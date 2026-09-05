@@ -64,6 +64,15 @@ const ROTTEN_FLESH = 116
 const GUNPOWDER = 117
 const STRING = 118
 const BONE_MEAL = 119
+# Mods register new nodes at 200+ (atlas tiles 42..63 cap the count at 22) and
+# new items at 120+. Registration happens at startup, so ids stay stable in saves.
+const MOD_NODE_BASE = 200
+const MOD_ITEM_BASE = 120
+const MAX_CUSTOM_NODES = 22
+const MAX_CUSTOM_ITEMS = 40
+static var custom_nodes := {}
+static var custom_tiles := {}
+static var custom_items := {}
 const NAMES = {
 	0:"Air", 1:"Grass", 2:"Dirt", 3:"Stone", 4:"Sand", 5:"Water", 6:"Oak log", 7:"Oak leaves", 8:"Oak planks", 9:"Cobblestone",
 	10:"Coal ore", 11:"Iron ore", 12:"Diamond ore", 13:"Snow", 14:"Cactus", 15:"Crafting table", 16:"Furnace", 17:"Chest", 18:"Torch",
@@ -92,23 +101,29 @@ const ARMOR_POINTS = [[1, 3, 2, 1], [2, 6, 5, 2], [2, 5, 3, 1], [3, 8, 6, 3]]
 const ARMOR_DURABILITY = [80, 240, 112, 528]
 
 static func title(id: int) -> String:
+	if custom_items.has(id) or custom_nodes.has(id):
+		return String((custom_items.get(id) if custom_items.has(id) else custom_nodes[id]).get("name","Unknown"))
 	if is_tool_id(id): return TIER_NAMES[tool_tier(id)] + " " + KIND_NAMES[tool_kind(id)]
 	if is_armor(id): return ARMOR_MATERIALS[armor_material(id)] + " " + ARMOR_PIECES[armor_piece(id)]
 	return NAMES.get(id, "Unknown")
 
 static func color(id: int) -> Color:
+	if custom_items.has(id) or custom_nodes.has(id):
+		return Color((custom_items.get(id) if custom_items.has(id) else custom_nodes[id]).get("color","#ffffff"))
 	if is_tool_id(id): return [Color("bd8e55"), Color("909995"), Color("cedcdd"), Color("63d5c5")][tool_tier(id)]
 	if is_armor(id): return ARMOR_COLORS[armor_material(id)]
 	return COLORS.get(id, Color.WHITE)
 
 static func exists(id: int) -> bool:
-	return NAMES.has(id) or is_tool_id(id) or is_armor(id)
+	return NAMES.has(id) or is_tool_id(id) or is_armor(id) or custom_nodes.has(id) or custom_items.has(id)
 
 # Every item that can appear in an inventory, for the creative catalog and console.
 static func all_ids() -> Array:
 	var ids: Array = []
 	for id in NAMES:
 		if id != AIR: ids.append(id)
+	ids.append_array(custom_items.keys())
+	ids.append_array(custom_nodes.keys())
 	ids.append_array(range(TOOLS, TOOLS_END))
 	ids.append_array(range(ARMOR_BASE, ARMOR_END))
 	return ids
@@ -125,6 +140,23 @@ static func lookup(query: String) -> int:
 	for id in all_ids():
 		if wanted in title(id).to_lower(): return id
 	return 0
+
+# Registration entry points used by the modding API. Ids are assigned in order;
+# registration happens once at startup, so ids are stable across saves.
+static func register_node(name_text: String, properties: Dictionary) -> int:
+	if custom_nodes.size() >= MAX_CUSTOM_NODES or custom_nodes.values().any(func(n): return n.name == name_text): return 0
+	var id: int = MOD_NODE_BASE + custom_nodes.size()
+	properties["name"] = name_text
+	custom_nodes[id] = properties
+	custom_tiles[id] = 42 + custom_tiles.size()
+	return id
+
+static func register_item(name_text: String, properties: Dictionary) -> int:
+	if custom_items.size() >= MAX_CUSTOM_ITEMS or custom_items.values().any(func(i): return i.name == name_text): return 0
+	var id: int = MOD_ITEM_BASE + custom_items.size()
+	properties["name"] = name_text
+	custom_items[id] = properties
+	return id
 
 static func is_tool_id(id: int) -> bool:
 	return id >= TOOLS and id < TOOLS_END
@@ -159,12 +191,14 @@ static func max_stack(id: int) -> int:
 	return 1 if is_tool_id(id) or is_armor(id) else 64
 
 static func solid(id: int) -> bool:
+	if custom_nodes.has(id): return not bool(custom_nodes[id].get("transparent",false))
 	return id != AIR and id != WATER and not plant(id) and id != TORCH
 
 static func plant(id: int) -> bool:
 	return id in [WHEAT, RIPE_WHEAT, SAPLING, FLOWER]
 
 static func transparent(id: int) -> bool:
+	if custom_nodes.has(id): return bool(custom_nodes[id].get("transparent",false))
 	return id in [AIR, WATER, GLASS] or plant(id) or id == TORCH
 
 # Sand and gravel are Luanti-style falling nodes: they drop when unsupported.
@@ -172,6 +206,7 @@ static func falls(id: int) -> bool:
 	return id in [SAND, GRAVEL]
 
 static func placeable(id: int) -> bool:
+	if custom_nodes.has(id) and not bool(custom_nodes[id].get("unobtainable",false)): return true
 	return id > AIR and id < 64 and NAMES.has(id) and id not in [WATER, BEDROCK, RIPE_WHEAT]
 
 static func preferred_tool(id: int) -> int:
@@ -181,6 +216,7 @@ static func preferred_tool(id: int) -> int:
 	return -1
 
 static func hardness(id: int) -> float:
+	if custom_nodes.has(id): return float(custom_nodes[id].get("hardness",1.0))
 	if id == BEDROCK: return INF
 	if id == OBSIDIAN: return 18.0
 	if id in [STONE, COBBLE, FURNACE, BRICKS]: return 3.0
@@ -208,9 +244,11 @@ static func drop(id: int) -> int:
 	return {GRASS:DIRT, STONE:COBBLE, COAL_ORE:COAL, DIAMOND_ORE:DIAMOND, FARMLAND:DIRT, WHEAT:SEEDS, RIPE_WHEAT:GRAIN}.get(id, id)
 
 static func food(id: int) -> int:
+	if custom_items.has(id): return clampi(int(custom_items[id].get("food",0)),0,20)
 	return {APPLE:4, RAW_MEAT:2, COOKED_MEAT:8, BREAD:6, ROTTEN_FLESH:2}.get(id, 0)
 
 static func tile(id: int, face: int) -> int:
+	if custom_tiles.has(id): return custom_tiles[id]
 	if id == GRASS: return 30 if face == 2 else (2 if face == 3 else 1)
 	if id == LOG and face in [2, 3]: return 31
 	if id == WORKBENCH and face == 2: return 32

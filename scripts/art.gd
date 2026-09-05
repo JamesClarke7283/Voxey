@@ -79,6 +79,15 @@ static func make_atlas() -> ImageTexture:
 						if x in [0,15] or y in [0,15]: c *= 0.6
 						if x > 3 and x < 12 and y > 3 and y < 12: c = Color("6c5a44") * rng.randf_range(0.9,1.1)
 				img.set_pixel(tile%8*16+x, tile/8*16+y, c)
+	# Mod nodes get procedural noise tiles from 42 onward, keyed by Nodes.custom_tiles.
+	for mod_id in Nodes.custom_tiles:
+		var base: Color = Nodes.color(mod_id)
+		var tile_index: int = Nodes.custom_tiles[mod_id]
+		for y in 16:
+			for x in 16:
+				var c: Color = base * rng.randf_range(0.85,1.1)
+				c.a = 1.0
+				img.set_pixel(tile_index%8*16+x, tile_index/8*16+y, c)
 	return ImageTexture.create_from_image(img)
 
 static func crack_texture(stage: int) -> ImageTexture:

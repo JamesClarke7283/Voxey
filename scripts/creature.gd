@@ -30,6 +30,7 @@ var attack_cooldown: float = 0.0
 var leap_cooldown: float = 0.0
 var ambient: float = 3.0
 var fuse: float = 0.0
+var last_seen: float = 0.0
 var hurt_flash: float = 0.0
 var life: float = 0.0
 var legs: Array = []
@@ -167,7 +168,9 @@ func _physics_process(delta: float) -> void:
 		think = randf_range(1.5,4.0)
 		direction = Vector3(randf_range(-1,1),0,randf_range(-1,1)).normalized() if randf()>0.35 else Vector3.ZERO
 	var toward: Vector3 = ((player_pos-position)*Vector3(1,0,1)).normalized()
-	var chasing: bool = aggressive() and distance < 24
+	# Mobs keep hunting for a few seconds after losing sight, then give up.
+	if _sees_player(): last_seen = life
+	var chasing: bool = aggressive() and distance < 24 and life-last_seen < 4.0
 	if chasing:
 		if data.get("ranged",false):
 			direction = -toward if distance < 5 else (toward if distance > 9 else Vector3.ZERO)
@@ -236,10 +239,13 @@ func _physics_process(delta: float) -> void:
 		if data.voice != "" and distance < 30: game.sound_at(data.voice,position,data.pitch*randf_range(0.94,1.06))
 
 func _sees_player() -> bool:
-	var origin: Vector3 = position+Vector3.UP*1.45
+	# Line-of-sight via voxel DDA between the mob's eye and the player's chest;
+	# walls and other opaque nodes block vision, water and plants do not.
+	var origin: Vector3 = position+Vector3.UP*height*0.85
 	var to_player: Vector3 = game.player.position+Vector3.UP*1.1-origin
+	if to_player.length() < 0.01: return true
 	var hit: Dictionary = game.world.raycast(origin,to_player.normalized(),to_player.length())
-	return hit.is_empty() or hit.distance >= to_player.length()
+	return hit.is_empty() or hit.distance >= to_player.length()-0.35
 
 func _tint(color: Color, amount: float) -> void:
 	tinted = amount > 0
@@ -260,6 +266,7 @@ func hit(damage: float, from: Vector3 = Vector3.INF) -> void:
 	if health <= 0: die()
 
 func die() -> void:
+	game.MOD_HOOK_CREATURE_KILLED(self)
 	for entry in info().drops:
 		var amount: int = randi_range(int(entry[1]),int(entry[2]))
 		if amount > 0: game.spawn_drop(center(),int(entry[0]),amount)

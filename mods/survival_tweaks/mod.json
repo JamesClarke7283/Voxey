@@ -1,0 +1,6 @@
+{
+	"name": "survival_tweaks",
+	"version": "1.0.0",
+	"description": "Example mod: registers a copper lantern node and a berry item, greets the player, and reacts to placed lanterns.",
+	"entry": "main.gd"
+}

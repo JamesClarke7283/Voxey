@@ -4,6 +4,7 @@ const LEGACY_SAVE_PATH = "user://voxey_world.json"
 const SaveStore = preload("res://scripts/world_store.gd")
 const SAVE_VERSION = 2
 const SAVE_VERSIONS = [1, 2]
+const MOD_ENTRY = preload("res://scripts/voxey_mods.gd")
 var world: VoxelWorld
 var player: VoxeyPlayer
 var inventory := Inventory.new()
@@ -44,9 +45,11 @@ var world_name: String = "New world"
 var gamemode: String = "survival"
 var console_messages: Array[String] = ["Voxey console. Type /help for commands."]
 var last_space_press: int = 0
+var api: VoxeyAPI
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
+	api = VoxeyAPI.new("engine",self)
 	saves = SaveStore.new()
 	_migrate_legacy_save()
 	RenderingServer.set_default_clear_color(Color("9dbac0"))
@@ -84,6 +87,19 @@ func _ready() -> void:
 	_setup_sounds()
 	get_viewport().size_changed.connect(_resize_ui)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_load_mods()
+
+func _load_mods() -> void:
+	MOD_ENTRY.load_all(self,[ProjectSettings.globalize_path("res://mods"),
+		OS.get_environment("HOME").path_join(".voxey").path_join("mods")])
+	for entry in MOD_ENTRY.loaded:
+		if entry.has("error"): print("Voxey mod error: ",entry.name," — ",entry.error)
+	for name_text in MOD_ENTRY.mod_names(): print("Voxey mod loaded: ",name_text)
+	if MOD_ENTRY.is_loaded("survival_tweaks"): return
+	# Built-in example mod: ships in mods/survival_tweaks and shows the API.
+
+func mods_loaded() -> Array:
+	return MOD_ENTRY.mod_names()
 
 func _setup_environment() -> void:
 	environment = WorldEnvironment.new()
@@ -270,6 +286,7 @@ func _finish_loading() -> void:
 	toast("Welcome to Voxey. Press E to craft, or Esc for the field guide.")
 	spawn_timer=5
 	save_game()
+	MOD_ENTRY.fire("on_world_entered",[world_name,world.seed_value])
 
 func _safe_spawn(near: Vector3) -> Vector3:
 	for radius in range(0,12):
@@ -380,6 +397,7 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 	_break_particles(p,id)
 	sound("break")
 	progress("gather")
+	api.emit_node_broken(p,id)
 
 func remove_torch(p: Vector3i) -> void:
 	if torch_lights.has(p): torch_lights[p].queue_free(); torch_lights.erase(p)
@@ -510,6 +528,7 @@ func sleep_at(p: Vector3i) -> void:
 	save_game()
 
 func die() -> void:
+	api.emit_player_died()
 	hud.return_cursor()
 	for slot in inventory.slots:
 		if slot.id: spawn_drop(player.position+Vector3.UP,slot.id,slot.count,slot.wear)
@@ -534,6 +553,11 @@ func progress(action: String) -> void:
 	if journal_step==0 and action=="gather" and inventory.count_item(Nodes.LOG)>0: journal_step=1
 	elif journal_step==1 and action=="craft" and (inventory.count_item(Nodes.PLANKS)>0 or hud.cursor.id==Nodes.PLANKS): journal_step=2
 	elif journal_step==2 and action=="build" and world.edits.values().has(Nodes.WORKBENCH): journal_step=3
+
+# Relay for creature deaths so hook subscribers see mob kills. `mob` freed by
+# the caller afterwards.
+func MOD_HOOK_CREATURE_KILLED(mob: Node3D) -> void:
+	MOD_ENTRY.fire("on_creature_killed",[mob.kind,Vector3(mob.position)])
 
 func toast(message: String) -> void:
 	if is_instance_valid(hud): hud.toast(message)

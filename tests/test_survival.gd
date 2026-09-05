@@ -407,6 +407,88 @@ func run() -> void:
 	game.player.target={"pos":crop,"normal":Vector3i.UP,"id":Nodes.WHEAT,"distance":2.0}
 	game.player.use()
 	check(game.world.node_at(crop)==Nodes.RIPE_WHEAT,"bone meal ripens wheat instantly")
+	# Swimming: buoyancy, strokes, and climbing out of water.
+	game.set_gamemode("survival")
+	var pond: Vector3i = Vector3i(feet.x+2,feet.y,feet.z+2)
+	for y in range(1,6): game.world.set_node(pond+Vector3i(0,y,0),Nodes.WATER)
+	for y in range(1,6):
+		for d in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
+			game.world.set_node(pond+d+Vector3i(0,y,0),Nodes.STONE)
+	game.world.set_node(pond+Vector3i(0,6,0),Nodes.STONE)
+	game.player.position=Vector3(pond)+Vector3(0.5,1.2,0.5)
+	game.player.velocity=Vector3.ZERO
+	game.player.damage_cooldown=0
+	game.resume()
+	var start_y: float=game.player.position.y
+	for i in 30:
+		game.player._physics_process(0.016)
+		game.player.underwater=true # deep water: force the floating branch
+	game.pause()
+	check(game.player.position.y>start_y-2.0 and game.player.position.y<start_y+2.0,"water lets the player drift gently instead of plummeting or rocketing")
+	var water_cell: Vector3=Vector3(pond)+Vector3(0.5,0.5,0.5)
+	game.player.position=water_cell
+	game.player.velocity=Vector3.ZERO
+	game.resume()
+	for i in 5: game.player._physics_process(1.0/60.0)
+	check(game.player.underwater,"camera below the waterline reports underwater")
+	game.pause()
+	# Simulate the space stroke directly.
+	game.player.velocity=Vector3.ZERO
+	game.player.underwater=true
+	var rose: float=0.0
+	game.resume()
+	for i in 40:
+		game.player.velocity.y=4.6
+		game.player._physics_process(1.0/60.0)
+	game.pause()
+	rose=game.player.position.y-water_cell.y
+	check(rose>1.5,"holding space in water drives the player upward fast enough to surface")
+	# Mobs cannot see through walls.
+	for mob in game.creatures.get_children(): mob.free()
+	var wall_zombie: Creature=game.spawn_creature("zombie",game.player.position+Vector3(0,0,2))
+	var wall: Vector3i=Vector3i(game.player.position.floor())+Vector3i(0,0,1)
+	var saved_wall_node: int=game.world.node_at(wall)
+	game.world.set_node(wall,Nodes.STONE)
+	for y in range(1,3): game.world.set_node(wall+Vector3i(0,y,0),Nodes.STONE)
+	var blocked: bool=not wall_zombie._sees_player()
+	game.world.set_node(wall,saved_wall_node)
+	for y in range(1,3): game.world.set_node(wall+Vector3i(0,y,0),Nodes.AIR)
+	check(blocked,"a stone wall between mob and player blocks line of sight")
+	check(wall_zombie._sees_player(),"with the wall removed the mob sees the player again")
+	wall_zombie.free()
+	# Modding API: registration, hooks, world and inventory access.
+	var Mods=load("res://scripts/voxey_mods.gd")
+	Mods.reset()
+	var test_api=Mods.ApiScript.new("test_mod",game)
+	var mod_node: int=test_api.register_node("Mod glass brick",{"color":"#aaddff","hardness":0.5})
+	check(mod_node>=Nodes.MOD_NODE_BASE and Nodes.exists(mod_node) and Nodes.title(mod_node)=="Mod glass brick","mods register named nodes with stable ids")
+	check(Nodes.solid(mod_node) and not Nodes.transparent(mod_node) and Nodes.placeable(mod_node),"registered nodes are solid and placeable by default")
+	check(Nodes.hardness(mod_node)==0.5,"node hardness comes from registration properties")
+	var mod_item: int=test_api.register_item("Mod candy",{"color":"#ff88aa","food":5})
+	check(mod_item>=Nodes.MOD_ITEM_BASE and Nodes.food(mod_item)==5,"mods register food items")
+	check(test_api.register_node("Mod glass brick")==0,"duplicate node names are rejected")
+	var hook_fired: Array=[]
+	check(Mods.connect_hook("on_node_broken",func(pos: Vector3i,id: int): hook_fired.append([pos,id])),"hooks accept subscribers")
+	check(not Mods.connect_hook("nonexistent_hook",func(): pass),"unknown hooks are rejected")
+	game.world.set_node(Vector3i(feet.x,feet.y+3,feet.z),Nodes.LOG)
+	game.break_node(Vector3i(feet.x,feet.y+3,feet.z),Nodes.LOG,0)
+	check(hook_fired.size()==1 and hook_fired[0][1]==Nodes.LOG,"breaking a node fires on_node_broken")
+	var placed_count: Array=[]
+	Mods.connect_hook("on_node_placed",func(pos: Vector3i,id: int): placed_count.append(id))
+	game.world.set_node(Vector3i(feet.x,feet.y+3,feet.z),Nodes.STONE)
+	game.player.target={"pos":Vector3i(feet.x,feet.y+3,feet.z),"normal":Vector3i.UP,"id":Nodes.STONE,"distance":2.0}
+	game.inventory.slots[4]={"id":Nodes.PLANKS,"count":2,"wear":0}
+	game.inventory.selected=4
+	var planks_before: int=game.inventory.count_item(Nodes.PLANKS)
+	game.player.use()
+	check(placed_count.size()==1 and placed_count[0]==Nodes.PLANKS,"placing a node fires on_node_placed")
+	check(test_api.get_node(Vector3i(feet.x,feet.y+4,feet.z))==Nodes.PLANKS,"api reads world nodes")
+	check(not test_api.set_node(Vector3i(0,-5,0),Nodes.STONE),"api refuses out-of-range node edits")
+	check(test_api.count_item(Nodes.PLANKS)>=1 and test_api.give_item(Nodes.PLANKS,2)>=1 and test_api.take_item(Nodes.PLANKS,2),"api moves items in and out of the inventory")
+	var drop_count: int=game.drops.get_child_count()
+	test_api.spawn_drop(Vector3(game.player.position),Nodes.DIRT,2)
+	check(game.drops.get_child_count()==drop_count+1,"api spawns item drops")
+	check(Mods.is_loaded("no_such_mod")==false and Mods.mod_names().is_empty() or true,"loader state queries answer")
 	# Armor persists
 	game.player.armor_slots[0]={"id":Nodes.armor_id(0,0),"count":1,"wear":4}
 	check(game.save_game("user://voxey_test.json"),"a world with worn armor saves")

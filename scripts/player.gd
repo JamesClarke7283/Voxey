@@ -116,14 +116,29 @@ func _physics_process(delta: float) -> void:
 	direction = basis * direction.normalized()
 	velocity.x = move_toward(velocity.x,direction.x*speed,delta*35)
 	velocity.z = move_toward(velocity.z,direction.z*speed,delta*35)
-	velocity.y -= (5.0 if wet else 24.0) * delta
-	velocity.y = maxf(velocity.y,-4.0 if wet else -45.0)
-	if Input.is_physical_key_pressed(KEY_SPACE):
-		if wet: velocity.y = 3.8
-		elif grounded:
-			velocity.y = 8.2
-			grounded = false
-			hunger -= 0.015
+	# Water: mild sinking drift, strong swim stroke toward where you look, and a
+	# surface kick so you pop up onto the shore instead of bobbing below it.
+	if wet:
+		velocity.y -= 3.2*delta
+		velocity.y = maxf(velocity.y,-2.2)
+		if Input.is_physical_key_pressed(KEY_SPACE):
+			velocity.y = 4.2 if not underwater else 4.6
+		elif underwater and not grounded:
+			velocity.y = maxf(velocity.y,0.4) # gentle buoyancy while floating
+		# Kicking into open air above the waterline vaults the ledge.
+		var facing: Vector3 = (basis * Vector3.FORWARD)
+		if velocity.y > 1.0 and not Nodes.solid(game.world.node_at(Vector3i((position+Vector3.UP*1.9).floor()))):
+			var ahead: Vector3i = Vector3i((position+facing*0.45).floor())
+			if not game.world.intersects(position+facing*0.9,0.29,1.4) and game.world.node_at(ahead+Vector3i.UP) != Nodes.WATER:
+				velocity.y = maxf(velocity.y,6.4)
+	else:
+		velocity.y -= 24.0*delta
+		velocity.y = maxf(velocity.y,-45.0)
+		if Input.is_physical_key_pressed(KEY_SPACE):
+			if grounded:
+				velocity.y = 8.2
+				grounded = false
+				hunger -= 0.015
 	var old_pos: Vector3 = position
 	_move(velocity*delta,crouch)
 	var distance: float = Vector2(position.x-old_pos.x,position.z-old_pos.z).length()
@@ -314,6 +329,7 @@ func use() -> void:
 		if place_id == Nodes.CHEST and game.world.chest_partner(destination) != destination: game.toast("The chests join into one large chest.")
 		game.settle(destination)
 		game.progress("build")
+		game.api.emit_node_placed(destination,place_id)
 
 # Damage passes through worn armor unless it bypasses it (drowning, starving,
 # falling). Every piece worn takes wear from a hit. A source position knocks
@@ -339,6 +355,7 @@ func hurt(amount: float, bypass_armor: bool = false, source: Vector3 = Vector3.I
 	damage_cooldown = 0.65
 	game.hud.flash = 0.45
 	game.sound("hurt")
+	game.api.emit_player_hurt(amount*(1.0-reduction),"" if is_inf(source.x) else str(source.round()))
 	if health <= 0: game.die()
 
 func _make_hand(id: int) -> void:

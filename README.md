@@ -44,6 +44,10 @@ Choose **Play / choose a world**, create a named world or select an existing one
 
 **Luanti-style extras:** bones grind into bone meal that instantly ripens wheat or grows a sapling; four string weave into wool; gunpowder and sand make TNT, which is lit with a right-click, falls, flashes, and detonates after three seconds, chaining into nearby TNT. Explosions leave craters, drop some of the destroyed nodes, and hurt anything close. Dropped nodes and the held node are miniature copies of the real textured node.
 
+**Water:** swimming replaces the sink-or-die crawl. Water slows you and lets you drift gently; hold Space to stroke upward, with extra thrust while your head is submerged, and a kick that vaults you onto the shore when you surface facing open air. Hostile creatures cannot see through walls: their aggro checks voxel line-of-sight, and they keep hunting briefly after losing sight before giving up.
+
+**Mods:** drop a folder into `mods/` (or `~/.voxey/mods/`) with a `mod.json` manifest and an entry script, and it receives the sandboxed `VoxeyAPI`: register new nodes and items, read and change the world, give or take inventory items, and subscribe to gameplay hooks (`on_node_broken`, `on_player_hurt`, …). A broken mod is skipped with a logged error; it never blocks the game. See `docs/modding/` for the full guide, API reference, and worked examples. `mods/survival_tweaks/` ships as a live example.
+
 **Food and shelter:** eat apples, cook meat, or till dirt with a hoe and plant seeds. Wheat matures after 90 active world seconds; three wheat make bread. Sheep also provide wool for beds. Right-click a bed to set spawn and sleep at night when no hostile creature is nearby. Saplings grow in 120 seconds. Torches illuminate the surroundings and prevent nearby hostile spawns. Death leaves recoverable item drops, which expire after five active minutes.
 
 **Storage chests:** a chest (8 planks at a table) holds 27 stacks; right-click to open, Shift-click to move stacks in or out. Place a second chest directly beside one and they join into a single large chest with 54 slots that keeps everything already inside. A chest never joins more than one neighbour, and breaking one half drops that half's items while the other half keeps its own 27. Contents drop when a chest is broken and are saved with the world.
@@ -120,7 +124,7 @@ The runner creates an isolated temporary project so tests do not disturb an open
 godot --headless --path . --script res://tests/test_survival.gd
 ```
 
-The suite exercises meshing and winding, negative coordinates, deterministic terrain, ore/tool progression, manual and guided crafting, inventory transactions, mining/placement, crack-overlay symmetry and growth, furnace and crop simulation, single and large chests, save recovery and armor persistence, separate worlds, platform home paths, armor protection and wear, falling nodes, explosions and TNT, creature AI (chasing, shooting, exploding, roaming, day/night spawning), and console commands.
+The suite exercises meshing and winding, negative coordinates, deterministic terrain, ore/tool progression, manual and guided crafting, inventory transactions, mining/placement, crack-overlay symmetry and growth, furnace and crop simulation, single and large chests, save recovery and armor persistence, separate worlds, platform home paths, armor protection and wear, falling nodes, explosions and TNT, creature AI (chasing, shooting, exploding, roaming, day/night spawning), water physics and line-of-sight, the modding API (registration, hooks, world/inventory access), and console commands.
 
 A windowed visual smoke test writes screenshots of the crack overlay, creatures, armor inventory, large chest, and console to `/tmp/voxey-shots`:
 
