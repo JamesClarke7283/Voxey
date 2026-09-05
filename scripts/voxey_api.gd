@@ -100,7 +100,16 @@ func log_line(message: String) -> void:
 	game.console_messages.append("[%s] %s" % [owner,message])
 	while game.console_messages.size()>60: game.console_messages.pop_front()
 
-# ---------------------------------------------------------------- hooks (emitters)
+# ---------------------------------------------------------------- hooks
+
+## Subscribe one of this mod's callables to a gameplay hook
+## ("on_node_broken", "on_node_placed", "on_player_hurt", "on_player_died",
+## "on_creature_killed", "on_world_entered"). Returns false for unknown
+## hooks or when the subscriber cap (8 per hook) is reached.
+func connect_hook(hook: String, callback: Callable) -> bool:
+	return Mods.connect_hook(hook,callback)
+
+# ---------------------------------------------------------------- hook emitters (engine-side)
 
 ## Fire the "on_player_hurt" hook. `amount` is post-armor damage.
 func emit_player_hurt(amount: float, source: String) -> void:

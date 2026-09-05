@@ -114,6 +114,20 @@ Append a line to the in-game console, attributed to the mod.
 
 ---
 
+## Hooks
+
+### `connect_hook(hook: String, callback: Callable) -> bool`
+Subscribe to a gameplay hook. Valid names: `on_node_broken`, `on_node_placed`,
+`on_player_hurt`, `on_player_died`, `on_creature_killed`, `on_world_entered`.
+Returns `false` for unknown hooks or when the 8-subscriber cap is hit. See
+[hooks.md](hooks.md) for argument contracts.
+
+```gdscript
+func _api_ready(a: VoxeyAPI) -> void:
+    api = a
+    api.connect_hook("on_node_placed", _on_placed)
+```
+
 ## Hook emission (advanced)
 
 Hooks are fired by the engine; mods normally only *subscribe*. These emitters

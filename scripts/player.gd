@@ -91,20 +91,22 @@ func _physics_process(delta: float) -> void:
 	if not game.world.loaded_at(position): return
 	damage_cooldown = maxf(0,damage_cooldown-delta)
 	use_cooldown = maxf(0,use_cooldown-delta)
+	var pad: TouchControls = game.controls if game.touch else null
 	var direction := Vector3.ZERO
 	if Input.is_physical_key_pressed(KEY_W): direction.z -= 1
 	if Input.is_physical_key_pressed(KEY_S): direction.z += 1
 	if Input.is_physical_key_pressed(KEY_A): direction.x -= 1
 	if Input.is_physical_key_pressed(KEY_D): direction.x += 1
-	var crouch: bool = Input.is_physical_key_pressed(KEY_CTRL)
+	if pad != null and pad.stick.length() > 0.12: direction += Vector3(pad.stick.x,0,pad.stick.y)
+	var crouch: bool = Input.is_physical_key_pressed(KEY_CTRL) or (pad != null and pad.sneak_held)
 	var sprint: bool = Input.is_physical_key_pressed(KEY_SHIFT) and hunger > 5 and not crouch
 	var speed: float = 7.0 if sprint else (2.1 if crouch else 4.5)
 	var moving: bool = direction.length() > 0.1
 	camera.fov = lerpf(camera.fov,86.0 if sprint and moving and not flying else 78.0,delta*7)
 	if game.gamemode=="creative" and flying:
 		direction=basis*direction.normalized()
-		if Input.is_physical_key_pressed(KEY_SPACE): direction.y+=1
-		if Input.is_physical_key_pressed(KEY_SHIFT): direction.y-=1
+		if Input.is_physical_key_pressed(KEY_SPACE) or (pad != null and pad.jump_held): direction.y+=1
+		if Input.is_physical_key_pressed(KEY_SHIFT) or (pad != null and pad.sneak_held): direction.y-=1
 		velocity=direction*12.0
 		_move(velocity*delta,false)
 		camera.position.y=1.62
@@ -121,7 +123,7 @@ func _physics_process(delta: float) -> void:
 	if wet:
 		velocity.y -= 3.2*delta
 		velocity.y = maxf(velocity.y,-2.2)
-		if Input.is_physical_key_pressed(KEY_SPACE):
+		if Input.is_physical_key_pressed(KEY_SPACE) or (pad != null and pad.jump_held):
 			velocity.y = 4.2 if not underwater else 4.6
 		elif underwater and not grounded:
 			velocity.y = maxf(velocity.y,0.4) # gentle buoyancy while floating
@@ -134,7 +136,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y -= 24.0*delta
 		velocity.y = maxf(velocity.y,-45.0)
-		if Input.is_physical_key_pressed(KEY_SPACE):
+		if Input.is_physical_key_pressed(KEY_SPACE) or (pad != null and pad.jump_held):
 			if grounded:
 				velocity.y = 8.2
 				grounded = false
@@ -210,7 +212,11 @@ func _process(delta: float) -> void:
 	swing = maxf(0,swing-delta*5)
 	hand.rotation = Vector3(-0.15-sin(swing*PI)*0.6,0.25,-0.12-sin(swing*PI)*0.4)
 	hand.position.y = -0.36+sin(bob)*0.012
-	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+	var pad: TouchControls = game.controls if game.touch else null
+	var mine_pressed: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or (pad != null and pad.mine_held)
+	var use_pressed: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or (pad != null and pad.use_pressed)
+	if pad != null: pad.use_pressed = false
+	if mine_pressed:
 		var mob = game.target_mob()
 		if mob != null:
 			mining = 0
@@ -224,7 +230,7 @@ func _process(delta: float) -> void:
 	else:
 		mining = 0.0
 		mining_pos = Vector3i(99999,99999,99999)
-	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and use_cooldown <= 0:
+	if use_pressed and use_cooldown <= 0:
 		use_cooldown = 0.25
 		use()
 

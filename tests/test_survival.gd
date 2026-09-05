@@ -489,6 +489,48 @@ func run() -> void:
 	test_api.spawn_drop(Vector3(game.player.position),Nodes.DIRT,2)
 	check(game.drops.get_child_count()==drop_count+1,"api spawns item drops")
 	check(Mods.is_loaded("no_such_mod")==false and Mods.mod_names().is_empty() or true,"loader state queries answer")
+	# Mobile: touch controls, virtual input merge, and touch-mode UI semantics.
+	game.set_gamemode("survival")
+	var TouchControlsClass=load("res://scripts/touch_controls.gd")
+	var pad: TouchControls=TouchControlsClass.new()
+	pad.game=game
+	game.add_child(pad)
+	game.touch=true
+	game.controls=pad
+	pad.show_game_controls()
+	check(pad.get_child_count()>0 and pad.visible,"touch controls build their buttons")
+	pad.stick=Vector2(0,-1)
+	var stick_pos: Vector3=game.player.position
+	game.resume()
+	game.player._physics_process(0.05)
+	game.pause()
+	check(game.player.position.distance_to(stick_pos)>0.005,"virtual joystick drives player movement")
+	pad.stick=Vector2.ZERO
+	var jump_pos: Vector3=game.player.position
+	pad.jump_held=true
+	game.player.velocity=Vector3.ZERO
+	game.resume()
+	for i in 4: game.player._physics_process(0.016)
+	game.pause()
+	check(game.player.position.y>jump_pos.y or game.player.velocity.y>0.0,"virtual jump lifts the player")
+	pad.jump_held=false
+	game.hud.show_game()
+	check(game.hud.hotbar.size()==9,"hotbar rebuilds under touch mode")
+	game.hud.split_mode=true
+	game.inventory.slots[0]={"id":Nodes.DIRT,"count":8,"wear":0}
+	game.hud.cursor={"id":0,"count":0,"wear":0}
+	game.hud._slot_click(0,false,false)
+	check(game.hud.cursor.count==4 and game.inventory.slots[0].count==4,"split mode halves a stack like a right click")
+	game.hud.split_mode=false
+	game.hud.cursor={"id":0,"count":0,"wear":0}
+	game.hud._slot_click(0,false,false)
+	check(game.hud.cursor.count==4 and game.inventory.slots[0].count==0,"normal tap takes the whole stack")
+	game.inventory.slots[0]={"id":0,"count":0,"wear":0}
+	game.hud.cursor={"id":0,"count":0,"wear":0}
+	game.touch=false
+	game.controls=null
+	pad.hide_all()
+	check(not pad.visible,"touch controls hide on desktop mode")
 	# Armor persists
 	game.player.armor_slots[0]={"id":Nodes.armor_id(0,0),"count":1,"wear":4}
 	check(game.save_game("user://voxey_test.json"),"a world with worn armor saves")

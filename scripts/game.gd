@@ -46,6 +46,8 @@ var gamemode: String = "survival"
 var console_messages: Array[String] = ["Voxey console. Type /help for commands."]
 var last_space_press: int = 0
 var api: VoxeyAPI
+var touch: bool = false
+var controls: TouchControls
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
@@ -86,6 +88,14 @@ func _ready() -> void:
 	canvas.add_child(hud)
 	_setup_sounds()
 	get_viewport().size_changed.connect(_resize_ui)
+	# Touch devices (phones/tablets) get on-screen controls and never capture
+	# the pointer. Desktop touch monitors keep the mouse workflow.
+	touch = DisplayServer.get_name() in ["Android","iOS"] or DisplayServer.is_touchscreen_available()
+	if touch:
+		controls = TouchControls.new()
+		controls.name = "TouchControls"
+		controls.game = self
+		add_child(controls)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_load_mods()
 
@@ -283,7 +293,7 @@ func _finish_loading() -> void:
 	player.flying=false
 	player.camera.make_current()
 	resume()
-	toast("Welcome to Voxey. Press E to craft, or Esc for the field guide.")
+	toast("Welcome to Voxey. Tap the bag button to craft, or pause for the field guide." if touch else "Welcome to Voxey. Press E to craft, or Esc for the field guide.")
 	spawn_timer=5
 	save_game()
 	MOD_ENTRY.fire("on_world_entered",[world_name,world.seed_value])
@@ -307,7 +317,10 @@ func resume() -> void:
 	hud.return_cursor()
 	state="playing"
 	world.active=true
-	Input.mouse_mode=Input.MOUSE_MODE_CAPTURED
+	if touch:
+		if is_instance_valid(controls): controls.show_game_controls()
+	else:
+		Input.mouse_mode=Input.MOUSE_MODE_CAPTURED
 	hud.show_game()
 
 func pause() -> void:
@@ -322,6 +335,7 @@ func open_inventory(kind: String = "hand", p: Vector3i = Vector3i.ZERO) -> void:
 	# Furnace simulation continues while its screen is open, but the player and mobs pause.
 	if kind=="furnace": world.active=true
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
+	if is_instance_valid(controls): controls.hide_all()
 	hud.show_inventory(kind,world.get_station(p,kind) if kind in ["chest","furnace"] else {})
 
 func return_to_title() -> void:
@@ -330,6 +344,7 @@ func return_to_title() -> void:
 	state="title"
 	world.active=false
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
+	if is_instance_valid(controls): controls.hide_all()
 	position_menu_camera()
 	menu_camera.make_current()
 	hud.show_title()
@@ -368,7 +383,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			inventory.selected=event.physical_keycode-KEY_1
 			hud.refresh_slots()
 	if not playing(): return
-	if event is InputEventMouseMotion and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED: player.look(event.screen_relative)
+	# Touch look: any drag outside the virtual controls turns the camera.
+	if touch and event is InputEventScreenDrag:
+		if is_instance_valid(controls) and event.index == controls._stick_touch: return
+		player.look(event.relative*1.6)
+		return
+	if not touch and event is InputEventMouseMotion and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED: player.look(event.screen_relative)
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index==MOUSE_BUTTON_MIDDLE and gamemode=="creative" and not player.target.is_empty():
 			inventory.slots[inventory.selected]={"id":player.target.id,"count":64,"wear":0}
@@ -530,6 +550,7 @@ func sleep_at(p: Vector3i) -> void:
 func die() -> void:
 	api.emit_player_died()
 	hud.return_cursor()
+	if is_instance_valid(controls): controls.hide_all()
 	for slot in inventory.slots:
 		if slot.id: spawn_drop(player.position+Vector3.UP,slot.id,slot.count,slot.wear)
 		slot.id=0; slot.count=0; slot.wear=0
@@ -578,6 +599,7 @@ func _resize_ui() -> void:
 		"new_world": hud.show_new_world()
 		"console": hud.show_console()
 		"loading": hud.show_loading()
+	if touch and state=="playing" and is_instance_valid(controls): controls.show_game_controls()
 
 func has_save() -> bool:
 	return not saves.list_worlds().is_empty()

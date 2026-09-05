@@ -46,6 +46,8 @@ Choose **Play / choose a world**, create a named world or select an existing one
 
 **Water:** swimming replaces the sink-or-die crawl. Water slows you and lets you drift gently; hold Space to stroke upward, with extra thrust while your head is submerged, and a kick that vaults you onto the shore when you surface facing open air. Hostile creatures cannot see through walls: their aggro checks voxel line-of-sight, and they keep hunting briefly after losing sight before giving up.
 
+**Mobile:** Voxey runs on Android, iOS, and other touch devices. Phones get on-screen controls — a floating joystick (touch the lower-left of the screen), jump, sneak, mine (hold), use, and in Creative a fly button — plus tappable hotbar slots, a pause/chat/drop row up top, and a drag-anywhere camera. The inventory adds **Split mode** and **Batch mode** toggles in place of right-click and Shift. Panels shrink to fit small and rotated screens; `window/handheld/orientation` follows the device. Export presets for Linux, Android, and iOS ship in `export_presets.cfg`.
+
 **Mods:** drop a folder into `mods/` (or `~/.voxey/mods/`) with a `mod.json` manifest and an entry script, and it receives the sandboxed `VoxeyAPI`: register new nodes and items, read and change the world, give or take inventory items, and subscribe to gameplay hooks (`on_node_broken`, `on_player_hurt`, …). A broken mod is skipped with a logged error; it never blocks the game. See `docs/modding/` for the full guide, API reference, and worked examples. `mods/survival_tweaks/` ships as a live example.
 
 **Food and shelter:** eat apples, cook meat, or till dirt with a hoe and plant seeds. Wheat matures after 90 active world seconds; three wheat make bread. Sheep also provide wool for beds. Right-click a bed to set spawn and sleep at night when no hostile creature is nearby. Saplings grow in 120 seconds. Torches illuminate the surroundings and prevent nearby hostile spawns. Death leaves recoverable item drops, which expire after five active minutes.
@@ -124,7 +126,7 @@ The runner creates an isolated temporary project so tests do not disturb an open
 godot --headless --path . --script res://tests/test_survival.gd
 ```
 
-The suite exercises meshing and winding, negative coordinates, deterministic terrain, ore/tool progression, manual and guided crafting, inventory transactions, mining/placement, crack-overlay symmetry and growth, furnace and crop simulation, single and large chests, save recovery and armor persistence, separate worlds, platform home paths, armor protection and wear, falling nodes, explosions and TNT, creature AI (chasing, shooting, exploding, roaming, day/night spawning), water physics and line-of-sight, the modding API (registration, hooks, world/inventory access), and console commands.
+The suite exercises meshing and winding, negative coordinates, deterministic terrain, ore/tool progression, manual and guided crafting, inventory transactions, mining/placement, crack-overlay symmetry and growth, furnace and crop simulation, single and large chests, save recovery and armor persistence, separate worlds, platform home paths, armor protection and wear, falling nodes, explosions and TNT, creature AI (chasing, shooting, exploding, roaming, day/night spawning), water physics and line-of-sight, the modding API (registration, hooks, world/inventory access), touch controls and split/batch toggles, and console commands.
 
 A windowed visual smoke test writes screenshots of the crack overlay, creatures, armor inventory, large chest, and console to `/tmp/voxey-shots`:
 

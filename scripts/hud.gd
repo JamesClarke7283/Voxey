@@ -40,6 +40,10 @@ var console_input: LineEdit
 var console_output: RichTextLabel
 var armor_ui: Array = []
 var armor_label: Label
+var split_mode: bool = false
+var shift_mode: bool = false
+var split_toggle: CheckButton
+var shift_toggle: CheckButton
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -141,17 +145,18 @@ func show_title() -> void:
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(shade)
 	var origin := Vector2(70,maxf(60,size.y*0.16))
+	var title_size: float = 100.0 if size.x > 700.0 else 64.0
 	_label(layer,"V  /  VOXEY",Vector2(38,24),18,ACCENT)
 	_label(layer,"A LITTLE WILD. ENTIRELY YOURS.",origin,13,ACCENT)
-	var title := _label(layer,"VOXEY",origin+Vector2(-5,21),100,TEXT)
+	var title := _label(layer,"VOXEY",origin+Vector2(-5,21),int(title_size),TEXT)
 	title.add_theme_color_override("font_shadow_color",Color("0c1c15"))
 	title.add_theme_constant_override("shadow_offset_y",6)
-	_label(layer,"One node. Endless possibilities.",origin+Vector2(0,142),23,TEXT)
-	_label(layer,"Gather, craft, and find your own way.\nA living voxel wilderness awaits.",origin+Vector2(0,187),16,MUTED)
-	start_button = _button(layer,"Play / choose a world  →",Rect2(origin+Vector2(0,267),Vector2(340,56)),show_worlds)
+	_label(layer,"One node. Endless possibilities.",origin+Vector2(0,title_size*0.5+92),23,TEXT)
+	_label(layer,"Gather, craft, and find your own way.\nA living voxel wilderness awaits.",origin+Vector2(0,title_size*0.5+137),16,MUTED)
+	start_button = _button(layer,"Play / choose a world  →",Rect2(origin+Vector2(0,title_size*0.5+217),Vector2(minf(340,size.x-90),56)),show_worlds)
 	start_button.add_theme_font_size_override("font_size",19)
-	_button(layer,"Create a new world",Rect2(origin+Vector2(0,335),Vector2(340,44)),show_new_world)
-	_label(layer,"SURVIVAL & CREATIVE  ·  YOUR OWN WORLDS",origin+Vector2(0,401),11,MUTED)
+	_button(layer,"Create a new world",Rect2(origin+Vector2(0,title_size*0.5+285),Vector2(minf(340,size.x-90),44)),show_new_world)
+	_label(layer,"SURVIVAL & CREATIVE  ·  YOUR OWN WORLDS",origin+Vector2(0,title_size*0.5+351),11,MUTED)
 	_label(layer,"VOXEY    ·    SINGLE PLAYER    ·    INFINITE HORIZONS",Vector2(38,size.y-40),11,MUTED)
 	var tag := _panel(layer,Rect2(Vector2(size.x-290,size.y-96),Vector2(254,58)),Color(0.09,0.16,0.13,0.75))
 	_label(tag,"THE OVERWORLD",Vector2(16,10),10,ACCENT)
@@ -160,21 +165,48 @@ func show_title() -> void:
 func show_game() -> void:
 	_clear()
 	screen = "game"
-	var start: Vector2 = Vector2(size.x*0.5-9*57*0.5,size.y-77)
+	var scale_value: float = _hud_scale()
+	var slot_w: float = 53.0*scale_value
+	var gap: float = 4.0*scale_value
+	var start: Vector2 = Vector2(size.x*0.5-9*(slot_w+gap)*0.5+gap*0.5,size.y-(77.0*scale_value if not game.touch else 40.0+62.0*scale_value))
 	for i in 9:
 		var icon := ItemIcon.new()
-		icon.position = start+Vector2(i*57,0)
-		icon.size = Vector2(53,55)
+		icon.position = start+Vector2(i*(slot_w+gap),0)
+		icon.size = Vector2(slot_w,55.0*scale_value)
 		icon.number = str(i+1)
 		layer.add_child(icon)
 		hotbar.append(icon)
+		# Tappable hotbar: every slot selects itself (desktop parity via 1-9 keys).
+		var tap := Button.new()
+		tap.flat = true
+		tap.focus_mode = Control.FOCUS_NONE
+		tap.position = icon.position
+		tap.size = icon.size
+		tap.tooltip_text = "Select slot %d" % [i+1]
+		tap.pressed.connect(func():
+			game.inventory.selected = i
+			refresh_slots())
+		layer.add_child(tap)
 	refresh_slots()
+
+# Uniform shrink factor for phones (portrait or small landscape); 1.0 on desktop.
+func _hud_scale() -> float:
+	var shorter: float = minf(size.x,size.y)
+	if shorter >= 600.0: return 1.0
+	return clampf(shorter/600.0,0.62,1.0)
+
+# Panels keep their design size on desktop; on phones they fill the screen
+# minus a small margin so nothing falls off-screen.
+func _panel_rect(design: Vector2) -> Rect2:
+	if size.x >= design.x+40 and size.y >= design.y+40: return Rect2(_center(design),design)
+	var fitted: Vector2 = (size-Vector2(16,16)).min(design)
+	return Rect2(_center(fitted),fitted)
 
 func show_pause() -> void:
 	_clear()
 	screen = "pause"
 	_dim()
-	var panel := _panel(layer,Rect2(_center(Vector2(480,530)),Vector2(480,530)))
+	var panel := _panel(layer,_panel_rect(Vector2(480,530)))
 	_label(panel,"TAKE A BREATHER",Vector2(34,26),12,ACCENT)
 	_label(panel,"A moment of quiet.",Vector2(34,49),30)
 	_label(panel,"Your world is paused.",Vector2(34,93),15,MUTED)
@@ -214,7 +246,7 @@ func show_guide() -> void:
 	_clear()
 	screen = "guide"
 	_dim()
-	var panel := _panel(layer,Rect2(_center(Vector2(790,600)),Vector2(790,600)))
+	var panel := _panel(layer,_panel_rect(Vector2(790,600)))
 	_label(panel,"THE VOXEY FIELD GUIDE",Vector2(32,25),12,ACCENT)
 	_label(panel,"Make yourself at home.",Vector2(32,47),30)
 	var text_value: String = "01   START SMALL\nHold left click on an oak log. Open your inventory with E, turn logs into planks, then craft a table. Place it and right click to unlock tools.\n\n02   DIG A LITTLE DEEPER\nA wooden pickaxe mines stone and coal. Stone picks unlock iron. Smelt iron ore in a furnace; an iron pickaxe can harvest diamonds below Y 12.\n\n03   BUILD A LIFE\nTill grass with a hoe and plant seeds. Crops ripen in 90 seconds. Sheep drop meat and wool; cook meat and make a bed. Right click a bed to set your spawn and sleep through the night. Saplings grow into trees.\n\n04   STAY ALIVE\nEat with right click. Keep hunger high to regenerate health. Watch your breath underwater and your footing on cliffs. The dark brings zombies, skeletons, spiders, and creepers. Build a shelter, place torches, and keep a sword close.\n\n05   ARMOR & THE WILD\nCraft leather, iron, golden, or diamond armor at a table and right click to wear it; each piece wears down as it protects you. Cows drop leather, chickens and pigs give meat, bones become bone meal for instant crops, string weaves wool, and gunpowder plus sand makes TNT. Sand and gravel fall when unsupported. Two chests placed together join into one large chest."
@@ -231,7 +263,7 @@ func show_inventory(kind: String = "hand", data: Dictionary = {}) -> void:
 	var tall: bool = kind == "chest" and data.get("slots",[]).size() > 27
 	var extra: int = 84 if tall else 0
 	_dim()
-	var panel := _panel(layer,Rect2(_center(Vector2(1100,616+extra)),Vector2(1100,616+extra)))
+	var panel := _panel(layer,_panel_rect(Vector2(1100,616+extra)))
 	_label(panel,"YOUR SATCHEL",Vector2(28,22),12,ACCENT)
 	_label(panel,{"hand":"A little ingenuity.","table":"The crafting table.","furnace":"Into the fire.","chest":"One large chest." if tall else "Room for everything."}[kind],Vector2(28,44),28)
 	_button(panel,"×",Rect2(1029,22,43,40),game.resume)
@@ -292,6 +324,21 @@ func show_inventory(kind: String = "hand", data: Dictionary = {}) -> void:
 	cursor_icon.size = Vector2(48,48)
 	cursor_icon.show_slot = false
 	layer.add_child(cursor_icon)
+	# Touch has no Shift/right-click: on-screen toggles provide both semantics.
+	if game.touch:
+		var toggle_panel := _panel(layer,Rect2(Vector2(8,size.y-124),Vector2(198,116)),Color(0.06,0.11,0.08,0.85))
+		split_toggle = CheckButton.new()
+		split_toggle.text = "Split mode"
+		split_toggle.position = Vector2(10,8)
+		split_toggle.size = Vector2(178,40)
+		split_toggle.toggled.connect(func(value: bool): split_mode=value)
+		toggle_panel.add_child(split_toggle)
+		shift_toggle = CheckButton.new()
+		shift_toggle.text = "Batch mode"
+		shift_toggle.position = Vector2(10,54)
+		shift_toggle.size = Vector2(178,40)
+		shift_toggle.toggled.connect(func(value: bool): shift_mode=value)
+		toggle_panel.add_child(shift_toggle)
 	refresh_slots()
 
 func _select_recipe(index: int) -> void:
@@ -398,7 +445,7 @@ func _refresh_crafting() -> void:
 	fill_button.disabled=not can_fill
 
 func _fill_grid() -> void:
-	if game.inventory.fill_grid(recipe_index,station,Input.is_physical_key_pressed(KEY_SHIFT)):
+	if game.inventory.fill_grid(recipe_index,station,Input.is_physical_key_pressed(KEY_SHIFT) or shift_mode):
 		game.sound("click")
 	else: game.toast("Make room in your inventory or gather the missing ingredients.")
 	refresh_slots()
@@ -408,7 +455,7 @@ func _take_output() -> void:
 	if match_index<0: return
 	var recipe: Dictionary = game.inventory.recipes[match_index]
 	var crafted: bool = false
-	if Input.is_physical_key_pressed(KEY_SHIFT):
+	if Input.is_physical_key_pressed(KEY_SHIFT) or shift_mode:
 		for i in 64:
 			if not game.inventory.craft_grid_to_inventory(station): break
 			crafted=true
@@ -457,6 +504,7 @@ func _armor_input(event: InputEvent, index: int) -> void:
 		_slot_click(index,false,true,false,true)
 
 func _slot_click(index: int, is_station: bool, right: bool, is_grid: bool = false, is_armor: bool = false) -> void:
+	if split_mode: right = true
 	var source: Array = game.player.armor_slots if is_armor else (game.inventory.grid if is_grid else (station_data.slots if is_station else game.inventory.slots))
 	var slot: Dictionary = source[index]
 	if is_armor and cursor.id != 0 and Nodes.armor_piece(cursor.id) != index: return
@@ -464,7 +512,7 @@ func _slot_click(index: int, is_station: bool, right: bool, is_grid: bool = fals
 		if index == 2: return
 		if index == 1 and cursor.id not in [Nodes.COAL,Nodes.LOG,Nodes.PLANKS,Nodes.STICK]: return
 		if index == 0 and cursor.id not in [Nodes.IRON_ORE,Nodes.GOLD_ORE,Nodes.COPPER_ORE,Nodes.SAND,Nodes.COBBLE,Nodes.RAW_MEAT,Nodes.LOG]: return
-	if Input.is_physical_key_pressed(KEY_SHIFT) and cursor.id == 0 and slot.id != 0:
+	if (Input.is_physical_key_pressed(KEY_SHIFT) or shift_mode) and cursor.id == 0 and slot.id != 0:
 		if is_station or is_grid or is_armor:
 			slot.count = game.inventory.add_item(slot.id,slot.count,slot.wear)
 			if slot.count == 0: slot.id = 0; slot.wear = 0
@@ -528,7 +576,7 @@ func show_death() -> void:
 	_clear()
 	screen="dead"
 	_dim()
-	var panel := _panel(layer,Rect2(_center(Vector2(500,300)),Vector2(500,300)))
+	var panel := _panel(layer,_panel_rect(Vector2(500,300)))
 	_label(panel,"THE WILDERNESS REMEMBERS",Vector2(32,26),12,ACCENT)
 	_label(panel,"A new beginning.",Vector2(32,53),32)
 	_label(panel,"Your belongings remain where you fell.\nReturn to collect them before they fade.",Vector2(32,113),16,MUTED)
@@ -584,31 +632,41 @@ func _draw() -> void:
 			if player.mining>0:
 				draw_rect(Rect2(center+Vector2(-24,20),Vector2(48,3)),Color(0,0,0,0.4))
 				draw_rect(Rect2(center+Vector2(-24,20),Vector2(48*player.mining,3)),ACCENT)
-		draw_style_box(_style(Color(0.07,0.13,0.09,0.84),Color(0.44,0.54,0.34,0.5),1),Rect2(center.x-270,size.y-117,536,107))
-		var left: float = center.x-255
+		# Status bar shrinks on phones so the touch buttons stay clear.
+		var bar_scale: float = _hud_scale()
+		var bar_w: float = 536.0*bar_scale
+		var bar_h: float = 107.0*bar_scale
+		var bar_y: float = size.y-bar_h-(62.0 if game.touch else 0.0)
+		draw_style_box(_style(Color(0.07,0.13,0.09,0.84),Color(0.44,0.54,0.34,0.5),1),Rect2(center.x-bar_w*0.5,bar_y,bar_w,bar_h))
+		var left: float = center.x-255.0*bar_scale
+		var row_y: float = bar_y+16.0*bar_scale
 		for i in (10 if game.gamemode=="survival" else 0):
-			_heart(Vector2(left+8+i*20,size.y-101),i<float(player.health)/2.0)
-			_food(Vector2(center.x+63+i*19,size.y-101),i<float(player.hunger)/2.0)
-		if game.gamemode=="creative": draw_string(font,Vector2(center.x-244,size.y-96),"CREATIVE  ·  "+("FLYING  /  SPACE ↑   SHIFT ↓" if player.flying else "F / DOUBLE SPACE TO FLY")+"  ·  / CONSOLE",HORIZONTAL_ALIGNMENT_LEFT,-1,11,ACCENT)
-		draw_rect(Rect2(center.x-254,size.y-86,508,3),Color("263c2b"))
-		draw_rect(Rect2(center.x-254,size.y-86,508*clampf(game.experience/30.0,0,1),3),Color("a6be69"))
+			_heart(Vector2(left+8+i*20*bar_scale,row_y),i<float(player.health)/2.0)
+			_food(Vector2(center.x+63.0*bar_scale+i*19*bar_scale,row_y),i<float(player.hunger)/2.0)
+		if game.gamemode=="creative": draw_string(font,Vector2(center.x-244.0*bar_scale,bar_y+21.0*bar_scale),"CREATIVE  ·  "+("FLYING  /  ▲ ✈" if player.flying else "TAP ✈ TO FLY")+"  ·  / CONSOLE",HORIZONTAL_ALIGNMENT_LEFT,-1,11,ACCENT)
+		draw_rect(Rect2(center.x-254.0*bar_scale,bar_y+31.0*bar_scale,508.0*bar_scale,3),Color("263c2b"))
+		draw_rect(Rect2(center.x-254.0*bar_scale,bar_y+31.0*bar_scale,508.0*bar_scale*clampf(game.experience/30.0,0,1),3),Color("a6be69"))
 		var selected_name: String = Nodes.title(game.inventory.held().id) if game.inventory.held().id else "Empty hand"
 		var text_width: float = font.get_string_size(selected_name,HORIZONTAL_ALIGNMENT_LEFT,-1,16).x
-		draw_style_box(_style(Color(0.07,0.13,0.09,0.8)),Rect2(center.x-text_width/2-14,size.y-155,text_width+28,32))
-		draw_string(font,Vector2(center.x-text_width/2,size.y-132),selected_name,HORIZONTAL_ALIGNMENT_LEFT,-1,16,TEXT)
+		draw_style_box(_style(Color(0.07,0.13,0.09,0.8)),Rect2(center.x-text_width/2-14,bar_y-32,text_width+28,32))
+		draw_string(font,Vector2(center.x-text_width/2,bar_y-9),selected_name,HORIZONTAL_ALIGNMENT_LEFT,-1,16,TEXT)
 		var defence: int = player.armor_points()
 		if defence>0 and game.gamemode=="survival":
-			for i in 10: _shield(Vector2(left+8+i*20,size.y-121),(i+1)*2<=defence,i*2+1==defence)
+			for i in 10: _shield(Vector2(left+8+i*20*bar_scale,row_y-20.0*bar_scale),(i+1)*2<=defence,i*2+1==defence)
 		if player.breath<10:
-			for i in 10: draw_circle(Vector2(center.x+64+i*18,size.y-123),4,Color("b5dbe6") if i<player.breath else Color("3c616b"))
+			for i in 10: draw_circle(Vector2(center.x+64.0*bar_scale+i*18*bar_scale,row_y-18.0*bar_scale),4,Color("b5dbe6") if i<player.breath else Color("3c616b"))
 		if game.journal_step<4 and game.gamemode=="survival":
-			var tasks: Array = [["A HUMBLE BEGINNING","Hold LMB to gather an oak log."],["MAKE SOMETHING","Press E. Turn your logs into planks."],["ROOM TO GROW","Craft a table, then place it with RMB."],["THE NEXT CHAPTER","Use your table to craft a wooden pickaxe."]]
+			var mine_hint: String = "Hold the ⛏ button to gather an oak log." if game.touch else "Hold LMB to gather an oak log."
+			var craft_hint: String = "Tap the bag button. Turn your logs into planks." if game.touch else "Press E. Turn your logs into planks."
+			var place_hint: String = "Craft a table, then place it with the ✋ button." if game.touch else "Craft a table, then place it with RMB."
+			var tasks: Array = [["A HUMBLE BEGINNING",mine_hint],["MAKE SOMETHING",craft_hint],["ROOM TO GROW",place_hint],["THE NEXT CHAPTER","Use your table to craft a wooden pickaxe."]]
 			draw_style_box(_style(Color(0.08,0.14,0.10,0.78)),Rect2(24,size.y-177,286,85))
 			draw_string(font,Vector2(40,size.y-151),tasks[game.journal_step][0],HORIZONTAL_ALIGNMENT_LEFT,-1,11,ACCENT)
 			draw_string(font,Vector2(40,size.y-125),tasks[game.journal_step][1],HORIZONTAL_ALIGNMENT_LEFT,-1,13,TEXT)
-		draw_style_box(_style(Color(0.07,0.13,0.09,0.75)),Rect2(size.x-236,size.y-89,212,65))
-		draw_string(font,Vector2(size.x-223,size.y-64),"E  Inventory     ESC  Pause",HORIZONTAL_ALIGNMENT_LEFT,-1,12,TEXT)
-		draw_string(font,Vector2(size.x-223,size.y-41),"LMB  Mine       RMB  Use",HORIZONTAL_ALIGNMENT_LEFT,-1,12,MUTED)
+		if not game.touch:
+			draw_style_box(_style(Color(0.07,0.13,0.09,0.75)),Rect2(size.x-236,size.y-89,212,65))
+			draw_string(font,Vector2(size.x-223,size.y-64),"E  Inventory     ESC  Pause",HORIZONTAL_ALIGNMENT_LEFT,-1,12,TEXT)
+			draw_string(font,Vector2(size.x-223,size.y-41),"LMB  Mine       RMB  Use",HORIZONTAL_ALIGNMENT_LEFT,-1,12,MUTED)
 		if debug:
 			var info: String = "%d FPS  ·  %d map blocks  ·  %d columns\n%d generation jobs  ·  %d remesh jobs\nSeed %d  ·  Greedy meshing  ·  16³ nodes / block" % [Engine.get_frames_per_second(),game.world.blocks.size(),game.world.columns.size(),game.world.jobs.size(),game.world.remesh_jobs.size(),game.world.seed_value]
 			draw_style_box(_style(Color(0,0,0,0.72)),Rect2(24,105,410,83))
@@ -648,7 +706,7 @@ func show_worlds() -> void:
 	_clear()
 	screen="worlds"
 	_dim()
-	var panel := _panel(layer,Rect2(_center(Vector2(900,560)),Vector2(900,560)))
+	var panel := _panel(layer,_panel_rect(Vector2(900,560)))
 	_label(panel,"A PLACE TO CALL YOUR OWN",Vector2(30,24),12,ACCENT)
 	_label(panel,"Your worlds.",Vector2(30,46),32)
 	_button(panel,"+ New world",Rect2(700,32,170,44),show_new_world)
@@ -701,7 +759,7 @@ func show_new_world() -> void:
 	_clear()
 	screen="new_world"
 	_dim()
-	var panel := _panel(layer,Rect2(_center(Vector2(620,548)),Vector2(620,548)))
+	var panel := _panel(layer,_panel_rect(Vector2(620,548)))
 	_label(panel,"TURN A NEW LEAF",Vector2(34,26),12,ACCENT)
 	_label(panel,"A world of your own.",Vector2(34,49),32)
 	_label(panel,"WORLD NAME",Vector2(34,117),12,MUTED)
@@ -731,7 +789,7 @@ func show_loading() -> void:
 	_clear()
 	screen="loading"
 	_dim()
-	var panel:=_panel(layer,Rect2(_center(Vector2(500,190)),Vector2(500,190)))
+	var panel:=_panel(layer,_panel_rect(Vector2(500,190)))
 	_label(panel,"GROWING YOUR WORLD",Vector2(30,26),12,ACCENT)
 	_label(panel,game.world_name,Vector2(30,56),30,TEXT,440)
 	_label(panel,"Preparing the terrain. Your adventure is almost ready.",Vector2(30,131),14,MUTED)
