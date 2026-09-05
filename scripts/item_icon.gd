@@ -65,13 +65,59 @@ func _draw() -> void:
 		if item_id in [Nodes.STICK,Nodes.TORCH,Nodes.BONE]:
 			shape = [[-3,5],[-2,4],[-1,3],[0,2],[1,1],[2,0],[3,-1],[4,-2]]
 			if item_id == Nodes.BONE: shape.append_array([[-4,4],[-3,6],[5,-3],[3,-3]])
+		elif item_id == Nodes.SHEARS:
+			shape = [[-4,-4],[-3,-5],[-2,-4],[-1,-3],[0,-2],[1,-1],[2,0],[3,1],[4,2],[4,3],[-2,-2],[-3,-1],[-4,0],[-4,1],[-3,2],[-2,3],[-1,4],[0,5],[1,4],[2,5]]
+		elif item_id in [Nodes.BUCKET,Nodes.WATER_BUCKET,Nodes.MILK_BUCKET]:
+			shape = [[-4,-2],[-3,-1],[-3,0],[-2,1],[-2,2],[-1,3],[0,3],[1,3],[2,2],[2,1],[3,0],[3,-1],[4,-2],[-2,-3],[-1,-4],[1,-4],[2,-3]]
+			if item_id == Nodes.WATER_BUCKET: shape.append_array([[-2,0],[-1,1],[0,1],[1,1],[2,0]])
+			if item_id == Nodes.MILK_BUCKET: shape.append_array([[-2,0],[-1,1],[0,1],[1,1],[2,0]])
+		elif item_id == Nodes.SNOWBALL:
+			shape = [[-3,-1],[-2,-3],[-1,-4],[1,-4],[2,-3],[3,-1],[3,1],[2,3],[0,4],[-2,3],[-3,1]]
+			pixel = 2.2
+		elif item_id == Nodes.CLAY_BALL:
+			shape = [[-3,-1],[-2,-3],[0,-4],[2,-3],[3,-1],[3,1],[2,3],[0,4],[-2,3],[-3,1]]
+			pixel = 2.2
+		elif item_id == Nodes.PAPER:
+			shape = [[-3,-4],[3,-4],[3,4],[-3,4]]
+			pixel = 2.4
+		elif item_id == Nodes.BOOK:
+			shape = [[-4,-4],[4,-4],[4,4],[-4,4],[-2,-2],[0,-2],[2,-2]]
+		elif item_id == Nodes.SADDLE:
+			shape = [[-4,-3],[-2,-4],[2,-4],[4,-3],[4,0],[2,2],[-2,2],[-4,0]]
 		elif item_id in [Nodes.WHEAT,Nodes.RIPE_WHEAT,Nodes.GRAIN,Nodes.SEEDS,Nodes.SAPLING,Nodes.FLOWER]:
 			shape = [[0,5],[0,3],[0,1],[0,-1],[0,-3],[-2,0],[2,-2],[-2,-4],[2,-5]]
 		elif item_id == Nodes.STRING:
 			shape = [[-5,-4],[-4,-2],[-3,0],[-2,2],[-1,4],[0,5],[1,4],[2,2],[3,0],[4,-2],[5,-4]]
 			pixel = 1.6
-		elif item_id in [Nodes.GUNPOWDER,Nodes.BONE_MEAL]:
+		elif item_id in [Nodes.GUNPOWDER,Nodes.SUGAR,Nodes.BONE_MEAL]:
 			shape = [[-4,2],[-2,4],[0,1],[2,3],[4,0],[-1,-2],[1,-4],[-3,-1],[3,-3],[0,4]]
+			pixel = 2.0
+		elif item_id == Nodes.PUMPKIN_PIE:
+			shape = [[-4,-1],[-3,-3],[-1,-4],[1,-4],[3,-3],[4,-1],[4,2],[3,3],[-3,3],[-4,2]]
+			pixel = 2.4
+		elif item_id == Nodes.MELON_SLICE:
+			shape = [[-4,2],[0,-4],[4,2]]
+			pixel = 2.6
+		elif item_id == Nodes.BOW:
+			shape = [[-2,-5],[0,-5],[2,-4],[3,-3],[4,-1],[4,1],[3,3],[2,4],[0,5],[-2,5],[-3,4],[-4,2],[-4,-2],[-3,-4]]
+			if item_id == Nodes.BOW: shape.append_array([[3,-4],[1,0],[2,1],[3,2]])
+		elif item_id == Nodes.ARROW_ITEM:
+			shape = [[4,-4],[3,-3],[2,-2],[1,-1],[0,0],[-1,1],[-2,2],[-3,3],[-4,4],[3,-5],[-3,5],[3,-4]]
+		elif item_id == Nodes.FEATHER:
+			shape = [[3,-5],[2,-4],[1,-3],[0,-2],[-1,-1],[-2,0],[-3,1],[-4,2],[-2,2],[-1,1]]
+		elif item_id == Nodes.FLINT:
+			shape = [[-2,-3],[1,-4],[3,-2],[4,1],[2,3],[-1,4],[-3,2],[-4,-1]]
+			pixel = 2.2
+		elif item_id == Nodes.FLINT_AND_STEEL:
+			shape = [[-4,0],[-3,-2],[-1,-3],[1,-3],[3,-2],[4,0],[3,2],[1,3],[-1,3],[-3,2]]
+			if item_id == Nodes.FLINT_AND_STEEL: shape.append_array([[-1,-5],[1,-4],[2,-2]])
+		elif item_id == Nodes.COMPASS:
+			shape = [[-4,-2],[-2,-4],[2,-4],[4,-2],[4,2],[2,4],[-2,4],[-4,2]]
+			if item_id == Nodes.COMPASS: shape.append_array([[0,-2],[1,0],[0,3],[-1,0]])
+			pixel = 2.0
+		elif item_id == Nodes.CLOCK:
+			shape = [[-4,-1],[-3,-3],[-1,-4],[1,-4],[3,-3],[4,-1],[4,1],[3,3],[1,4],[-1,4],[-3,3],[-4,1]]
+			if item_id == Nodes.CLOCK: shape.append_array([[0,-2],[0,0],[2,1]])
 			pixel = 2.0
 		elif item_id == Nodes.LEATHER:
 			shape = [[-4,-3],[-2,-4],[0,-4],[2,-4],[4,-2],[5,0],[4,2],[2,4],[0,4],[-2,4],[-4,3],[-5,1],[-5,-1],[-2,-1],[0,0],[2,1],[-1,2]]

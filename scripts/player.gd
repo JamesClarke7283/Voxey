@@ -115,12 +115,27 @@ func _physics_process(delta: float) -> void:
 	var wet: bool = game.world.node_at(Vector3i((position+Vector3.UP*0.5).floor())) == Nodes.WATER
 	underwater = game.world.node_at(Vector3i(camera.global_position.floor())) == Nodes.WATER
 	if wet: speed *= 0.55
+	# Ladders: holding forward (or jump) against a ladder climbs; sneaking holds still.
+	var body_cell: Vector3i = Vector3i(position.floor())
+	var on_ladder: bool = game.world.node_at(body_cell) == Nodes.LADDER or game.world.node_at(body_cell+Vector3i.UP) == Nodes.LADDER
 	direction = basis * direction.normalized()
 	velocity.x = move_toward(velocity.x,direction.x*speed,delta*35)
 	velocity.z = move_toward(velocity.z,direction.z*speed,delta*35)
-	# Water: mild sinking drift, strong swim stroke toward where you look, and a
-	# surface kick so you pop up onto the shore instead of bobbing below it.
-	if wet:
+	if on_ladder:
+		velocity.y = 0.0
+		var climb: float = 0.0
+		if Input.is_physical_key_pressed(KEY_SPACE) or (pad != null and pad.jump_held) or (direction.length() > 0.2 and camera.rotation.x > -0.7):
+			climb = 3.6
+		elif pad != null and pad.sneak_held:
+			climb = 0.0
+		elif crouch:
+			climb = 0.0
+		elif direction.length() > 0.2:
+			climb = -3.2 if camera.rotation.x < -0.7 else 0.0
+		velocity.y = climb
+	elif wet:
+		# Water: mild sinking drift, strong swim stroke, and a surface kick that
+		# vaults the shore when you face open air above the waterline.
 		velocity.y -= 3.2*delta
 		velocity.y = maxf(velocity.y,-2.2)
 		if Input.is_physical_key_pressed(KEY_SPACE) or (pad != null and pad.jump_held):
@@ -142,7 +157,7 @@ func _physics_process(delta: float) -> void:
 				grounded = false
 				hunger -= 0.015
 	var old_pos: Vector3 = position
-	_move(velocity*delta,crouch)
+	_move(velocity*delta,crouch,on_ladder)
 	var distance: float = Vector2(position.x-old_pos.x,position.z-old_pos.z).length()
 	walked += distance
 	if distance > 0.001 and grounded:
@@ -170,7 +185,7 @@ func _physics_process(delta: float) -> void:
 			if game.world.node_at(feet+d) == Nodes.CACTUS: hurt(1)
 		if position.y < -5: hurt(20,true)
 
-func _move(motion: Vector3, crouch: bool) -> void:
+func _move(motion: Vector3, crouch: bool, on_ladder: bool = false) -> void:
 	var steps: int = maxi(1,ceili(motion.length()/0.2))
 	var part: Vector3 = motion/steps
 	grounded = false
@@ -193,7 +208,9 @@ func _move(motion: Vector3, crouch: bool) -> void:
 			position[axis] += part[axis]*low
 			if axis == 1 and part.y < 0:
 				grounded = true
-				if velocity.y < -12: hurt(floorf((-velocity.y-11)*0.9),true)
+				if velocity.y < -12 and not on_ladder:
+					hurt(floorf((-velocity.y-11)*0.9),true)
+					game.achievements.award("sniper_hurt")
 			velocity[axis] = 0.0
 			part[axis] = 0.0
 	if game.world.intersects(position-Vector3.UP*0.035): grounded = true
@@ -221,8 +238,15 @@ func _process(delta: float) -> void:
 		if mob != null:
 			mining = 0
 			if use_cooldown <= 0:
-				mob.hit(2+(Nodes.tool_tier(held)+1)*(2 if Nodes.tool_kind(held)==3 else 1),position)
-				if game.gamemode!="creative": game.inventory.damage_tool()
+				# Shears shear sheep instead of hurting them; other tools attack.
+				if held == Nodes.SHEARS and mob.kind == "sheep" and not mob.sheared:
+					if mob.shear():
+						swing = 1
+						use_cooldown = 0.6
+						if game.gamemode!="creative": game.inventory.damage_tool()
+				else:
+					mob.hit(2+(Nodes.tool_tier(held)+1)*(2 if Nodes.tool_kind(held)==3 else 1),position)
+					if game.gamemode!="creative" and held != Nodes.SHEARS: game.inventory.damage_tool()
 				use_cooldown = 0.45
 				swing = 1
 		elif not target.is_empty():
@@ -286,6 +310,49 @@ func use() -> void:
 	if Nodes.is_armor(held):
 		equip_armor(game.inventory.held())
 		return
+	# Milking: an empty bucket on a cow becomes a milk bucket.
+	if held == Nodes.BUCKET:
+		var cow = game.target_mob()
+		if cow != null and cow.kind == "cow":
+			game.inventory.consume_selected()
+			game.inventory.add_item(Nodes.MILK_BUCKET,1)
+			game.sound("eat")
+			game.toast("Fresh milk.")
+			swing = 1
+			game.achievements.award("milkmaid")
+			return
+	# An empty bucket on water scoops a water bucket.
+	if held == Nodes.BUCKET and not target.is_empty() and game.world.node_at(target.pos) == Nodes.WATER:
+		game.inventory.consume_selected()
+		game.inventory.add_item(Nodes.WATER_BUCKET,1)
+		game.sound("dig")
+		swing = 1
+		return
+	# Compass points home; clock reads the day and hour.
+	if held == Nodes.COMPASS:
+		var home_delta: Vector3 = game.spawn_point-position
+		var bearing: String = ["east","south-east","south","south-west","west","north-west","north","north-east"][wrapi(roundi(atan2(-home_delta.x,-home_delta.z)/PI*4.0),0,8)]
+		game.toast("Spawn lies %d m to the %s." % [int(home_delta.length()),bearing])
+		swing = 0.5
+		return
+	if held == Nodes.CLOCK:
+		game.toast("Day %d  ·  %s  ·  %d%% through the day." % [game.day_number(),game.time_name(),int(fposmod(game.day_time,1.0)*100)])
+		swing = 0.5
+		return
+	# The bow fires an arrow where you look if you have ammunition.
+	if held == Nodes.BOW:
+		if game.inventory.count_item(Nodes.ARROW_ITEM) > 0 or game.gamemode=="creative":
+			if game.gamemode!="creative": game.inventory.remove_item(Nodes.ARROW_ITEM,1)
+			var origin: Vector3 = camera.global_position-camera.global_basis.z*0.4
+			var velocity_value: Vector3 = -camera.global_basis.z*26.0+Vector3.UP*2.2
+			var shot: Arrow = game.spawn_arrow(origin,velocity_value)
+			if shot != null: shot.from_player = true
+			if game.gamemode!="creative": game.inventory.damage_tool()
+			game.sound("arrow")
+			swing = 1
+		else:
+			game.toast("You need arrows. Craft them from flint, sticks, and feathers.")
+		return
 	if target.is_empty(): return
 	var p: Vector3i = target.pos
 	var id: int = target.id
@@ -308,11 +375,29 @@ func use() -> void:
 		game.sound("place")
 		swing = 1
 		return
+	# Bone meal sprinkled on grass carpets it with wildflowers.
+	if held == Nodes.BONE_MEAL and id == Nodes.GRASS and game.world.node_at(p+Vector3i.UP) == Nodes.AIR:
+		game.world.set_node(p+Vector3i.UP,Nodes.FLOWER)
+		if game.gamemode!="creative": game.inventory.consume_selected()
+		game.puff(Vector3(p)+Vector3.ONE*0.5+Vector3.UP,Color("b8e07a"),8)
+		game.sound("place")
+		swing = 1
+		return
 	if Nodes.tool_kind(held) == 4 and id in [Nodes.GRASS,Nodes.DIRT] and game.world.node_at(p+Vector3i.UP) == Nodes.AIR:
 		game.world.set_node(p,Nodes.FARMLAND)
 		if game.gamemode!="creative": game.inventory.damage_tool()
 		game.sound("dig")
 		return
+	# Pouring: a water bucket fills the targeted face with a water node.
+	if held == Nodes.WATER_BUCKET and not target.is_empty():
+		var pour: Vector3i = p+target.normal
+		if game.world.node_at(pour) == Nodes.AIR and game.world.set_node(pour,Nodes.WATER):
+			if game.gamemode!="creative": game.inventory.consume_selected()
+			game.inventory.add_item(Nodes.BUCKET,1)
+			game.sound("place")
+			swing = 1
+			game.api.emit_node_placed(pour,Nodes.WATER)
+			return
 	var place_id: int = Nodes.WHEAT if held == Nodes.SEEDS else held
 	if not Nodes.placeable(place_id) and not (game.gamemode=="creative" and place_id in [Nodes.WATER,Nodes.BEDROCK]): return
 	var destination: Vector3i = p+target.normal
@@ -331,7 +416,7 @@ func use() -> void:
 		if game.gamemode!="creative": game.inventory.consume_selected()
 		game.sound("place")
 		swing = 1
-		if place_id == Nodes.TORCH: game.add_torch(destination)
+		if place_id in [Nodes.TORCH,Nodes.GLOWSTONE]: game.add_torch(destination)
 		if place_id == Nodes.CHEST and game.world.chest_partner(destination) != destination: game.toast("The chests join into one large chest.")
 		game.settle(destination)
 		game.progress("build")

@@ -14,6 +14,7 @@ static func build(data: PackedByteArray) -> Array:
 				has_nodes = true
 				if Nodes.plant(id): _plant(outputs[0], Vector3(x,y,z), id)
 				elif id == Nodes.TORCH: _torch(outputs[0], Vector3(x,y,z))
+				elif id == Nodes.LADDER: _ladder(outputs[0], Vector3(x,y,z), data, Vector3i(x,y,z))
 	if not has_nodes: return [[], []]
 	for axis in 3:
 		var u: int = (axis + 1) % 3
@@ -32,7 +33,7 @@ static func build(data: PackedByteArray) -> Array:
 						p[u] += i
 						p[v] += j
 						var id: int = data[p.x + p.z*18 + p.y*324]
-						if id == 0 or Nodes.plant(id) or id == Nodes.TORCH: continue
+						if id == 0 or Nodes.plant(id) or id == Nodes.TORCH or id == Nodes.LADDER: continue
 						p[axis] += sign_dir
 						var neighbor: int = data[p.x + p.z*18 + p.y*324]
 						if neighbor == id or not Nodes.transparent(neighbor): continue
@@ -112,3 +113,24 @@ static func _torch(out: Array, p: Vector3) -> void:
 			a[axis] = p[axis]+0.5+side*0.07
 			b[axis] = a[axis]
 			_quad(out,[a,b,b+Vector3.UP*0.75,a+Vector3.UP*0.75],uv,Vector3.UP,Nodes.TORCH,Color.WHITE,side == 1)
+
+# A ladder is a flat quad mounted against the first solid neighbor (or the
+# west face when free-standing, as when a supporting node was mined first).
+static func _ladder(out: Array, p: Vector3, data: PackedByteArray, cell: Vector3i) -> void:
+	var uv: Array = [Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)]
+	var mounts: Array = [[Vector3i(1,0,0),Vector3(0.92,0,0),Vector3(0.92,0,1)],
+		[Vector3i(-1,0,0),Vector3(0.08,0,1),Vector3(0.08,0,0)],
+		[Vector3i(0,0,1),Vector3(1,0,0.92),Vector3(0,0,0.92)],
+		[Vector3i(0,0,-1),Vector3(0,0,0.08),Vector3(1,0,0.08)]]
+	for mount in mounts:
+		var neighbor: Vector3i = cell+mount[0]
+		if neighbor.x < 0 or neighbor.x > 17 or neighbor.z < 0 or neighbor.z > 17: continue
+		var wall: int = data[neighbor.x + neighbor.z*18 + (cell.y+1)*324]
+		if Nodes.solid(wall) and not Nodes.transparent(wall):
+			var a: Vector3 = p+mount[1]
+			var b: Vector3 = p+mount[2]
+			_quad(out,[a,b,b+Vector3.UP,a+Vector3.UP],uv,Vector3(mount[0])*-1.0,Nodes.LADDER,Color.WHITE,mount[0].x+mount[0].z > 0)
+			return
+	var a: Vector3 = p+Vector3(0.08,0,0)
+	var b: Vector3 = p+Vector3(0.08,0,1)
+	_quad(out,[a,b,b+Vector3.UP,a+Vector3.UP],uv,Vector3.RIGHT,Nodes.LADDER,Color.WHITE,false)

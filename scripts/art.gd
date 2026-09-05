@@ -6,13 +6,18 @@ static func make_atlas() -> ImageTexture:
 	img.fill(Color.TRANSPARENT)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7164
-	for tile in 42:
+	for tile in 48:
 		var base: Color = Nodes.color(tile)
 		if tile == 41: base = Color("a08a6a")
 		if tile == 30: base = Color("719f43")
 		if tile == 31: base = Color("bb945e")
 		if tile == 32: base = Color("b78b52")
 		if tile == 33: base = Color("626d71")
+		if tile == 42: base = Color("a8834f")
+		if tile == 44: base = Color("9aa2a8")
+		if tile == 45: base = Color("cf8a2a")
+		if tile == 46: base = Color("cf8a2a")
+		if tile == 47: base = Color("9dc14f")
 		for y in 16:
 			for x in 16:
 				var c: Color = base * rng.randf_range(0.86,1.1)
@@ -78,8 +83,58 @@ static func make_atlas() -> ImageTexture:
 					41:
 						if x in [0,15] or y in [0,15]: c *= 0.6
 						if x > 3 and x < 12 and y > 3 and y < 12: c = Color("6c5a44") * rng.randf_range(0.9,1.1)
+					42:
+						# Ladder: two rails with rungs, transparent elsewhere.
+						if x in [2,3,12,13]: c = Color("a8834f")*rng.randf_range(0.85,1.1)
+						elif y % 5 in [1,2] and x > 3 and x < 12: c = Color("b8955c")*rng.randf_range(0.85,1.1)
+						else: c.a = 0.0
+					43:
+						# Bookshelf: plank frame, rows of colored book spines.
+						if y < 2 or y > 13 or (y in [7,8]): c = Color("c39760")*rng.randf_range(0.85,1.05)
+						else:
+							var spine: int = (x*7+y*13)%5
+							c = [Color("9c4a33"),Color("3e5a7a"),Color("5d7a3e"),Color("b08a3e"),Color("6a4a7a")][spine]*rng.randf_range(0.85,1.1)
+							if x % 4 == 0: c *= 0.6
+					44:
+						# Clay: grey-blue with darker speckles.
+						if (x/2*5+y/2*11)%13 < 3: c *= 0.82
+					45:
+						# Carved pumpkin face.
+						c = Color("cf8a2a")*rng.randf_range(0.9,1.1)
+						if y in [4,5] and x in [3,4,11,12]: c = Color("3a2410")
+						if y in [9,10,11] and x in [4,5,10,11]: c = Color("3a2410")
+						if y == 11 and x in [6,7,8,9]: c = Color("3a2410")
+						if x in [0,15] or y in [0,15]: c *= 0.72
+					46:
+						# Pumpkin side: ribs.
+						if x % 4 == 0: c *= 0.72
+						if x in [0,15] or y in [0,15]: c *= 0.72
+					47:
+						# Melon: striped rind.
+						c = (Color("9dc14f") if x % 3 != 0 else Color("6f9437"))*rng.randf_range(0.9,1.1)
+					48,49,50:
+						# Metal storage blocks: beveled ingot grid.
+						if x in [0,15] or y in [0,15]: c *= 0.8
+						elif (x in [5,10] or y in [5,10]): c = base.darkened(0.18)
+						elif x in [6,11] or y in [6,11]: c = base.lightened(0.15)
+					51:
+						# Glowstone: mottled bright patches.
+						if (x/2*7+y/2*5)%9 < 3: c = base.lightened(0.35)*rng.randf_range(0.95,1.1)
+						else: c = base.darkened(0.12)
 				img.set_pixel(tile%8*16+x, tile/8*16+y, c)
-	# Mod nodes get procedural noise tiles from 42 onward, keyed by Nodes.custom_tiles.
+	# Expansion-node face tiles (drawn after the loop so they can override).
+	# Tile 52: sandstone top, tile 53: melon top. Ladder (42), bookshelf (43),
+	# clay (44), pumpkins (45/46), melon side (47), and the metal blocks
+	# (48..51) are drawn by the main loop above.
+	for y in 16:
+		for x in 16:
+			var c: Color = Color("d9cf9c")*rng.randf_range(0.9,1.08)
+			c.a = 1.0
+			if x in [0,15] or y in [0,15]: c = Color("cfc394")*rng.randf_range(0.9,1.05)
+			img.set_pixel(52%8*16+x, 52/8*16+y, c)
+			var melon_top: Color = (Color("9dc14f") if (x/2+y/2)%2 == 0 else Color("8ab344"))*rng.randf_range(0.9,1.08)
+			img.set_pixel(53%8*16+x, 53/8*16+y, melon_top)
+	# Mod nodes get procedural noise tiles from 53 onward, keyed by Nodes.custom_tiles.
 	for mod_id in Nodes.custom_tiles:
 		var base: Color = Nodes.color(mod_id)
 		var tile_index: int = Nodes.custom_tiles[mod_id]

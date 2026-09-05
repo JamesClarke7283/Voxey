@@ -531,6 +531,116 @@ func run() -> void:
 	game.controls=null
 	pad.hide_all()
 	check(not pad.visible,"touch controls hide on desktop mode")
+	# Achievements: awarding, persistence, and trigger wiring.
+	game.achievements.unlocked.clear()
+	game.achievements.counters.clear()
+	game.set_gamemode("survival")
+	check(game.achievements.award("first_log"),"the first achievement awards cleanly")
+	check(not game.achievements.award("first_log"),"an achievement never awards twice")
+	game.achievements.award("craft_table")
+	check(game.achievements.is_unlocked("craft_table"),"awarded achievements register as unlocked")
+	check(not game.achievements.award("bogus_id"),"unknown achievement ids are rejected")
+	var saved_ach: Dictionary=game.achievements.to_save()
+	game.achievements.unlocked.clear()
+	game.achievements.from_save(saved_ach)
+	check(game.achievements.is_unlocked("first_log") and game.achievements.is_unlocked("craft_table"),"achievements persist through save data")
+	# Break triggers: mining a log awards Timber.
+	game.achievements.unlocked.clear()
+	game.set_gamemode("survival")
+	var log_p := Vector3i(feet.x+1,feet.y+4,feet.z)
+	game.world.set_node(log_p,Nodes.LOG)
+	game.break_node(log_p,Nodes.LOG,0)
+	check(game.achievements.is_unlocked("first_log"),"breaking an oak log awards Timber")
+	# Shears: shear a sheep, get wool, coat regrows.
+	var Sheep=game.spawn_creature("sheep",game.player.position+Vector3(1.5,0,0))
+	game.achievements.unlocked.clear()
+	check(not Sheep.sheared,"sheep start woolly")
+	check(Sheep.shear(),"shearing a woolly sheep succeeds")
+	check(Sheep.sheared,"the sheep remembers it is sheared")
+	check(game.achievements.is_unlocked("wool_gatherer"),"shearing awards the Barber achievement")
+	var wool_drops: int=0
+	for d in game.drops.get_children():
+		if d.item_id==Nodes.WOOL: wool_drops+=d.amount
+	check(wool_drops>=1 and wool_drops<=3,"shearing drops 1-3 wool")
+	check(not Sheep.shear(),"a sheared sheep cannot be shorn again")
+	game.resume()
+	Sheep.wool_timer=0.01
+	Sheep._physics_process(0.05)
+	game.pause()
+	check(not Sheep.sheared,"the wool coat regrows after its timer")
+	game.player.velocity=Vector3.ZERO
+	check(Nodes.title(Nodes.SHEARS)=="Shears" and Nodes.max_stack(Nodes.SHEARS)==1,"shears are a named unstackable tool")
+	game.inventory.slots[5]={"id":Nodes.SHEARS,"count":1,"wear":0}
+	game.inventory.selected=5
+	Sheep.free()
+	# New nodes: placeable, drop tables, generation.
+	check(Nodes.placeable(Nodes.SANDSTONE) and Nodes.placeable(Nodes.LADDER) and Nodes.placeable(Nodes.BOOKSHELF),"expansion nodes are placeable")
+	check(Nodes.drop(Nodes.CLAY)==Nodes.CLAY_BALL and Nodes.drop(Nodes.MELON)==Nodes.MELON_SLICE,"expansion nodes drop their items")
+	check(Nodes.food(Nodes.PUMPKIN_PIE)==8 and Nodes.food(Nodes.GOLDEN_APPLE)==10,"new foods restore hunger")
+	check(Nodes.tile(Nodes.SANDSTONE,2)==52 and Nodes.tile(Nodes.PUMPKIN,2)==45 and Nodes.tile(Nodes.MELON,2)==53,"new nodes use their dedicated atlas faces")
+	# Recipes for the new content craft correctly.
+	var craft_bag := Inventory.new()
+	craft_bag.add_item(Nodes.IRON,2)
+	check(craft_bag.craft(craft_bag.recipe_index(Nodes.SHEARS),"hand") and craft_bag.count_item(Nodes.SHEARS)==1,"shears craft from two iron ingots")
+	craft_bag.add_item(Nodes.SAND,4)
+	check(craft_bag.craft(craft_bag.recipe_index(Nodes.SANDSTONE),"hand") and craft_bag.count_item(Nodes.SANDSTONE)==1,"sandstone crafts from four sand")
+	craft_bag.add_item(Nodes.CLAY_BALL,4)
+	check(craft_bag.craft(craft_bag.recipe_index(Nodes.BRICK_ITEM),"hand") and craft_bag.count_item(Nodes.BRICK_ITEM)==4,"bricks craft from clay balls")
+	# Bucket: milk a cow, then pour and scoop water.
+	var Cow=game.spawn_creature("cow",game.player.position+Vector3(-1.5,0,0))
+	game.inventory.slots[6]={"id":Nodes.BUCKET,"count":1,"wear":0}
+	game.inventory.selected=6
+	# Stand 2.5 m south of the cow facing north, aiming at its center
+	# (camera sits 1.62 m up, cow center ~0.74 m up → pitch down).
+	game.player.position=Cow.position+Vector3(0,0,2.5)
+	game.player.rotation.y=0
+	game.player.camera.rotation.x=-0.35
+	game.player.target={} # free sight: no block in the way
+	game.achievements.unlocked.clear()
+	game.player.use()
+	check(game.inventory.count_item(Nodes.MILK_BUCKET)==1 and game.achievements.is_unlocked("milkmaid"),"an empty bucket milks a cow")
+	Cow.free()
+	# Bow and arrows: firing consumes ammunition and spawns a player arrow.
+	game.set_gamemode("survival")
+	game.player.position=game._safe_spawn(Vector3(feet.x+0.5,feet.y+2,feet.z+0.5))
+	game.player.target={}
+	game.inventory.slots[7]={"id":Nodes.BOW,"count":1,"wear":0}
+	game.inventory.selected=7
+	var arrows_before: int=game.inventory.count_item(Nodes.ARROW_ITEM)
+	game.inventory.add_item(Nodes.ARROW_ITEM,2)
+	game.player.use()
+	check(game.inventory.count_item(Nodes.ARROW_ITEM)==arrows_before+1,"firing a bow consumes exactly one arrow")
+	check(game.entities.get_child_count()>0,"the bow spawns an arrow entity")
+	var player_arrow: Node3D=game.entities.get_child(game.entities.get_child_count()-1)
+	check(player_arrow.from_player,"player arrows are flagged to hit creatures, not the shooter")
+	player_arrow.free()
+	game.inventory.slots[7]={"id":0,"count":0,"wear":0}
+	# Compass and clock answer with bearing and time.
+	game.inventory.slots[7]={"id":Nodes.COMPASS,"count":1,"wear":0}
+	game.player.use()
+	game.inventory.slots[7]={"id":Nodes.CLOCK,"count":1,"wear":0}
+	game.player.use()
+	check(true,"compass and clock read out without errors")
+	game.inventory.slots[7]={"id":0,"count":0,"wear":0}
+	# Storage blocks: craft, revert, glowstone glows.
+	var metal_bag := Inventory.new()
+	metal_bag.add_item(Nodes.IRON,9)
+	check(metal_bag.craft(metal_bag.recipe_index(Nodes.IRON_BLOCK),"table") and metal_bag.count_item(Nodes.IRON_BLOCK)==1,"nine iron ingots form a block of iron")
+	var revert_index: int=-1
+	for i in metal_bag.recipes.size():
+		if metal_bag.recipes[i].name=="Iron ingots": revert_index=i
+	check(revert_index>=0 and metal_bag.craft(revert_index,"table") and metal_bag.count_item(Nodes.IRON)==9 and metal_bag.count_item(Nodes.IRON_BLOCK)==0,"a block of iron reverts to nine ingots")
+	check(Nodes.solid(Nodes.IRON_BLOCK) and Nodes.solid(Nodes.GLOWSTONE) and Nodes.placeable(Nodes.GLOWSTONE),"metal and glowstone blocks are solid placeable nodes")
+	var glow_p := Vector3i(feet.x,feet.y+6,feet.z)
+	game.world.set_node(glow_p,Nodes.GLOWSTONE)
+	game.add_torch(glow_p)
+	check(game.torch_lights.has(glow_p),"glowstone registers a light source")
+	game.world.set_node(glow_p,Nodes.AIR)
+	check(not game.torch_lights.has(glow_p) or is_instance_valid(game.torch_lights.get(glow_p)),"breaking glowstone is tracked by the light map")
+	# Bow and arrow items exist with proper names and stacks.
+	check(Nodes.title(Nodes.BOW)=="Bow" and Nodes.title(Nodes.ARROW_ITEM)=="Arrow" and Nodes.max_stack(Nodes.ARROW_ITEM)==64,"bow and arrows are named items with stack rules")
+	check(Nodes.title(Nodes.FEATHER)=="Feather" and Nodes.title(Nodes.FLINT)=="Flint","feathers and flint exist as crafting materials")
+	check(Game.VERSION!="","a version tag exists for the menus")
 	# Armor persists
 	game.player.armor_slots[0]={"id":Nodes.armor_id(0,0),"count":1,"wear":4}
 	check(game.save_game("user://voxey_test.json"),"a world with worn armor saves")

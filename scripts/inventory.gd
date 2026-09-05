@@ -38,6 +38,29 @@ func _init() -> void:
 		for piece in 4:
 			var id: int = Nodes.armor_id(material,piece)
 			_recipe(Nodes.title(id), id, 1, patterns[piece], 3, "table")
+	# Luanti/Mineclonia-style expansion items.
+	_recipe("Shears", Nodes.SHEARS, 1, [0,Nodes.IRON,Nodes.IRON,0], 2)
+	_recipe("Bucket", Nodes.BUCKET, 1, [Nodes.IRON,0,Nodes.IRON,0,Nodes.IRON,0], 2)
+	_recipe("Sandstone", Nodes.SANDSTONE, 1, [Nodes.SAND,Nodes.SAND,Nodes.SAND,Nodes.SAND], 2)
+	_recipe("Sandstone bricks", Nodes.SANDSTONE_BRICK, 4, [Nodes.SANDSTONE,Nodes.SANDSTONE,Nodes.SANDSTONE,Nodes.SANDSTONE], 2)
+	_recipe("Snow block", Nodes.SNOW_BLOCK, 1, [Nodes.SNOWBALL,Nodes.SNOWBALL,Nodes.SNOWBALL,Nodes.SNOWBALL], 2)
+	_recipe("Ladder", Nodes.LADDER, 3, [Nodes.STICK,0,Nodes.STICK,Nodes.STICK,Nodes.STICK,Nodes.STICK,Nodes.STICK,0,Nodes.STICK], 3)
+	_recipe("Bookshelf", Nodes.BOOKSHELF, 1, [Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS,Nodes.BOOK,Nodes.BOOK,Nodes.BOOK,Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS], 3, "table")
+	_recipe("Paper", Nodes.PAPER, 3, [Nodes.SUGAR], 1)
+	_recipe("Book", Nodes.BOOK, 1, [Nodes.PAPER,Nodes.PAPER,Nodes.PAPER,Nodes.LEATHER], 2)
+	_recipe("Bricks", Nodes.BRICK_ITEM, 4, [Nodes.CLAY_BALL,Nodes.CLAY_BALL,Nodes.CLAY_BALL,Nodes.CLAY_BALL], 2)
+	_recipe("Pumpkin pie", Nodes.PUMPKIN_PIE, 1, [Nodes.PUMPKIN,Nodes.SUGAR,Nodes.GRAIN,0,0,0,0,0,0], 3, "table")
+	_recipe("Golden apple", Nodes.GOLDEN_APPLE, 1, [Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.APPLE,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD], 3, "table")
+	_recipe("Bow", Nodes.BOW, 1, [0,Nodes.STICK,Nodes.STRING,Nodes.STICK,0,Nodes.STRING,0,Nodes.STICK,Nodes.STRING], 3, "table")
+	_recipe("Arrows", Nodes.ARROW_ITEM, 4, [0,Nodes.FLINT,0,0,Nodes.STICK,0,0,Nodes.FEATHER,0], 3, "table")
+	_recipe("Block of iron", Nodes.IRON_BLOCK, 1, [Nodes.IRON,Nodes.IRON,Nodes.IRON,Nodes.IRON,Nodes.IRON,Nodes.IRON,Nodes.IRON,Nodes.IRON,Nodes.IRON], 3, "table")
+	_recipe("Block of gold", Nodes.GOLD_BLOCK, 1, [Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD], 3, "table")
+	_recipe("Block of diamond", Nodes.DIAMOND_BLOCK, 1, [Nodes.DIAMOND,Nodes.DIAMOND,Nodes.DIAMOND,Nodes.DIAMOND,Nodes.DIAMOND,Nodes.DIAMOND,Nodes.DIAMOND,Nodes.DIAMOND,Nodes.DIAMOND], 3, "table")
+	_recipe("Iron ingots", Nodes.IRON, 9, [Nodes.IRON_BLOCK], 1)
+	_recipe("Gold ingots", Nodes.GOLD, 9, [Nodes.GOLD_BLOCK], 1)
+	_recipe("Diamonds", Nodes.DIAMOND, 9, [Nodes.DIAMOND_BLOCK], 1)
+	_recipe("Glowstone", Nodes.GLOWSTONE, 1, [Nodes.COAL,Nodes.GOLD,Nodes.COAL,Nodes.GOLD,Nodes.COAL,Nodes.GOLD,Nodes.COAL,Nodes.GOLD,Nodes.COAL], 3, "table")
+	_recipe("Flint and steel", Nodes.FLINT_AND_STEEL, 1, [Nodes.FLINT,0,0,0,Nodes.IRON], 2)
 
 func _recipe(label: String, id: int, count: int, pattern: Array, width: int, station: String = "hand") -> void:
 	var ingredients: Dictionary = {}

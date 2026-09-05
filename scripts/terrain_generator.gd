@@ -63,6 +63,8 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 				elif y > h - 4: id = Nodes.SAND if desert or h <= SEA + 1 else Nodes.DIRT
 				else:
 					id = Nodes.STONE
+					if desert and y >= h - 7: id = Nodes.SANDSTONE
+					if snowy and y == h - 4 and h > SEA + 4: id = Nodes.ICE
 					if y > 2 and y < h - 4 and caves.get_noise_3d(wx, y * 1.3, wz) > 0.39:
 						id = Nodes.AIR
 					else:
@@ -74,12 +76,22 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 						elif ore < 92 and y < 32: id = Nodes.COPPER_ORE
 						elif ore > 981: id = Nodes.GRAVEL
 				data[x + z * 18 + y * 324] = id
+			# Underwater clay patches and frozen lakes give the surface variety.
+			if h <= SEA and not desert:
+				if hash_at(wx, 55, wz) % 23 == 0: data[x + z * 18 + (h - 1) * 324] = Nodes.CLAY
+			if snowy and h <= SEA: data[x + z * 18 + (SEA) * 324] = Nodes.ICE
 			if h > SEA + 1:
 				var decoration: int = hash_at(wx, 100, wz) % 100
 				if desert and decoration < 2:
 					for y in range(h + 1, h + 4): data[x + z * 18 + y * 324] = Nodes.CACTUS
 				elif not desert and not snowy and decoration < 5:
 					data[x + z * 18 + (h + 1) * 324] = Nodes.FLOWER if decoration == 0 else Nodes.WHEAT
+				elif decoration == 6 and not snowy:
+					data[x + z * 18 + (h + 1) * 324] = Nodes.PUMPKIN
+				elif decoration == 7 and snowy:
+					data[x + z * 18 + (h + 1) * 324] = Nodes.PUMPKIN
+				elif decoration == 8 and not desert:
+					data[x + z * 18 + (h + 1) * 324] = Nodes.MELON
 	for wz in range(base_z - 2, base_z + 20):
 		for wx in range(base_x - 2, base_x + 20):
 			if posmod(hash_at(wx, 77, wz), 105) != 0: continue

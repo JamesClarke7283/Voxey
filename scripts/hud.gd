@@ -158,6 +158,8 @@ func show_title() -> void:
 	_button(layer,"Create a new world",Rect2(origin+Vector2(0,title_size*0.5+285),Vector2(minf(340,size.x-90),44)),show_new_world)
 	_label(layer,"SURVIVAL & CREATIVE  ·  YOUR OWN WORLDS",origin+Vector2(0,title_size*0.5+351),11,MUTED)
 	_label(layer,"VOXEY    ·    SINGLE PLAYER    ·    INFINITE HORIZONS",Vector2(38,size.y-40),11,MUTED)
+	var version_tag := _panel(layer,Rect2(Vector2(size.x-224,20),Vector2(186,32)),Color(0.05,0.1,0.08,0.6))
+	_label(version_tag,"v"+Game.VERSION+"  ·  "+Game.VERSION_NAME,Vector2(14,7),13,ACCENT)
 	var tag := _panel(layer,Rect2(Vector2(size.x-290,size.y-96),Vector2(254,58)),Color(0.09,0.16,0.13,0.75))
 	_label(tag,"THE OVERWORLD",Vector2(16,10),10,ACCENT)
 	_label(tag,"Oakwood meadow  /  Day 1",Vector2(16,27),14,TEXT)
@@ -209,7 +211,7 @@ func show_pause() -> void:
 	var panel := _panel(layer,_panel_rect(Vector2(480,530)))
 	_label(panel,"TAKE A BREATHER",Vector2(34,26),12,ACCENT)
 	_label(panel,"A moment of quiet.",Vector2(34,49),30)
-	_label(panel,"Your world is paused.",Vector2(34,93),15,MUTED)
+	_label(panel,"v"+Game.VERSION+" "+Game.VERSION_NAME+"    ·    "+game.world_name,Vector2(34,93),13,MUTED)
 	_button(panel,"Back to the wilderness",Rect2(34,137,412,48),game.resume)
 	_label(panel,"View distance",Vector2(34,212),15)
 	var distance := HSlider.new()
@@ -238,9 +240,46 @@ func show_pause() -> void:
 	audio_button.toggled.connect(func(value: bool): game.audio_enabled=value)
 	panel.add_child(audio_button)
 	_button(panel,"Field guide",Rect2(34,358,198,43),show_guide)
-	_button(panel,"Fullscreen  ·  F11",Rect2(246,358,200,43),game.toggle_fullscreen)
+	if game.touch:
+		_button(panel,"Achievements",Rect2(246,358,200,43),show_achievements)
+	else:
+		_button(panel,"Achievements",Rect2(246,358,122,43),show_achievements)
+		_button(panel,"Fullscreen",Rect2(380,358,66,43),game.toggle_fullscreen)
 	_button(panel,"Save & return to title",Rect2(34,420,412,46),game.return_to_title)
 	_label(panel,"World edits and inventory autosave every 45 seconds.",Vector2(34,483),12,MUTED)
+
+func show_achievements() -> void:
+	_clear()
+	screen="achievements"
+	_dim()
+	var panel := _panel(layer,_panel_rect(Vector2(700,600)))
+	_label(panel,"MOMENTS OF PRIDE",Vector2(32,25),12,ACCENT)
+	_label(panel,"Achievements.",Vector2(32,47),30)
+	var scroll := ScrollContainer.new()
+	scroll.position=Vector2(32,104)
+	scroll.size=Vector2(636,424)
+	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation",8)
+	scroll.add_child(list)
+	var total: int = 0
+	var done: int = 0
+	for definition in game.achievements.DEFINITIONS:
+		total += 1
+		var earned: bool = game.achievements.is_unlocked(definition.id)
+		if earned: done += 1
+		var row := Button.new()
+		row.custom_minimum_size=Vector2(620,54)
+		row.alignment=HORIZONTAL_ALIGNMENT_LEFT
+		row.disabled=true
+		row.text=("✔  " if earned else "      ")+String(definition.title)+(("  —  "+String(definition.description)) if earned else "")
+		row.add_theme_font_size_override("font_size",14)
+		row.add_theme_color_override("font_disabled_color",ACCENT if earned else MUTED)
+		list.add_child(row)
+	_label(panel,"%d / %d earned" % [done,total],Vector2(32,540),14,ACCENT)
+	_button(panel,"Back",Rect2(500,534,168,44),show_pause)
 
 func show_guide() -> void:
 	_clear()
@@ -511,7 +550,7 @@ func _slot_click(index: int, is_station: bool, right: bool, is_grid: bool = fals
 	if is_station and station == "furnace" and cursor.id != 0:
 		if index == 2: return
 		if index == 1 and cursor.id not in [Nodes.COAL,Nodes.LOG,Nodes.PLANKS,Nodes.STICK]: return
-		if index == 0 and cursor.id not in [Nodes.IRON_ORE,Nodes.GOLD_ORE,Nodes.COPPER_ORE,Nodes.SAND,Nodes.COBBLE,Nodes.RAW_MEAT,Nodes.LOG]: return
+		if index == 0 and cursor.id not in [Nodes.IRON_ORE,Nodes.GOLD_ORE,Nodes.COPPER_ORE,Nodes.SAND,Nodes.COBBLE,Nodes.RAW_MEAT,Nodes.LOG,Nodes.CLAY_BALL]: return
 	if (Input.is_physical_key_pressed(KEY_SHIFT) or shift_mode) and cursor.id == 0 and slot.id != 0:
 		if is_station or is_grid or is_armor:
 			slot.count = game.inventory.add_item(slot.id,slot.count,slot.wear)

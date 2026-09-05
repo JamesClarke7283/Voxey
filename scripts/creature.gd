@@ -7,7 +7,7 @@ const KINDS = {
 	"sheep": {"hostile":false,"health":8.0,"speed":0.8,"width":0.3,"height":1.1,"damage":0,"drops":[[Nodes.RAW_MEAT,1,2],[Nodes.WOOL,1,2]],"voice":"sheep","pitch":1.0},
 	"cow": {"hostile":false,"health":10.0,"speed":0.7,"width":0.36,"height":1.35,"damage":0,"drops":[[Nodes.RAW_MEAT,1,3],[Nodes.LEATHER,0,2]],"voice":"cow","pitch":0.75},
 	"pig": {"hostile":false,"health":10.0,"speed":0.9,"width":0.3,"height":0.9,"damage":0,"drops":[[Nodes.RAW_MEAT,1,3]],"voice":"pig","pitch":1.0},
-	"chicken": {"hostile":false,"health":4.0,"speed":1.0,"width":0.18,"height":0.65,"damage":0,"drops":[[Nodes.RAW_MEAT,1,1]],"voice":"chicken","pitch":1.5,"glides":true},
+	"chicken": {"hostile":false,"health":4.0,"speed":1.0,"width":0.18,"height":0.65,"damage":0,"drops":[[Nodes.RAW_MEAT,1,1],[Nodes.FEATHER,1,2]],"voice":"chicken","pitch":1.5,"glides":true},
 	"zombie": {"hostile":true,"health":20.0,"speed":2.1,"width":0.28,"height":1.8,"damage":3,"drops":[[Nodes.ROTTEN_FLESH,0,2]],"voice":"zombie","pitch":0.9,"burns":true},
 	"skeleton": {"hostile":true,"health":20.0,"speed":2.4,"width":0.28,"height":1.8,"damage":2,"drops":[[Nodes.BONE,0,2]],"voice":"skeleton","pitch":1.1,"burns":true,"ranged":true},
 	"spider": {"hostile":true,"health":16.0,"speed":3.2,"width":0.5,"height":0.8,"damage":2,"drops":[[Nodes.STRING,0,2]],"voice":"spider","pitch":1.0,"neutral_by_day":true,"leaps":true},
@@ -41,6 +41,9 @@ var scared: float = 0.0
 var provoked: bool = false
 var grounded: bool = false
 var tinted: bool = false
+var sheared: bool = false
+var wool_timer: float = 0.0
+var wool_parts: Array = []
 
 func _ready() -> void:
 	if not KINDS.has(kind): kind = "sheep"
@@ -123,6 +126,10 @@ func _build_model() -> void:
 			_box(Vector3(0.22,0.95,-0.68),Vector3(0.03,0.065,0.09),Color("303b32"))
 			for x in [-0.23,0.23]:
 				for z in [-0.32,0.32]: legs.append(_box(Vector3(x,0.22,z),Vector3(0.15,0.44,0.16),Color("877965")))
+			# The wool coat is a separate layer so shearing can hide it.
+			wool_parts.append(_box(Vector3(0,0.88,0.1),Vector3(0.82,0.72,0.95),Color("e5e0ce")))
+			wool_parts.append(_box(Vector3(0,1.0,-0.62),Vector3(0.6,0.62,0.4),Color("eae5d4")))
+			wool_parts.append(_box(Vector3(0,0.55,0.42),Vector3(0.55,0.3,0.3),Color("e5e0ce")))
 
 func _box(pos: Vector3, size_value: Vector3, color: Color) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
@@ -158,6 +165,11 @@ func _physics_process(delta: float) -> void:
 	scared = maxf(0,scared-delta)
 	hurt_flash = maxf(0,hurt_flash-delta)
 	ambient -= delta
+	if sheared and kind == "sheep":
+		wool_timer -= delta
+		if wool_timer <= 0:
+			sheared = false
+			for part in wool_parts: part.visible = true
 	var player_pos: Vector3 = game.player.position
 	var distance: float = position.distance_to(player_pos)
 	if distance > 90: queue_free(); return
@@ -265,8 +277,22 @@ func hit(damage: float, from: Vector3 = Vector3.INF) -> void:
 	game.sound_at("mob_hurt",position,info().pitch*randf_range(0.95,1.05))
 	if health <= 0: die()
 
+# Shearing a woolly sheep drops 1-3 wool and reveals the bare skin; the coat
+# regrows after a couple of minutes of grazing.
+func shear() -> bool:
+	if sheared: return false
+	sheared = true
+	wool_timer = randf_range(100.0,160.0)
+	for part in wool_parts: part.visible = false
+	var amount: int = randi_range(1,3)
+	game.spawn_drop(center()+Vector3.UP*0.4,Nodes.WOOL,amount)
+	game.sound_at("sheep",position,1.2)
+	game.achievements.award("wool_gatherer")
+	return true
+
 func die() -> void:
 	game.MOD_HOOK_CREATURE_KILLED(self)
+	if kind == "zombie": game.achievements.award("kill_zombie")
 	for entry in info().drops:
 		var amount: int = randi_range(int(entry[1]),int(entry[2]))
 		if amount > 0: game.spawn_drop(center(),int(entry[0]),amount)

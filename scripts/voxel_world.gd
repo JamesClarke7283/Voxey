@@ -240,7 +240,7 @@ func _simulate() -> void:
 		var input: Dictionary = s.slots[0]
 		var fuel: Dictionary = s.slots[1]
 		var output: Dictionary = s.slots[2]
-		var recipe: int = {Nodes.IRON_ORE:Nodes.IRON,Nodes.GOLD_ORE:Nodes.GOLD,Nodes.COPPER_ORE:Nodes.COPPER,Nodes.SAND:Nodes.GLASS,Nodes.COBBLE:Nodes.STONE,Nodes.RAW_MEAT:Nodes.COOKED_MEAT,Nodes.LOG:Nodes.COAL}.get(input.id,0)
+		var recipe: int = {Nodes.IRON_ORE:Nodes.IRON,Nodes.GOLD_ORE:Nodes.GOLD,Nodes.COPPER_ORE:Nodes.COPPER,Nodes.SAND:Nodes.GLASS,Nodes.COBBLE:Nodes.STONE,Nodes.RAW_MEAT:Nodes.COOKED_MEAT,Nodes.LOG:Nodes.COAL,Nodes.CLAY_BALL:Nodes.BRICK_ITEM}.get(input.id,0)
 		if s.burn > 0: s.burn -= 1
 		if recipe == 0 or (output.id != 0 and output.id != recipe) or output.count >= 64: s.progress = 0.0; continue
 		if s.burn <= 0:

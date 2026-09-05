@@ -48,10 +48,12 @@ var last_space_press: int = 0
 var api: VoxeyAPI
 var touch: bool = false
 var controls: TouchControls
+var achievements: VoxeyAchievements
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	api = VoxeyAPI.new("engine",self)
+	achievements = VoxeyAchievements.new(self)
 	saves = SaveStore.new()
 	_migrate_legacy_save()
 	RenderingServer.set_default_clear_color(Color("9dbac0"))
@@ -194,6 +196,7 @@ func _process(delta: float) -> void:
 		if journal_step == 3:
 			for id in range(80,100):
 				if inventory.count_item(id)>0: journal_step=4; toast("You're ready to explore. Make this world yours."); break
+		_check_achievements()
 	_update_day()
 	clouds.position.x = player.position.x + fmod(Time.get_ticks_msec()*0.0006,40)
 	clouds.position.z = player.position.z
@@ -219,6 +222,16 @@ func _update_day() -> void:
 
 func day_number() -> int:
 	return floori(day_time)+1
+
+# Survival milestones and per-event achievements, checked every second of play.
+func _check_achievements() -> void:
+	if gamemode!="survival": return
+	if day_number()>=5: achievements.award("survivor")
+	if player.position.y<8.0: achievements.award("deep")
+	var worn: int = 0
+	for slot in player.armor_slots:
+		if Nodes.is_armor(slot.id) and Nodes.armor_material(slot.id)==3: worn += 1
+	if worn==4: achievements.award("diamond_gear")
 
 func time_name() -> String:
 	var phase: float = fposmod(day_time,1.0)
@@ -406,8 +419,13 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 		elif id==Nodes.RIPE_WHEAT:
 			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.GRAIN,1)
 			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.SEEDS,1+randi()%2)
+		elif id==Nodes.GRAVEL and randf()<0.25:
+			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.FLINT)
 		elif id!=Nodes.GLASS: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.drop(id))
 		if id in [Nodes.COAL_ORE,Nodes.IRON_ORE,Nodes.DIAMOND_ORE]: experience += 1
+		if id==Nodes.LOG: achievements.award("first_log")
+		if id==Nodes.STONE: achievements.award("mine_stone")
+		if id==Nodes.DIAMOND_ORE: achievements.award("diamonds")
 	for slot in world.detach_station(p,partner): spawn_drop(Vector3(p)+Vector3.ONE*0.5,slot.id,slot.count,slot.wear)
 	remove_torch(p)
 	var above: Vector3i=p+Vector3i.UP
@@ -434,11 +452,12 @@ func settle(p: Vector3i) -> void:
 		entities.add_child(falling)
 		p += Vector3i.UP
 
-func spawn_arrow(origin: Vector3, velocity: Vector3) -> void:
+func spawn_arrow(origin: Vector3, velocity: Vector3) -> Arrow:
 	var arrow := Arrow.new()
 	arrow.game = self; arrow.position = origin; arrow.velocity = velocity
 	entities.add_child(arrow)
 	sound_at("arrow",origin)
+	return arrow
 
 func ignite_tnt(p: Vector3i, fuse: float = 3.0) -> void:
 	if world.node_at(p) != Nodes.TNT or not world.set_node(p,Nodes.AIR): return
@@ -530,9 +549,11 @@ func add_torch(p: Vector3i) -> void:
 	if torch_lights.has(p): return
 	var light := OmniLight3D.new()
 	light.position=Vector3(p)+Vector3(0.5,0.85,0.5)
-	light.omni_range=8
-	light.light_color=Color("ffbc60")
-	light.light_energy=1.6
+	# Glowstone glows a touch wider and cooler than a torch flame.
+	var glow: bool = world.node_at(p)==Nodes.GLOWSTONE
+	light.omni_range=10 if glow else 8
+	light.light_color=Color("e8dba0") if glow else Color("ffbc60")
+	light.light_energy=2.1 if glow else 1.6
 	light.shadow_enabled=false
 	add_child(light)
 	torch_lights[p]=light
@@ -574,11 +595,28 @@ func progress(action: String) -> void:
 	if journal_step==0 and action=="gather" and inventory.count_item(Nodes.LOG)>0: journal_step=1
 	elif journal_step==1 and action=="craft" and (inventory.count_item(Nodes.PLANKS)>0 or hud.cursor.id==Nodes.PLANKS): journal_step=2
 	elif journal_step==2 and action=="build" and world.edits.values().has(Nodes.WORKBENCH): journal_step=3
+	# Craft-based achievements key off what the player now holds.
+	if action=="craft":
+		if inventory.count_item(Nodes.PLANKS)>0: achievements.award("craft_planks")
+		if inventory.count_item(Nodes.BREAD)>0: achievements.award("baker")
+		if inventory.count_item(Nodes.TOOLS)>0 or inventory.count_item(Nodes.TOOLS+4)>0 or _holds_tool_kind(0): achievements.award("first_pickaxe")
+		_holds_smelted_iron()
+	if action=="build":
+		if world.edits.values().has(Nodes.WORKBENCH): achievements.award("craft_table")
+		if world.edits.values().has(Nodes.BOOKSHELF): achievements.award("bookworm")
 
 # Relay for creature deaths so hook subscribers see mob kills. `mob` freed by
 # the caller afterwards.
 func MOD_HOOK_CREATURE_KILLED(mob: Node3D) -> void:
 	MOD_ENTRY.fire("on_creature_killed",[mob.kind,Vector3(mob.position)])
+
+func _holds_tool_kind(kind: int) -> bool:
+	for slot in inventory.slots:
+		if Nodes.is_tool_id(slot.id) and Nodes.tool_kind(slot.id)==kind: return true
+	return false
+
+func _holds_smelted_iron() -> void:
+	if inventory.count_item(Nodes.IRON)>0: achievements.award("iron_age")
 
 func toast(message: String) -> void:
 	if is_instance_valid(hud): hud.toast(message)
@@ -593,6 +631,7 @@ func _resize_ui() -> void:
 		"game": hud.show_game()
 		"pause": hud.show_pause()
 		"guide": hud.show_guide()
+		"achievements": hud.show_achievements()
 		"inventory": hud.show_inventory(hud.station,hud.station_data)
 		"dead": hud.show_death()
 		"worlds": hud.show_worlds()
@@ -617,7 +656,7 @@ func save_game(path: String = "") -> bool:
 	for drop in drops.get_children():
 		if drop.is_queued_for_deletion(): continue
 		dropped.append({"position":[drop.position.x,drop.position.y,drop.position.z],"id":drop.item_id,"count":drop.amount,"wear":drop.wear})
-	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":changes,"growth":growing,"stations":world.stations,"inventory":inventory.slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"armor":player.armor_slots,"time":day_time,"experience":experience,"journal":journal_step,"drops":dropped,"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
+	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":changes,"growth":growing,"stations":world.stations,"inventory":inventory.slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"armor":player.armor_slots,"time":day_time,"experience":experience,"journal":journal_step,"drops":dropped,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
 	var file := FileAccess.open(path+".tmp",FileAccess.WRITE)
 	if file==null: toast("Couldn't save the world: storage is unavailable."); return false
 	file.store_string(JSON.stringify(data))
@@ -693,6 +732,7 @@ func load_world_data(data: Dictionary) -> void:
 			if Nodes.is_armor(piece.id) and Nodes.armor_piece(piece.id)==i: player.armor_slots[i]=piece
 	elif int(saved_armor)>0: player.armor_slots[1]={"id":Nodes.ARMOR,"count":1,"wear":0}
 	player.breath=10
+	achievements.from_save(data.get("achievements",{}))
 	day_time=float(data.get("time",0.3))
 	experience=float(data.get("experience",0))
 	journal_step=int(data.get("journal",0))
@@ -703,7 +743,7 @@ func load_world_data(data: Dictionary) -> void:
 	var load_position: Array=data.get("spawn",data.position) if player.health<=0 else data.position
 	world.target=Vector3(load_position[0],load_position[1],load_position[2])
 	for p in world.edits:
-		if world.edits[p]==Nodes.TORCH: add_torch(p)
+		if world.edits[p] in [Nodes.TORCH,Nodes.GLOWSTONE]: add_torch(p)
 	state="loading"
 	world.active=false
 
