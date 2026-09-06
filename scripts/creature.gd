@@ -34,6 +34,10 @@ var last_seen: float = 0.0
 var hurt_flash: float = 0.0
 var life: float = 0.0
 var legs: Array = []
+var arms: Array = []
+var head: Node3D
+var gait: float = 0.0
+var egg_timer: float = 90.0
 var parts: Array = []
 var colors: Array = []
 var model: Node3D
@@ -60,40 +64,92 @@ func _ready() -> void:
 func _build_model() -> void:
 	match kind:
 		"zombie":
-			_box(Vector3(0,1.08,0),Vector3(0.48,0.65,0.3),Color("475f67"))
-			_box(Vector3(0,1.63,-0.03),Vector3.ONE*0.42,Color("7e9672"))
-			_box(Vector3(-0.11,1.68,-0.25),Vector3(0.07,0.06,0.02),Color("1f2a24"))
-			_box(Vector3(0.11,1.68,-0.25),Vector3(0.07,0.06,0.02),Color("1f2a24"))
+			_box(Vector3(0,1.08,0),Vector3(0.48,0.64,0.28),Color("416f72"),"cloth")
+			_box(Vector3(0,1.36,-0.145),Vector3(0.18,0.12,0.025),Color("7a8c55"),"skin")
+			head = _joint(Vector3(0,1.51,-0.015),"Head")
+			_box(Vector3(0,0.13,0),Vector3(0.43,0.43,0.42),Color("81935d"),"skin",head)
+			_box(Vector3(0,0.31,0.015),Vector3(0.44,0.075,0.43),Color("44503a"),"skin",head)
 			for side in [-1,1]:
-				_box(Vector3(side*0.34,1.18,-0.2),Vector3(0.18,0.18,0.66),Color("7e9672"))
-				legs.append(_box(Vector3(side*0.14,0.38,0),Vector3(0.2,0.74,0.22),Color("3e4656")))
+				_box(Vector3(side*0.105,0.16,-0.216),Vector3(0.105,0.055,0.018),Color("25362a"),"",head)
+				_box(Vector3(side*0.12,0.08,-0.218),Vector3(0.075,0.045,0.019),Color("64764b"),"skin",head)
+				var arm := _joint(Vector3(side*0.335,1.31,0),"Arm")
+				_box(Vector3(0,-0.11,0),Vector3(0.18,0.25,0.22),Color("416f72"),"cloth",arm)
+				_box(Vector3(0,-0.39,0),Vector3(0.16,0.33,0.19),Color("81935d"),"skin",arm)
+				arm.rotation.x = -1.35
+				arms.append(arm)
+				var leg := _joint(Vector3(side*0.13,0.77,0),"Hip")
+				_box(Vector3(0,-0.33,0),Vector3(0.21,0.65,0.24),Color("465063"),"cloth",leg)
+				_box(Vector3(0,-0.69,-0.035),Vector3(0.22,0.14,0.3),Color("323d40"),"",leg)
+				legs.append(leg)
+			_box(Vector3(0,0.005,-0.22),Vector3(0.18,0.04,0.02),Color("39412d"),"",head)
+			_box(Vector3(0.04,0.012,-0.233),Vector3(0.045,0.027,0.015),Color("c4be8d"),"",head)
 		"skeleton":
-			_box(Vector3(0,1.1,0),Vector3(0.38,0.62,0.2),Color("d9d9cf"))
-			for y in [0.95,1.1,1.25]: _box(Vector3(0,y,-0.11),Vector3(0.3,0.05,0.02),Color("9c9b90"))
-			_box(Vector3(0,1.62,0),Vector3.ONE*0.4,Color("e3e2d8"))
-			_box(Vector3(-0.1,1.66,-0.22),Vector3(0.09,0.08,0.03),Color("2a2a28"))
-			_box(Vector3(0.1,1.66,-0.22),Vector3(0.09,0.08,0.03),Color("2a2a28"))
-			_box(Vector3(0.24,1.2,-0.25),Vector3(0.1,0.1,0.6),Color("d9d9cf"))
-			_box(Vector3(0.24,1.2,-0.62),Vector3(0.05,0.7,0.05),Color("6f5233"))
-			_box(Vector3(-0.24,1.2,0),Vector3(0.1,0.6,0.1),Color("d9d9cf"))
-			for side in [-1,1]: legs.append(_box(Vector3(side*0.12,0.39,0),Vector3(0.12,0.76,0.12),Color("d9d9cf")))
+			_box(Vector3(0,1.08,0.035),Vector3(0.09,0.62,0.1),Color("b6b6a4"),"bone")
+			_box(Vector3(0,0.8,0),Vector3(0.34,0.12,0.2),Color("cfcebb"),"bone")
+			_box(Vector3(0,1.36,0),Vector3(0.43,0.09,0.15),Color("dddaca"),"bone")
+			for y in [0.98,1.12,1.26]:
+				for side in [-1,1]:
+					_box(Vector3(side*0.105,y,-0.055),Vector3(0.17,0.06,0.18),Color("d5d3bf"),"bone")
+			head = _joint(Vector3(0,1.48,0),"Head")
+			_box(Vector3(0,0.17,0.02),Vector3(0.4,0.36,0.36),Color("dddaca"),"bone",head)
+			for side in [-1,1]:
+				_box(Vector3(side*0.103,0.18,-0.17),Vector3(0.12,0.115,0.025),Color("363c39"),"",head)
+				_box(Vector3(side*0.103,0.257,-0.178),Vector3(0.15,0.04,0.028),Color("b7b7a5"),"bone",head)
+				var leg := _joint(Vector3(side*0.115,0.76,0),"Hip")
+				_box(Vector3(0,-0.32,0),Vector3(0.095,0.64,0.11),Color("d5d3bf"),"bone",leg)
+				_box(Vector3(0,-0.35,-0.01),Vector3(0.12,0.09,0.13),Color("b8b9a8"),"bone",leg)
+				_box(Vector3(0,-0.71,-0.04),Vector3(0.13,0.09,0.23),Color("d5d3bf"),"bone",leg)
+				legs.append(leg)
+				var arm := _joint(Vector3(side*0.27,1.34,0),"Arm")
+				_box(Vector3(0,-0.29,0),Vector3(0.09,0.58,0.1),Color("d5d3bf"),"bone",arm)
+				arm.rotation.x = -1.3 if side == 1 else -0.7
+				arms.append(arm)
+			_box(Vector3(0,0.09,-0.175),Vector3(0.04,0.065,0.03),Color("4c5149"),"",head)
+			_box(Vector3(0,-0.035,-0.025),Vector3(0.3,0.055,0.29),Color("d5d3bf"),"bone",head)
+			for x in [-0.1,-0.035,0.035,0.1]:
+				_box(Vector3(x,0.01,-0.17),Vector3(0.045,0.055,0.025),Color("dddaca"),"bone",head)
+			# Bow is attached to the hand and follows the aiming pose.
+			var bow := _joint(Vector3(0,-0.57,0),"Bow",arms[1])
+			bow.rotation.x = 1.3
+			for i in 5:
+				var limb := _box(Vector3(0,(i-2)*0.135,-0.12+absf(i-2)*0.045),Vector3(0.045,0.17,0.045),Color("8b603b"),"wood",bow)
+				limb.rotation.x = (i-2)*0.22
+			_box(Vector3(0,0,-0.005),Vector3(0.012,0.56,0.012),Color("d5cdb1"),"",bow)
 		"spider":
-			_box(Vector3(0,0.45,0.15),Vector3(0.8,0.45,0.95),Color("2e2a2e"))
-			_box(Vector3(0,0.45,-0.55),Vector3(0.5,0.4,0.45),Color("3a3339"))
-			for x in [-0.16,-0.06,0.06,0.16]: _box(Vector3(x,0.52,-0.78),Vector3(0.06,0.06,0.02),Color("d8312a"))
+			_box(Vector3(0,0.52,0.28),Vector3(0.72,0.46,0.78),Color("383039"),"shell")
+			_box(Vector3(0,0.49,-0.24),Vector3(0.48,0.32,0.4),Color("4b3a3d"),"shell")
+			head = _joint(Vector3(0,0.47,-0.55),"Head")
+			_box(Vector3.ZERO,Vector3(0.48,0.32,0.36),Color("3c3036"),"shell",head)
+			for side in [-1,1]:
+				for i in 3:
+					var eye := _box(Vector3(side*(0.055+i*0.07),0.06+float(i%2)*0.055,-0.188),Vector3.ONE*(0.075 if i == 0 else 0.045),Color("f04d35"),"",head)
+					eye.material_override.emission_enabled = true
+					eye.material_override.emission = Color("a52215")
+				_box(Vector3(side*0.095,-0.17,-0.2),Vector3(0.055,0.19,0.065),Color("c4ae87"),"bone",head)
 			for i in 4:
 				for side in [-1,1]:
-					var leg := _box(Vector3(side*0.62,0.5,-0.35+i*0.28),Vector3(0.75,0.07,0.07),Color("2a252a"))
-					leg.rotation.z = side*0.35
+					var leg := _joint(Vector3(side*0.22,0.47,-0.32+i*0.2),"Leg")
+					var upper := _box(Vector3(side*0.26,0.1,0),Vector3(0.58,0.08,0.085),Color("49383e"),"shell",leg)
+					upper.rotation.z = side*0.34
+					var lower := _box(Vector3(side*0.62,-0.12,0),Vector3(0.075,0.57,0.075),Color("302b32"),"shell",leg)
+					lower.rotation.z = side*0.4
+					leg.rotation.y = side*(i-1.5)*0.28
+					leg.set_meta("rest_y",leg.rotation.y)
 					legs.append(leg)
 		"creeper":
-			_box(Vector3(0,0.85,0),Vector3(0.42,0.85,0.3),Color("4fa441"))
-			_box(Vector3(0,1.5,0),Vector3.ONE*0.46,Color("5cb24c"))
+			_box(Vector3(0,0.86,0.02),Vector3(0.4,0.84,0.3),Color("678c46"),"moss")
+			head = _joint(Vector3(0,1.29,0),"Head")
+			_box(Vector3(0,0.21,0),Vector3(0.49,0.48,0.46),Color("789e50"),"moss",head)
 			for side in [-1,1]:
-				_box(Vector3(side*0.1,1.56,-0.24),Vector3(0.1,0.1,0.02),Color("1d2a1c"))
-			_box(Vector3(0,1.42,-0.24),Vector3(0.12,0.16,0.02),Color("1d2a1c"))
-			for x in [-0.12,0.12]:
-				for z in [-0.14,0.14]: legs.append(_box(Vector3(x,0.2,z),Vector3(0.2,0.4,0.24),Color("3e8a36")))
+				_box(Vector3(side*0.115,0.28,-0.237),Vector3(0.105,0.105,0.02),Color("233526"),"",head)
+				_box(Vector3(side*0.08,0.085,-0.238),Vector3(0.065,0.11,0.02),Color("233526"),"",head)
+			_box(Vector3(0,0.16,-0.239),Vector3(0.1,0.1,0.02),Color("233526"),"",head)
+			for x in [-0.13,0.13]:
+				for z in [-0.16,0.19]:
+					var leg := _joint(Vector3(x,0.43,z),"Hip")
+					_box(Vector3(0,-0.19,0),Vector3(0.23,0.38,0.29),Color("547b3e"),"moss",leg)
+					_box(Vector3(0,-0.38,-0.015),Vector3(0.23,0.07,0.32),Color("344b2b"),"moss",leg)
+					legs.append(leg)
 		"cow":
 			_box(Vector3(0,0.85,0),Vector3(0.78,0.7,1.25),Color("5b3d2b"))
 			_box(Vector3(0.2,0.95,0.1),Vector3(0.3,0.3,0.4),Color("f0e9dc"))
@@ -131,20 +187,46 @@ func _build_model() -> void:
 			wool_parts.append(_box(Vector3(0,1.0,-0.62),Vector3(0.6,0.62,0.4),Color("eae5d4")))
 			wool_parts.append(_box(Vector3(0,0.55,0.42),Vector3(0.55,0.3,0.3),Color("e5e0ce")))
 
-func _box(pos: Vector3, size_value: Vector3, color: Color) -> MeshInstance3D:
+func _joint(pos: Vector3, label: String, parent: Node3D = null) -> Node3D:
+	var joint := Node3D.new()
+	joint.name = label
+	joint.position = pos
+	(parent if parent != null else model).add_child(joint)
+	return joint
+
+func _box(pos: Vector3, size_value: Vector3, color: Color, skin: String = "", parent: Node3D = null) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = size_value
-	instance.mesh = mesh
+	instance.mesh = CreatureArt.cuboid(size_value)
 	instance.position = pos
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
+	mat.albedo_texture = CreatureArt.texture(skin,color)
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	mat.roughness = 1.0
 	instance.material_override = mat
-	model.add_child(instance)
+	(parent if parent != null else model).add_child(instance)
 	parts.append(instance)
-	colors.append(color)
+	colors.append(Color.WHITE)
 	return instance
+
+func animate(delta: float, chasing: bool = false) -> void:
+	var moving: bool = direction.length() > 0.1
+	gait = move_toward(gait,1.0 if moving else 0.0,delta*5.0)
+	for i in legs.size():
+		var phase: float = i*PI if kind != "spider" else (i/2+i%2)*PI
+		var swing: float = sin(life*8+phase)*0.4*gait
+		if kind == "spider":
+			legs[i].rotation.y = float(legs[i].get_meta("rest_y",0.0))+swing*0.5
+			legs[i].rotation.z = sin(life*8+phase+PI/2)*0.1*gait
+		else: legs[i].rotation.x = swing
+	for i in arms.size():
+		var rest: float = -1.35 if kind == "zombie" else (-1.3 if i == 1 else -0.7)
+		arms[i].rotation.x = rest+sin(life*4+i)*0.07+sin(life*8+i*PI)*gait*0.1
+	if head != null:
+		head.rotation.x = sin(life*1.8)*0.035
+		if chasing:
+			var target: Vector3 = model.to_local(game.player.position+Vector3.UP*1.5)
+			head.rotation.y = lerp_angle(head.rotation.y,clampf(atan2(-target.x,-target.z),-0.6,0.6),delta*5)
+		else: head.rotation.y = sin(life*0.8)*0.08
 
 func info() -> Dictionary:
 	return KINDS[kind]
@@ -165,6 +247,11 @@ func _physics_process(delta: float) -> void:
 	scared = maxf(0,scared-delta)
 	hurt_flash = maxf(0,hurt_flash-delta)
 	ambient -= delta
+	if kind == "chicken":
+		egg_timer -= delta
+		if egg_timer <= 0:
+			game.spawn_drop(position+Vector3.UP*0.3,Nodes.EGG)
+			egg_timer = randf_range(90.0,150.0)
 	if sheared and kind == "sheep":
 		wool_timer -= delta
 		if wool_timer <= 0:
@@ -200,7 +287,8 @@ func _physics_process(delta: float) -> void:
 				queue_free()
 				return
 		elif fuse > 0: fuse = maxf(0,fuse-delta*2)
-	if direction.length() > 0.1: model.rotation.y = lerp_angle(model.rotation.y,atan2(-direction.x,-direction.z),delta*5)
+	if chasing and data.get("ranged",false): model.rotation.y = lerp_angle(model.rotation.y,atan2(-toward.x,-toward.z),delta*5)
+	elif direction.length() > 0.1: model.rotation.y = lerp_angle(model.rotation.y,atan2(-direction.x,-direction.z),delta*5)
 	knock = knock.move_toward(Vector3.ZERO,delta*12)
 	velocity.x = direction.x*speed+knock.x
 	velocity.z = direction.z*speed+knock.z
@@ -216,10 +304,7 @@ func _physics_process(delta: float) -> void:
 			velocity.y = 0
 		elif game.world.intersects(position-Vector3.UP*0.08,width,1.0) and not game.world.intersects(position+Vector3.UP*1.05,width,height): velocity.y = 7.2
 	if not grounded and game.world.intersects(position-Vector3.UP*0.04,width,0.5): grounded = true
-	for i in legs.size():
-		var swing: float = sin(life*8+i*PI)*0.35 if direction.length()>0.1 else 0.0
-		if kind == "spider": legs[i].rotation.y = swing*0.6
-		else: legs[i].rotation.x = swing
+	animate(delta,chasing)
 	if data.get("explodes",false):
 		model.scale = Vector3.ONE*(1.0+fuse*0.25)
 		_tint(Color.WHITE,0.7 if fuse > 0 and int(fuse*12)%2 == 0 else 0.0)

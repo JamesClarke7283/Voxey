@@ -15,6 +15,7 @@ static func build(data: PackedByteArray) -> Array:
 				if Nodes.plant(id): _plant(outputs[0], Vector3(x,y,z), id)
 				elif id == Nodes.TORCH: _torch(outputs[0], Vector3(x,y,z))
 				elif id == Nodes.LADDER: _ladder(outputs[0], Vector3(x,y,z), data, Vector3i(x,y,z))
+				elif id in [Nodes.BED_FOOT,Nodes.BED_HEAD]: _bed_half(outputs[0], Vector3(x,y,z), id, data, Vector3i(x,y,z))
 	if not has_nodes: return [[], []]
 	for axis in 3:
 		var u: int = (axis + 1) % 3
@@ -33,7 +34,7 @@ static func build(data: PackedByteArray) -> Array:
 						p[u] += i
 						p[v] += j
 						var id: int = data[p.x + p.z*18 + p.y*324]
-						if id == 0 or Nodes.plant(id) or id == Nodes.TORCH or id == Nodes.LADDER: continue
+						if id == 0 or Nodes.plant(id) or id == Nodes.TORCH or id == Nodes.LADDER or id in [Nodes.BED_FOOT,Nodes.BED_HEAD]: continue
 						p[axis] += sign_dir
 						var neighbor: int = data[p.x + p.z*18 + p.y*324]
 						if neighbor == id or not Nodes.transparent(neighbor): continue
@@ -98,11 +99,13 @@ static func _quad(out: Array, vertices: Array, uvs: Array, normal: Vector3, tile
 
 static func _plant(out: Array, p: Vector3, id: int) -> void:
 	var h: float = 0.55 if id == Nodes.WHEAT else 0.9
+	if id in [Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM]: h = 0.45
+	if id in [Nodes.SUGAR_CANE,Nodes.VINE]: h = 1.0
 	var uv: Array = [Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)]
 	for flip in 2:
 		var verts: Array = [p+Vector3(0.08,0,0.08),p+Vector3(0.92,0,0.92),p+Vector3(0.92,h,0.92),p+Vector3(0.08,h,0.08)] if flip == 0 else [p+Vector3(0.08,0,0.92),p+Vector3(0.92,0,0.08),p+Vector3(0.92,h,0.08),p+Vector3(0.08,h,0.92)]
-		_quad(out,verts,uv,Vector3.UP,id,Color.WHITE,false)
-		_quad(out,verts,uv,Vector3.UP,id,Color.WHITE,true)
+		_quad(out,verts,uv,Vector3.UP,Nodes.tile(id,0),Color.WHITE,false)
+		_quad(out,verts,uv,Vector3.UP,Nodes.tile(id,0),Color.WHITE,true)
 
 static func _torch(out: Array, p: Vector3) -> void:
 	var uv: Array = [Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)]
@@ -134,3 +137,30 @@ static func _ladder(out: Array, p: Vector3, data: PackedByteArray, cell: Vector3
 	var a: Vector3 = p+Vector3(0.08,0,0)
 	var b: Vector3 = p+Vector3(0.08,0,1)
 	_quad(out,[a,b,b+Vector3.UP,a+Vector3.UP],uv,Vector3.RIGHT,Nodes.LADDER,Color.WHITE,false)
+
+# A bed half is a 9/16-height box: blanket top, oak frame sides. The head
+# half's end shows the pillow tile edge; the foot/blanket use the same tile
+# family. Neighbor-aware so beds against walls skip hidden faces.
+static func _bed_half(out: Array, p: Vector3, id: int, data: PackedByteArray, cell: Vector3i) -> void:
+	var h: float = 0.5625
+	var top_tile: int = Nodes.tile(id,2)
+	var uv: Array = [Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)]
+	_quad(out,[p+Vector3(0,h,0),p+Vector3(1,h,0),p+Vector3(1,h,1),p+Vector3(0,h,1)],
+		[Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)],Vector3.UP,top_tile,Color.WHITE,false)
+	# Four sides: oak frame color, blanket shade on the long sides.
+	var frame: Color = Color(0.62,0.62,0.62)
+	for side in [[Vector3i(1,0,0),Vector3.RIGHT],[Vector3i(-1,0,0),Vector3.LEFT],[Vector3i(0,0,1),Vector3.BACK],[Vector3i(0,0,-1),Vector3.FORWARD]]:
+		var d: Vector3i = side[0]
+		var n: Vector3i = cell+d
+		if n.x >= 0 and n.x <= 17 and n.z >= 0 and n.z <= 17:
+			var neighbor: int = data[n.x + n.z*18 + (cell.y+1)*324]
+			# Skip faces against solid non-bed nodes; bed halves stay visible so
+			# the pair reads as one continuous bed.
+			if Nodes.solid(neighbor) and neighbor != Nodes.BED_FOOT and neighbor != Nodes.BED_HEAD: continue
+		var a: Vector3
+		var b: Vector3
+		if d.x == 1: a = p+Vector3(1,0,0); b = p+Vector3(1,0,1)
+		elif d.x == -1: a = p+Vector3(0,0,1); b = p+Vector3(0,0,0)
+		elif d.z == 1: a = p+Vector3(0,0,1); b = p+Vector3(1,0,1)
+		else: a = p+Vector3(1,0,0); b = p+Vector3(0,0,0)
+		_quad(out,[a,b,b+Vector3.UP*h,a+Vector3.UP*h],uv,Vector3(d.x,0,d.z),top_tile,frame,d.x+d.z < 0)

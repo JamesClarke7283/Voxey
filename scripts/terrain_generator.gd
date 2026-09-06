@@ -79,7 +79,15 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 			# Underwater clay patches and frozen lakes give the surface variety.
 			if h <= SEA and not desert:
 				if hash_at(wx, 55, wz) % 23 == 0: data[x + z * 18 + (h - 1) * 324] = Nodes.CLAY
-			if snowy and h <= SEA: data[x + z * 18 + (SEA) * 324] = Nodes.ICE
+				if snowy and h <= SEA: data[x + z * 18 + (SEA) * 324] = Nodes.ICE
+			# Cane starts on dry banks with adjacent water. World-coordinate hashes
+			# keep vegetation identical in the neighboring column's mesh halo.
+			if h in [SEA,SEA+1] and not snowy and hash_at(wx,61,wz)%7 == 0:
+				var waterside: bool = false
+				for side in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+					if terrain_height(wx+side.x,wz+side.y) < SEA: waterside = true
+				if waterside:
+					for dy in range(1,3+hash_at(wx,62,wz)%2): data[x+z*18+(h+dy)*324] = Nodes.SUGAR_CANE
 			if h > SEA + 1:
 				var decoration: int = hash_at(wx, 100, wz) % 100
 				if desert and decoration < 2:
@@ -92,6 +100,8 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 					data[x + z * 18 + (h + 1) * 324] = Nodes.PUMPKIN
 				elif decoration == 8 and not desert:
 					data[x + z * 18 + (h + 1) * 324] = Nodes.MELON
+				elif decoration in [9,10] and not desert and not snowy:
+					data[x + z * 18 + (h + 1) * 324] = Nodes.RED_MUSHROOM if decoration == 9 else Nodes.BROWN_MUSHROOM
 	for wz in range(base_z - 2, base_z + 20):
 		for wx in range(base_x - 2, base_x + 20):
 			if posmod(hash_at(wx, 77, wz), 105) != 0: continue
@@ -113,6 +123,13 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 				var lx: int = wx - base_x
 				var lz: int = wz - base_z
 				if lx >= 0 and lx < 18 and lz >= 0 and lz < 18: data[lx + lz * 18 + (h + dy) * 324] = Nodes.LOG
+			if c > -0.2 and hash_at(wx,63,wz)%3 == 0:
+				var lx: int = wx+1-base_x
+				var lz: int = wz-base_z
+				if lx >= 0 and lx < 18 and lz >= 0 and lz < 18:
+					for dy in range(1,trunk-1):
+						var index: int = lx+lz*18+(h+dy)*324
+						if data[index] == Nodes.AIR: data[index] = Nodes.VINE
 	for p in edits:
 		var lx: int = p.x - base_x
 		var lz: int = p.z - base_z

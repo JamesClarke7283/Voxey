@@ -101,11 +101,34 @@ const IRON_BLOCK = 48
 const GOLD_BLOCK = 49
 const DIAMOND_BLOCK = 50
 const GLOWSTONE = 51
-# Mods register new nodes at 200+ (atlas tiles 54..63 cap the count at 10) and
+# A bed is two half-height nodes: foot + head, always adjacent on one axis.
+const BED_FOOT = 54
+const BED_HEAD = 55
+# Keep new inventory items above the byte-sized node/mod ranges. Existing save
+# ids and the six reserved mod atlas tiles remain unchanged.
+const VINE = 41
+const RED_BRICKS = 52
+const HAY_BALE = 53
+const SUGAR_CANE = 56
+const RED_MUSHROOM = 57
+const BROWN_MUSHROOM = 58
+const MOSSY_COBBLE = 59
+const MOSSY_BRICKS = 60
+const COAL_BLOCK = 61
+const TERRACOTTA = 62
+const CHARCOAL = 256
+const BOWL = 257
+const MUSHROOM_STEW = 258
+const GOLD_NUGGET = 259
+const IRON_NUGGET = 260
+const EGG = 261
+# The old single-node bed id, migrated on load and in recipes.
+const LEGACY_BED = 24
+# Mods register new nodes at 200+ (atlas tiles 58..63 cap the count at 6) and
 # new items at 120+. Registration happens at startup, so ids stay stable in saves.
 const MOD_NODE_BASE = 200
 const MOD_ITEM_BASE = 140
-const MAX_CUSTOM_NODES = 10
+const MAX_CUSTOM_NODES = 6
 const MAX_CUSTOM_ITEMS = 40
 static var custom_nodes := {}
 static var custom_tiles := {}
@@ -121,7 +144,11 @@ const NAMES = {
 	120:"Bucket", 121:"Water bucket", 122:"Milk bucket", 123:"Shears", 124:"Saddle", 125:"Paper", 126:"Book", 127:"Brick", 128:"Clay ball", 129:"Snowball",
 	130:"Sugar", 131:"Pumpkin pie", 132:"Melon slice", 133:"Golden apple",
 	134:"Bow", 135:"Arrow", 136:"Feather", 137:"Flint", 138:"Flint and steel", 139:"Compass", 140:"Clock",
-	48:"Block of iron", 49:"Block of gold", 50:"Block of diamond", 51:"Glowstone"
+	48:"Block of iron", 49:"Block of gold", 50:"Block of diamond", 51:"Glowstone",
+	54:"Bed (foot)", 55:"Bed (head)",
+	41:"Vines", 52:"Red bricks", 53:"Hay bale", 56:"Sugar cane", 57:"Red mushroom", 58:"Brown mushroom",
+	59:"Mossy cobblestone", 60:"Mossy stone bricks", 61:"Block of coal", 62:"Terracotta",
+	256:"Charcoal", 257:"Bowl", 258:"Mushroom stew", 259:"Gold nugget", 260:"Iron nugget", 261:"Egg"
 }
 const COLORS = {
 	1:Color("709f40"), 2:Color("906244"), 3:Color("898b87"), 4:Color("dacc91"), 5:Color("438eac"), 6:Color("725137"), 7:Color("52863b"),
@@ -135,7 +162,11 @@ const COLORS = {
 	120:Color("b8bdc2"), 121:Color("5d9bc0"), 122:Color("e8e4da"), 123:Color("c0c6cc"), 124:Color("a5623d"), 125:Color("efe9d8"), 126:Color("9c4a33"), 127:Color("b0654a"), 128:Color("a8b2b8"), 129:Color("f4f8fa"),
 	130:Color("f2f0e6"), 131:Color("d9a545"), 132:Color("c94f5c"), 133:Color("e3b93e"),
 	134:Color("8a6a45"), 135:Color("c9b98a"), 136:Color("f0efe8"), 137:Color("3a3d42"), 138:Color("b8a06a"), 139:Color("c0392b"), 140:Color("d4b24c"),
-	48:Color("d1d9d5"), 49:Color("e5c44f"), 50:Color("5fd8cf"), 51:Color("e8d170")
+	48:Color("d1d9d5"), 49:Color("e5c44f"), 50:Color("5fd8cf"), 51:Color("e8d170"),
+	54:Color("b6543d"), 55:Color("e2dacc"),
+	41:Color("527c3d"), 52:Color("b46950"), 53:Color("c5a54a"), 56:Color("96b95a"), 57:Color("c44f42"), 58:Color("977254"),
+	59:Color("6b7b5c"), 60:Color("7e8970"), 61:Color("343b40"), 62:Color("a66d52"),
+	256:Color("484039"), 257:Color("987047"), 258:Color("b3824f"), 259:Color("edc753"), 260:Color("cbd3d1"), 261:Color("eee2c5")
 }
 const KIND_NAMES = ["pickaxe", "axe", "shovel", "sword", "hoe", "shears"]
 const TIER_NAMES = ["Wooden", "Stone", "Iron", "Diamond"]
@@ -179,9 +210,12 @@ static func all_ids() -> Array:
 	ids.append_array(range(ARMOR_BASE, ARMOR_END))
 	return ids
 
-# Saves from before the armor system stored the single chestplate as id 74.
+# Saves from before the armor system stored the single chestplate as id 74;
+# saves from before the two-block bed stored a single bed node as id 24.
 static func migrate(id: int) -> int:
-	return ARMOR if id == LEGACY_ARMOR else id
+	if id == LEGACY_ARMOR: return ARMOR
+	if id == LEGACY_BED: return BED_FOOT
+	return id
 
 static func lookup(query: String) -> int:
 	var wanted: String = query.strip_edges().to_lower().replace("_", " ")
@@ -199,12 +233,13 @@ static func register_node(name_text: String, properties: Dictionary) -> int:
 	var id: int = MOD_NODE_BASE + custom_nodes.size()
 	properties["name"] = name_text
 	custom_nodes[id] = properties
-	custom_tiles[id] = 54 + custom_tiles.size()
+	custom_tiles[id] = 58 + custom_tiles.size()
 	return id
 
 static func register_item(name_text: String, properties: Dictionary) -> int:
 	if custom_items.size() >= MAX_CUSTOM_ITEMS or custom_items.values().any(func(i): return i.name == name_text): return 0
 	var id: int = MOD_ITEM_BASE + custom_items.size()
+	while exists(id): id += 1
 	properties["name"] = name_text
 	custom_items[id] = properties
 	return id
@@ -239,14 +274,15 @@ static func durability(id: int) -> int:
 	return 0
 
 static func max_stack(id: int) -> int:
-	return 1 if is_tool_id(id) or is_armor(id) or id in [SHEARS,BUCKET,WATER_BUCKET,MILK_BUCKET,SADDLE] else 64
+	if id == EGG: return 16
+	return 1 if is_tool_id(id) or is_armor(id) or id in [SHEARS,BUCKET,WATER_BUCKET,MILK_BUCKET,SADDLE,MUSHROOM_STEW] else 64
 
 static func solid(id: int) -> bool:
 	if custom_nodes.has(id): return not bool(custom_nodes[id].get("transparent",false))
 	return id != AIR and id != WATER and not plant(id) and id not in [TORCH,LADDER]
 
 static func plant(id: int) -> bool:
-	return id in [WHEAT, RIPE_WHEAT, SAPLING, FLOWER]
+	return id in [WHEAT, RIPE_WHEAT, SAPLING, FLOWER, VINE, SUGAR_CANE, RED_MUSHROOM, BROWN_MUSHROOM]
 
 static func transparent(id: int) -> bool:
 	if custom_nodes.has(id): return bool(custom_nodes[id].get("transparent",false))
@@ -258,15 +294,22 @@ static func falls(id: int) -> bool:
 
 static func placeable(id: int) -> bool:
 	if custom_nodes.has(id) and not bool(custom_nodes[id].get("unobtainable",false)): return true
+	# The legacy single-node bed is no longer obtainable; only the two-block bed is.
+	if id == LEGACY_BED: return false
 	return id > AIR and id < 64 and NAMES.has(id) and id not in [WATER, BEDROCK, RIPE_WHEAT]
 
 static func preferred_tool(id: int) -> int:
+	if id in [RED_BRICKS,MOSSY_COBBLE,MOSSY_BRICKS,COAL_BLOCK,TERRACOTTA]: return 0
+	if id == HAY_BALE: return 4
 	if id in [STONE, COBBLE, COAL_ORE, IRON_ORE, DIAMOND_ORE, FURNACE, BRICKS, OBSIDIAN, GOLD_ORE, COPPER_ORE, GOLD_NODE, COPPER_NODE, IRON_NODE, DIAMOND_NODE, SANDSTONE, SANDSTONE_BRICK, BOOKSHELF, IRON_BLOCK, GOLD_BLOCK, DIAMOND_BLOCK, GLOWSTONE]: return 0
-	if id in [LOG, PLANKS, WORKBENCH, CHEST, BED, LADDER, PUMPKIN, MELON]: return 1
+	if id in [LOG, PLANKS, WORKBENCH, CHEST, BED, BED_FOOT, BED_HEAD, LADDER, PUMPKIN, MELON]: return 1
 	if id in [DIRT, GRASS, SAND, SNOW, GRAVEL, FARMLAND, CLAY, SNOW_BLOCK]: return 2
 	return -1
 
 static func hardness(id: int) -> float:
+	if id in [RED_BRICKS,MOSSY_COBBLE,MOSSY_BRICKS,TERRACOTTA]: return 2.0
+	if id == COAL_BLOCK: return 5.0
+	if id == HAY_BALE: return 0.5
 	if custom_nodes.has(id): return float(custom_nodes[id].get("hardness",1.0))
 	if id == BEDROCK: return INF
 	if id == OBSIDIAN: return 18.0
@@ -277,6 +320,7 @@ static func hardness(id: int) -> float:
 	if id in [COAL_ORE, IRON_ORE, DIAMOND_ORE, GOLD_ORE, COPPER_ORE]: return 4.5
 	if id in [GOLD_NODE, COPPER_NODE, IRON_NODE, DIAMOND_NODE]: return 5.0
 	if id in [LOG, WORKBENCH, CHEST]: return 2.1
+	if id in [BED_FOOT, BED_HEAD]: return 0.8
 	if id == SANDSTONE: return 1.6
 	if id == PLANKS or id == LADDER: return 1.5
 	if id in [LEAVES, TORCH, TNT] or plant(id): return 0.22
@@ -295,6 +339,7 @@ static func break_time(id: int, tool: int) -> float:
 
 static func harvestable(id: int, tool: int) -> bool:
 	if id == BEDROCK: return false
+	if id == VINE: return tool == SHEARS
 	if preferred_tool(id) == 0:
 		if tool_kind(tool) != 0 and tool != SHEARS: return false
 		if tool == SHEARS and id not in [BOOKSHELF]: return id in [BOOKSHELF]
@@ -306,7 +351,8 @@ static func harvestable(id: int, tool: int) -> bool:
 static func drop(id: int) -> int:
 	return {GRASS:DIRT, STONE:COBBLE, COAL_ORE:COAL, DIAMOND_ORE:DIAMOND, FARMLAND:DIRT, WHEAT:SEEDS, RIPE_WHEAT:GRAIN,
 		LEAVES:SAPLING, ICE:0, CLAY:CLAY_BALL, GLOWSTONE:GLOWSTONE_DUST_ALIAS,
-		PUMPKIN:PUMPKIN, MELON:MELON_SLICE, BOOKSHELF:BOOKSHELF, SNOW_BLOCK:SNOW_BALL_ALIAS}.get(id, id)
+		PUMPKIN:PUMPKIN, MELON:MELON_SLICE, BOOKSHELF:BOOKSHELF, SNOW_BLOCK:SNOW_BALL_ALIAS,
+		BED_FOOT:BED_FOOT, BED_HEAD:BED_FOOT}.get(id, id)
 
 # Aliases so the drop table reads cleanly above.
 const SNOW_BALL_ALIAS = SNOWBALL
@@ -314,7 +360,7 @@ const GLOWSTONE_DUST_ALIAS = GLOWSTONE # glowstone drops itself; kept for clarit
 
 static func food(id: int) -> int:
 	if custom_items.has(id): return clampi(int(custom_items[id].get("food",0)),0,20)
-	return {APPLE:4, RAW_MEAT:2, COOKED_MEAT:8, BREAD:6, ROTTEN_FLESH:2, PUMPKIN_PIE:8, MELON_SLICE:2, GOLDEN_APPLE:10}.get(id, 0)
+	return {APPLE:4, RAW_MEAT:2, COOKED_MEAT:8, BREAD:6, ROTTEN_FLESH:2, PUMPKIN_PIE:8, MELON_SLICE:2, GOLDEN_APPLE:10, MUSHROOM_STEW:6}.get(id, 0)
 
 static func tile(id: int, face: int) -> int:
 	if custom_tiles.has(id): return custom_tiles[id]
@@ -324,6 +370,17 @@ static func tile(id: int, face: int) -> int:
 	if id == FURNACE and face == 5: return 33
 	if id == TNT and face in [2, 3]: return 41
 	if id == SANDSTONE and face == 2: return 52
+	if id == SANDSTONE: return 64
+	if id == SANDSTONE_BRICK: return 65
+	if id == ICE: return 66
+	if id == SNOW_BLOCK: return 67
+	if id == VINE: return 68
+	if id == RED_BRICKS: return 69
+	if id == HAY_BALE: return 71 if face in [2,3] else 70
+	if id in [SUGAR_CANE,RED_MUSHROOM,BROWN_MUSHROOM,MOSSY_COBBLE,MOSSY_BRICKS,COAL_BLOCK,TERRACOTTA]: return 72+id-SUGAR_CANE
 	if id == PUMPKIN and face == 2: return 45
 	if id == MELON and face == 2: return 53
+	# Bed halves use dedicated tiles: 56 foot top, 57 head (pillow) top.
+	if id == BED_FOOT: return 56
+	if id == BED_HEAD: return 57
 	return id

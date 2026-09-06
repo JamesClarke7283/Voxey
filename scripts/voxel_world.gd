@@ -167,7 +167,7 @@ func set_node(p: Vector3i, id: int) -> bool:
 	if p.y <= 0 or p.y >= 64 or not blocks.has(b): return false
 	blocks[b].data[local_index(p)] = id
 	edits[p] = id
-	if id == Nodes.WHEAT or id == Nodes.SAPLING: growth[p] = 0.0
+	if id in [Nodes.WHEAT,Nodes.SAPLING,Nodes.SUGAR_CANE]: growth[p] = 0.0
 	else: growth.erase(p)
 	_mark_dirty(p)
 	return true
@@ -234,17 +234,23 @@ func _simulate() -> void:
 			set_node(p,Nodes.RIPE_WHEAT)
 		elif id == Nodes.SAPLING and growth[p] > 120:
 			grow_tree(p)
+		elif id == Nodes.SUGAR_CANE and growth[p] > 60:
+			growth[p] = 0.0
+			var bottom: Vector3i = p
+			while node_at(bottom+Vector3i.DOWN) == Nodes.SUGAR_CANE: bottom += Vector3i.DOWN
+			if p.y-bottom.y < 2 and node_at(p+Vector3i.UP) == Nodes.AIR and can_plant_cane(bottom):
+				set_node(p+Vector3i.UP,Nodes.SUGAR_CANE)
 	for key in stations:
 		var s: Dictionary = stations[key]
 		if s.get("kind","") != "furnace": continue
 		var input: Dictionary = s.slots[0]
 		var fuel: Dictionary = s.slots[1]
 		var output: Dictionary = s.slots[2]
-		var recipe: int = {Nodes.IRON_ORE:Nodes.IRON,Nodes.GOLD_ORE:Nodes.GOLD,Nodes.COPPER_ORE:Nodes.COPPER,Nodes.SAND:Nodes.GLASS,Nodes.COBBLE:Nodes.STONE,Nodes.RAW_MEAT:Nodes.COOKED_MEAT,Nodes.LOG:Nodes.COAL,Nodes.CLAY_BALL:Nodes.BRICK_ITEM}.get(input.id,0)
+		var recipe: int = {Nodes.IRON_ORE:Nodes.IRON,Nodes.GOLD_ORE:Nodes.GOLD,Nodes.COPPER_ORE:Nodes.COPPER,Nodes.SAND:Nodes.GLASS,Nodes.COBBLE:Nodes.STONE,Nodes.RAW_MEAT:Nodes.COOKED_MEAT,Nodes.LOG:Nodes.CHARCOAL,Nodes.CLAY_BALL:Nodes.BRICK_ITEM,Nodes.CLAY:Nodes.TERRACOTTA}.get(input.id,0)
 		if s.burn > 0: s.burn -= 1
 		if recipe == 0 or (output.id != 0 and output.id != recipe) or output.count >= 64: s.progress = 0.0; continue
 		if s.burn <= 0:
-			var burn: int = {Nodes.COAL:80,Nodes.LOG:15,Nodes.PLANKS:15,Nodes.STICK:5}.get(fuel.id,0)
+			var burn: int = {Nodes.COAL:80,Nodes.CHARCOAL:80,Nodes.COAL_BLOCK:800,Nodes.LOG:15,Nodes.PLANKS:15,Nodes.STICK:5,Nodes.BOWL:10}.get(fuel.id,0)
 			if burn == 0: continue
 			s.burn = burn
 			fuel.count -= 1
@@ -256,6 +262,14 @@ func _simulate() -> void:
 			if input.count <= 0: input.id = 0
 			output.id = recipe
 			output.count += 1
+
+func can_plant_cane(p: Vector3i) -> bool:
+	var soil: Vector3i = p+Vector3i.DOWN
+	if node_at(soil) == Nodes.SUGAR_CANE: return true
+	if node_at(soil) not in [Nodes.DIRT,Nodes.GRASS,Nodes.SAND]: return false
+	for side in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
+		if node_at(soil+side) == Nodes.WATER: return true
+	return false
 
 func grow_tree(p: Vector3i) -> void:
 	for y in range(2,6):

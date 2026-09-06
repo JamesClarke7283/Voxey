@@ -585,7 +585,7 @@ func run() -> void:
 	craft_bag.add_item(Nodes.SAND,4)
 	check(craft_bag.craft(craft_bag.recipe_index(Nodes.SANDSTONE),"hand") and craft_bag.count_item(Nodes.SANDSTONE)==1,"sandstone crafts from four sand")
 	craft_bag.add_item(Nodes.CLAY_BALL,4)
-	check(craft_bag.craft(craft_bag.recipe_index(Nodes.BRICK_ITEM),"hand") and craft_bag.count_item(Nodes.BRICK_ITEM)==4,"bricks craft from clay balls")
+	check(craft_bag.craft(craft_bag.recipe_index(Nodes.CLAY),"hand") and craft_bag.count_item(Nodes.CLAY)==1,"clay balls form a clay block for smelting")
 	# Bucket: milk a cow, then pour and scoop water.
 	var Cow=game.spawn_creature("cow",game.player.position+Vector3(-1.5,0,0))
 	game.inventory.slots[6]={"id":Nodes.BUCKET,"count":1,"wear":0}
@@ -641,6 +641,57 @@ func run() -> void:
 	check(Nodes.title(Nodes.BOW)=="Bow" and Nodes.title(Nodes.ARROW_ITEM)=="Arrow" and Nodes.max_stack(Nodes.ARROW_ITEM)==64,"bow and arrows are named items with stack rules")
 	check(Nodes.title(Nodes.FEATHER)=="Feather" and Nodes.title(Nodes.FLINT)=="Flint","feathers and flint exist as crafting materials")
 	check(Game.VERSION!="","a version tag exists for the menus")
+	# Two-block bed: placement lays foot+head in facing order, breaking one
+	# half removes both, sleeping works from either half.
+	game.set_gamemode("survival")
+	var bed_base := Vector3i(feet.x-2,feet.y+3,feet.z-2)
+	for q in [bed_base,bed_base+Vector3i(1,0,0),bed_base+Vector3i(-1,0,0),bed_base+Vector3i(0,0,1),bed_base+Vector3i(0,0,-1)]: game.world.set_node(q,Nodes.AIR)
+	game.inventory.slots[8]={"id":Nodes.BED_FOOT,"count":1,"wear":0}
+	game.inventory.selected=8
+	# Build a stone platform and stand on it; the bed's foot lands on the face
+	# above the targeted floor, head one block further north (facing -z).
+	for q in [bed_base,bed_base+Vector3i(0,0,1),bed_base+Vector3i(0,0,2)]:
+		game.world.set_node(q,Nodes.AIR)
+	var bed_floor: Vector3i = bed_base+Vector3i(0,-1,1)
+	game.world.set_node(bed_floor,Nodes.STONE)
+	game.player.position=Vector3(bed_base)+Vector3(0.5,2.9,3.5)
+	game.player.rotation.y=0
+	game.player.camera.rotation.x=-1.2
+	game.player.target={"pos":bed_floor,"normal":Vector3i.UP,"id":Nodes.STONE,"distance":2.0}
+	var bed_count_before: int=game.inventory.count_item(Nodes.BED_FOOT)
+	game.player.use()
+	check(game.world.node_at(bed_base+Vector3i(0,0,1))==Nodes.BED_FOOT,"placing a bed lays the foot at the target face")
+	check(game.world.node_at(bed_base)==Nodes.BED_HEAD,"the bed head sits in the player's facing direction")
+	check(game.inventory.count_item(Nodes.BED_FOOT)==bed_count_before-1,"a two-block bed consumes exactly one item")
+	# Breaking either half removes both and drops one bed.
+	var bed_drops_before: int=game.drops.get_child_count()
+	game.break_node(bed_base,Nodes.BED_HEAD,0)
+	check(game.world.node_at(bed_base+Vector3i(0,0,1))==Nodes.AIR and game.world.node_at(bed_base)==Nodes.AIR,"breaking the head removes the whole bed")
+	var bed_dropped: int=0
+	for d in game.drops.get_children():
+		if d.item_id==Nodes.BED_FOOT: bed_dropped+=d.amount
+	check(bed_dropped==1 and game.drops.get_child_count()==bed_drops_before+1,"a broken bed drops exactly one bed item")
+	# The recipe yields the foot; legacy saves migrate id 24 to the foot.
+	check(Inventory.clean_slot({"id":24,"count":1,"wear":0}).id==Nodes.BED_FOOT,"legacy single-node beds migrate to the two-block bed")
+	check(Nodes.title(Nodes.BED_FOOT)=="Bed (foot)" and Nodes.hardness(Nodes.BED_HEAD)==0.8,"bed halves have names and hardness")
+	# Natural placement: aiming at the ground at your own feet must work.
+	var bed_spot: Vector3=game._safe_spawn(Vector3(34.5,46,34.5))
+	game.world.set_node(Vector3i(bed_spot)+Vector3i(0,-1,0),Nodes.STONE)
+	game.world.set_node(Vector3i(bed_spot),Nodes.AIR)
+	game.world.set_node(Vector3i(bed_spot)+Vector3i(0,1,0),Nodes.AIR)
+	game.player.position=bed_spot
+	game.player.velocity=Vector3.ZERO
+	game.player.camera.rotation.x=-1.3
+	game.resume()
+	var down_ray: Dictionary=game.world.raycast(game.player.camera.global_position,-game.player.camera.global_basis.z)
+	game.pause()
+	game.player.target=down_ray
+	game.inventory.slots[8]={"id":Nodes.BED_FOOT,"count":1,"wear":0}
+	game.inventory.selected=8
+	var natural_before: int=game.inventory.count_item(Nodes.BED_FOOT)
+	game.player.use()
+	check(game.inventory.count_item(Nodes.BED_FOOT)==natural_before-1,"a bed can be placed at your own feet aiming down")
+	load("res://tests/content_checks.gd").run(self,game)
 	# Armor persists
 	game.player.armor_slots[0]={"id":Nodes.armor_id(0,0),"count":1,"wear":4}
 	check(game.save_game("user://voxey_test.json"),"a world with worn armor saves")
@@ -650,6 +701,8 @@ func run() -> void:
 		if FileAccess.file_exists(path): DirAccess.remove_absolute(path)
 	print("VOXEY TESTS: %d passed, %d failed in %.2fs" % [passed,failed,(Time.get_ticks_msec()-start)/1000.0])
 	game.audio_enabled=false
+	# Release test hook closures before tearing down their captured scene.
+	Mods.reset()
 	for audio in game.audio_players+game.audio_players_3d: audio.stop()
 	for i in 10: await process_frame
 	game.queue_free()

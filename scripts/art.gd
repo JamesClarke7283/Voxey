@@ -1,13 +1,17 @@
 class_name Art
 extends RefCounted
 
+static var atlas_texture: Texture2D
+
 static func make_atlas() -> ImageTexture:
-	var img := Image.create(128, 128, false, Image.FORMAT_RGBA8)
+	var img := Image.create(128, 256, false, Image.FORMAT_RGBA8)
 	img.fill(Color.TRANSPARENT)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7164
-	for tile in 48:
+	for tile in 79:
+		if tile in range(58,64): continue # Reserved for existing mod nodes.
 		var base: Color = Nodes.color(tile)
+		if tile >= 64: base = Nodes.color([Nodes.SANDSTONE,Nodes.SANDSTONE_BRICK,Nodes.ICE,Nodes.SNOW_BLOCK,Nodes.VINE,Nodes.RED_BRICKS,Nodes.HAY_BALE,Nodes.HAY_BALE,Nodes.SUGAR_CANE,Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM,Nodes.MOSSY_COBBLE,Nodes.MOSSY_BRICKS,Nodes.COAL_BLOCK,Nodes.TERRACOTTA][tile-64])
 		if tile == 41: base = Color("a08a6a")
 		if tile == 30: base = Color("719f43")
 		if tile == 31: base = Color("bb945e")
@@ -23,6 +27,11 @@ static func make_atlas() -> ImageTexture:
 				var c: Color = base * rng.randf_range(0.86,1.1)
 				c.a = 1.0
 				match tile:
+					3,25,28:
+						# Broad mineral planes with sparse seams, instead of white noise.
+						c = base * (0.93 + float((x/4*3+y/3*7)%5)*0.025)
+						if (x+y*3)%23 == 0: c = base.darkened(0.16)
+						if tile == 25 and (x/3+y/2)%5 == 0: c = Color("4c3d61")
 					1:
 						c = (Color("719f43") if y < 3 + int(x * 7 + 3) % 3 else Color("916747")) * rng.randf_range(0.86,1.08)
 					6:
@@ -92,7 +101,7 @@ static func make_atlas() -> ImageTexture:
 						# Bookshelf: plank frame, rows of colored book spines.
 						if y < 2 or y > 13 or (y in [7,8]): c = Color("c39760")*rng.randf_range(0.85,1.05)
 						else:
-							var spine: int = (x*7+y*13)%5
+							var spine: int = (x/2+y/8*3)%5
 							c = [Color("9c4a33"),Color("3e5a7a"),Color("5d7a3e"),Color("b08a3e"),Color("6a4a7a")][spine]*rng.randf_range(0.85,1.1)
 							if x % 4 == 0: c *= 0.6
 					44:
@@ -112,6 +121,17 @@ static func make_atlas() -> ImageTexture:
 					47:
 						# Melon: striped rind.
 						c = (Color("9dc14f") if x % 3 != 0 else Color("6f9437"))*rng.randf_range(0.9,1.1)
+					56:
+						# Bed foot: red blanket over a plank frame.
+						c = Color("b6543d")*rng.randf_range(0.92,1.06)
+						if y > 12: c = Color("8f683c")
+						if y < 2: c = Color("e2dacc")*rng.randf_range(0.92,1.04)
+					57:
+						# Bed head: white pillow with a folded blanket edge.
+						c = Color("e2dacc")*rng.randf_range(0.92,1.04)
+						if y > 11: c = Color("b6543d")*rng.randf_range(0.92,1.06)
+						if y > 13: c = Color("8f683c")
+						if (x == 7 or x == 8) and y in [4,5]: c = c.darkened(0.08)
 					48,49,50:
 						# Metal storage blocks: beveled ingot grid.
 						if x in [0,15] or y in [0,15]: c *= 0.8
@@ -121,6 +141,46 @@ static func make_atlas() -> ImageTexture:
 						# Glowstone: mottled bright patches.
 						if (x/2*7+y/2*5)%9 < 3: c = base.lightened(0.35)*rng.randf_range(0.95,1.1)
 						else: c = base.darkened(0.12)
+					64,65:
+						if y % 8 == 7 or (tile == 65 and (x+(y/8)*8)%16 == 0): c = base.darkened(0.24)
+						elif y % 8 == 0: c = base.lightened(0.15)
+					66:
+						c = Color("91bbcf").lerp(Color("d5edf0"),float((x+y)%13 < 2)*0.65)
+						if x in [0,15] or y in [0,15]: c = Color("79a5c2")
+					67:
+						c = Color("edf3ee") * rng.randf_range(0.97,1.0)
+						if y > 12: c = Color("d6e4e6")
+					68:
+						c = Color.TRANSPARENT
+						if x%7 == 2 or (y%5 < 3 and (x+y/5*2)%7 < 4): c = base*rng.randf_range(0.8,1.15)
+					69,76:
+						if y%4 == 3 or (x+(y/4)%2*4)%8 == 0: c = Color("c4b6a0") if tile == 69 else Color("525c58")
+						elif y%4 == 0: c = base.lightened(0.12)
+						if tile == 76 and (x*3+y*7)%19 < 5: c = Color("617a43")
+					70,71:
+						c = base * (0.8 + float((x*7+y/3)%5)*0.08)
+						if tile == 70 and y in [3,4,11,12]: c = Color("986440")
+						if tile == 71 and maxi(absi(x-8),absi(y-8))%3 == 0: c = base.darkened(0.2)
+					72:
+						c = Color.TRANSPARENT
+						if x%5 in [1,2,3]: c = [Color("72983e"),Color("b5ce73"),Color("91b751")][x%5-1]
+						if c.a > 0 and y%5 == 4: c = Color("597d38")
+					73,74:
+						c = Color.TRANSPARENT
+						if x in [7,8,9] and y > 6 and y < 15: c = Color("d6c7a0") if x == 7 else Color("a79777")
+						if y in range(2,9) and absi(x-8) <= mini(y+1,6):
+							c = base*rng.randf_range(0.85,1.12)
+							if y == 8: c = base.darkened(0.32)
+							if tile == 73 and (x/2*3+y/2*7)%11 < 2: c = Color("f2e5cf")
+					75:
+						if y%5 == 0 or (x+y/5*3)%7 == 0: c = base.darkened(0.3)
+						elif (x/2*5+y/2*7)%13 < 5: c = Color("627d41")*rng.randf_range(0.8,1.1)
+					77:
+						if x%5 == 0 or y%5 == 0: c = base.darkened(0.25)
+						elif (x+y)%7 == 0: c = base.lightened(0.1)
+					78:
+						c = base*rng.randf_range(0.97,1.03)
+						if y in [0,15]: c = base.darkened(0.05)
 				img.set_pixel(tile%8*16+x, tile/8*16+y, c)
 	# Expansion-node face tiles (drawn after the loop so they can override).
 	# Tile 52: sandstone top, tile 53: melon top. Ladder (42), bookshelf (43),
@@ -134,7 +194,7 @@ static func make_atlas() -> ImageTexture:
 			img.set_pixel(52%8*16+x, 52/8*16+y, c)
 			var melon_top: Color = (Color("9dc14f") if (x/2+y/2)%2 == 0 else Color("8ab344"))*rng.randf_range(0.9,1.08)
 			img.set_pixel(53%8*16+x, 53/8*16+y, melon_top)
-	# Mod nodes get procedural noise tiles from 53 onward, keyed by Nodes.custom_tiles.
+	# Mod nodes retain their reserved tiles 58..63.
 	for mod_id in Nodes.custom_tiles:
 		var base: Color = Nodes.color(mod_id)
 		var tile_index: int = Nodes.custom_tiles[mod_id]
@@ -143,7 +203,8 @@ static func make_atlas() -> ImageTexture:
 				var c: Color = base * rng.randf_range(0.85,1.1)
 				c.a = 1.0
 				img.set_pixel(tile_index%8*16+x, tile_index/8*16+y, c)
-	return ImageTexture.create_from_image(img)
+	atlas_texture = ImageTexture.create_from_image(img)
+	return atlas_texture
 
 static func crack_texture(stage: int) -> ImageTexture:
 	# Luanti-style crack overlay. The image has an even size, so its exact centre is

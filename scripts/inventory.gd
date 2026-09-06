@@ -24,7 +24,7 @@ func _init() -> void:
 	_recipe("Chest", Nodes.CHEST, 1, [8,8,8,8,0,8,8,8,8], 3, "table")
 	_recipe("Stone bricks", Nodes.BRICKS, 4, [3,3,3,3], 2)
 	_recipe("Bread", Nodes.BREAD, 1, [71,71,71,0,0,0,0,0,0], 3, "table")
-	_recipe("Bed", Nodes.BED, 1, [75,75,75,8,8,8,0,0,0], 3, "table")
+	_recipe("Bed", Nodes.BED_FOOT, 1, [75,75,75,8,8,8,0,0,0], 3, "table")
 	_recipe("Wool", Nodes.WOOL, 1, [Nodes.STRING,Nodes.STRING,Nodes.STRING,Nodes.STRING], 2)
 	_recipe("Bone meal", Nodes.BONE_MEAL, 3, [Nodes.BONE], 1)
 	_recipe("TNT", Nodes.TNT, 1, [117,4,117,4,117,4,117,4,117], 3, "table")
@@ -46,10 +46,9 @@ func _init() -> void:
 	_recipe("Snow block", Nodes.SNOW_BLOCK, 1, [Nodes.SNOWBALL,Nodes.SNOWBALL,Nodes.SNOWBALL,Nodes.SNOWBALL], 2)
 	_recipe("Ladder", Nodes.LADDER, 3, [Nodes.STICK,0,Nodes.STICK,Nodes.STICK,Nodes.STICK,Nodes.STICK,Nodes.STICK,0,Nodes.STICK], 3)
 	_recipe("Bookshelf", Nodes.BOOKSHELF, 1, [Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS,Nodes.BOOK,Nodes.BOOK,Nodes.BOOK,Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS], 3, "table")
-	_recipe("Paper", Nodes.PAPER, 3, [Nodes.SUGAR], 1)
+	_recipe("Paper", Nodes.PAPER, 3, [Nodes.SUGAR_CANE,Nodes.SUGAR_CANE,Nodes.SUGAR_CANE], 3, "table")
 	_recipe("Book", Nodes.BOOK, 1, [Nodes.PAPER,Nodes.PAPER,Nodes.PAPER,Nodes.LEATHER], 2)
-	_recipe("Bricks", Nodes.BRICK_ITEM, 4, [Nodes.CLAY_BALL,Nodes.CLAY_BALL,Nodes.CLAY_BALL,Nodes.CLAY_BALL], 2)
-	_recipe("Pumpkin pie", Nodes.PUMPKIN_PIE, 1, [Nodes.PUMPKIN,Nodes.SUGAR,Nodes.GRAIN,0,0,0,0,0,0], 3, "table")
+	_shapeless("Pumpkin pie", Nodes.PUMPKIN_PIE, 1, [Nodes.PUMPKIN,Nodes.SUGAR,Nodes.EGG])
 	_recipe("Golden apple", Nodes.GOLDEN_APPLE, 1, [Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.APPLE,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD], 3, "table")
 	_recipe("Bow", Nodes.BOW, 1, [0,Nodes.STICK,Nodes.STRING,Nodes.STICK,0,Nodes.STRING,0,Nodes.STICK,Nodes.STRING], 3, "table")
 	_recipe("Arrows", Nodes.ARROW_ITEM, 4, [0,Nodes.FLINT,0,0,Nodes.STICK,0,0,Nodes.FEATHER,0], 3, "table")
@@ -61,6 +60,22 @@ func _init() -> void:
 	_recipe("Diamonds", Nodes.DIAMOND, 9, [Nodes.DIAMOND_BLOCK], 1)
 	_recipe("Glowstone", Nodes.GLOWSTONE, 1, [Nodes.COAL,Nodes.GOLD,Nodes.COAL,Nodes.GOLD,Nodes.COAL,Nodes.GOLD,Nodes.COAL,Nodes.GOLD,Nodes.COAL], 3, "table")
 	_recipe("Flint and steel", Nodes.FLINT_AND_STEEL, 1, [Nodes.FLINT,0,0,0,Nodes.IRON], 2)
+	_recipe("Charcoal torches", Nodes.TORCH, 4, [Nodes.CHARCOAL,Nodes.STICK], 1)
+	_recipe("Sugar", Nodes.SUGAR, 1, [Nodes.SUGAR_CANE], 1)
+	_recipe("Bowls", Nodes.BOWL, 4, [Nodes.PLANKS,0,Nodes.PLANKS,0,Nodes.PLANKS,0], 3, "table")
+	_shapeless("Mushroom stew", Nodes.MUSHROOM_STEW, 1, [Nodes.BOWL,Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM])
+	_shapeless("Mossy cobblestone", Nodes.MOSSY_COBBLE, 1, [Nodes.COBBLE,Nodes.VINE])
+	_shapeless("Mossy stone bricks", Nodes.MOSSY_BRICKS, 1, [Nodes.BRICKS,Nodes.VINE])
+	_recipe("Red bricks", Nodes.RED_BRICKS, 1, [Nodes.BRICK_ITEM,Nodes.BRICK_ITEM,Nodes.BRICK_ITEM,Nodes.BRICK_ITEM], 2)
+	_recipe("Clay", Nodes.CLAY, 1, [Nodes.CLAY_BALL,Nodes.CLAY_BALL,Nodes.CLAY_BALL,Nodes.CLAY_BALL], 2)
+	for pair in [[Nodes.GRAIN,Nodes.HAY_BALE],[Nodes.COAL,Nodes.COAL_BLOCK],[Nodes.GOLD_NUGGET,Nodes.GOLD],[Nodes.IRON_NUGGET,Nodes.IRON]]:
+		var square: Array = []; square.resize(9); square.fill(pair[0])
+		_recipe(Nodes.title(pair[1]),pair[1],1,square,3,"table")
+		_recipe(Nodes.title(pair[0])+" (unpack)",pair[0],9,[pair[1]],1)
+
+func _shapeless(label: String, id: int, count: int, ingredients: Array) -> void:
+	_recipe(label,id,count,ingredients,2)
+	recipes.back()["shapeless"] = true
 
 func _recipe(label: String, id: int, count: int, pattern: Array, width: int, station: String = "hand") -> void:
 	var ingredients: Dictionary = {}
@@ -189,6 +204,12 @@ func matching_recipe(station: String) -> int:
 	for i in recipes.size():
 		var recipe: Dictionary = recipes[i]
 		if recipe.station == "table" and station != "table": continue
+		if recipe.get("shapeless",false):
+			var present: Dictionary = {}
+			for cell in cells:
+				if cell: present[cell] = present.get(cell,0)+1
+			if present == recipe.ingredients: return i
+			continue
 		var pattern: Dictionary = _normalized_pattern(recipe.pattern,recipe.width)
 		if pattern.width != normalized.width or pattern.height != normalized.height: continue
 		if pattern.cells == normalized.cells: return i

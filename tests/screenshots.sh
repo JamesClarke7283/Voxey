@@ -21,3 +21,5 @@ renderer/rendering_method="gl_compatibility"
 PROJECT
 godot --headless --path "$voxey_check_dir" --editor --import --quit > "$voxey_check_dir/import.log" 2>&1
 godot --path "$voxey_check_dir" --resolution 1280x720 --script res://tests/screenshot_tour.gd
+
+godot --path "$voxey_check_dir" --resolution 1280x920 --script res://tests/asset_gallery.gd

@@ -19,13 +19,9 @@ func _ready() -> void:
 		mesh_instance.scale = Vector3.ONE*0.25
 		mesh_instance.position = Vector3(-0.125,0,-0.125)
 	else:
-		var mesh := BoxMesh.new()
-		mesh.size = Vector3(0.21,0.21,0.06) if not Nodes.is_tool_id(item_id) else Vector3(0.08,0.3,0.08)
-		mesh_instance.mesh = mesh
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Nodes.color(item_id)
-		mat.roughness = 1.0
-		mesh_instance.material_override = mat
+		mesh_instance.mesh = ItemArt.mesh(item_id)
+		mesh_instance.material_override = ItemArt.material(item_id)
+		mesh_instance.scale = Vector3.ONE*0.36
 	add_child(mesh_instance)
 
 func _physics_process(delta: float) -> void:

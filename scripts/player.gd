@@ -302,7 +302,11 @@ func use() -> void:
 	var held: int = game.inventory.held().id
 	if Nodes.food(held) > 0 and hunger < 20:
 		hunger = minf(20,hunger+Nodes.food(held))
-		game.inventory.consume_selected()
+		if game.gamemode != "creative":
+			game.inventory.consume_selected()
+			if held == Nodes.MUSHROOM_STEW:
+				var rest: int = game.inventory.add_item(Nodes.BOWL,1)
+				if rest > 0: game.spawn_drop(position+Vector3.UP,Nodes.BOWL,rest)
 		game.sound("eat")
 		game.toast("A good meal. Hunger restored.")
 		swing = 1
@@ -360,7 +364,7 @@ func use() -> void:
 		if id in [Nodes.WORKBENCH,Nodes.FURNACE,Nodes.CHEST]:
 			game.open_inventory({Nodes.WORKBENCH:"table",Nodes.FURNACE:"furnace",Nodes.CHEST:"chest"}[id],p)
 			return
-		if id == Nodes.BED:
+		if id in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.BED]:
 			game.sleep_at(p)
 			return
 		if id == Nodes.TNT:
@@ -405,13 +409,46 @@ func use() -> void:
 		game.toast("Use a hoe to till dirt before planting seeds.")
 		return
 	if place_id == Nodes.SAPLING and id not in [Nodes.DIRT,Nodes.GRASS]: return
+	if place_id == Nodes.SUGAR_CANE and not game.world.can_plant_cane(destination):
+		game.toast("Plant sugar cane on dirt, grass or sand beside water.")
+		return
+	if place_id in [Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM] and (target.normal != Vector3i.UP or id not in [Nodes.DIRT,Nodes.GRASS,Nodes.MOSSY_COBBLE]): return
 	if Nodes.solid(game.world.node_at(destination)): return
 	if place_id == Nodes.CHEST:
 		var reason: String = game.world.chest_placement_problem(destination)
 		if not reason.is_empty(): game.toast(reason); return
 	var node_box := AABB(Vector3(destination),Vector3.ONE)
 	var player_box := AABB(position-Vector3(0.3,0,0.3),Vector3(0.6,1.8,0.6))
-	if Nodes.solid(place_id) and node_box.intersects(player_box): return
+	# Bed halves are half-height and meant to be placed at your feet — like
+	# Mineclonia, overlap with the player is allowed (you step up onto them).
+	if Nodes.solid(place_id) and place_id not in [Nodes.BED_FOOT,Nodes.BED_HEAD] and node_box.intersects(player_box): return
+	# A bed needs room for its second half, laid in the player's facing direction.
+	if place_id in [Nodes.BED_FOOT,Nodes.BED_HEAD]:
+		var look: Vector3 = basis*Vector3.FORWARD
+		var facing: Vector3i = Vector3i(0,0,1) if absf(look.z) >= absf(look.x) else Vector3i(1,0,0)
+		facing = Vector3i(signi(int(signf(look.x))),0,0) if facing.x != 0 else Vector3i(0,0,signi(int(signf(look.z))))
+		var foot: Vector3i = destination
+		var head: Vector3i = destination+facing
+		if place_id == Nodes.BED_HEAD:
+			head = destination
+			foot = destination-facing
+		if Nodes.solid(game.world.node_at(head)) or game.world.node_at(head) in [Nodes.BED_FOOT,Nodes.BED_HEAD]:
+			game.toast("The bed needs two free blocks.")
+			return
+		var head_box := AABB(Vector3(head),Vector3.ONE)
+		if head_box.intersects(player_box): return
+		if not game.world.set_node(foot,Nodes.BED_FOOT): return
+		if not game.world.set_node(head,Nodes.BED_HEAD):
+			game.world.set_node(foot,Nodes.AIR)
+			return
+		if game.gamemode!="creative": game.inventory.consume_selected()
+		game.sound("place")
+		swing = 1
+		game.settle(foot+Vector3i.UP)
+		game.progress("build")
+		game.api.emit_node_placed(foot,Nodes.BED_FOOT)
+		game.api.emit_node_placed(head,Nodes.BED_HEAD)
+		return
 	if game.world.set_node(destination,place_id):
 		if game.gamemode!="creative": game.inventory.consume_selected()
 		game.sound("place")
@@ -452,15 +489,7 @@ func hurt(amount: float, bypass_armor: bool = false, source: Vector3 = Vector3.I
 func _make_hand(id: int) -> void:
 	hand_id = id
 	for child in hand.get_children(): child.queue_free()
-	if Nodes.is_tool_id(id):
-		_add_hand_box(Vector3(0,-0.05,0),Vector3(0.06,0.52,0.06),Color("987343"))
-		var kind: int = Nodes.tool_kind(id)
-		if kind == 0: _add_hand_box(Vector3(0,0.22,0),Vector3(0.4,0.07,0.08),Nodes.color(id)); _add_hand_box(Vector3(-0.17,0.14,0),Vector3(0.07,0.16,0.08),Nodes.color(id))
-		elif kind == 3: _add_hand_box(Vector3(0,0.25,0),Vector3(0.10,0.45,0.07),Nodes.color(id)); _add_hand_box(Vector3(0,0.02,0),Vector3(0.22,0.05,0.08),Nodes.color(id))
-		else: _add_hand_box(Vector3(0.03,0.2,0),Vector3(0.21,0.23,0.08),Nodes.color(id))
-	elif Nodes.is_armor(id):
-		_add_hand_box(Vector3.ZERO,Vector3(0.26,0.22,0.12),Nodes.color(id))
-	elif Nodes.placeable(id):
+	if Nodes.placeable(id):
 		# The held node is a miniature of the real one, using the terrain atlas.
 		var instance := MeshInstance3D.new()
 		instance.mesh = game.node_mesh(id)
@@ -470,7 +499,13 @@ func _make_hand(id: int) -> void:
 		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		hand.add_child(instance)
 	elif id != 0:
-		_add_hand_box(Vector3.ZERO,Vector3(0.22,0.24,0.08),Nodes.color(id))
+		var instance := MeshInstance3D.new()
+		instance.mesh = ItemArt.mesh(id)
+		instance.material_override = ItemArt.material(id)
+		instance.scale = Vector3.ONE*(0.55 if Nodes.is_tool_id(id) else 0.38)
+		instance.rotation.y = -0.35
+		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		hand.add_child(instance)
 	else:
 		_add_hand_box(Vector3(0,-0.17,0.15),Vector3(0.19,0.46,0.19),Color("c29470"))
 		_add_hand_box(Vector3(0,-0.34,0.15),Vector3(0.2,0.2,0.2),Color("526d58"))

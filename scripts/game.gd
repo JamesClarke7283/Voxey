@@ -411,7 +411,20 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func break_node(p: Vector3i, id: int, tool: int) -> void:
 	var partner: Vector3i = world.chest_partner(p) if id == Nodes.CHEST else p
+	# A bed breaks as a whole: removing one half takes the other with it.
+	if id == Nodes.BED_FOOT or id == Nodes.BED_HEAD:
+		var other: Vector3i = _bed_partner(p,id)
+		if other != p and world.node_at(other) in [Nodes.BED_FOOT,Nodes.BED_HEAD]:
+			world.set_node(other,Nodes.AIR)
 	if not world.set_node(p,Nodes.AIR): return
+	if id == Nodes.SUGAR_CANE:
+		var above: Vector3i = p+Vector3i.UP
+		while world.node_at(above) == Nodes.SUGAR_CANE:
+			world.set_node(above,Nodes.AIR)
+			if gamemode != "creative": spawn_drop(Vector3(above)+Vector3.ONE*0.5,Nodes.SUGAR_CANE)
+			above += Vector3i.UP
+		# The remaining stalk resumes growing even when harvested from wild cane.
+		if world.node_at(p+Vector3i.DOWN) == Nodes.SUGAR_CANE: world.growth[p+Vector3i.DOWN] = 0.0
 	if gamemode!="creative" and Nodes.harvestable(id,tool):
 		if id==Nodes.LEAVES:
 			if randf()<0.12: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.APPLE)
@@ -421,6 +434,7 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.SEEDS,1+randi()%2)
 		elif id==Nodes.GRAVEL and randf()<0.25:
 			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.FLINT)
+		elif id == Nodes.CLAY: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.CLAY_BALL,4)
 		elif id!=Nodes.GLASS: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.drop(id))
 		if id in [Nodes.COAL_ORE,Nodes.IRON_ORE,Nodes.DIAMOND_ORE]: experience += 1
 		if id==Nodes.LOG: achievements.award("first_log")
@@ -439,6 +453,14 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 
 func remove_torch(p: Vector3i) -> void:
 	if torch_lights.has(p): torch_lights[p].queue_free(); torch_lights.erase(p)
+
+# The other half of a bed: scan the four horizontal neighbours for the
+# complementary half. Returns p when no partner is found.
+func _bed_partner(p: Vector3i, id: int) -> Vector3i:
+	var wanted: int = Nodes.BED_HEAD if id == Nodes.BED_FOOT else Nodes.BED_FOOT
+	for d in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
+		if world.node_at(p+d) == wanted: return p+d
+	return p
 
 # Unsupported sand and gravel become falling entities, then the node above is
 # checked in turn so a whole column comes down together.
@@ -479,6 +501,10 @@ func explode(center: Vector3, radius: float, source: Node = null) -> void:
 				var id: int = world.node_at(p)
 				if id in [Nodes.AIR,Nodes.BEDROCK,Nodes.OBSIDIAN,Nodes.WATER]: continue
 				if id == Nodes.TNT: ignite_tnt(p,randf_range(0.3,0.9)); continue
+				if id in [Nodes.BED_FOOT,Nodes.BED_HEAD]:
+					# Remove the whole bed, drop one item, count one node.
+					var other: Vector3i = _bed_partner(p,id)
+					if other != p and world.node_at(other) in [Nodes.BED_FOOT,Nodes.BED_HEAD]: world.set_node(other,Nodes.AIR)
 				var partner: Vector3i = world.chest_partner(p) if id == Nodes.CHEST else p
 				if not world.set_node(p,Nodes.AIR): continue
 				for slot in world.detach_station(p,partner): spawn_drop(Vector3(p)+Vector3.ONE*0.5,slot.id,slot.count,slot.wear)

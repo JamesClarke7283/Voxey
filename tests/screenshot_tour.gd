@@ -91,7 +91,7 @@ func run() -> void:
 	for i in kinds.size():
 		var mob=game.spawn_creature(kinds[i],Vector3(base.x-3.5+i,base.y,base.z-5.5 if i%2==0 else base.z-4.0))
 		mob.set_physics_process(false)
-		mob.model.rotation.y=0.0
+		mob.model.rotation.y=PI
 	var arrow := Arrow.new()
 	arrow.game=game; arrow.position=Vector3(base.x+1.5,base.y+1.4,base.z-2.5); arrow.velocity=Vector3(0,0,3)
 	game.entities.add_child(arrow)

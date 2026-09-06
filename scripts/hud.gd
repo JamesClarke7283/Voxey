@@ -449,7 +449,7 @@ func _recipe_preview() -> void:
 			var index: int = y*int(recipe.width)+x
 			icon.item_id = recipe.pattern[index] if x<recipe.width and index<recipe.pattern.size() else 0
 			preview.add_child(icon)
-	_label(preview,"PATTERN",Vector2(571,119),10,MUTED)
+	_label(preview,"ANY ORDER" if recipe.get("shapeless",false) else "PATTERN",Vector2(571,119),10,MUTED)
 	fill_button = _button(preview,"Fill grid",Rect2(294,117,176,37),_fill_grid)
 	_label(preview,"Requires a crafting table" if recipe.station=="table" and station!="table" else "Shift + fill: batch  ·  Click output to craft",Vector2(294,166),11,MUTED)
 	_refresh_crafting()
