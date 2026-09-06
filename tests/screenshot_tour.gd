@@ -118,6 +118,24 @@ func run() -> void:
 	await snap("06_large_chest")
 	game.hud.show_console("/spawn ")
 	await snap("07_console")
+	# Beds from both ends: catch culled side faces and holes in the floor.
+	game.pause()
+	game.hud.visible = false
+	player.hand.visible = false
+	for container in [game.creatures,game.drops,game.entities]:
+		for child in container.get_children(): child.free()
+	game.world.set_node(base+Vector3i(-2,0,-3),Nodes.BED_FOOT)
+	game.world.set_node(base+Vector3i(-2,0,-4),Nodes.BED_HEAD)
+	game.world.set_node(base+Vector3i(0,0,-3),Nodes.BED_FOOT)
+	game.world.set_node(base+Vector3i(1,0,-3),Nodes.BED_HEAD)
+	game.world.set_node(base+Vector3i(2,0,-3),Nodes.PLANKS)
+	player.position = Vector3(base)+Vector3(0.5,1.0,0.5)
+	player.camera.look_at(Vector3(base)+Vector3(0,0.25,-3.0))
+	await settle_frames(30)
+	await snap("10_beds_front")
+	player.position = Vector3(base)+Vector3(0.5,1.0,-6.5)
+	player.camera.look_at(Vector3(base)+Vector3(0,0.25,-3.0))
+	await snap("11_beds_back")
 	print("TOUR DONE")
 	game.queue_free()
 	await process_frame

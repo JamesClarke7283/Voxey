@@ -126,12 +126,14 @@ static func make_atlas() -> ImageTexture:
 						c = Color("b6543d")*rng.randf_range(0.92,1.06)
 						if y > 12: c = Color("8f683c")
 						if y < 2: c = Color("e2dacc")*rng.randf_range(0.92,1.04)
+						c.a = 1.0
 					57:
 						# Bed head: white pillow with a folded blanket edge.
 						c = Color("e2dacc")*rng.randf_range(0.92,1.04)
 						if y > 11: c = Color("b6543d")*rng.randf_range(0.92,1.06)
 						if y > 13: c = Color("8f683c")
 						if (x == 7 or x == 8) and y in [4,5]: c = c.darkened(0.08)
+						c.a = 1.0
 					48,49,50:
 						# Metal storage blocks: beveled ingot grid.
 						if x in [0,15] or y in [0,15]: c *= 0.8

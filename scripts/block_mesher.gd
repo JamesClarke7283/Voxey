@@ -37,7 +37,9 @@ static func build(data: PackedByteArray) -> Array:
 						if id == 0 or Nodes.plant(id) or id == Nodes.TORCH or id == Nodes.LADDER or id in [Nodes.BED_FOOT,Nodes.BED_HEAD]: continue
 						p[axis] += sign_dir
 						var neighbor: int = data[p.x + p.z*18 + p.y*324]
-						if neighbor == id or not Nodes.transparent(neighbor): continue
+						# A bed only fills the lower part of its cell. Keep the full
+						# neighbor face so the exposed floor/wall has no holes.
+						if neighbor == id or (not Nodes.transparent(neighbor) and neighbor not in [Nodes.BED_FOOT,Nodes.BED_HEAD]): continue
 						if id == Nodes.WATER and neighbor == Nodes.GLASS: continue
 						mask[i + j*16] = id
 				var j: int = 0
@@ -140,27 +142,31 @@ static func _ladder(out: Array, p: Vector3, data: PackedByteArray, cell: Vector3
 
 # A bed half is a 9/16-height box: blanket top, oak frame sides. The head
 # half's end shows the pillow tile edge; the foot/blanket use the same tile
-# family. Neighbor-aware so beds against walls skip hidden faces.
+# family. Hide only faces covered by the actual neighboring voxel.
 static func _bed_half(out: Array, p: Vector3, id: int, data: PackedByteArray, cell: Vector3i) -> void:
 	var h: float = 0.5625
 	var top_tile: int = Nodes.tile(id,2)
+	var padded_cell: Vector3i = cell+Vector3i.ONE
 	var uv: Array = [Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)]
 	_quad(out,[p+Vector3(0,h,0),p+Vector3(1,h,0),p+Vector3(1,h,1),p+Vector3(0,h,1)],
 		[Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)],Vector3.UP,top_tile,Color.WHITE,false)
+	# Pickups and unsupported beds need an underside too.
+	var below: Vector3i = padded_cell+Vector3i.DOWN
+	if Nodes.transparent(data[below.x+below.z*18+below.y*324]):
+		_quad(out,[p,p+Vector3.RIGHT,p+Vector3(1,0,1),p+Vector3.BACK],
+			uv,Vector3.DOWN,Nodes.tile(Nodes.PLANKS,3),Color(0.53,0.53,0.53),true)
 	# Four sides: oak frame color, blanket shade on the long sides.
 	var frame: Color = Color(0.62,0.62,0.62)
 	for side in [[Vector3i(1,0,0),Vector3.RIGHT],[Vector3i(-1,0,0),Vector3.LEFT],[Vector3i(0,0,1),Vector3.BACK],[Vector3i(0,0,-1),Vector3.FORWARD]]:
 		var d: Vector3i = side[0]
-		var n: Vector3i = cell+d
-		if n.x >= 0 and n.x <= 17 and n.z >= 0 and n.z <= 17:
-			var neighbor: int = data[n.x + n.z*18 + (cell.y+1)*324]
-			# Skip faces against solid non-bed nodes; bed halves stay visible so
-			# the pair reads as one continuous bed.
-			if Nodes.solid(neighbor) and neighbor != Nodes.BED_FOOT and neighbor != Nodes.BED_HEAD: continue
+		var n: Vector3i = padded_cell+d
+		var neighbor: int = data[n.x+n.z*18+n.y*324]
+		if not Nodes.transparent(neighbor): continue
 		var a: Vector3
 		var b: Vector3
 		if d.x == 1: a = p+Vector3(1,0,0); b = p+Vector3(1,0,1)
 		elif d.x == -1: a = p+Vector3(0,0,1); b = p+Vector3(0,0,0)
 		elif d.z == 1: a = p+Vector3(0,0,1); b = p+Vector3(1,0,1)
 		else: a = p+Vector3(1,0,0); b = p+Vector3(0,0,0)
-		_quad(out,[a,b,b+Vector3.UP*h,a+Vector3.UP*h],uv,Vector3(d.x,0,d.z),top_tile,frame,d.x+d.z < 0)
+		# Both Z faces use the opposite vertex order to the X faces.
+		_quad(out,[a,b,b+Vector3.UP*h,a+Vector3.UP*h],uv,Vector3(d.x,0,d.z),top_tile,frame,d.z != 0)

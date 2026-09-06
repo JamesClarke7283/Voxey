@@ -4,6 +4,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var new_nodes: Array = [Nodes.VINE,Nodes.RED_BRICKS,Nodes.HAY_BALE,Nodes.SUGAR_CANE,Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM,Nodes.MOSSY_COBBLE,Nodes.MOSSY_BRICKS,Nodes.COAL_BLOCK,Nodes.TERRACOTTA]
 	var new_items: Array = [Nodes.CHARCOAL,Nodes.BOWL,Nodes.MUSHROOM_STEW,Nodes.GOLD_NUGGET,Nodes.IRON_NUGGET,Nodes.EGG]
 	var atlas: Image = Art.make_atlas().get_image()
+	_bed_render_checks(suite,atlas)
 	var atlas_ok: bool = true
 	# Regressions: expansion tiles used to be blank or alias unrelated faces.
 	for id in new_nodes+[Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.GLOWSTONE,Nodes.IRON_BLOCK,Nodes.GOLD_BLOCK,Nodes.DIAMOND_BLOCK,Nodes.SANDSTONE,Nodes.SANDSTONE_BRICK,Nodes.ICE,Nodes.SNOW_BLOCK]:
@@ -126,6 +127,49 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 		if drop.item_id == Nodes.EGG: egg_found = true
 	suite.check(egg_found and chicken.egg_timer >= 90,"chickens lay collectible eggs and reset their timer")
 	chicken.free()
+
+static func _bed_render_checks(suite: SceneTree, atlas: Image) -> void:
+	for id in [Nodes.BED_FOOT,Nodes.BED_HEAD]:
+		var mesh: ArrayMesh = Art.build_node_mesh(id)
+		var arrays: Array = mesh.surface_get_arrays(0)
+		suite.check(_outward(mesh),Nodes.title(id)+" faces outward on every side")
+		suite.check(arrays[Mesh.ARRAY_VERTEX].size() == 24 and arrays[Mesh.ARRAY_NORMAL].count(Vector3.DOWN) == 4,Nodes.title(id)+" has a closed mesh including its underside")
+		var opaque: bool = true
+		var tile: int = Nodes.tile(id,2)
+		for y in 16:
+			for x in 16:
+				if atlas.get_pixel(tile%8*16+x,tile/8*16+y).a != 1.0: opaque = false
+		suite.check(opaque,Nodes.title(id)+" texture is fully opaque")
+	# Check each facing at the center and on all four map-block boundaries.
+	var correct_neighbors: bool = true
+	for cell in [Vector3i(7,7,7),Vector3i(0,7,7),Vector3i(15,7,7),Vector3i(7,7,0),Vector3i(7,7,15)]:
+		for direction in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
+			var data := PackedByteArray(); data.resize(5832)
+			var p: Vector3i = cell+Vector3i.ONE
+			var neighbor: Vector3i = p+direction
+			data[p.x+p.z*18+p.y*324] = Nodes.BED_FOOT
+			data[neighbor.x+neighbor.z*18+neighbor.y*324] = Nodes.STONE
+			var surface: Array = BlockMesher.build(data)[0]
+			var bed_sides: Dictionary = {}
+			for i in surface[Mesh.ARRAY_VERTEX].size():
+				if surface[Mesh.ARRAY_TEX_UV2][i] == Vector2(0,7):
+					var normal: Vector3 = surface[Mesh.ARRAY_NORMAL][i]
+					if normal.y == 0: bed_sides[normal] = true
+			if bed_sides.size() != 3 or bed_sides.has(Vector3(direction)): correct_neighbors = false
+	suite.check(correct_neighbors,"bed sides only hide against their actual neighbor, including chunk borders")
+	var full_faces: bool = true
+	for direction in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.UP,Vector3i.DOWN,Vector3i.FORWARD,Vector3i.BACK]:
+		var data := PackedByteArray(); data.resize(5832)
+		var p := Vector3i(8,8,8)
+		var neighbor: Vector3i = p+direction
+		data[p.x+p.z*18+p.y*324] = Nodes.STONE
+		data[neighbor.x+neighbor.z*18+neighbor.y*324] = Nodes.BED_HEAD
+		var surface: Array = BlockMesher.build(data)[0]
+		var exposed: bool = false
+		for i in surface[Mesh.ARRAY_VERTEX].size():
+			if surface[Mesh.ARRAY_TEX_UV2][i] == Vector2(3,0) and surface[Mesh.ARRAY_NORMAL][i] == Vector3(direction): exposed = true
+		if not exposed: full_faces = false
+	suite.check(full_faces,"half-height beds do not punch holes in surrounding floor and wall meshes")
 
 static func _outward(mesh: ArrayMesh) -> bool:
 	var arrays: Array = mesh.surface_get_arrays(0)
