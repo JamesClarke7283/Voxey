@@ -7,6 +7,7 @@ var life: float = 0.0
 var damage: float = 6.0
 var stuck: bool = false
 var from_player: bool = false
+var hits_player: bool = false
 
 func _ready() -> void:
 	var shaft := MeshInstance3D.new()
@@ -61,12 +62,17 @@ func _physics_process(delta: float) -> void:
 			return
 		position = next
 		if from_player:
+			for entity in game.entities.get_children():
+				if entity is MagicProjectile and position.distance_to(entity.position) < 0.5:
+					if entity.kind == "ghast": entity.deflect(velocity); queue_free(); return
+					if entity.kind == "shulker": entity.queue_free(); queue_free(); return
+		if from_player:
 			for mob in game.creatures.get_children():
 				if not mob.is_queued_for_deletion() and position.distance_to(mob.center()) < maxf(0.55,mob.width+0.2):
 					mob.hit(damage,position-velocity)
 					queue_free()
 					return
-		elif position.distance_to(game.player.position+Vector3.UP*0.9) < 0.65:
+		if (not from_player or hits_player) and position.distance_to(game.player.position+Vector3.UP*0.9) < 0.65:
 			game.player.hurt(3,false,position-velocity)
 			queue_free()
 			return

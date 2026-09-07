@@ -17,7 +17,7 @@ The Nether spans Y 0–127 and has netherrack caverns, bedrock above and below, 
 
 Water cannot be placed in the Nether. Beds cannot set your spawn there; dying returns you to your Overworld spawn. Inventory travels with you. Terrain edits, chests, furnaces, crops, dropped items, and grounded arrows are stored separately for each dimension in the same world save. Menus and inactive dimensions pause pickup expiry timers.
 
-This is an original adaptation to Voxey's separately saved dimensions, inspired by [Mineclonia's Nether and five-biome feature set](https://github.com/mark-wiemer/mineclonia/blob/main/README.md). It is not complete Mineclonia parity: there is no fluid spreading, fortress loot system, ghast/blaze roster, bartering, or portal-size variation yet. No external game assets or source code are bundled.
+This is an original adaptation to Voxey's separately saved dimensions, inspired by [Mineclonia's Nether and five-biome feature set](https://github.com/mark-wiemer/mineclonia/blob/main/README.md). It is not complete Mineclonia parity: fluid spreading, bartering, and portal-size variation are not implemented. Fortresses, loot, ghasts, blazes, and the route to the End are covered in [the redstone and End guide](redstone-end.md). No external game assets or source code are bundled.
 
 ## Enchanting
 

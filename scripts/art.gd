@@ -4,14 +4,15 @@ extends RefCounted
 static var atlas_texture: Texture2D
 
 static func make_atlas() -> ImageTexture:
-	var img := Image.create(128, 256, false, Image.FORMAT_RGBA8)
+	var img := Image.create(128, 512, false, Image.FORMAT_RGBA8)
 	img.fill(Color.TRANSPARENT)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7164
-	for tile in 104:
+	for tile in 137:
 		if tile in range(58,64): continue # Reserved for existing mod nodes.
 		var base: Color = Nodes.color(tile)
-		if tile >= 94: base = Nodes.color(Nodes.DEEP_NODES[tile-94])
+		if tile >= 104: base = Nodes.color(Nodes.EXPANSION_NODES[tile-104])
+		if tile >= 94 and tile < 104: base = Nodes.color(Nodes.DEEP_NODES[tile-94])
 		if tile >= 79 and tile < 94: base = Nodes.color(Nodes.LAVA+mini(tile-79,13))
 		if tile >= 64 and tile < 79: base = Nodes.color([Nodes.SANDSTONE,Nodes.SANDSTONE_BRICK,Nodes.ICE,Nodes.SNOW_BLOCK,Nodes.VINE,Nodes.RED_BRICKS,Nodes.HAY_BALE,Nodes.HAY_BALE,Nodes.SUGAR_CANE,Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM,Nodes.MOSSY_COBBLE,Nodes.MOSSY_BRICKS,Nodes.COAL_BLOCK,Nodes.TERRACOTTA][tile-64])
 		if tile == 41: base = Color("a08a6a")
@@ -29,6 +30,29 @@ static func make_atlas() -> ImageTexture:
 				var c: Color = base * rng.randf_range(0.86,1.1)
 				c.a = 1.0
 				match tile:
+					104,105:
+						c = Color("55535c" if tile == 105 else "828589")*rng.randf_range(0.85,1.1)
+						if (x/2*7+y/2*11)%13 < 4: c = Color("cb283c")
+					124,125,130:
+						if (x/3+y/3*7)%5 == 0: c = base.darkened(0.18)
+						if tile != 124 and (y%4 == 0 or (x+y/4*4)%8 == 0): c = base.darkened(0.3)
+					126,127:
+						if x < 2 or y < 2 or x > 13 or y > 13: c = Color("d2c994")
+						elif x in range(5,11) and y in range(5,11): c = Color("142e32") if tile == 126 else Color("b1e584")
+					128,136:
+						c = Color("171329")
+						if (x*17+y*37)%61 < 2: c = Color("bc90d4")
+					129:
+						if x%5 != 0 and y%7 != 0: c.a = 0.0
+					131:
+						if x%4 == 0: c = base.darkened(0.4)
+					132,135:
+						c = Color("e9e2c5") if tile == 132 else Color("5cddda")
+						if x not in range(6,10): c.a = 0
+					134:
+						if x%5 in [0,1] or y%5 in [0,1]: c = Color("292c34")
+						else: c = Color("d57e20")
+
 					94,95,96,97,98,99,100,101,102,103:
 						var rock := Color("484b52")
 						c = rock*(0.88+float((x/3*3+y/2*7)%5)*0.04)

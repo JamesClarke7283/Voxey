@@ -40,11 +40,13 @@ func block_levels() -> Array:
 	return levels
 
 func terrain_height(x: int, z: int) -> int:
+	if dimension == "end": return 44
 	if dimension == "nether": return clampi(int(14+hills.get_noise_2d(x,z)*23+detail.get_noise_2d(x,z)*9),7,36)
 	var continental: float = hills.get_noise_2d(x, z)
 	return clampi(int(25.0 + continental * 23.0 + detail.get_noise_2d(x, z) * 5.0), 7, 48)
 
 func biome(x: int, z: int) -> String:
+	if dimension == "end": return "The End" if Vector2(x,z).length() < 160 else "End highlands"
 	if dimension == "nether":
 		var n: float = climate.get_noise_2d(x,z)
 		if n < -0.22: return "Warped forest"
@@ -70,16 +72,41 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 	data.resize(18 * 18 * max_y())
 	var deep := PackedByteArray()
 	deep.resize(18*18*absi(min_y()))
+	var stronghold := WorldStructures.stronghold(world_seed,Vector2i(floori((coord.x*16)/512.0),floori((coord.y*16)/512.0)))
+	var end_towers: Array = WorldStructures.towers()
 	var base_x: int = coord.x * 16 - 1
 	var base_z: int = coord.y * 16 - 1
 	for z in 18:
 		for x in 18:
 			var wx: int = base_x + x
 			var wz: int = base_z + z
+			if dimension == "end":
+				for y in max_y(): data[x+z*18+y*324] = WorldStructures.end_node(wx,y,wz,detail)
+				for tower in end_towers:
+					var r: int = 2 if tower.y < 70 else 3
+					if Vector2(wx-tower.x,wz-tower.z).length_squared() <= r*r:
+						for y in range(30,tower.y+1): data[x+z*18+y*324] = Nodes.BEDROCK if y == tower.y and wx == tower.x and wz == tower.z else Nodes.OBSIDIAN
+					if tower.y >= 80 and absi(wx-tower.x) <= 2 and absi(wz-tower.z) <= 2:
+						for y in range(tower.y+1,tower.y+5):
+							if absi(wx-tower.x) == 2 or absi(wz-tower.z) == 2 or y == tower.y+4: data[x+z*18+y*324] = Nodes.IRON_BARS
+				if absi(wx) <= 3 and absi(wz) <= 3:
+					data[x+z*18+44*324] = Nodes.BEDROCK
+					if wx == 0 and wz == 0:
+						for y in range(45,49): data[x+z*18+y*324] = Nodes.BEDROCK
+				if wx in range(49,54) and wz in range(-2,3):
+					data[x+z*18+44*324] = Nodes.OBSIDIAN
+					for y in range(45,49): data[x+z*18+y*324] = Nodes.AIR
+				continue
 			if dimension == "nether":
-				for y in max_y(): data[x+z*18+y*324] = nether_node(wx,y,wz)
+				for y in max_y():
+					var structure_id: int = WorldStructures.fortress_node(Vector3i(wx,y,wz))
+					data[x+z*18+y*324] = structure_id if structure_id >= 0 else nether_node(wx,y,wz)
 				continue
 			for y in range(min_y(),0): deep[x+z*18+(y-min_y())*324] = deep_node(wx,y,wz)
+			if absi(wx-stronghold.x) <= 24 and absi(wz-stronghold.z) <= 11:
+				for y in range(stronghold.y,stronghold.y+10):
+					var structure_id: int = WorldStructures.stronghold_node(Vector3i(wx,y,wz),stronghold)
+					if structure_id >= 0: deep[x+z*18+(y-min_y())*324] = structure_id
 			var h: int = terrain_height(wx, wz)
 			var c: float = climate.get_noise_2d(wx, wz)
 			var desert: bool = c > 0.28
@@ -176,13 +203,13 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 			for z in 18:
 				for x in 18:
 					var id: int = Nodes.AIR
-					if wy < min_y(): id = Nodes.BEDROCK
+					if wy < min_y(): id = Nodes.AIR if dimension == "end" else Nodes.BEDROCK
 					elif wy < 0: id = deep[x+z*18+(wy-min_y())*324]
 					elif wy < max_y(): id = data[x+z*18+wy*324]
 					padded[x + z * 18 + y * 324] = id
 					if x > 0 and x < 17 and y > 0 and y < 17 and z > 0 and z < 17:
 						compact[(x-1) + (z-1)*16 + (y-1)*256] = id
-		blocks.append({"y":by,"data":compact, "surfaces":BlockMesher.build(padded)})
+		blocks.append({"y":by,"data":compact, "surfaces":BlockMesher.build(padded,true)})
 	return {"coord":coord, "blocks":blocks}
 
 # World-coordinate evaluation keeps terrain and vegetation identical in halos.
@@ -233,6 +260,7 @@ func deep_node(x: int, y: int, z: int) -> int:
 	if y > OVERWORLD_MIN+4 and (tunnel > 0.33 or (y < -12 and cavern > 0.32)):
 		return Nodes.LAVA if y <= -112 else Nodes.AIR
 	var ore: int = hash_at(floori(x/2.0),floori(y/2.0),floori(z/2.0))%1000
+	if ore >= 120 and ore < 145 and y < -16: return Nodes.DEEP_REDSTONE_ORE if deepslate else Nodes.REDSTONE_ORE
 	if ore < 22 and y < -48: return Nodes.DEEP_DIAMOND_ORE
 	if ore < 50: return Nodes.DEEP_IRON_ORE if deepslate else Nodes.IRON_ORE
 	if ore < 65: return Nodes.DEEP_GOLD_ORE if deepslate else Nodes.GOLD_ORE

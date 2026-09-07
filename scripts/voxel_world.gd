@@ -11,6 +11,9 @@ var columns: Dictionary = {}
 var edits: Dictionary = {}
 var stations: Dictionary = {}
 var growth: Dictionary = {}
+var block_states: Dictionary = {}
+var adventure_state: Dictionary = {}
+var circuits: RedstoneCircuit
 var pending: Dictionary = {}
 var jobs: Array = []
 var remesh_jobs: Array = []
@@ -28,6 +31,7 @@ func configure(seed_number: int, atlas: Texture2D, dimension_name: String = "ove
 	dimension = dimension_name
 	seed_value = seed_number
 	generator = TerrainGenerator.new(seed_value,dimension)
+	circuits = RedstoneCircuit.new(self)
 	material = ShaderMaterial.new()
 	material.shader = preload("res://shaders/terrain.gdshader")
 	material.set_shader_parameter("atlas",atlas)
@@ -67,7 +71,7 @@ func _process(delta: float) -> void:
 		if already: dirty[coord] = true; break
 		var snapshot: PackedByteArray = _snapshot(coord)
 		var job: Dictionary = {"coord":coord, "result":[]}
-		job.task = WorkerThreadPool.add_task(func(): job.result = BlockMesher.build(snapshot))
+		job.task = WorkerThreadPool.add_task(func(): job.result = BlockMesher.build(snapshot,true))
 		remesh_jobs.append(job)
 	if jobs.size() < 2:
 		var nearest := Vector2i(999999,999999)
@@ -80,6 +84,7 @@ func _process(delta: float) -> void:
 				if dist < best: best = dist; nearest = c
 		if best < 999999: _queue_column(nearest)
 	if active:
+		if get_parent() != null and get_parent().has_method("playing") and get_parent().playing(): circuits.update(delta)
 		tick += delta
 		if tick >= 1.0:
 			tick = 0.0
@@ -117,7 +122,11 @@ func _apply_column(result: Dictionary) -> void:
 		for z in range(c.y*16-1,c.y*16+17):
 			for y in range(generator.min_y()+1,generator.max_y()):
 				var p := Vector3i(x,y,z)
-				if node_at(p) == Nodes.LAVA: react_fluid(p)
+				var id: int = node_at(p)
+				if id == Nodes.LAVA: react_fluid(p)
+				if x >= c.x*16 and x < c.x*16+16 and z >= c.y*16 and z < c.y*16+16:
+					if id in Nodes.CIRCUIT_NODES: circuits.register(p,id)
+					if id == Nodes.CHEST and not edits.has(p): _structure_loot(p)
 	column_loaded.emit()
 
 func _apply_mesh(coord: Vector3i, surfaces: Array) -> void:
@@ -139,6 +148,7 @@ func _apply_mesh(coord: Vector3i, surfaces: Array) -> void:
 
 func _unload(c: Vector2i) -> void:
 	columns.erase(c)
+	circuits.unload(c)
 	for y in generator.block_levels():
 		var b := Vector3i(c.x,y,c.y)
 		if blocks.has(b): blocks[b].root.queue_free(); blocks.erase(b)
@@ -151,7 +161,7 @@ static func local_index(p: Vector3i) -> int:
 	return posmod(p.x,16) + posmod(p.z,16)*16 + posmod(p.y,16)*256
 
 func node_at(p: Vector3i) -> int:
-	if p.y < generator.min_y(): return Nodes.BEDROCK
+	if p.y < generator.min_y(): return Nodes.AIR if dimension == "end" else Nodes.BEDROCK
 	if p.y >= generator.max_y(): return Nodes.AIR
 	var b: Vector3i = block_coord(p)
 	if blocks.has(b): return blocks[b].data[local_index(p)]
@@ -171,7 +181,9 @@ func loaded_at(p: Vector3) -> bool:
 func set_node(p: Vector3i, id: int) -> bool:
 	var b: Vector3i = block_coord(p)
 	if p.y <= generator.min_y() or p.y >= generator.max_y() or not blocks.has(b): return false
+	var old_id: int = blocks[b].data[local_index(p)]
 	blocks[b].data[local_index(p)] = id
+	circuits.changed(p,old_id,id)
 	edits[p] = id
 	if id in [Nodes.WHEAT,Nodes.SAPLING,Nodes.SUGAR_CANE]: growth[p] = 0.0
 	else: growth.erase(p)
@@ -221,7 +233,7 @@ func raycast(origin: Vector3, direction: Vector3, reach: float = 5.0, liquids: b
 	var distance: float = 0.0
 	for iteration in 128:
 		var id: int = node_at(cell)
-		if id != Nodes.AIR and id != Nodes.NETHER_PORTAL and (liquids or id != Nodes.WATER):
+		if id != Nodes.AIR and id not in [Nodes.NETHER_PORTAL,Nodes.END_PORTAL] and (liquids or id != Nodes.WATER):
 			return {"pos":cell,"normal":normal,"id":id,"distance":distance}
 		var axis: int = 0 if t_max.x < t_max.y else 1
 		if t_max.z < t_max[axis]: axis = 2
@@ -334,11 +346,11 @@ static func pair_key(a: Vector3i, b: Vector3i) -> String:
 	return station_key(primary)+"+"+station_key(b if primary == a else a)
 
 func get_station(p: Vector3i, kind: String) -> Dictionary:
-	if kind == "chest":
+	if kind == "chest" and node_at(p) == Nodes.CHEST:
 		var partner: Vector3i = chest_partner(p)
 		if partner != p: return _double_chest(p,partner)
 	var key: String = station_key(p)
-	if not stations.has(key): stations[key] = _new_station(kind,3 if kind == "furnace" else 27)
+	if not stations.has(key): stations[key] = _new_station(kind,3 if kind == "furnace" else (5 if node_at(p) == Nodes.HOPPER else (9 if node_at(p) in [Nodes.DISPENSER,Nodes.DROPPER] else 27)))
 	return stations[key]
 
 func _double_chest(a: Vector3i, b: Vector3i) -> Dictionary:
@@ -407,6 +419,7 @@ func portal_frame(base: Vector3i, axis: Vector3i) -> bool:
 	return true
 
 func ignite_portal(near: Vector3i) -> bool:
+	if dimension == "end": return false
 	for axis in [Vector3i.RIGHT,Vector3i.BACK]:
 		for dx in range(-2,2):
 			for dy in range(-3,2):
@@ -455,3 +468,12 @@ func cave_spawn(near: Vector3, vertical_reach: int = 12) -> Vector3:
 			var pos := Vector3(x+0.5,y+0.01,z+0.5)
 			if not intersects(pos): return pos
 	return Vector3.INF
+
+func _structure_loot(p: Vector3i) -> void:
+	var key: String = station_key(p)
+	if stations.has(key): return
+	var station: Dictionary = get_station(p,"chest")
+	var loot: Array = [[Nodes.PAPER,8],[Nodes.BOOK,3],[Nodes.IRON,4],[Nodes.ENDER_PEARL,1],[Nodes.BREAD,4]]
+	if dimension == "nether": loot = [[Nodes.GOLD,5],[Nodes.DIAMOND,1],[Nodes.NETHER_BRICKS,16],[Nodes.SADDLE,1],[Nodes.FLINT_AND_STEEL,1]]
+	if dimension == "end": loot = [[Nodes.ELYTRA,1],[Nodes.DIAMOND,5],[Nodes.GOLD,8],[Nodes.ENDER_PEARL,4],[Nodes.END_ROD,16],[Nodes.GOLDEN_APPLE,2]]
+	for i in loot.size(): station.slots[i] = {"id":loot[i][0],"count":loot[i][1],"wear":0}

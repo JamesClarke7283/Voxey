@@ -26,7 +26,9 @@ func _draw() -> void:
 	if item_id == 0: return
 	var center: Vector2 = size*Vector2(0.5,0.47)
 	var scale_value: float = minf(size.x,size.y)*0.027
-	if Nodes.placeable(item_id) or item_id in [Nodes.WATER,Nodes.BEDROCK,Nodes.RIPE_WHEAT]:
+	if item_id in Nodes.SMALL_CIRCUITS:
+		draw_texture_rect(ItemArt.texture(item_id),Rect2(center-Vector2.ONE*16,Vector2.ONE*32),false)
+	elif Nodes.placeable(item_id) or item_id in [Nodes.WATER,Nodes.BEDROCK,Nodes.RIPE_WHEAT]:
 		if Art.atlas_texture == null: Art.make_atlas()
 		var s: float = scale_value
 		if Nodes.plant(item_id) or item_id in [Nodes.TORCH,Nodes.LADDER]:

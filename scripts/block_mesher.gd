@@ -3,7 +3,7 @@ extends RefCounted
 
 # Greedy face merging: one quad for a coplanar rectangle of matching nodes.
 # Only packed arrays leave the worker; GPU and scene resources stay on the main thread.
-static func build(data: PackedByteArray) -> Array:
+static func build(data: PackedByteArray, external_circuits: bool = false) -> Array:
 	var outputs: Array = [_empty(), _empty()]
 	var has_nodes: bool = false
 	for y in 16:
@@ -12,7 +12,9 @@ static func build(data: PackedByteArray) -> Array:
 				var id: int = data[(x+1) + (z+1)*18 + (y+1)*324]
 				if id == 0: continue
 				has_nodes = true
-				if id == Nodes.NETHER_PORTAL: _portal(outputs[0],Vector3(x,y,z),data,Vector3i(x,y,z))
+				if id in Nodes.CIRCUIT_NODES and not external_circuits: _art_box(outputs[0],Vector3(x,y,z)+Vector3(0.5,0.2,0.5),Vector3(0.85,0.4,0.85),Nodes.tile(id,0),Nodes.tile(id,2))
+				elif id == Nodes.NETHER_PORTAL: _portal(outputs[0],Vector3(x,y,z),data,Vector3i(x,y,z))
+				elif id == Nodes.END_PORTAL: _end_portal(outputs[0],Vector3(x,y,z))
 				elif id == Nodes.ENCHANTING_TABLE: _enchanting_table(outputs[0],Vector3(x,y,z))
 				elif Nodes.plant(id): _plant(outputs[0], Vector3(x,y,z), id)
 				elif id == Nodes.TORCH: _torch(outputs[0], Vector3(x,y,z))
@@ -36,7 +38,7 @@ static func build(data: PackedByteArray) -> Array:
 						p[u] += i
 						p[v] += j
 						var id: int = data[p.x + p.z*18 + p.y*324]
-						if id == 0 or Nodes.plant(id) or id == Nodes.TORCH or id == Nodes.LADDER or id in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.NETHER_PORTAL,Nodes.ENCHANTING_TABLE]: continue
+						if id in Nodes.CIRCUIT_NODES or id == 0 or Nodes.plant(id) or id == Nodes.TORCH or id == Nodes.LADDER or id in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.NETHER_PORTAL,Nodes.END_PORTAL,Nodes.ENCHANTING_TABLE]: continue
 						p[axis] += sign_dir
 						var neighbor: int = data[p.x + p.z*18 + p.y*324]
 						# A bed only fills the lower part of its cell. Keep the full
@@ -198,3 +200,9 @@ static func _enchanting_table(out: Array, p: Vector3) -> void:
 	# A hovering open book with a gilt spine and separate page blocks.
 	_art_box(out,p+Vector3(0.5,0.82,0.5),Vector3(0.66,0.08,0.45),8,93)
 	_art_box(out,p+Vector3(0.5,0.87,0.5),Vector3(0.035,0.035,0.46),49,49)
+
+static func _end_portal(out: Array, p: Vector3) -> void:
+	var points: Array = [p+Vector3(0,0.75,0),p+Vector3(1,0.75,0),p+Vector3(1,0.75,1),p+Vector3(0,0.75,1)]
+	var uv: Array = [Vector2(0,0),Vector2(1,0),Vector2(1,1),Vector2(0,1)]
+	_quad(out,points,uv,Vector3.UP,Nodes.tile(Nodes.END_PORTAL,2),Color.WHITE,false)
+	_quad(out,points,uv,Vector3.DOWN,Nodes.tile(Nodes.END_PORTAL,2),Color.WHITE,true)

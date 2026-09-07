@@ -28,3 +28,5 @@ godot --path "$voxey_check_dir" --resolution 1280x920 --script res://tests/creat
 godot --path "$voxey_check_dir" --resolution 1280x720 --script res://tests/nether_tour.gd
 
 godot --path "$voxey_check_dir" --resolution 1280x720 --script res://tests/depth_tour.gd
+
+godot --path "$voxey_check_dir" --resolution 1280x720 --script res://tests/expansion_tour.gd

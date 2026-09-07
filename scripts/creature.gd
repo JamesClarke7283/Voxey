@@ -4,8 +4,15 @@ extends Node3D
 # Every mob shares one controller. KINDS describes the differences: shape, speed,
 # hit points, drops, voice, and the special behaviours enabled by flags.
 const KINDS = {
+	"shulker": {"hostile":true,"health":30.0,"speed":0.0,"width":0.5,"height":1.0,"damage":4,"drops":[[Nodes.SHULKER_SHELL,1,2]],"voice":"","pitch":0.9},
+	"enderman": {"hostile":true,"health":40.0,"speed":3.6,"width":0.3,"height":2.9,"damage":5,"drops":[[Nodes.ENDER_PEARL,1,2]],"voice":"","pitch":0.6},
+	"ghast": {"hostile":true,"health":10.0,"speed":2.0,"width":1.6,"height":4.0,"damage":6,"drops":[[Nodes.GHAST_TEAR,1,2],[Nodes.GUNPOWDER,1,3]],"voice":"","pitch":0.6},
+	"blaze": {"hostile":true,"health":20.0,"speed":2.4,"width":0.35,"height":1.8,"damage":4,"drops":[[Nodes.BLAZE_ROD,1,2]],"voice":"","pitch":0.8},
+	"slime": {"hostile":true,"health":12.0,"speed":1.6,"width":0.45,"height":1.0,"damage":2,"drops":[[Nodes.SLIME_BALL,1,3]],"voice":"","pitch":0.8,"leaps":true},
+	"end_crystal": {"hostile":false,"health":1.0,"speed":0.0,"width":0.6,"height":1.4,"damage":0,"drops":[],"voice":"","pitch":1.0},
+	"ender_dragon": {"hostile":true,"health":200.0,"speed":13.0,"width":3.0,"height":4.0,"damage":7,"drops":[],"voice":"","pitch":0.4},
 	"piglin": {"hostile":true,"health":20.0,"speed":2.5,"width":0.3,"height":1.8,"damage":4,"drops":[[Nodes.GOLD_NUGGET,1,4]],"voice":"pig","pitch":0.65},
-	"magma_cube": {"hostile":true,"health":16.0,"speed":1.5,"width":0.43,"height":1.0,"damage":3,"drops":[[Nodes.COAL,1,2]],"voice":"","pitch":0.8,"leaps":true},
+	"magma_cube": {"hostile":true,"health":16.0,"speed":1.5,"width":0.43,"height":1.0,"damage":3,"drops":[[Nodes.MAGMA_CREAM,1,2]],"voice":"","pitch":0.8,"leaps":true},
 	"sheep": {"hostile":false,"health":8.0,"speed":0.8,"width":0.3,"height":1.1,"damage":0,"drops":[[Nodes.RAW_MEAT,1,2],[Nodes.WOOL,1,2]],"voice":"sheep","pitch":1.0},
 	"cow": {"hostile":false,"health":10.0,"speed":0.7,"width":0.36,"height":1.35,"damage":0,"drops":[[Nodes.RAW_MEAT,1,3],[Nodes.LEATHER,1,2]],"voice":"cow","pitch":0.75},
 	"pig": {"hostile":false,"health":10.0,"speed":0.9,"width":0.3,"height":0.9,"damage":0,"drops":[[Nodes.RAW_MEAT,1,3]],"voice":"pig","pitch":1.0},
@@ -16,7 +23,7 @@ const KINDS = {
 	"creeper": {"hostile":true,"health":20.0,"speed":2.0,"width":0.28,"height":1.6,"damage":0,"drops":[[Nodes.GUNPOWDER,0,2]],"voice":"","pitch":1.0,"explodes":true},
 }
 const PASSIVE = ["sheep","cow","pig","chicken"]
-const HOSTILE = ["zombie","zombie","skeleton","spider","creeper"]
+const HOSTILE = ["zombie","zombie","skeleton","spider","creeper","enderman","slime"]
 
 var game: Node3D
 var kind: String = "sheep"

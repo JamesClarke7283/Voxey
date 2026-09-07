@@ -78,6 +78,33 @@ func _init() -> void:
 		_recipe(Nodes.title(pair[1]),pair[1],1,square,3,"table")
 		_recipe(Nodes.title(pair[0])+" (unpack)",pair[0],9,[pair[1]],1)
 
+	# Redstone components and the Nether-to-End survival chain.
+	_recipe("Redstone torch",Nodes.REDSTONE_TORCH,1,[Nodes.REDSTONE_WIRE,Nodes.STICK],1)
+	_recipe("Lever",Nodes.LEVER,1,[Nodes.STICK,Nodes.COBBLE],1)
+	_recipe("Stone button",Nodes.BUTTON,1,[Nodes.STONE],1)
+	_recipe("Pressure plate",Nodes.PRESSURE_PLATE,1,[Nodes.STONE,Nodes.STONE],2)
+	_recipe("Repeater",Nodes.REPEATER,1,[Nodes.REDSTONE_TORCH,Nodes.REDSTONE_WIRE,Nodes.REDSTONE_TORCH,Nodes.STONE,Nodes.STONE,Nodes.STONE],3,"table")
+	_recipe("Comparator",Nodes.COMPARATOR,1,[0,Nodes.REDSTONE_TORCH,0,Nodes.REDSTONE_TORCH,Nodes.QUARTZ,Nodes.REDSTONE_TORCH,Nodes.STONE,Nodes.STONE,Nodes.STONE],3,"table")
+	_recipe("Piston",Nodes.PISTON,1,[Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS,Nodes.COBBLE,Nodes.IRON,Nodes.COBBLE,Nodes.COBBLE,Nodes.REDSTONE_WIRE,Nodes.COBBLE],3,"table")
+	_recipe("Sticky piston",Nodes.STICKY_PISTON,1,[Nodes.SLIME_BALL,Nodes.PISTON],1)
+	_recipe("Redstone lamp",Nodes.REDSTONE_LAMP,1,[0,Nodes.REDSTONE_WIRE,0,Nodes.REDSTONE_WIRE,Nodes.GLOWSTONE,Nodes.REDSTONE_WIRE,0,Nodes.REDSTONE_WIRE,0],3,"table")
+	_recipe("Observer",Nodes.OBSERVER,1,[Nodes.COBBLE,Nodes.COBBLE,Nodes.COBBLE,Nodes.REDSTONE_WIRE,Nodes.REDSTONE_WIRE,Nodes.QUARTZ,Nodes.COBBLE,Nodes.COBBLE,Nodes.COBBLE],3,"table")
+	for device in [Nodes.DISPENSER,Nodes.DROPPER]:
+		_recipe(Nodes.title(device),device,1,[Nodes.COBBLE,Nodes.COBBLE,Nodes.COBBLE,Nodes.COBBLE,Nodes.BOW if device == Nodes.DISPENSER else 0,Nodes.COBBLE,Nodes.COBBLE,Nodes.REDSTONE_WIRE,Nodes.COBBLE],3,"table")
+	_recipe("Hopper",Nodes.HOPPER,1,[Nodes.IRON,0,Nodes.IRON,Nodes.IRON,Nodes.CHEST,Nodes.IRON,0,Nodes.IRON,0],3,"table")
+	_recipe("Iron door",Nodes.IRON_DOOR,3,[Nodes.IRON,Nodes.IRON,Nodes.IRON,Nodes.IRON,Nodes.IRON,Nodes.IRON],2,"table")
+	_recipe("Iron bars",Nodes.IRON_BARS,16,[Nodes.IRON,Nodes.IRON,Nodes.IRON,Nodes.IRON,Nodes.IRON,Nodes.IRON],3,"table")
+	_recipe("Redstone block",Nodes.REDSTONE_BLOCK,1,[Nodes.REDSTONE_WIRE,Nodes.REDSTONE_WIRE,Nodes.REDSTONE_WIRE,Nodes.REDSTONE_WIRE,Nodes.REDSTONE_WIRE,Nodes.REDSTONE_WIRE,Nodes.REDSTONE_WIRE,Nodes.REDSTONE_WIRE,Nodes.REDSTONE_WIRE],3,"table")
+	_recipe("Redstone dust",Nodes.REDSTONE_WIRE,9,[Nodes.REDSTONE_BLOCK],1)
+	_recipe("Blaze powder",Nodes.BLAZE_POWDER,2,[Nodes.BLAZE_ROD],1)
+	_shapeless("Eye of Ender",Nodes.ENDER_EYE,1,[Nodes.ENDER_PEARL,Nodes.BLAZE_POWDER])
+	_shapeless("Magma cream",Nodes.MAGMA_CREAM,1,[Nodes.SLIME_BALL,Nodes.BLAZE_POWDER])
+	_recipe("Nether bricks",Nodes.NETHER_BRICKS,1,[Nodes.NETHER_BRICK_ITEM,Nodes.NETHER_BRICK_ITEM,Nodes.NETHER_BRICK_ITEM,Nodes.NETHER_BRICK_ITEM],2)
+	_recipe("End crystal",Nodes.END_CRYSTAL,1,[Nodes.GLASS,Nodes.GLASS,Nodes.GLASS,Nodes.GLASS,Nodes.ENDER_EYE,Nodes.GLASS,Nodes.GLASS,Nodes.GHAST_TEAR,Nodes.GLASS],3,"table")
+	_recipe("End stone bricks",Nodes.END_BRICKS,4,[Nodes.END_STONE,Nodes.END_STONE,Nodes.END_STONE,Nodes.END_STONE],2)
+	_recipe("Purpur",Nodes.PURPUR,4,[Nodes.CHORUS_FRUIT,Nodes.CHORUS_FRUIT,Nodes.CHORUS_FRUIT,Nodes.CHORUS_FRUIT],2)
+	_recipe("End rods",Nodes.END_ROD,4,[Nodes.BLAZE_ROD,Nodes.CHORUS_FRUIT],1)
+
 func _shapeless(label: String, id: int, count: int, ingredients: Array) -> void:
 	_recipe(label,id,count,ingredients,2)
 	recipes.back()["shapeless"] = true

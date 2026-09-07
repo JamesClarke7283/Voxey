@@ -16,7 +16,7 @@ Choose **Play / choose a world**, create a named world or select an existing one
 | --- | --- |
 | WASD | Move |
 | Mouse | Look |
-| Space | Jump / swim upward |
+| Space | Jump / swim upward; hold while falling with equipped elytra to glide |
 | Shift | Sprint; descend when flying |
 | Ctrl | Sneak and avoid walking off edges; bypass station interaction |
 | Hold left mouse | Progressively mine a node / attack |
@@ -44,7 +44,7 @@ Choose **Play / choose a world**, create a named world or select an existing one
 
 **Creatures:** sheep, cows, pigs, and chickens wander the surface by day; cows always drop 1–2 leather, chickens drop feathers. At night zombies, skeletons, spiders, and creepers spawn away from torchlight. Zombies groan and chase, skeletons keep their distance and shoot arrows, spiders leap and are neutral in daylight unless provoked, and creepers hiss, swell, and explode. Zombies and skeletons burn in sunlight. Craft shears to clip a sheep's coat for wool — it regrows as the sheep grazes — and milk cows with an empty bucket. Creature calls, hurt sounds, hisses, and blasts are synthesized at startup and played positionally. Hostiles drop rotten flesh, bones, string, and gunpowder.
 
-**Nether, enchanting, and books:** build a 4×5 obsidian frame (2×3 opening; corners optional), light the inside with flint and steel, and stand in the portal for one second. The Nether has lava seas and falls, quartz ore, glowstone, five biomes, giant fungi, ruined nether-brick bridges, piglins, and magma cubes. Travel scales horizontal coordinates by 8; each dimension keeps its own edits, storage, and pickups. Water evaporates there, and beds cannot set spawn.
+**Nether, enchanting, and books:** build a 4×5 obsidian frame (2×3 opening; corners optional), light the inside with flint and steel, and stand in the portal for one second. The Nether has lava seas and falls, quartz ore, glowstone, five biomes, giant fungi, nether-brick fortresses with blaze spawners and loot, piglins, magma cubes, ghasts, and endermen. Travel scales horizontal coordinates by 8; each dimension keeps its own edits, storage, and pickups. Water evaporates there, and beds cannot set spawn.
 
 Water touching lava from any of the six sides converts the lava source to obsidian. Deep caves now generate lava and lapis ore. Mine obsidian with a diamond pickaxe; buckets collect and place water or lava sources.
 
@@ -115,9 +115,11 @@ Saves are version 2 (version 1 files still load; the old single chestplate becom
 
 `VOXEY_DATA_DIR` can override the storage root for portable installations and isolated tests. Sandboxed platforms without a home environment use their writable application directory. The desktop code is portable; this build has been run on Linux. Windows and macOS home-path selection is covered by tests, but native builds on those systems have not been exercised.
 
+**Redstone and the End:** mine redstone to craft dust, torches, levers, buttons, plates, repeaters, comparators, observers, lamps, pistons, sticky pistons, doors, dispensers, droppers, and hoppers. Defeat blazes for rods and endermen for pearls, craft Eyes of Ender, and follow them to a stronghold. Fill twelve portal frames to enter the End. Destroy tower crystals and defeat the dragon for XP, an egg, and portals to home and the outer islands. Explore shulker-guarded cities for elytra. See [the redstone and End guide](docs/redstone-end.md) for controls, recipes, saving, and the encounter.
+
 ## World and rendering
 
-Voxels are **nodes**. Each **map block** contains 16×16×16 nodes in a compact byte array. The world streams horizontally around the player. The Overworld covers Y −128 through 63 (192 blocks); the Nether covers Y 0 through 127 (128 blocks), with dimension-specific bedrock boundaries. Existing positive-Y terrain coordinates are preserved.
+Voxels are **nodes**. Each **map block** contains 16×16×16 nodes in a compact byte array. The world streams horizontally around the player. The Overworld covers Y −128 through 63 (192 blocks); the Nether and End cover Y 0 through 127 (128 blocks). The End has islands over an open void; the other dimensions have bedrock boundaries. Existing positive-Y terrain coordinates are preserved.
 
 - Worker-thread terrain generation and mesh construction with deterministic noise, caves, ore clusters, cross-boundary trees, meadows, shores, desert, and snow biomes.
 - Greedy meshing merges coplanar faces; neighboring nodes and a one-node halo eliminate internal and map-block-boundary faces. One opaque/cutout surface and one water surface per map block, with a shared repeating texture atlas.
@@ -126,7 +128,7 @@ Voxels are **nodes**. Each **map block** contains 16×16×16 nodes in a compact 
 - Nine crack stages use a full UV square on each face. The crack texture is drawn in one sector and stamped with four-fold rotational symmetry about the exact face centre, so every stage grows evenly outward; forks and web rings appear in later stages.
 - Day/night lighting, fog, voxel clouds, positional torch lights, generated 2D and positional 3D sound effects, textured pickups, falling nodes, mining debris, and explosion craters.
 
-This is a playable foundation, not full Mineclonia parity. It currently has no multiplayer, End, redstone simulation, fluid-flow simulation, or the full Mineclonia mob/content roster. The Nether has five adapted biomes, piglins, magma cubes, and ruined bridges; enchanting uses a compact, deterministic set of equipment upgrades. Water is static, creatures are not persisted between sessions, recipes use a fixed registry, and the vertical range is bounded. Assets and game code are original; no Minecraft or Mineclonia assets are bundled.
+Voxey includes three dimensions, redstone simulation, and a persistent End dragon encounter. It is an original adaptation rather than full Mineclonia parity: multiplayer, fluid-flow simulation, brewing, the Wither, bastions, and the complete mob/content roster are not implemented. Ordinary roaming mobs respawn between sessions; the dragon encounter and defeated city guards persist. Recipes use a fixed registry and vertical ranges are bounded. Assets and game code are original; no Minecraft or Mineclonia assets are bundled.
 
 ## Validation
 
@@ -142,7 +144,7 @@ The runner creates an isolated temporary project so tests do not disturb an open
 godot --headless --path . --script res://tests/test_survival.gd
 ```
 
-The suite exercises meshing and winding, negative coordinates, deterministic terrain, ore/tool progression, manual and guided crafting, inventory transactions, mining/placement, crack-overlay symmetry and growth, furnace and crop simulation, single and large chests, save recovery and armor persistence, separate worlds, platform home paths, armor protection and wear, falling nodes, explosions and TNT, creature AI (chasing, shooting, exploding, roaming, day/night spawning), water physics and line-of-sight, the modding API (registration, hooks, world/inventory access), touch controls and split/batch toggles, achievements, shears, buckets, the bow, the two-block bed, and console commands. Depth checks cover Q and Escape drops, negative-Y terrain/collision, underground saves, deepslate ore progression, and lava-bucket fuel. Nether checks cover portal frames and round trips, independent dimension saves, lava reactions, cave resources, XP/lapis transactions, bookshelf gaps, item metadata, book editing, and arrow pickup/expiry. Content checks also cover atlas coverage, item mesh winding, joint animation, shaped/shapeless recipes, container returns, sugar cane growth, egg laying, and item ids above 255 in saves.
+The suite exercises meshing and winding, negative coordinates, deterministic terrain, ore/tool progression, manual and guided crafting, inventory transactions, mining/placement, crack-overlay symmetry and growth, furnace and crop simulation, single and large chests, save recovery and armor persistence, separate worlds, platform home paths, armor protection and wear, falling nodes, explosions and TNT, creature AI (chasing, shooting, exploding, roaming, day/night spawning), water physics and line-of-sight, the modding API (registration, hooks, world/inventory access), touch controls and split/batch toggles, achievements, shears, buckets, the bow, the two-block bed, and console commands. Depth checks cover Q and Escape drops, negative-Y terrain/collision, underground saves, deepslate ore progression, and lava-bucket fuel. Nether checks cover portal frames and round trips, independent dimension saves, lava reactions, cave resources, XP/lapis transactions, bookshelf gaps, item metadata, book editing, and arrow pickup/expiry. Expansion checks cover redstone signal range, timed pulses, side locking, comparators, pistons, doors, machine inventory, strongholds, Nether fortresses, pearl impacts, the End boss, crystal destruction and saves, dragon respawning, gateways, shulkers, and elytra. Content checks also cover atlas coverage, item mesh winding, joint animation, shaped/shapeless recipes, container returns, sugar cane growth, egg laying, and item ids above 255 in saves.
 
 A windowed visual smoke test writes screenshots of the crack overlay, creatures, armor inventory, large chest, console, and a dedicated asset gallery to `/tmp/voxey-shots`:
 

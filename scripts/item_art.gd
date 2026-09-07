@@ -11,7 +11,26 @@ static func texture(id: int) -> Texture2D:
 	var img := Image.create(16,16,false,Image.FORMAT_RGBA8)
 	var base: Color = Nodes.color(id)
 	var dark := Color("36332d")
-	if Nodes.is_tool_id(id):
+	if id in Nodes.SMALL_CIRCUITS:
+		if id == Nodes.REDSTONE_WIRE:
+			for p in [Vector2i(2,10),Vector2i(5,7),Vector2i(10,8),Vector2i(7,11)]: img.fill_rect(Rect2i(p,Vector2i(4,3)),Color("c02d3a"))
+		elif id in [Nodes.REPEATER,Nodes.COMPARATOR]:
+			_polygon(img,[[2,9],[8,6],[14,9],[8,14]],Color("b9b5a8"))
+			_line(img,Vector2(5,9),Vector2(5,4),Color("a66848"),2)
+			_line(img,Vector2(10,11),Vector2(10,6),Color("a66848"),2)
+			img.fill_rect(Rect2i(4,3,3,3),Color("de3940")); img.fill_rect(Rect2i(9,5,3,3),Color("de3940"))
+			if id == Nodes.COMPARATOR: img.fill_rect(Rect2i(9,2,3,3),Color("de3940"))
+		elif id in [Nodes.REDSTONE_TORCH,Nodes.LEVER]:
+			_line(img,Vector2(7,13),Vector2(8,4),Color("a9844f"),2)
+			img.fill_rect(Rect2i(6,2,5,4),Color("cf2b3c") if id == Nodes.REDSTONE_TORCH else Color("a28d6d"))
+			if id == Nodes.LEVER: img.fill_rect(Rect2i(4,12,8,2),Color("898a89"))
+		else: _polygon(img,[[2,8],[8,5],[14,8],[8,12]],base)
+	elif id == Nodes.ELYTRA:
+		_polygon(img,[[7,3],[2,2],[2,9],[5,14],[7,11]],base)
+		_polygon(img,[[9,3],[14,2],[14,9],[11,14],[9,11]],base)
+		_line(img,Vector2(4,4),Vector2(6,11),base.lightened(0.3))
+		_line(img,Vector2(12,4),Vector2(10,11),base.lightened(0.3))
+	elif Nodes.is_tool_id(id):
 		_line(img,Vector2(3,13),Vector2(10,6),Color("765034"),2)
 		_line(img,Vector2(3,12),Vector2(9,6),Color("ba8c54"))
 		match Nodes.tool_kind(id):
@@ -99,6 +118,25 @@ static func texture(id: int) -> Texture2D:
 				_line(img,Vector2(9,y),Vector2(12,y-2),base,2)
 		else:
 			for p in [Vector2i(4,9),Vector2i(8,7),Vector2i(10,11),Vector2i(5,4),Vector2i(11,3),Vector2i(2,12)]: img.fill_rect(Rect2i(p,Vector2i(3,2)),base)
+	elif id in [Nodes.ENDER_PEARL,Nodes.ENDER_EYE,Nodes.SLIME_BALL,Nodes.MAGMA_CREAM]:
+		_polygon(img,[[5,2],[10,2],[13,5],[13,10],[10,13],[5,13],[2,10],[2,5]],base)
+		_line(img,Vector2(4,5),Vector2(7,3),base.lightened(0.4),2)
+		if id == Nodes.ENDER_EYE:
+			_polygon(img,[[3,8],[6,5],[10,5],[13,8],[10,11],[6,11]],Color("b4cc77"))
+			img.fill_rect(Rect2i(7,5,3,6),Color("163f40"))
+	elif id in [Nodes.BLAZE_ROD,Nodes.BLAZE_POWDER]:
+		if id == Nodes.BLAZE_ROD:
+			_line(img,Vector2(3,13),Vector2(12,3),Color("b97720"),3)
+			_line(img,Vector2(4,12),Vector2(12,3),Color("ffdb71"))
+		else:
+			for p in [Vector2i(3,9),Vector2i(7,5),Vector2i(9,10),Vector2i(5,12)]: img.fill_rect(Rect2i(p,Vector2i(3,3)),base)
+	elif id == Nodes.GHAST_TEAR:
+		_polygon(img,[[8,2],[12,8],[11,12],[8,14],[4,12],[3,8]],base)
+		_line(img,Vector2(6,7),Vector2(5,10),Color("f0f9f3"),2)
+	elif id == Nodes.END_CRYSTAL:
+		_polygon(img,[[8,1],[14,5],[14,11],[8,15],[2,11],[2,5]],Color("ece0ed"))
+		_polygon(img,[[8,4],[11,7],[11,10],[8,12],[5,9],[5,6]],base)
+		_line(img,Vector2(8,1),Vector2(8,4),Color("aaa0c3"))
 	elif id == Nodes.STRING:
 		for p in [[3,3,11,3],[11,3,13,6],[13,6,5,10],[5,10,3,7],[3,7,10,6],[10,6,11,12],[11,12,7,14]]: _line(img,Vector2(p[0],p[1]),Vector2(p[2],p[3]),base)
 	elif id == Nodes.SHEARS:

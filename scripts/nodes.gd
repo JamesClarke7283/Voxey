@@ -142,6 +142,56 @@ const DEEP_COAL_ORE = 208
 const DEEP_COPPER_ORE = 209
 const DEEP_NODES = [194,195,196,197,198,199,206,207,208,209]
 const DEEP_ORES = {198:12,199:11,206:34,207:190,208:10,209:35}
+
+# Expansion voxel ids remain byte-sized; 200..205 stay reserved for mods.
+const REDSTONE_ORE = 210
+const DEEP_REDSTONE_ORE = 211
+const REDSTONE_WIRE = 212
+const REDSTONE_TORCH = 213
+const LEVER = 214
+const BUTTON = 215
+const PRESSURE_PLATE = 216
+const REPEATER = 217
+const COMPARATOR = 218
+const PISTON = 219
+const STICKY_PISTON = 220
+const PISTON_HEAD = 221
+const REDSTONE_LAMP = 222
+const REDSTONE_BLOCK = 223
+const OBSERVER = 224
+const DISPENSER = 225
+const DROPPER = 226
+const HOPPER = 227
+const IRON_DOOR = 228
+const IRON_DOOR_OPEN = 229
+const END_STONE = 230
+const END_BRICKS = 231
+const END_FRAME = 232
+const END_FRAME_EYE = 233
+const END_PORTAL = 234
+const IRON_BARS = 235
+const PURPUR = 236
+const CHORUS_PLANT = 237
+const END_ROD = 238
+const DRAGON_EGG = 239
+const BLAZE_SPAWNER = 240
+const SOUL_TORCH = 241
+const END_GATEWAY = 242
+const ELYTRA = 277
+const SHULKER_SHELL = 278
+const ENDER_PEARL = 267
+const ENDER_EYE = 268
+const BLAZE_ROD = 269
+const BLAZE_POWDER = 270
+const GHAST_TEAR = 271
+const END_CRYSTAL = 272
+const SLIME_BALL = 273
+const CHORUS_FRUIT = 274
+const MAGMA_CREAM = 275
+const NETHER_BRICK_ITEM = 276
+const EXPANSION_NODES = [210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242]
+const CIRCUIT_NODES = [REDSTONE_WIRE,REDSTONE_TORCH,LEVER,BUTTON,PRESSURE_PLATE,REPEATER,COMPARATOR,PISTON,STICKY_PISTON,PISTON_HEAD,REDSTONE_LAMP,REDSTONE_BLOCK,OBSERVER,DISPENSER,DROPPER,HOPPER,IRON_DOOR,IRON_DOOR_OPEN]
+const SMALL_CIRCUITS = [REDSTONE_WIRE,REDSTONE_TORCH,LEVER,BUTTON,PRESSURE_PLATE,REPEATER,COMPARATOR,IRON_DOOR_OPEN]
 const LAPIS = 262
 const WRITABLE_BOOK = 263
 const WRITTEN_BOOK = 264
@@ -166,6 +216,51 @@ static var custom_nodes := {}
 static var custom_tiles := {}
 static var custom_items := {}
 const NAMES = {
+	242:"End gateway",
+	277:"Elytra",278:"Shulker shell",
+	210:"Redstone ore",
+	211:"Deepslate redstone ore",
+	212:"Redstone dust",
+	213:"Redstone torch",
+	214:"Lever",
+	215:"Stone button",
+	216:"Stone pressure plate",
+	217:"Redstone repeater",
+	218:"Redstone comparator",
+	219:"Piston",
+	220:"Sticky piston",
+	221:"Piston head",
+	222:"Redstone lamp",
+	223:"Block of redstone",
+	224:"Observer",
+	225:"Dispenser",
+	226:"Dropper",
+	227:"Hopper",
+	228:"Iron door",
+	229:"Open iron door",
+	230:"End stone",
+	231:"End stone bricks",
+	232:"End portal frame",
+	233:"Filled End portal frame",
+	234:"End portal",
+	235:"Iron bars",
+	236:"Purpur block",
+	237:"Chorus plant",
+	238:"End rod",
+	239:"Dragon egg",
+	240:"Blaze spawner",
+	241:"Soul torch",
+	267:"Ender pearl",
+	268:"Eye of Ender",
+	269:"Blaze rod",
+	270:"Blaze powder",
+	271:"Ghast tear",
+	272:"End crystal",
+	273:"Slime ball",
+	274:"Chorus fruit",
+	275:"Magma cream",
+	276:"Nether brick",
+
 	194:"Deepslate",
 	195:"Cobbled deepslate",
 	196:"Polished deepslate",
@@ -214,6 +309,51 @@ const NAMES = {
 	256:"Charcoal", 257:"Bowl", 258:"Mushroom stew", 259:"Gold nugget", 260:"Iron nugget", 261:"Egg"
 }
 const COLORS = {
+	242:Color("51487c"),
+	277:Color("92909f"),278:Color("a77aab"),
+	210:Color("857274"),
+	211:Color("654853"),
+	212:Color("a82126"),
+	213:Color("e43b32"),
+	214:Color("a48e72"),
+	215:Color("7d8589"),
+	216:Color("84888b"),
+	217:Color("d2bcaf"),
+	218:Color("cdb9ab"),
+	219:Color("ac8b59"),
+	220:Color("80ac58"),
+	221:Color("ac8b59"),
+	222:Color("94613b"),
+	223:Color("ba292e"),
+	224:Color("777d85"),
+	225:Color("81858a"),
+	226:Color("7c8589"),
+	227:Color("454b53"),
+	228:Color("b4bfc4"),
+	229:Color("b4bfc4"),
+	230:Color("ddd9a0"),
+	231:Color("d4cea0"),
+	232:Color("628774"),
+	233:Color("509988"),
+	234:Color("191327"),
+	235:Color("929c9f"),
+	236:Color("ab7ead"),
+	237:Color("815781"),
+	238:Color("f2e1bc"),
+	239:Color("32253f"),
+	240:Color("472d26"),
+	241:Color("44e1d8"),
+	267:Color("247e79"),
+	268:Color("68b573"),
+	269:Color("e7ad36"),
+	270:Color("f8bd3b"),
+	271:Color("c5e8e3"),
+	272:Color("e09be2"),
+	273:Color("86bb59"),
+	274:Color("a36ea3"),
+	275:Color("dd842c"),
+	276:Color("613c42"),
+
 	194:Color("4b4d53"),
 	195:Color("505359"),
 	196:Color("54575e"),
@@ -275,6 +415,7 @@ const ARMOR_POINTS = [[1, 3, 2, 1], [2, 6, 5, 2], [2, 5, 3, 1], [3, 8, 6, 3]]
 const ARMOR_DURABILITY = [80, 240, 112, 528]
 
 static func title(id: int) -> String:
+	if id == ELYTRA: return "Elytra"
 	if custom_items.has(id) or custom_nodes.has(id):
 		return String((custom_items.get(id) if custom_items.has(id) else custom_nodes[id]).get("name","Unknown"))
 	if id == SHEARS: return "Shears"
@@ -283,6 +424,7 @@ static func title(id: int) -> String:
 	return NAMES.get(id, "Unknown")
 
 static func color(id: int) -> Color:
+	if id == ELYTRA: return COLORS[ELYTRA]
 	if custom_items.has(id) or custom_nodes.has(id):
 		return Color((custom_items.get(id) if custom_items.has(id) else custom_nodes[id]).get("color","#ffffff"))
 	if id == SHEARS: return Color("c0c6cc")
@@ -342,7 +484,7 @@ static func is_tool_id(id: int) -> bool:
 	return id >= TOOLS and id < TOOLS_END
 
 static func is_armor(id: int) -> bool:
-	return id >= ARMOR_BASE and id < ARMOR_END
+	return id == ELYTRA or id >= ARMOR_BASE and id < ARMOR_END
 
 static func tool_kind(id: int) -> int:
 	return (id - TOOLS) % 5 if is_tool_id(id) else -1
@@ -351,18 +493,19 @@ static func tool_tier(id: int) -> int:
 	return clampi((id - TOOLS) / 5, 0, 3) if is_tool_id(id) else -1
 
 static func armor_material(id: int) -> int:
-	return (id - ARMOR_BASE) / 4 if is_armor(id) else -1
+	return 0 if id == ELYTRA else (id - ARMOR_BASE) / 4 if is_armor(id) else -1
 
 static func armor_piece(id: int) -> int:
-	return (id - ARMOR_BASE) % 4 if is_armor(id) else -1
+	return 1 if id == ELYTRA else (id - ARMOR_BASE) % 4 if is_armor(id) else -1
 
 static func armor_id(material: int, piece: int) -> int:
 	return ARMOR_BASE + material * 4 + piece
 
 static func armor_points(id: int) -> int:
-	return ARMOR_POINTS[armor_material(id)][armor_piece(id)] if is_armor(id) else 0
+	return ARMOR_POINTS[armor_material(id)][armor_piece(id)] if is_armor(id) and id != ELYTRA else 0
 
 static func durability(id: int) -> int:
+	if id == ELYTRA: return 433
 	if id == BOW: return 385
 	if id == SHEARS: return 239
 	if is_tool_id(id): return DURABILITY[tool_tier(id)]
@@ -371,25 +514,26 @@ static func durability(id: int) -> int:
 
 static func max_stack(id: int) -> int:
 	if id in [WRITABLE_BOOK,WRITTEN_BOOK,BOW,LAVA_BUCKET]: return 1
-	if id == EGG: return 16
+	if id in [EGG,ENDER_PEARL]: return 16
 	return 1 if is_tool_id(id) or is_armor(id) or id in [SHEARS,BUCKET,WATER_BUCKET,MILK_BUCKET,SADDLE,MUSHROOM_STEW] else 64
 
 static func solid(id: int) -> bool:
 	if custom_nodes.has(id): return not bool(custom_nodes[id].get("transparent",false))
-	return id not in [AIR,WATER,LAVA,NETHER_PORTAL] and not plant(id) and id not in [TORCH,LADDER]
+	return id not in [AIR,WATER,LAVA,NETHER_PORTAL,END_PORTAL,END_GATEWAY,END_ROD,SOUL_TORCH] and id not in SMALL_CIRCUITS and not plant(id) and id not in [TORCH,LADDER]
 
 static func plant(id: int) -> bool:
 	return id in [WHEAT, RIPE_WHEAT, SAPLING, FLOWER, VINE, SUGAR_CANE, RED_MUSHROOM, BROWN_MUSHROOM]
 
 static func transparent(id: int) -> bool:
 	if custom_nodes.has(id): return bool(custom_nodes[id].get("transparent",false))
-	return id in [AIR, WATER, LAVA, NETHER_PORTAL, GLASS, LADDER, ICE] or plant(id) or id == TORCH
+	return id in CIRCUIT_NODES or id in [AIR, WATER, LAVA, NETHER_PORTAL, END_PORTAL, END_GATEWAY, END_ROD, SOUL_TORCH, IRON_BARS, GLASS, LADDER, ICE] or plant(id) or id == TORCH
 
 # Sand and gravel are Luanti-style falling nodes: they drop when unsupported.
 static func falls(id: int) -> bool:
 	return id in [SAND, GRAVEL, SNOW_BLOCK]
 
 static func placeable(id: int) -> bool:
+	if id in EXPANSION_NODES: return id not in [PISTON_HEAD,IRON_DOOR_OPEN,END_FRAME_EYE,END_PORTAL,END_GATEWAY,BLAZE_SPAWNER]
 	if id in DEEP_NODES: return true
 	if id in NETHER_NODES: return id not in [LAVA,NETHER_PORTAL]
 	if custom_nodes.has(id) and not bool(custom_nodes[id].get("unobtainable",false)): return true
@@ -398,6 +542,8 @@ static func placeable(id: int) -> bool:
 	return id > AIR and id < 64 and NAMES.has(id) and id not in [WATER, BEDROCK, RIPE_WHEAT]
 
 static func preferred_tool(id: int) -> int:
+	if id in SMALL_CIRCUITS: return -1
+	if id in EXPANSION_NODES: return 0
 	if id in DEEP_NODES: return 0
 	if id in [CRIMSON_STEM,WARPED_STEM,BOOKSHELF]: return 1
 	if id == SOUL_SAND: return 2
@@ -410,6 +556,9 @@ static func preferred_tool(id: int) -> int:
 	return -1
 
 static func hardness(id: int) -> float:
+	if id in [END_FRAME,END_FRAME_EYE,END_PORTAL,END_GATEWAY]: return INF
+	if id in SMALL_CIRCUITS: return 0.2
+	if id in EXPANSION_NODES: return 3.0
 	if id in DEEP_NODES: return 4.5 if DEEP_ORES.has(id) else 3.5
 	if id in [RED_BRICKS,MOSSY_COBBLE,MOSSY_BRICKS,TERRACOTTA]: return 2.0
 	if id == COAL_BLOCK: return 5.0
@@ -445,7 +594,8 @@ static func break_time(id: int, tool: int) -> float:
 
 static func harvestable(id: int, tool: int) -> bool:
 	if DEEP_ORES.has(id): return harvestable(DEEP_ORES[id],tool)
-	if id == BEDROCK: return false
+	if id in [BEDROCK,END_FRAME,END_FRAME_EYE,END_PORTAL,END_GATEWAY,PISTON_HEAD]: return false
+	if id in [REDSTONE_ORE,DEEP_REDSTONE_ORE]: return tool_kind(tool) == 0 and tool_tier(tool) >= 2
 	if id == VINE: return tool == SHEARS
 	if preferred_tool(id) == 0:
 		if tool_kind(tool) != 0 and tool != SHEARS: return false
@@ -457,6 +607,10 @@ static func harvestable(id: int, tool: int) -> bool:
 
 static func drop(id: int) -> int:
 	if DEEP_ORES.has(id): return drop(DEEP_ORES[id])
+	if id in [REDSTONE_ORE,DEEP_REDSTONE_ORE]: return REDSTONE_WIRE
+	if id in [END_PORTAL,END_GATEWAY,END_FRAME,END_FRAME_EYE,PISTON_HEAD,BLAZE_SPAWNER]: return 0
+	if id == IRON_DOOR_OPEN: return IRON_DOOR
+	if id == CHORUS_PLANT: return CHORUS_FRUIT
 	if id == DEEPSLATE: return COBBLED_DEEPSLATE
 	return {GRASS:DIRT, STONE:COBBLE, COAL_ORE:COAL, DIAMOND_ORE:DIAMOND, FARMLAND:DIRT, WHEAT:SEEDS, RIPE_WHEAT:GRAIN,
 		LAPIS_ORE:LAPIS, NETHER_QUARTZ_ORE:QUARTZ, LAVA:0, NETHER_PORTAL:0, LEAVES:SAPLING, ICE:0, CLAY:CLAY_BALL, GLOWSTONE:GLOWSTONE_DUST_ALIAS,
@@ -469,9 +623,10 @@ const GLOWSTONE_DUST_ALIAS = GLOWSTONE # glowstone drops itself; kept for clarit
 
 static func food(id: int) -> int:
 	if custom_items.has(id): return clampi(int(custom_items[id].get("food",0)),0,20)
-	return {APPLE:4, RAW_MEAT:2, COOKED_MEAT:8, BREAD:6, ROTTEN_FLESH:2, PUMPKIN_PIE:8, MELON_SLICE:2, GOLDEN_APPLE:10, MUSHROOM_STEW:6}.get(id, 0)
+	return {CHORUS_FRUIT:4,APPLE:4, RAW_MEAT:2, COOKED_MEAT:8, BREAD:6, ROTTEN_FLESH:2, PUMPKIN_PIE:8, MELON_SLICE:2, GOLDEN_APPLE:10, MUSHROOM_STEW:6}.get(id, 0)
 
 static func tile(id: int, face: int) -> int:
+	if id in EXPANSION_NODES: return 104+EXPANSION_NODES.find(id)
 	if id in DEEP_NODES: return 94+DEEP_NODES.find(id)
 	if id == ENCHANTING_TABLE: return 93 if face == 2 else 88
 	if id in NETHER_NODES: return 79+id-LAVA
@@ -499,7 +654,7 @@ static func tile(id: int, face: int) -> int:
 
 static func smelt_result(id: int) -> int:
 	if DEEP_ORES.has(id): id = DEEP_ORES[id]
-	return {IRON_ORE:IRON,GOLD_ORE:GOLD,COPPER_ORE:COPPER,SAND:GLASS,COBBLE:STONE,RAW_MEAT:COOKED_MEAT,LOG:CHARCOAL,CLAY_BALL:BRICK_ITEM,CLAY:TERRACOTTA,COBBLED_DEEPSLATE:DEEPSLATE}.get(id,0)
+	return {NETHERRACK:NETHER_BRICK_ITEM,IRON_ORE:IRON,GOLD_ORE:GOLD,COPPER_ORE:COPPER,SAND:GLASS,COBBLE:STONE,RAW_MEAT:COOKED_MEAT,LOG:CHARCOAL,CLAY_BALL:BRICK_ITEM,CLAY:TERRACOTTA,COBBLED_DEEPSLATE:DEEPSLATE}.get(id,0)
 
 static func fuel_time(id: int) -> int:
 	return {COAL:80,CHARCOAL:80,COAL_BLOCK:800,LOG:15,PLANKS:15,STICK:5,BOWL:10,LAVA_BUCKET:1000,CRIMSON_STEM:15,WARPED_STEM:15}.get(id,0)

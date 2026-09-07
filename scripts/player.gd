@@ -21,6 +21,7 @@ var crack_textures: Array = []
 var crack_stage: int = -1
 var dig_timer: float = 0.0
 var use_cooldown: float = 0.0
+var use_latched: bool = false
 var damage_cooldown: float = 0.0
 var survival_timer: float = 0.0
 var walked: float = 0.0
@@ -30,6 +31,9 @@ var hand_id: int = -1
 var swing: float = 0.0
 var underwater: bool = false
 var flying: bool = false
+var gliding: bool = false
+var levitation: float = 0
+var flight_wear: float = 0
 
 func _init() -> void:
 	for i in 4: armor_slots.append({"id":0,"count":0,"wear":0})
@@ -90,6 +94,7 @@ func _physics_process(delta: float) -> void:
 	if game == null or not game.playing(): return
 	if not game.world.loaded_at(position): return
 	damage_cooldown = maxf(0,damage_cooldown-delta)
+	levitation = maxf(0,levitation-delta)
 	use_cooldown = maxf(0,use_cooldown-delta)
 	var pad: TouchControls = game.controls if game.touch else null
 	var direction := Vector3.ZERO
@@ -120,9 +125,12 @@ func _physics_process(delta: float) -> void:
 	var body_cell: Vector3i = Vector3i(position.floor())
 	var on_ladder: bool = game.world.node_at(body_cell) == Nodes.LADDER or game.world.node_at(body_cell+Vector3i.UP) == Nodes.LADDER
 	direction = basis * direction.normalized()
-	velocity.x = move_toward(velocity.x,direction.x*speed,delta*35)
-	velocity.z = move_toward(velocity.z,direction.z*speed,delta*35)
-	if on_ladder:
+	if not gliding:
+		velocity.x = move_toward(velocity.x,direction.x*speed,delta*35)
+		velocity.z = move_toward(velocity.z,direction.z*speed,delta*35)
+	if levitation > 0:
+		velocity.y = move_toward(velocity.y,3.0,delta*10)
+	elif on_ladder:
 		velocity.y = 0.0
 		var climb: float = 0.0
 		if Input.is_physical_key_pressed(KEY_SPACE) or (pad != null and pad.jump_held) or (direction.length() > 0.2 and camera.rotation.x > -0.7):
@@ -150,13 +158,16 @@ func _physics_process(delta: float) -> void:
 			if not game.world.intersects(position+facing*0.9,0.29,1.4) and game.world.node_at(ahead+Vector3i.UP) != Nodes.WATER:
 				velocity.y = maxf(velocity.y,6.4)
 	else:
-		velocity.y -= 24.0*delta
-		velocity.y = maxf(velocity.y,-45.0)
+		if not gliding:
+			velocity.y -= 24.0*delta
+			velocity.y = maxf(velocity.y,-45.0)
 		if Input.is_physical_key_pressed(KEY_SPACE) or (pad != null and pad.jump_held):
 			if grounded:
 				velocity.y = 8.2
 				grounded = false
 				hunger -= 0.015
+	var glide_input: bool = Input.is_physical_key_pressed(KEY_SPACE) or (pad != null and pad.jump_held)
+	gliding = update_glide(delta,glide_input,wet or on_ladder)
 	var old_pos: Vector3 = position
 	_move(velocity*delta,crouch,on_ladder)
 	var distance: float = Vector2(position.x-old_pos.x,position.z-old_pos.z).length()
@@ -235,6 +246,8 @@ func _process(delta: float) -> void:
 	var mine_pressed: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or (pad != null and pad.mine_held)
 	var use_pressed: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or (pad != null and pad.use_pressed)
 	if pad != null: pad.use_pressed = false
+	if mine_pressed and use_cooldown <= 0 and game.adventure.deflect_target():
+		use_cooldown = 0.4; swing = 1; return
 	if mine_pressed:
 		var mob = game.target_mob()
 		if mob != null:
@@ -256,7 +269,10 @@ func _process(delta: float) -> void:
 	else:
 		mining = 0.0
 		mining_pos = Vector3i(99999,99999,99999)
-	if use_pressed and use_cooldown <= 0:
+	if not use_pressed: use_latched = false
+	var circuit_click: bool = not target.is_empty() and target.id in [Nodes.LEVER,Nodes.BUTTON,Nodes.REPEATER,Nodes.COMPARATOR]
+	if use_pressed and use_cooldown <= 0 and (not circuit_click or not use_latched):
+		use_latched = true
 		use_cooldown = 0.25
 		use()
 
@@ -304,6 +320,19 @@ func equip_armor(slot: Dictionary) -> bool:
 
 func use() -> void:
 	var held: int = game.inventory.held().id
+	if held == Nodes.ENDER_EYE and not target.is_empty() and target.id == Nodes.END_FRAME:
+		if WorldStructures.fill_eye(game.world,target.pos):
+			if game.gamemode != "creative": game.inventory.consume_selected()
+			game.sound("place"); swing = 1
+		return
+	if held in [Nodes.ENDER_PEARL,Nodes.ENDER_EYE]:
+		if game.adventure.throw_item(held): swing = 1; use_cooldown = 0.6
+		return
+	if held == Nodes.END_CRYSTAL and not target.is_empty():
+		if game.adventure.place_crystal(target.pos):
+			if game.gamemode != "creative": game.inventory.consume_selected()
+			swing = 1
+		return
 	if held in [Nodes.WRITABLE_BOOK,Nodes.WRITTEN_BOOK]: game.open_book(); return
 	if Nodes.food(held) > 0 and hunger < 20:
 		hunger = minf(20,hunger+Nodes.food(held))
@@ -369,6 +398,7 @@ func use() -> void:
 	var p: Vector3i = target.pos
 	var id: int = target.id
 	if not Input.is_physical_key_pressed(KEY_CTRL):
+		if game.world.circuits.interact(p): return
 		if id == Nodes.ENCHANTING_TABLE: game.open_enchanting(p); return
 		if held == Nodes.FLINT_AND_STEEL and id == Nodes.OBSIDIAN:
 			if game.world.ignite_portal(p+target.normal): game.sound("place")
@@ -466,7 +496,22 @@ func use() -> void:
 		game.api.emit_node_placed(foot,Nodes.BED_FOOT)
 		game.api.emit_node_placed(head,Nodes.BED_HEAD)
 		return
+	var support: Vector3i = -target.normal if place_id in [Nodes.REDSTONE_TORCH,Nodes.LEVER,Nodes.BUTTON] else Vector3i.DOWN
+	if place_id in Nodes.SMALL_CIRCUITS and place_id != Nodes.IRON_DOOR_OPEN and not Nodes.solid(game.world.node_at(destination+support)):
+		game.toast("Place this component on a solid block."); return
+	if place_id == Nodes.IRON_DOOR and game.world.node_at(destination+Vector3i.UP) != Nodes.AIR: return
 	if game.world.set_node(destination,place_id):
+		if place_id in Nodes.CIRCUIT_NODES:
+			var forward: Vector3 = -camera.global_basis.z
+			var axis: int = 0 if absf(forward.x) > absf(forward.z) else 2
+			if place_id in [Nodes.PISTON,Nodes.STICKY_PISTON,Nodes.DISPENSER,Nodes.DROPPER,Nodes.OBSERVER] and absf(forward.y) > 0.75: axis = 1
+			var d := Vector3i.ZERO; d[axis] = int(signf(forward[axis]))
+			if place_id == Nodes.HOPPER: d = -target.normal
+			game.world.circuits.configure(destination,d,support)
+			if place_id == Nodes.IRON_DOOR:
+				game.world.set_node(destination+Vector3i.UP,Nodes.IRON_DOOR)
+				game.world.circuits.configure(destination+Vector3i.UP,d)
+				game.world.circuits.state(destination+Vector3i.UP)["upper"] = true
 		if game.gamemode!="creative": game.inventory.consume_selected()
 		game.sound("place")
 		swing = 1
@@ -507,7 +552,12 @@ func hurt(amount: float, bypass_armor: bool = false, source: Vector3 = Vector3.I
 func _make_hand(id: int) -> void:
 	hand_id = id
 	for child in hand.get_children(): child.queue_free()
-	if Nodes.placeable(id):
+	if id in Nodes.CIRCUIT_NODES:
+		var model: Node3D = RedstoneArt.build(id)
+		model.scale = Vector3.ONE*0.28
+		model.position = Vector3(0,-0.14,0)
+		hand.add_child(model)
+	elif Nodes.placeable(id):
 		# The held node is a miniature of the real one, using the terrain atlas.
 		var instance := MeshInstance3D.new()
 		instance.mesh = game.node_mesh(id)
@@ -540,3 +590,16 @@ func _add_hand_box(pos: Vector3, size_value: Vector3, color: Color) -> void:
 	instance.material_override = mat
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	hand.add_child(instance)
+
+func update_glide(delta: float, jump_held: bool, blocked: bool = false) -> bool:
+	var wings: Dictionary = armor_slots[1]
+	if wings.id != Nodes.ELYTRA or wings.wear >= Nodes.durability(Nodes.ELYTRA)-1 or grounded or blocked or levitation > 0: return false
+	if not gliding and not (jump_held and velocity.y < -2): return false
+	var forward: Vector3 = -camera.global_basis.z
+	var speed: float = 16-clampf(camera.rotation.x,-1,1)*5
+	velocity.x = lerpf(velocity.x,forward.x*speed,clampf(delta*2.5,0,1))
+	velocity.z = lerpf(velocity.z,forward.z*speed,clampf(delta*2.5,0,1))
+	velocity.y = lerpf(velocity.y,clampf(-2.3+camera.rotation.x*5,-12,-0.65),clampf(delta*4,0,1))
+	flight_wear += delta
+	if flight_wear >= 2 and game.gamemode != "creative": wings.wear += 1; flight_wear = 0
+	return true

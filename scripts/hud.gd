@@ -295,6 +295,7 @@ func show_guide() -> void:
 	var text_value: String = "01   START SMALL\nHold left click on an oak log. Open your inventory with E, turn logs into planks, then craft a table. Place it and right click to unlock tools.\n\n02   DIG A LITTLE DEEPER\nA wooden pickaxe mines stone and coal. Stone picks unlock iron. Smelt iron ore in a furnace; an iron pickaxe can harvest diamonds below Y 12.\n\n03   BUILD A LIFE\nTill grass with a hoe and plant seeds. Crops ripen in 90 seconds. Sheep drop meat and wool; cook meat and make a bed. Right click a bed to set your spawn and sleep through the night. Saplings grow into trees.\n\n04   STAY ALIVE\nEat with right click. Keep hunger high to regenerate health. Watch your breath underwater and your footing on cliffs. The dark brings zombies, skeletons, spiders, and creepers. Build a shelter, place torches, and keep a sword close.\n\n05   ARMOR & THE WILD\nCraft leather, iron, golden, or diamond armor at a table and right click to wear it; each piece wears down as it protects you. Cows drop leather, chickens and pigs give meat, bones become bone meal for instant crops, string weaves wool, and gunpowder plus sand makes TNT. Sand and gravel fall when unsupported. Two chests placed together join into one large chest."
 	text_value += "\n\n06   THE NETHER\nWater touching cave lava makes obsidian. Mine it with a diamond pickaxe. Build a 4 × 5 obsidian frame with a 2 × 3 opening, light it with flint and steel, and step inside. Return through a portal. Water evaporates there; beds cannot set spawn.\n\n07   BOOKS & ENCHANTING\nCows always drop leather. Three paper + leather make a book; add a feather + charcoal for a writable book. Hold it and right click to write. A book, two diamonds, and four obsidian make an enchanting table. Mine lapis underground; right click the table to upgrade equipment using lapis and XP levels. Leave a one-block air gap between the table and nearby bookshelves.\n\n08   RECOVER YOUR ARROWS\nArrows stuck in the world last ten active minutes. Walk near them to pick them up. Ground items stay put until the entire pickup fits in your inventory."
 	text_value += "\n\n09   INTO THE DEEP\nThe Overworld now reaches bedrock at Y -128. Find deepslate, larger caverns and deep ores below zero. Carry torches: cave enemies can appear even during the day. Four cobbled deepslate make polished deepslate; four polished blocks make bricks. Lava buckets fuel furnaces and leave an empty bucket.\n\n10   DROP WHAT YOU CARRY\nQ throws one item. In inventory, press an item to carry it, move outside the panel, then press Escape to drop the stack and close. Left-click outside drops a stack; right-click drops one. Thrown items have a short pickup delay. Esc with the pointer inside returns carried items to your bag."
+	text_value += "\n\n10   REDSTONE\nMine redstone ore deep underground with an iron pickaxe. Dust carries power up to 15 blocks. Right click levers and buttons; walk on plates. Repeaters face away from you and restore power; right click to set a 1–4 tick delay. Comparators read container fullness and switch compare/subtract modes. Torches invert the power of their supporting block. Observers pulse when the block at their face changes. Pistons push up to 12 blocks; sticky pistons pull one back. Hoppers move items when unpowered; powered dispensers fire arrows and droppers eject one item. Hold Ctrl to place against interactive blocks.\n\n11   FIND THE END\nExplore Nether fortresses for blazes and their rods. Craft blaze powder, then combine it with ender pearls from endermen to make Eyes of Ender. Throw an Eye in the Overworld and follow it to an underground stronghold. Fill all twelve portal frames with Eyes and step into the portal. Pearls teleport you to their landing spot, costing health.\n\n12   THE DRAGON\nShoot the healing crystals atop the End’s ten obsidian towers; two have iron cages. Fight the dragon with your bow or strike when it perches. Avoid its purple breath and the void. Victory gives XP, a dragon egg, and a portal home. Four crafted crystals placed on the cardinal edges of the exit fountain summon another dragon. Victory also opens a gateway near the arrival platform, leading to the outer islands and a return gateway. Beyond the main island lie chorus groves and purpur cities guarded by shulkers. Their homing shots cause levitation. Find elytra in the treasure chests, equip them in your chest slot, and hold Jump while falling to glide. Aim to steer and dive; worn-out wings stop gliding."
 	var scroll := ScrollContainer.new()
 	scroll.position = Vector2(32,100); scroll.size = Vector2(726,350)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -539,7 +540,7 @@ func _furnace_preview() -> void:
 
 func _chest_preview() -> void:
 	var rows: int = station_data.slots.size()/9
-	_label(preview,"LARGE CHEST  ·  TWO CHESTS JOINED" if rows > 3 else "CHEST STORAGE",Vector2.ZERO,12,ACCENT)
+	_label(preview,"LARGE CHEST  ·  TWO CHESTS JOINED" if rows > 3 else station_data.get("label","CHEST STORAGE"),Vector2.ZERO,12,ACCENT)
 	var spacing: int = 51 if rows <= 3 else 44
 	for i in station_data.slots.size():
 		_station_slot(i,Vector2((i%9)*73,27+(i/9)*spacing),Vector2(65,47 if rows <= 3 else 40))
@@ -685,7 +686,7 @@ func _draw() -> void:
 		draw_style_box(_style(Color(0.08,0.14,0.10,0.76),Color(0.5,0.6,0.4,0.2),1),Rect2(24,24,253,65))
 		draw_string(font,Vector2(40,48),"V /  "+("Deepslate caverns" if game.dimension == "overworld" and player.position.y < -32 else ("Deep caves" if game.dimension == "overworld" and player.position.y < 0 else game.world.generator.biome(int(player.position.x),int(player.position.z)))),HORIZONTAL_ALIGNMENT_LEFT,-1,16,TEXT)
 		draw_string(font,Vector2(40,72),"%d   /   %d   /   %d" % [player.position.x,player.position.y,player.position.z],HORIZONTAL_ALIGNMENT_LEFT,-1,12,MUTED)
-		var time_label: String = "THE NETHER" if game.dimension == "nether" else "DAY %d  ·  %s" % [game.day_number(),game.time_name()]
+		var time_label: String = "THE END" if game.dimension == "end" else "THE NETHER" if game.dimension == "nether" else "DAY %d  ·  %s" % [game.day_number(),game.time_name()]
 		draw_style_box(_style(Color(0.08,0.14,0.10,0.76)),Rect2(size.x-217,24,193,45))
 		draw_circle(Vector2(size.x-193,46),7,Color("e8cc80") if game.daylight>0.4 else Color("bdcede"))
 		draw_string(font,Vector2(size.x-175,51),time_label,HORIZONTAL_ALIGNMENT_LEFT,-1,12,TEXT)
@@ -699,6 +700,14 @@ func _draw() -> void:
 			if player.mining>0:
 				draw_rect(Rect2(center+Vector2(-24,20),Vector2(48,3)),Color(0,0,0,0.4))
 				draw_rect(Rect2(center+Vector2(-24,20),Vector2(48*player.mining,3)),ACCENT)
+		if game.dimension == "end" and not game.world.adventure_state.get("defeated",false) and Vector2(player.position.x,player.position.z).length() < 110:
+			var boss_width: float = minf(360,size.x*0.42)
+			var boss_health: float = float(game.world.adventure_state.get("dragon_health",200))
+			draw_string(font,Vector2(center.x-boss_width/2,106),"ENDER DRAGON",HORIZONTAL_ALIGNMENT_CENTER,boss_width,15,Color("e1b5ef"))
+			draw_rect(Rect2(center.x-boss_width/2,116,boss_width,8),Color("31233e"))
+			draw_rect(Rect2(center.x-boss_width/2,116,boss_width*clampf(boss_health/200,0,1),8),Color("b975d3"))
+			var remaining: int = 10-game.world.adventure_state.get("destroyed_crystals",[]).size()
+			draw_string(font,Vector2(center.x-boss_width/2,143),"%d / 10 healing crystals remain" % remaining,HORIZONTAL_ALIGNMENT_CENTER,boss_width,12,Color("c7b5cf"))
 		# Status bar shrinks on phones so the touch buttons stay clear.
 		var bar_scale: float = _hud_scale()
 		var bar_w: float = 536.0*bar_scale
@@ -714,6 +723,8 @@ func _draw() -> void:
 		draw_rect(Rect2(center.x-254.0*bar_scale,bar_y+31.0*bar_scale,508.0*bar_scale,3),Color("263c2b"))
 		draw_rect(Rect2(center.x-254.0*bar_scale,bar_y+31.0*bar_scale,508.0*bar_scale*game.xp_progress(),3),Color("a6be69"))
 		draw_string(font,Vector2(center.x-20,bar_y+22*bar_scale),str(game.xp_level()),HORIZONTAL_ALIGNMENT_CENTER,40,16,Color("b9e17c"))
+		if player.levitation > 0: draw_string(font,Vector2(center.x-70,bar_y-50),"Levitation · %ds" % ceili(player.levitation),HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color("d8b7e4"))
+		elif player.gliding: draw_string(font,Vector2(center.x-55,bar_y-50),"ELYTRA GLIDING",HORIZONTAL_ALIGNMENT_LEFT,-1,13,Color("d8b7e4"))
 		var selected_name: String = Nodes.title(game.inventory.held().id) if game.inventory.held().id else "Empty hand"
 		var text_width: float = font.get_string_size(selected_name,HORIZONTAL_ALIGNMENT_LEFT,-1,16).x
 		draw_style_box(_style(Color(0.07,0.13,0.09,0.8)),Rect2(center.x-text_width/2-14,bar_y-32,text_width+28,32))

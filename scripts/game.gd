@@ -28,6 +28,7 @@ var daylight: float = 1.0
 var spawn_point := Vector3(8,35,8)
 var experience: float = 0.0
 var dimension: String = "overworld"
+var adventure: Adventure
 var dimension_states: Dictionary = {}
 var portal_cooldown: float = 0.0
 var portal_time: float = 0.0
@@ -56,6 +57,7 @@ var achievements: VoxeyAchievements
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
+	adventure = Adventure.new(self)
 	api = VoxeyAPI.new("engine",self)
 	achievements = VoxeyAchievements.new(self)
 	saves = SaveStore.new()
@@ -190,7 +192,14 @@ func _process(delta: float) -> void:
 	if state == "loading" and world.area_ready(world.target): _finish_loading()
 	if state != "title" and state != "loading": world.target = player.position
 	if playing():
+		adventure.update(delta)
 		portal_cooldown = maxf(0,portal_cooldown-delta)
+		var portal_node: int = world.node_at(Vector3i(player.position.floor()))
+		if portal_cooldown <= 0 and portal_node == Nodes.END_GATEWAY:
+			adventure.enter_gateway(); return
+		if portal_cooldown <= 0 and (portal_node == Nodes.END_PORTAL or world.node_at(Vector3i((player.position+Vector3.UP*0.3).floor())) == Nodes.END_PORTAL):
+			travel_dimension("overworld" if dimension == "end" else "end",dimension == "end")
+			return
 		if portal_cooldown <= 0 and world.node_at(Vector3i(player.position.floor())) == Nodes.NETHER_PORTAL:
 			portal_time += delta
 			if portal_time >= 1.0:
@@ -218,9 +227,22 @@ func _process(delta: float) -> void:
 		if light.visible: visible_torches += 1
 
 func _update_day() -> void:
-	clouds.visible = dimension != "nether"
-	environment.environment.background_mode = Environment.BG_COLOR if dimension == "nether" else Environment.BG_SKY
+	clouds.visible = dimension == "overworld"
+	environment.environment.background_mode = Environment.BG_COLOR if dimension != "overworld" else Environment.BG_SKY
 	environment.environment.fog_density = 0.035 if dimension == "nether" else 0.009
+	if dimension == "end":
+		daylight = 0.1
+		sunlight.light_energy = 0.3
+		environment.environment.background_color = Color("141020")
+		var end_sky: ProceduralSkyMaterial = environment.environment.sky.sky_material
+		end_sky.sky_top_color = Color("141020"); end_sky.sky_horizon_color = Color("252033")
+		end_sky.ground_horizon_color = Color("252033"); end_sky.ground_bottom_color = Color("141020")
+		sunlight.light_color = Color("cbbddb")
+		environment.environment.fog_density = 0.004
+		environment.environment.fog_light_color = Color("252032")
+		environment.environment.ambient_light_color = Color("c5b7d7")
+		environment.environment.ambient_light_energy = 0.6
+		return
 	if dimension == "nether":
 		daylight = 0.1
 		sunlight.light_energy = 0.05
@@ -329,7 +351,7 @@ func _finish_loading() -> void:
 		player.camera.rotation.x=float(pending_save.get("pitch",0))
 		if player.health<=0:
 			player.health=20; player.hunger=20
-			if dimension == "nether":
+			if dimension != "overworld":
 				# Restore persisted drops before taking the player home.
 				pending_save["respawn_overworld"] = true
 			else: player.position=spawn_point
@@ -348,6 +370,12 @@ func _finish_loading() -> void:
 			travel_dimension("overworld",true)
 			return
 		if pending_save.get("arrival_portal",false): _arrival_portal()
+		if pending_save.get("arrival_end",false):
+			for x in range(49,54):
+				for z in range(-2,3):
+					world.set_node(Vector3i(x,44,z),Nodes.OBSIDIAN)
+					for y in range(45,49): world.set_node(Vector3i(x,y,z),Nodes.AIR)
+			player.position = Vector3(51.5,45.01,0.5)
 		pending_save={}
 	else:
 		spawn_point=_safe_spawn(spawn_point)
@@ -471,6 +499,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func break_node(p: Vector3i, id: int, tool: int) -> void:
 	var partner: Vector3i = world.chest_partner(p) if id == Nodes.CHEST else p
+	if id in [Nodes.IRON_DOOR,Nodes.IRON_DOOR_OPEN]:
+		var other: Vector3i = p+(Vector3i.DOWN if world.circuits.state(p).get("upper",false) else Vector3i.UP)
+		if world.node_at(other) in [Nodes.IRON_DOOR,Nodes.IRON_DOOR_OPEN]: world.set_node(other,Nodes.AIR)
 	# A bed breaks as a whole: removing one half takes the other with it.
 	if id == Nodes.BED_FOOT or id == Nodes.BED_HEAD:
 		var other: Vector3i = _bed_partner(p,id)
@@ -495,6 +526,8 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 		elif id==Nodes.GRAVEL and randf()<0.25:
 			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.FLINT)
 		elif id in [Nodes.LAPIS_ORE,Nodes.DEEP_LAPIS_ORE]: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.LAPIS,randi_range(4,9))
+		elif id in [Nodes.REDSTONE_ORE,Nodes.DEEP_REDSTONE_ORE]:
+			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.REDSTONE_WIRE,randi_range(4,5)); experience += 2
 		elif id == Nodes.CLAY: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.CLAY_BALL,4)
 		elif id!=Nodes.GLASS: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.drop(id))
 		if Nodes.DEEP_ORES.has(id) or id in [Nodes.COAL_ORE,Nodes.IRON_ORE,Nodes.DIAMOND_ORE,Nodes.LAPIS_ORE,Nodes.NETHER_QUARTZ_ORE]: experience += 1
@@ -505,7 +538,7 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 	remove_torch(p)
 	var above: Vector3i=p+Vector3i.UP
 	var upper: int=world.node_at(above)
-	if Nodes.plant(upper) or upper==Nodes.TORCH: break_node(above,upper,tool)
+	if Nodes.plant(upper) or upper==Nodes.TORCH or upper in Nodes.SMALL_CIRCUITS and upper != Nodes.IRON_DOOR_OPEN: break_node(above,upper,tool)
 	settle(above)
 	_break_particles(p,id)
 	sound("break")
@@ -560,7 +593,7 @@ func explode(center: Vector3, radius: float, source: Node = null) -> void:
 				if offset.length() > radius-randf()*0.7: continue
 				var p := Vector3i(floori(center.x)+x,floori(center.y)+y,floori(center.z)+z)
 				var id: int = world.node_at(p)
-				if id in [Nodes.AIR,Nodes.BEDROCK,Nodes.OBSIDIAN,Nodes.WATER]: continue
+				if id in [Nodes.AIR,Nodes.BEDROCK,Nodes.OBSIDIAN,Nodes.WATER,Nodes.LAVA,Nodes.END_FRAME,Nodes.END_FRAME_EYE,Nodes.END_PORTAL,Nodes.END_GATEWAY,Nodes.NETHER_PORTAL]: continue
 				if id == Nodes.TNT: ignite_tnt(p,randf_range(0.3,0.9)); continue
 				if id in [Nodes.BED_FOOT,Nodes.BED_HEAD]:
 					# Remove the whole bed, drop one item, count one node.
@@ -577,7 +610,7 @@ func explode(center: Vector3, radius: float, source: Node = null) -> void:
 	var player_distance: float = center.distance_to(player.position+Vector3.UP*0.9)
 	if player_distance < blast: player.hurt(lerpf(16.0,1.0,player_distance/blast),false,center)
 	for mob in creatures.get_children():
-		if mob == source: continue
+		if mob == source or mob.is_queued_for_deletion(): continue
 		var d: float = center.distance_to(mob.center())
 		if d < blast: mob.hit(lerpf(20.0,1.0,d/blast),center)
 	puff(center,Color("d8c9a6"),50,radius*2.2)
@@ -587,7 +620,7 @@ func explode(center: Vector3, radius: float, source: Node = null) -> void:
 
 func spawn_creature(kind: String, pos: Vector3) -> Creature:
 	if not Creature.KINDS.has(kind): return null
-	var mob := Creature.new()
+	var mob: Creature = ExpeditionCreature.new() if kind in ["ghast","blaze","slime","enderman","end_crystal","ender_dragon","shulker"] else Creature.new()
 	mob.game=self; mob.position=pos; mob.kind=kind
 	creatures.add_child(mob)
 	return mob
@@ -612,15 +645,23 @@ func target_mob() -> Creature:
 	if not player.target.is_empty(): max_distance=minf(max_distance,player.target.distance)
 	var nearest: Creature=null
 	for mob in creatures.get_children():
+		if mob.is_queued_for_deletion(): continue
 		var center: Vector3=mob.center()
 		var along: float=(center-origin).dot(dir)
 		if along>0 and along<max_distance and (origin+dir*along).distance_to(center)<maxf(0.65,mob.width+0.35): nearest=mob; max_distance=along
 	return nearest
 
 func _spawn_creature() -> void:
-	if creatures.get_child_count()>=12: return
+	var normal_count: int = 0
+	for mob in creatures.get_children():
+		if mob.kind not in ["end_crystal","ender_dragon"]: normal_count += 1
+	if normal_count >= 12: return
+	if dimension == "nether" and randf() < 0.3:
+		var pos: Vector3 = player.position+Vector3(randf_range(-28,28),randf_range(8,16),randf_range(-28,28))
+		if world.loaded_at(pos) and not world.intersects(pos,1.6,4): spawn_creature("ghast",pos)
+		return
 	var underground: bool = dimension == "overworld" and player.position.y < world.generator.terrain_height(floori(player.position.x),floori(player.position.z))-6
-	var hostile: bool=daylight<0.35 or underground
+	var hostile: bool=daylight<0.35 or underground or dimension != "overworld"
 	var angle: float=randf()*TAU
 	var pos: Vector3=player.position+Vector3(cos(angle),0,sin(angle))*randf_range(14,32)
 	if not world.loaded_at(pos): return
@@ -631,7 +672,7 @@ func _spawn_creature() -> void:
 		for p in torch_lights:
 			if Vector3(p).distance_to(pos)<10: return
 	elif creatures.get_child_count()>=7: return
-	var pool: Array = ["piglin","magma_cube","magma_cube"] if dimension == "nether" else (Creature.HOSTILE if hostile else Creature.PASSIVE)
+	var pool: Array = ["enderman"] if dimension == "end" else (["piglin","magma_cube","enderman"] if dimension == "nether" else (Creature.HOSTILE if hostile else Creature.PASSIVE))
 	var biome: String = world.generator.biome(int(pos.x),int(pos.z))
 	if not hostile and "desert" in biome and randf() < 0.6: return
 	spawn_creature(pool[randi()%pool.size()],pos)
@@ -650,8 +691,8 @@ func add_torch(p: Vector3i) -> void:
 	torch_lights[p]=light
 
 func sleep_at(p: Vector3i) -> void:
-	if dimension == "nether":
-		toast("Beds cannot set your spawn in the Nether.")
+	if dimension != "overworld":
+		toast("Beds only set your spawn in the Overworld.")
 		return
 	spawn_point=_safe_spawn(Vector3(p)+Vector3(1,0,0))
 	if daylight>0.4: toast("Spawn set. Come back at night to sleep."); return
@@ -680,7 +721,7 @@ func die() -> void:
 
 func respawn() -> void:
 	player.health=20; player.hunger=20; player.breath=10; player.velocity=Vector3.ZERO
-	if dimension == "nether":
+	if dimension != "overworld":
 		travel_dimension("overworld",true)
 		return
 	player.position=spawn_point
@@ -749,7 +790,7 @@ func save_game(path: String = "") -> bool:
 	if path.is_empty(): return false
 	var snapshot: Dictionary = dimension_snapshot()
 	dimension_states[dimension] = snapshot
-	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":snapshot.edits,"growth":snapshot.growth,"stations":snapshot.stations,"inventory":inventory.slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"armor":player.armor_slots,"time":day_time,"experience":experience,"journal":journal_step,"drops":snapshot.drops,"arrows":snapshot.arrows,"dimension":dimension,"dimensions":dimension_states,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
+	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":snapshot.edits,"growth":snapshot.growth,"stations":snapshot.stations,"block_states":snapshot.block_states,"adventure":snapshot.adventure,"inventory":inventory.slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"armor":player.armor_slots,"time":day_time,"experience":experience,"journal":journal_step,"drops":snapshot.drops,"arrows":snapshot.arrows,"dimension":dimension,"dimensions":dimension_states,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
 	var file := FileAccess.open(path+".tmp",FileAccess.WRITE)
 	if file==null: toast("Couldn't save the world: storage is unavailable."); return false
 	file.store_string(JSON.stringify(data))
@@ -803,7 +844,7 @@ func load_world_data(data: Dictionary) -> void:
 	gamemode=String(data.get("gamemode","survival"))
 	if gamemode not in ["survival","creative"]: gamemode="survival"
 	dimension = String(data.get("dimension","overworld"))
-	if dimension not in ["overworld","nether"]: dimension = "overworld"
+	if dimension not in ["overworld","nether","end"]: dimension = "overworld"
 	dimension_states = data.get("dimensions",{}).duplicate(true)
 	portal_cooldown = 4.0
 	_clear_entities()
@@ -812,6 +853,8 @@ func load_world_data(data: Dictionary) -> void:
 		if entry is Array and entry.size()==4: world.edits[Vector3i(int(entry[0]),int(entry[1]),int(entry[2]))]=int(entry[3])
 	for entry in data.get("growth",[]): world.growth[Vector3i(int(entry[0]),int(entry[1]),int(entry[2]))]=float(entry[3])
 	world.stations=data.get("stations",{}).duplicate(true)
+	world.block_states=data.get("block_states",dimension_states.get(dimension,{}).get("block_states",{})).duplicate(true)
+	world.adventure_state=data.get("adventure",dimension_states.get(dimension,{}).get("adventure",{})).duplicate(true)
 	for station_state in world.stations.values():
 		for i in station_state.slots.size(): station_state.slots[i]=Inventory.clean_slot(station_state.slots[i])
 	inventory.restore(data.inventory)
@@ -1055,7 +1098,7 @@ func execute_command(command: String) -> String:
 		"gamemode":
 			if parts.size()!=2 or not set_gamemode(parts[1].to_lower()): response="Usage: /gamemode survival | creative"
 			else: response="Game mode set to "+gamemode.capitalize()+"."
-		"help": response="/gamemode survival | creative  ·  /time day | night  ·  /seed  ·  /save  ·  /spawnpoint\n/give <item> [count]  ·  /spawn <creature>  ·  /tp <x> <y> <z>  ·  /heal  ·  /killmobs\n/dimension overworld | nether  ·  /xp <points>\nCreative: F or double Space toggles flight. Space rises; Shift descends."
+		"help": response="/gamemode survival | creative  ·  /time day | night  ·  /seed  ·  /save  ·  /spawnpoint\n/give <item> [count]  ·  /spawn <creature>  ·  /tp <x> <y> <z>  ·  /heal  ·  /killmobs\n/dimension overworld | nether | end  ·  /xp <points>\nCreative: F or double Space toggles flight. Space rises; Shift descends."
 		"seed": response="World seed: "+str(world.seed_value)
 		"save": response="World saved to "+saves.save_path(active_world_id) if save_game() else "The world could not be saved."
 		"time":
@@ -1064,10 +1107,16 @@ func execute_command(command: String) -> String:
 				day_time=floorf(day_time)+(0.3 if parts[1]=="day" else 0.7)
 				response="Time set to "+parts[1]+"."
 		"spawnpoint":
-			if dimension == "nether": response="Set your spawn in the Overworld."
+			if dimension != "overworld": response="Set your spawn in the Overworld."
 			else: spawn_point=player.position; response="Spawn point set."
+		"locate":
+			if parts.size() < 2: response = "Usage: /locate stronghold | fortress | end_city"
+			elif parts[1] == "stronghold": response = "Stronghold: "+str(WorldStructures.nearest_stronghold(world.seed_value,player.position))
+			elif parts[1] == "fortress": response = "Nether fortress: "+str(Vector3i(roundi((player.position.x-60)/160)*160+60,29,roundi((player.position.z-60)/160)*160+60))
+			elif parts[1] == "end_city": response = "End city: (288, 43, 0) in the End highlands."
+			else: response = "Unknown structure."
 		"dimension":
-			if parts.size() != 2 or parts[1] not in ["overworld","nether"]: response="Usage: /dimension overworld | nether"
+			if parts.size() != 2 or parts[1] not in ["overworld","nether","end"]: response="Usage: /dimension overworld | nether | end"
 			else: travel_dimension(parts[1]); response="Entering "+parts[1].capitalize()+"."
 		"xp":
 			if parts.size() != 2 or not parts[1].is_valid_int(): response="Usage: /xp <points>"
@@ -1117,6 +1166,10 @@ func teleport(destination: Vector3) -> void:
 	hud.show_loading()
 
 func dimension_snapshot() -> Dictionary:
+	for mob in creatures.get_children():
+		if mob.kind == "ender_dragon" and not mob.is_queued_for_deletion():
+			world.adventure_state["dragon_health"] = mob.health
+			world.adventure_state["dragon_phase"] = mob.life
 	var changes: Array = []
 	for p in world.edits: changes.append([p.x,p.y,p.z,world.edits[p]])
 	var growing: Array = []
@@ -1128,14 +1181,16 @@ func dimension_snapshot() -> Dictionary:
 	for entity in entities.get_children():
 		if entity is Arrow and entity.stuck and not entity.is_queued_for_deletion():
 			arrows.append({"position":[entity.position.x,entity.position.y,entity.position.z],"rotation":[entity.rotation.x,entity.rotation.y,entity.rotation.z],"life":entity.life})
-	return {"edits":changes,"growth":growing,"stations":world.stations.duplicate(true),"drops":dropped,"arrows":arrows,"position":[player.position.x,player.position.y,player.position.z]}
+	return {"edits":changes,"growth":growing,"stations":world.stations.duplicate(true),"block_states":world.block_states.duplicate(true),"adventure":world.adventure_state.duplicate(true),"drops":dropped,"arrows":arrows,"position":[player.position.x,player.position.y,player.position.z]}
 
 func travel_dimension(destination: String, respawning: bool = false) -> void:
-	if destination == dimension or destination not in ["overworld","nether"]: return
+	if destination == dimension or destination not in ["overworld","nether","end"]: return
 	hud.return_cursor()
 	dimension_states[dimension] = dimension_snapshot()
 	var arrival: Vector3 = player.position*Vector3(0.125,1,0.125) if destination == "nether" else player.position*Vector3(8,1,8)
-	if respawning: arrival = spawn_point
+	var end_travel: bool = destination == "end" or dimension == "end"
+	if destination == "end": arrival = Vector3(51.5,45.01,0.5)
+	if respawning or (end_travel and destination == "overworld"): arrival = spawn_point
 	var seed_number: int = world.seed_value
 	var render_radius: int = world.radius
 	dimension = destination
@@ -1146,10 +1201,13 @@ func travel_dimension(destination: String, respawning: bool = false) -> void:
 	for entry in saved.get("edits",[]): world.edits[Vector3i(entry[0],entry[1],entry[2])] = int(entry[3])
 	for entry in saved.get("growth",[]): world.growth[Vector3i(entry[0],entry[1],entry[2])] = float(entry[3])
 	world.stations = saved.get("stations",{}).duplicate(true)
-	arrival.y = world.generator.terrain_height(int(arrival.x),int(arrival.z))+1.01 if not respawning else arrival.y
-	pending_save = {"position":[arrival.x,arrival.y,arrival.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"drops":saved.get("drops",[]),"arrows":saved.get("arrows",[]),"arrival_portal":not respawning}
+	world.block_states = saved.get("block_states",{}).duplicate(true)
+	world.adventure_state = saved.get("adventure",{}).duplicate(true)
+	arrival.y = world.generator.terrain_height(int(arrival.x),int(arrival.z))+1.01 if not respawning and not end_travel else arrival.y
+	pending_save = {"position":[arrival.x,arrival.y,arrival.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"drops":saved.get("drops",[]),"arrows":saved.get("arrows",[]),"arrival_portal":not respawning and not end_travel,"arrival_end":destination == "end"}
 	world.target = arrival
 	player.velocity = Vector3.ZERO
+	player.gliding = false; player.levitation = 0
 	portal_time = 0.0
 	portal_cooldown = 4.0
 	state = "loading"
