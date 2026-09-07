@@ -3,7 +3,7 @@ extends RefCounted
 
 # Greedy face merging: one quad for a coplanar rectangle of matching nodes.
 # Only packed arrays leave the worker; GPU and scene resources stay on the main thread.
-static func build(data: PackedByteArray, external_circuits: bool = false) -> Array:
+static func build(data: Variant, external_circuits: bool = false) -> Array:
 	var outputs: Array = [_empty(), _empty()]
 	var has_nodes: bool = false
 	for y in 16:
@@ -13,6 +13,7 @@ static func build(data: PackedByteArray, external_circuits: bool = false) -> Arr
 				if id == 0: continue
 				has_nodes = true
 				if id in Nodes.CIRCUIT_NODES and not external_circuits: _art_box(outputs[0],Vector3(x,y,z)+Vector3(0.5,0.2,0.5),Vector3(0.85,0.4,0.85),Nodes.tile(id,0),Nodes.tile(id,2))
+				elif VillageContent.special(id): VillageArt.mesh(outputs[0],Vector3(x,y,z),id)
 				elif id == Nodes.NETHER_PORTAL: _portal(outputs[0],Vector3(x,y,z),data,Vector3i(x,y,z))
 				elif id == Nodes.END_PORTAL: _end_portal(outputs[0],Vector3(x,y,z))
 				elif id == Nodes.ENCHANTING_TABLE: _enchanting_table(outputs[0],Vector3(x,y,z))
@@ -38,7 +39,7 @@ static func build(data: PackedByteArray, external_circuits: bool = false) -> Arr
 						p[u] += i
 						p[v] += j
 						var id: int = data[p.x + p.z*18 + p.y*324]
-						if id in Nodes.CIRCUIT_NODES or id == 0 or Nodes.plant(id) or id == Nodes.TORCH or id == Nodes.LADDER or id in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.NETHER_PORTAL,Nodes.END_PORTAL,Nodes.ENCHANTING_TABLE]: continue
+						if VillageContent.special(id) or id in Nodes.CIRCUIT_NODES or id == 0 or Nodes.plant(id) or id == Nodes.TORCH or id == Nodes.LADDER or id in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.NETHER_PORTAL,Nodes.END_PORTAL,Nodes.ENCHANTING_TABLE]: continue
 						p[axis] += sign_dir
 						var neighbor: int = data[p.x + p.z*18 + p.y*324]
 						# A bed only fills the lower part of its cell. Keep the full
@@ -125,7 +126,7 @@ static func _torch(out: Array, p: Vector3) -> void:
 
 # A ladder is a flat quad mounted against the first solid neighbor (or the
 # west face when free-standing, as when a supporting node was mined first).
-static func _ladder(out: Array, p: Vector3, data: PackedByteArray, cell: Vector3i) -> void:
+static func _ladder(out: Array, p: Vector3, data: Variant, cell: Vector3i) -> void:
 	var uv: Array = [Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)]
 	var mounts: Array = [[Vector3i(1,0,0),Vector3(0.92,0,0),Vector3(0.92,0,1)],
 		[Vector3i(-1,0,0),Vector3(0.08,0,1),Vector3(0.08,0,0)],
@@ -147,7 +148,7 @@ static func _ladder(out: Array, p: Vector3, data: PackedByteArray, cell: Vector3
 # A bed half is a 9/16-height box: blanket top, oak frame sides. The head
 # half's end shows the pillow tile edge; the foot/blanket use the same tile
 # family. Hide only faces covered by the actual neighboring voxel.
-static func _bed_half(out: Array, p: Vector3, id: int, data: PackedByteArray, cell: Vector3i) -> void:
+static func _bed_half(out: Array, p: Vector3, id: int, data: Variant, cell: Vector3i) -> void:
 	var h: float = 0.5625
 	var top_tile: int = Nodes.tile(id,2)
 	var padded_cell: Vector3i = cell+Vector3i.ONE
@@ -175,7 +176,7 @@ static func _bed_half(out: Array, p: Vector3, id: int, data: PackedByteArray, ce
 		# Both Z faces use the opposite vertex order to the X faces.
 		_quad(out,[a,b,b+Vector3.UP*h,a+Vector3.UP*h],uv,Vector3(d.x,0,d.z),top_tile,frame,d.z != 0)
 
-static func _portal(out: Array, p: Vector3, data: PackedByteArray, cell: Vector3i) -> void:
+static func _portal(out: Array, p: Vector3, data: Variant, cell: Vector3i) -> void:
 	var c: Vector3i = cell+Vector3i.ONE
 	var along_x: bool = data[c.x+1+c.z*18+c.y*324] == Nodes.NETHER_PORTAL or data[c.x-1+c.z*18+c.y*324] == Nodes.NETHER_PORTAL
 	var a: Vector3 = p+Vector3(0,0,0.5) if along_x else p+Vector3(0.5,0,0)

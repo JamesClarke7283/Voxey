@@ -4,7 +4,13 @@ extends Node3D
 var game: Node3D
 var velocity := Vector3.ZERO
 var life: float = 0.0
+var item_id: int = Nodes.ARROW_ITEM
 var damage: float = 6.0
+var recoverable: bool = true
+var flame: bool = false
+var punch: int = 0
+var piercing: int = 0
+var hit_mobs: Array = []
 var stuck: bool = false
 var from_player: bool = false
 var hits_player: bool = false
@@ -44,8 +50,8 @@ func _physics_process(delta: float) -> void:
 	life += delta
 	if stuck:
 		if life >= 600.0: queue_free(); return
-		if position.distance_to(game.player.position+Vector3.UP*0.8) < 1.6 and game.inventory.capacity(Nodes.ARROW_ITEM) >= 1:
-			game.inventory.add_item(Nodes.ARROW_ITEM)
+		if recoverable and position.distance_to(game.player.position+Vector3.UP*0.8) < 1.6 and game.inventory.capacity(item_id) >= 1:
+			game.inventory.add_item(item_id)
 			game.sound("pickup")
 			queue_free()
 		return
@@ -68,12 +74,16 @@ func _physics_process(delta: float) -> void:
 					if entity.kind == "shulker": entity.queue_free(); queue_free(); return
 		if from_player:
 			for mob in game.creatures.get_children():
-				if not mob.is_queued_for_deletion() and position.distance_to(mob.center()) < maxf(0.55,mob.width+0.2):
+				if not hit_mobs.has(mob.get_instance_id()) and not mob.is_queued_for_deletion() and position.distance_to(mob.center()) < maxf(0.55,mob.width+0.2):
+					hit_mobs.append(mob.get_instance_id())
+					PotionEffects.apply_item(mob,item_id)
+					if flame: PotionEffects.apply(mob,"burning",5)
 					mob.hit(damage,position-velocity)
-					queue_free()
-					return
+					mob.knock *= 1+punch*0.6
+					if hit_mobs.size() > piercing: queue_free(); return
 		if (not from_player or hits_player) and position.distance_to(game.player.position+Vector3.UP*0.9) < 0.65:
-			game.player.hurt(3,false,position-velocity)
+			game.player.hurt(3,false,position-velocity,"projectile")
+			PotionEffects.apply_item(game.player,item_id)
 			queue_free()
 			return
 	_orient()

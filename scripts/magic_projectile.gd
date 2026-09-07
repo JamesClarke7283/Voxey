@@ -60,7 +60,7 @@ func _physics_process(delta: float) -> void:
 					impact(position); return
 		elif position.distance_to(game.player.position+Vector3.UP*0.9) < 0.7:
 			if kind == "shulker": game.player.levitation = 8
-			game.player.hurt(6 if kind == "ghast" else 4,false,position-velocity)
+			game.player.hurt(6 if kind == "ghast" else 4,false,position-velocity,"fire" if kind in ["blaze","ghast"] else "projectile")
 			impact(position); return
 	if fmod(life,0.12) < delta: game.puff(position,Color("aa72d2") if kind in ["breath","pearl"] else Color("f6aa42"),1,0.3)
 

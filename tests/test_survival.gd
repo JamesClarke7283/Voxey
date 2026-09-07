@@ -105,7 +105,9 @@ func run() -> void:
 	while not game.world.area_ready(game.world.target) and Time.get_ticks_msec()<timeout: await process_frame
 	check(game.world.columns.size()>=9,"background workers stream the spawn area")
 	game.start_new("8675309")
-	await process_frame
+	timeout = Time.get_ticks_msec()+30000
+	while game.state == "loading" and Time.get_ticks_msec() < timeout: await process_frame
+	check(game.state == "playing","new worlds finish loading their own terrain before gameplay")
 	game.pause()
 	check(game.player.health==20 and not game.world.intersects(game.player.position),"new survival player spawns outside solid terrain")
 	var p:=Vector3i(8,45,8)
@@ -374,7 +376,7 @@ func run() -> void:
 	var roaming: int=0
 	for mob in game.creatures.get_children():
 		if is_instance_valid(mob) and not mob.hostile and mob.position.y>0: roaming+=1
-	check(roaming==4,"passive creatures roam without falling through the world")
+	check(roaming==Creature.PASSIVE.size(),"passive creatures roam without falling through the world")
 	for mob in game.creatures.get_children(): mob.free()
 	var hostile_spawns: int=0
 	var passive_spawns: int=0

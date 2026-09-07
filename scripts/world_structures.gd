@@ -48,6 +48,8 @@ static func fortress_node(p: Vector3i) -> int:
 	var crossing: bool = absi(q.x) <= 3 or absi(q.z) <= 3
 	var tower: bool = absi(q.x) <= 9 and absi(q.z) <= 9
 	if not crossing and not tower: return -1
+	if q.y == 28 and q.x in range(-7,-3) and q.z in range(4,8): return Nodes.SOUL_SAND
+	if q.y == 29 and q.x in range(-7,-3) and q.z in range(4,8): return VillageContent.NETHER_WART_3
 	if q.y in [27,28]: return Nodes.NETHER_BRICKS
 	if q.y < 27:
 		if absi(q.x) in [8,9] and absi(q.z) in [8,9]: return Nodes.NETHER_BRICKS

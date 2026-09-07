@@ -6,7 +6,7 @@ All textures and models are original procedural art. Enemy skins, block faces, a
 
 ## Gathering and crafting
 
-The new content is available in the Creative catalog and through `/give`, as well as the survival paths below. Existing built-in item/node ids and the six reserved mod texture tiles are retained. Mod item registration skips built-in ids, preventing a collision with the clock. New ordinary items use ids above 255; only voxel data is byte-sized.
+The new content is available in the Creative catalog and through `/give`, as well as the survival paths below. Existing built-in item/node ids and the six reserved mod texture tiles are retained. Mod item registration skips built-in ids, preventing a collision with the clock. New items and blocks use stable IDs above 255; voxel arrays use 32-bit integers. Existing save IDs remain valid.
 
 | Addition | Survival source and use |
 | --- | --- |

@@ -22,3 +22,6 @@ renderer/rendering_method="gl_compatibility"
 PROJECT
 godot --headless --path "$voxey_check_dir" --editor --import --quit > "$voxey_check_dir/import.log" 2>&1
 godot --headless --path "$voxey_check_dir" --script res://tests/test_survival.gd
+
+godot --headless --path "$voxey_check_dir" --script res://tests/village_runner.gd
+godot --headless --path "$voxey_check_dir" --script res://tests/alchemy_runner.gd

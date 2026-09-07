@@ -2,12 +2,18 @@ class_name Inventory
 extends RefCounted
 
 signal changed
+const BASE_SLOTS = 36
+const POUCH_SLOTS = 3
 var slots: Array = []
+var pouch_slots: Array = []
 var selected: int = 0
 var recipes: Array = []
 var grid: Array = []
+var dynamic_recipe: int = -1
 
 func _init() -> void:
+	changed.connect(sync_pouches)
+	for i in POUCH_SLOTS: pouch_slots.append({"id":0,"count":0,"wear":0})
 	for i in 36: slots.append({"id":0, "count":0, "wear":0})
 	for i in 9: grid.append({"id":0, "count":0, "wear":0})
 	_recipe("Oak planks", Nodes.PLANKS, 4, [Nodes.LOG], 1)
@@ -105,11 +111,17 @@ func _init() -> void:
 	_recipe("Purpur",Nodes.PURPUR,4,[Nodes.CHORUS_FRUIT,Nodes.CHORUS_FRUIT,Nodes.CHORUS_FRUIT,Nodes.CHORUS_FRUIT],2)
 	_recipe("End rods",Nodes.END_ROD,4,[Nodes.BLAZE_ROD,Nodes.CHORUS_FRUIT],1)
 
+	VillageContent.recipes(self)
+	PotionCatalog.recipes(self)
+	Pouches.recipes(self)
+
 func _shapeless(label: String, id: int, count: int, ingredients: Array) -> void:
 	_recipe(label,id,count,ingredients,2)
 	recipes.back()["shapeless"] = true
 
 func _recipe(label: String, id: int, count: int, pattern: Array, width: int, station: String = "hand") -> void:
+	id = Nodes.migrate(id)
+	pattern = pattern.map(func(item): return Nodes.migrate(int(item)))
 	var ingredients: Dictionary = {}
 	for item in pattern:
 		if item: ingredients[item] = ingredients.get(item, 0) + 1
@@ -123,18 +135,62 @@ func recipe_index(id: int) -> int:
 func held() -> Dictionary:
 	return slots[selected]
 
+# The flat inventory shares its cargo dictionaries with the equipped pouches.
+# Sync also handles transactions which replace the entire flat array.
+func sync_pouches() -> void:
+	var offset: int = BASE_SLOTS
+	for pouch in pouch_slots:
+		if not Pouches.is_pouch(pouch.id): continue
+		var cargo: Array = Pouches.contents(pouch)
+		for i in cargo.size():
+			if offset+i < slots.size(): cargo[i] = slots[offset+i]
+		offset += cargo.size()
+
+func rebuild_pouches() -> void:
+	slots = slots.slice(0,BASE_SLOTS)
+	for pouch in pouch_slots:
+		if Pouches.is_pouch(pouch.id): slots.append_array(Pouches.contents(pouch))
+	changed.emit()
+
+func exchange_pouch(index: int, incoming: Dictionary) -> Dictionary:
+	if index < 0 or index >= POUCH_SLOTS or (incoming.id != 0 and (not Pouches.is_pouch(incoming.id) or incoming.count != 1)): return incoming
+	sync_pouches()
+	var previous: Dictionary = pouch_slots[index]
+	pouch_slots[index] = incoming.duplicate(true)
+	rebuild_pouches()
+	return previous
+
+func pouch_offset(index: int) -> int:
+	var offset: int = BASE_SLOTS
+	for i in index: offset += Pouches.size_of(pouch_slots[i].id)
+	return offset
+
+func page_count() -> int:
+	return maxi(1,ceili((slots.size()-9)/27.0))
+
+func page_indices(page: int) -> Array:
+	var result: Array = range(9)
+	for i in 27:
+		var index: int = 9+27*clampi(page,0,page_count()-1)+i
+		result.append(index if index < slots.size() else -1)
+	return result
+
 func count_item(id: int) -> int:
+	id = Nodes.migrate(id)
 	var n: int = 0
 	for slot in slots:
-		if slot.id == id: n += slot.count
+		if Nodes.migrate(slot.id) == id: n += slot.count
 	return n
 
 # Return leftover quantity: callers can leave a physical drop if the bag is full.
 func capacity(id: int, wear: int = 0, data: Dictionary = {}) -> int:
+	id = Nodes.migrate(id)
 	var available: int = 0
-	for slot in slots:
+	for i in slots.size():
+		if i >= BASE_SLOTS and Pouches.is_pouch(id): continue
+		var slot: Dictionary = slots[i]
 		if slot.id == 0: available += Nodes.max_stack(id)
-		elif slot.id == id and slot.wear == wear and slot.get("data",{}) == data: available += Nodes.max_stack(id)-int(slot.count)
+		elif Nodes.migrate(slot.id) == id and slot.wear == wear and slot.get("data",{}) == data: available += Nodes.max_stack(id)-int(slot.count)
 	return available
 
 static func copy_data(to: Dictionary, source: Dictionary) -> void:
@@ -144,11 +200,14 @@ static func copy_data(to: Dictionary, source: Dictionary) -> void:
 static func enchantment(slot: Dictionary, kind: String) -> int:
 	return int(slot.get("data",{}).get("enchantments",{}).get(kind,0)) if slot.id != 0 else 0
 
-func add_item(id: int, amount: int = 1, wear: int = 0, data: Dictionary = {}) -> int:
+func add_item(id: int, amount: int = 1, wear: int = 0, data: Dictionary = {}, exclude_start: int = -1, exclude_end: int = -1) -> int:
+	id = Nodes.migrate(id)
 	if id == 0 or amount <= 0: return 0
 	for pass_index in 2:
-		for slot in slots:
-			if (pass_index == 0 and slot.id == id and slot.wear == wear and slot.get("data",{}) == data) or (pass_index == 1 and slot.id == 0):
+		for i in slots.size():
+			if (i >= BASE_SLOTS and Pouches.is_pouch(id)) or (i >= exclude_start and i < exclude_end): continue
+			var slot: Dictionary = slots[i]
+			if (pass_index == 0 and Nodes.migrate(slot.id) == id and slot.wear == wear and slot.get("data",{}) == data) or (pass_index == 1 and slot.id == 0):
 				var moved: int = mini(amount, Nodes.max_stack(id) - int(slot.count))
 				if moved <= 0: continue
 				copy_data(slot,{"id":id,"data":data})
@@ -163,9 +222,10 @@ func add_item(id: int, amount: int = 1, wear: int = 0, data: Dictionary = {}) ->
 	return amount
 
 func remove_item(id: int, amount: int = 1) -> bool:
+	id = Nodes.migrate(id)
 	if count_item(id) < amount: return false
 	for slot in slots:
-		if slot.id != id: continue
+		if Nodes.migrate(slot.id) != id: continue
 		var taken: int = mini(amount, int(slot.count))
 		slot.count -= taken
 		amount -= taken
@@ -195,43 +255,68 @@ func can_craft(recipe: Dictionary, station: String) -> bool:
 	if recipe.station == "table" and station != "table": return false
 	for id in recipe.ingredients:
 		if count_item(id) < recipe.ingredients[id]: return false
-	return true
+	return not Pouches.output_data(recipe.id,recipe_inputs(recipe)).has("error")
+
+func recipe_inputs(recipe: Dictionary) -> Array:
+	var needed: Dictionary = recipe.ingredients.duplicate()
+	var inputs: Array = []
+	for slot in slots:
+		var amount: int = mini(slot.count,needed.get(slot.id,0))
+		if amount <= 0: continue
+		var ingredient: Dictionary = slot.duplicate(true)
+		ingredient.count = amount
+		inputs.append(ingredient)
+		needed[slot.id] -= amount
+	return inputs
 
 func craft(index: int, station: String) -> bool:
 	var recipe: Dictionary = recipes[index]
 	if not can_craft(recipe, station): return false
 	var before: Array = slots.duplicate(true)
+	var output_data: Dictionary = Pouches.output_data(recipe.id,recipe_inputs(recipe))
 	for id in recipe.ingredients: remove_item(id, recipe.ingredients[id])
-	if add_item(recipe.id, recipe.count) > 0:
+	var leftovers: int = add_item(recipe.id, recipe.count,0,output_data)
+	if recipe.ingredients.has(Nodes.MILK_BUCKET): leftovers += add_item(Nodes.BUCKET,recipe.ingredients[Nodes.MILK_BUCKET])
+	if leftovers > 0:
 		slots = before
 		changed.emit()
 		return false
 	return true
 
-static func clean_slot(slot) -> Dictionary:
+static func clean_slot(slot, allow_pouches: bool = true) -> Dictionary:
 	if not slot is Dictionary: return {"id":0,"count":0,"wear":0}
 	var id: int = Nodes.migrate(int(slot.get("id", 0)))
-	if not Nodes.exists(id) or id == Nodes.AIR: return {"id":0,"count":0,"wear":0}
+	if not Nodes.exists(id) or id == Nodes.AIR or (not allow_pouches and Pouches.is_pouch(id)): return {"id":0,"count":0,"wear":0}
 	var result: Dictionary = {"id":id, "count":clampi(int(slot.get("count",0)), 0, Nodes.max_stack(id)), "wear":maxi(0,int(slot.get("wear",0)))}
 	if slot.get("data") is Dictionary and result.count > 0:
 		var raw: Dictionary = slot.data
 		var metadata: Dictionary = {}
+		if Pouches.is_pouch(id) and raw.get("contents") is Array:
+			var clean: Array = []
+			for i in mini(Pouches.size_of(id),raw.contents.size()): clean.append(clean_slot(raw.contents[i],false))
+			metadata["contents"] = clean
 		if id in [Nodes.WRITABLE_BOOK,Nodes.WRITTEN_BOOK]:
 			metadata["title"] = str(raw.get("title","Untitled")).left(64)
 			metadata["text"] = str(raw.get("text","")).left(12000)
+		if result.id == VillageContent.CROSSBOW and Nodes.exists(int(raw.get("loaded_arrow",0))):
+			var arrow: int = int(raw.loaded_arrow)
+			if arrow == Nodes.ARROW_ITEM or VillageContent.DATA.get(arrow,{}).get("family","") == "arrow":
+				metadata["loaded_arrow"] = arrow
+				metadata["charge"] = clampf(float(raw.get("charge",0)),0,1.25)
 		if raw.get("enchantments") is Dictionary:
-			var ench: Dictionary = {}
-			for kind in ["Sharpness","Efficiency","Protection","Power","Unbreaking"]:
-				if raw.enchantments.has(kind): ench[kind] = clampi(int(raw.enchantments[kind]),1,3)
+			var ench: Dictionary = Enchantments.clean(id,raw.enchantments)
 			if not ench.is_empty(): metadata["enchantments"] = ench
 		if not metadata.is_empty(): result["data"] = metadata
 	if result.count == 0: result.id = 0; result.wear = 0
 	return result
 
-func restore(data: Array) -> void:
-	for i in mini(data.size(), slots.size()):
-		if not data[i] is Dictionary: continue
-		slots[i] = clean_slot(data[i])
+func restore(data: Array, equipped: Array = []) -> void:
+	slots.clear(); pouch_slots.clear()
+	for i in BASE_SLOTS: slots.append(clean_slot(data[i] if i < data.size() else {}))
+	for i in POUCH_SLOTS:
+		var pouch: Dictionary = clean_slot(equipped[i] if i < equipped.size() else {})
+		pouch_slots.append(pouch if Pouches.is_pouch(pouch.id) else {"id":0,"count":0,"wear":0})
+	rebuild_pouches()
 	selected = clampi(selected, 0, 8)
 	changed.emit()
 
@@ -258,11 +343,18 @@ func matching_recipe(station: String) -> int:
 	var cells: Array = []
 	for i in grid.size():
 		if station != "table" and (i%3>1 or i/3>1) and grid[i].id != 0: return -1
-		cells.append(int(grid[i].id))
+		cells.append(Nodes.migrate(int(grid[i].id)))
+	var special: Dictionary = Pouches.special_recipe(grid)
+	if not special.is_empty():
+		if Pouches.output_data(special.id,grid).has("error"): return -1
+		if dynamic_recipe < 0: dynamic_recipe = recipes.size(); recipes.append(special)
+		else: recipes[dynamic_recipe] = special
+		return dynamic_recipe
 	var normalized: Dictionary = _normalized_pattern(cells,3)
 	if normalized.is_empty(): return -1
 	for i in recipes.size():
 		var recipe: Dictionary = recipes[i]
+		if recipe.get("dynamic",false): continue
 		if recipe.station == "table" and station != "table": continue
 		if recipe.get("shapeless",false):
 			var present: Dictionary = {}
@@ -282,12 +374,18 @@ func matching_recipe(station: String) -> int:
 func take_grid_result(station: String) -> Dictionary:
 	var index: int = matching_recipe(station)
 	if index < 0: return {}
+	var result: Dictionary = {"id":recipes[index].id,"count":recipes[index].count,"wear":0}
+	var metadata: Dictionary = Pouches.output_data(result.id,grid)
+	if metadata.has("error"): return {}
+	if not metadata.is_empty(): result["data"] = metadata
 	for slot in grid:
 		if slot.id == 0: continue
 		slot.count -= 1
-		if slot.count == 0: slot.id = 0; slot.wear = 0; slot.erase("data")
+		if slot.count == 0:
+			if slot.id == Nodes.MILK_BUCKET: slot.id = Nodes.BUCKET; slot.count = 1
+			else: slot.id = 0; slot.wear = 0; slot.erase("data")
 	changed.emit()
-	return {"id":recipes[index].id,"count":recipes[index].count,"wear":0}
+	return result
 
 func grid_to_inventory() -> Array:
 	var overflow: Array = []
@@ -307,13 +405,18 @@ func fill_grid(index: int, station: String, all_available: bool = false) -> bool
 		slots = before_slots; grid = before_grid; changed.emit(); return false
 	var recipe: Dictionary = recipes[index]
 	var amount: int = 64 if all_available else 1
-	for id in recipe.ingredients: amount = mini(amount,count_item(id)/int(recipe.ingredients[id]))
+	for id in recipe.ingredients: amount = mini(amount,mini(Nodes.max_stack(id),count_item(id)/int(recipe.ingredients[id])))
 	for i in recipe.pattern.size():
 		var id: int = recipe.pattern[i]
 		if id == 0: continue
 		var destination: int = i%int(recipe.width)+(i/int(recipe.width))*3
+		var ingredient: Dictionary = {}
+		for slot in slots:
+			if slot.id == id and slot.count >= amount: ingredient = slot.duplicate(true); break
+		if ingredient.is_empty(): ingredient = {"id":id,"count":amount,"wear":0}
 		remove_item(id,amount)
-		grid[destination] = {"id":id,"count":amount,"wear":0}
+		ingredient.count = amount
+		grid[destination] = ingredient
 	changed.emit()
 	return true
 
@@ -322,6 +425,6 @@ func craft_grid_to_inventory(station: String) -> bool:
 	var before_grid: Array = grid.duplicate(true)
 	var result: Dictionary = take_grid_result(station)
 	if result.is_empty(): return false
-	if add_item(result.id,result.count) > 0:
+	if add_item(result.id,result.count,result.wear,result.get("data",{})) > 0:
 		slots = before_slots; grid = before_grid; changed.emit(); return false
 	return true

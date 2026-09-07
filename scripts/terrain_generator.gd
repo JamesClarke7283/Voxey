@@ -57,6 +57,7 @@ func biome(x: int, z: int) -> String:
 	var c: float = climate.get_noise_2d(x, z)
 	if c > 0.28: return "Sunwash desert"
 	if c < -0.35: return "Frostpine highlands"
+	if c > -0.24 and c < 0.24 and hills.get_noise_2d(x,z) < -0.12 and terrain_height(x,z) in range(19,28): return "Swamp"
 	if hills.get_noise_2d(x,z) < -0.18: return "Willow shores"
 	return "Oakwood meadow"
 
@@ -68,9 +69,9 @@ func hash_at(x: int, y: int, z: int) -> int:
 func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 	# An 18-node halo gives the mesher complete boundary information. Trees are
 	# seeded in world coordinates, including roots outside the requested column.
-	var data := PackedByteArray()
+	var data := PackedInt32Array()
 	data.resize(18 * 18 * max_y())
-	var deep := PackedByteArray()
+	var deep := PackedInt32Array()
 	deep.resize(18*18*absi(min_y()))
 	var stronghold := WorldStructures.stronghold(world_seed,Vector2i(floori((coord.x*16)/512.0),floori((coord.y*16)/512.0)))
 	var end_towers: Array = WorldStructures.towers()
@@ -130,8 +131,15 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 						elif ore < 70 and y < 18: id = Nodes.GOLD_ORE
 						elif ore < 92 and y < 32: id = Nodes.COPPER_ORE
 						elif ore < 105 and y < 22: id = Nodes.LAPIS_ORE
+						elif ore in [106,107] and y < h-6: id = VillageContent.EMERALD_ORE
+						elif ore in range(110,140): id = [VillageContent.GRANITE,VillageContent.DIORITE,VillageContent.ANDESITE][ore%3]
 						elif ore > 981: id = Nodes.GRAVEL
 				data[x + z * 18 + y * 324] = id
+			if biome(wx,wz) == "Swamp":
+				if h > SEA: data[x+z*18+h*324] = VillageContent.MUD if hash_at(wx/3,93,wz/3)%5 == 0 else VillageContent.SWAMP_GRASS
+				if h < SEA and hash_at(wx,94,wz)%21 == 0: data[x+z*18+(SEA+1)*324] = VillageContent.LILY_PAD
+			if h < SEA-2 and not snowy and hash_at(wx,95,wz)%11 == 0:
+				for ky in range(h+1,mini(h+4,SEA)): data[x+z*18+ky*324] = VillageContent.KELP_PLANT
 			# Underwater clay patches and frozen lakes give the surface variety.
 			if h <= SEA and not desert:
 				if hash_at(wx, 55, wz) % 23 == 0: data[x + z * 18 + (h - 1) * 324] = Nodes.CLAY
@@ -156,6 +164,8 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 					data[x + z * 18 + (h + 1) * 324] = Nodes.PUMPKIN
 				elif decoration == 8 and not desert:
 					data[x + z * 18 + (h + 1) * 324] = Nodes.MELON
+				elif decoration == 11 and not desert:
+					data[x+z*18+(h+1)*324] = VillageContent.SWEET_BERRIES_3
 				elif decoration in [9,10] and not desert and not snowy:
 					data[x + z * 18 + (h + 1) * 324] = Nodes.RED_MUSHROOM if decoration == 9 else Nodes.BROWN_MUSHROOM
 	for wz in (range(base_z - 2, base_z + 20) if dimension == "overworld" else []):
@@ -186,6 +196,7 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 					for dy in range(1,trunk-1):
 						var index: int = lx+lz*18+(h+dy)*324
 						if data[index] == Nodes.AIR: data[index] = Nodes.VINE
+	if dimension == "overworld": VillageGenerator.overlay(self,coord,data)
 	for p in edits:
 		var lx: int = p.x - base_x
 		var lz: int = p.z - base_z
@@ -194,9 +205,9 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 			else: data[lx + lz * 18 + p.y * 324] = edits[p]
 	var blocks: Array = []
 	for by in block_levels():
-		var padded := PackedByteArray()
+		var padded := PackedInt32Array()
 		padded.resize(18 * 18 * 18)
-		var compact := PackedByteArray()
+		var compact := PackedInt32Array()
 		compact.resize(4096)
 		for y in 18:
 			var wy: int = by * 16 + y - 1
@@ -267,5 +278,6 @@ func deep_node(x: int, y: int, z: int) -> int:
 	if ore < 80: return Nodes.DEEP_LAPIS_ORE if deepslate else Nodes.LAPIS_ORE
 	if ore < 105 and y > -64: return Nodes.DEEP_COAL_ORE if deepslate else Nodes.COAL_ORE
 	if ore < 120 and y > -48: return Nodes.DEEP_COPPER_ORE if deepslate else Nodes.COPPER_ORE
+	if ore in [146,147]: return VillageContent.DEEP_EMERALD_ORE if deepslate else VillageContent.EMERALD_ORE
 	if ore > 984: return Nodes.GRAVEL
 	return stone

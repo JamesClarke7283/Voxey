@@ -4,26 +4,35 @@ extends Node3D
 # Every mob shares one controller. KINDS describes the differences: shape, speed,
 # hit points, drops, voice, and the special behaviours enabled by flags.
 const KINDS = {
+	"silverfish":{"hostile":true,"health":8.0,"speed":2.2,"width":0.2,"height":0.35,"damage":1,"drops":[],"voice":"spider","pitch":1.7},
+	"turtle":{"hostile":false,"health":30.0,"speed":0.5,"width":0.45,"height":0.7,"damage":0,"drops":[[VillageContent.TURTLE_SCUTE,1,2]],"voice":"","pitch":0.7},
+	"phantom":{"hostile":true,"health":20.0,"speed":6.0,"width":0.7,"height":0.65,"damage":4,"drops":[[VillageContent.PHANTOM_MEMBRANE,1,2]],"voice":"","pitch":1.3},
+	"breeze":{"hostile":true,"health":30.0,"speed":2.8,"width":0.35,"height":1.6,"damage":4,"drops":[[VillageContent.BREEZE_ROD,1,2]],"voice":"","pitch":1.1,"leaps":true},
+	"pillager":{"hostile":true,"health":24.0,"speed":2.2,"width":0.3,"height":1.95,"damage":4,"drops":[[VillageContent.EMERALD,0,2],[VillageContent.CROSSBOW,0,1]],"voice":"","pitch":0.9,"ranged":true},
+	"rabbit":{"hostile":false,"health":3.0,"speed":1.3,"width":0.22,"height":0.95,"damage":0,"drops":[[VillageContent.RAW_RABBIT,1,1],[VillageContent.RABBIT_HIDE,1,1],[VillageContent.RABBIT_FOOT,0,1]],"voice":"","pitch":1.5},
+	"horse":{"hostile":false,"health":30.0,"speed":1.4,"width":0.4,"height":2.2,"damage":0,"drops":[[Nodes.LEATHER,1,2]],"voice":"","pitch":1.0},
+	"villager":{"hostile":false,"health":20.0,"speed":1.2,"width":0.28,"height":1.95,"damage":0,"drops":[],"voice":"","pitch":1.0},
+	"iron_golem":{"hostile":false,"health":100.0,"speed":2.3,"width":0.55,"height":2.8,"damage":10,"drops":[],"voice":"","pitch":1.0},
 	"shulker": {"hostile":true,"health":30.0,"speed":0.0,"width":0.5,"height":1.0,"damage":4,"drops":[[Nodes.SHULKER_SHELL,1,2]],"voice":"","pitch":0.9},
 	"enderman": {"hostile":true,"health":40.0,"speed":3.6,"width":0.3,"height":2.9,"damage":5,"drops":[[Nodes.ENDER_PEARL,1,2]],"voice":"","pitch":0.6},
 	"ghast": {"hostile":true,"health":10.0,"speed":2.0,"width":1.6,"height":4.0,"damage":6,"drops":[[Nodes.GHAST_TEAR,1,2],[Nodes.GUNPOWDER,1,3]],"voice":"","pitch":0.6},
 	"blaze": {"hostile":true,"health":20.0,"speed":2.4,"width":0.35,"height":1.8,"damage":4,"drops":[[Nodes.BLAZE_ROD,1,2]],"voice":"","pitch":0.8},
-	"slime": {"hostile":true,"health":12.0,"speed":1.6,"width":0.45,"height":1.0,"damage":2,"drops":[[Nodes.SLIME_BALL,1,3]],"voice":"","pitch":0.8,"leaps":true},
+	"slime": {"hostile":true,"health":4.0,"speed":1.6,"width":0.45,"height":1.0,"damage":2,"drops":[[Nodes.SLIME_BALL,1,3]],"voice":"","pitch":0.8,"leaps":true},
 	"end_crystal": {"hostile":false,"health":1.0,"speed":0.0,"width":0.6,"height":1.4,"damage":0,"drops":[],"voice":"","pitch":1.0},
 	"ender_dragon": {"hostile":true,"health":200.0,"speed":13.0,"width":3.0,"height":4.0,"damage":7,"drops":[],"voice":"","pitch":0.4},
 	"piglin": {"hostile":true,"health":20.0,"speed":2.5,"width":0.3,"height":1.8,"damage":4,"drops":[[Nodes.GOLD_NUGGET,1,4]],"voice":"pig","pitch":0.65},
 	"magma_cube": {"hostile":true,"health":16.0,"speed":1.5,"width":0.43,"height":1.0,"damage":3,"drops":[[Nodes.MAGMA_CREAM,1,2]],"voice":"","pitch":0.8,"leaps":true},
-	"sheep": {"hostile":false,"health":8.0,"speed":0.8,"width":0.3,"height":1.1,"damage":0,"drops":[[Nodes.RAW_MEAT,1,2],[Nodes.WOOL,1,2]],"voice":"sheep","pitch":1.0},
-	"cow": {"hostile":false,"health":10.0,"speed":0.7,"width":0.36,"height":1.35,"damage":0,"drops":[[Nodes.RAW_MEAT,1,3],[Nodes.LEATHER,1,2]],"voice":"cow","pitch":0.75},
-	"pig": {"hostile":false,"health":10.0,"speed":0.9,"width":0.3,"height":0.9,"damage":0,"drops":[[Nodes.RAW_MEAT,1,3]],"voice":"pig","pitch":1.0},
-	"chicken": {"hostile":false,"health":4.0,"speed":1.0,"width":0.18,"height":0.65,"damage":0,"drops":[[Nodes.RAW_MEAT,1,1],[Nodes.FEATHER,1,2]],"voice":"chicken","pitch":1.5,"glides":true},
+	"sheep": {"hostile":false,"health":8.0,"speed":0.8,"width":0.3,"height":1.1,"damage":0,"drops":[[VillageContent.RAW_MUTTON,1,2],[Nodes.WOOL,1,2]],"voice":"sheep","pitch":1.0},
+	"cow": {"hostile":false,"health":10.0,"speed":0.7,"width":0.36,"height":1.35,"damage":0,"drops":[[VillageContent.RAW_BEEF,1,3],[Nodes.LEATHER,1,2]],"voice":"cow","pitch":0.75},
+	"pig": {"hostile":false,"health":10.0,"speed":0.9,"width":0.3,"height":0.9,"damage":0,"drops":[[VillageContent.RAW_PORKCHOP,1,3]],"voice":"pig","pitch":1.0},
+	"chicken": {"hostile":false,"health":4.0,"speed":1.0,"width":0.18,"height":0.65,"damage":0,"drops":[[VillageContent.RAW_CHICKEN,1,1],[Nodes.FEATHER,1,2]],"voice":"chicken","pitch":1.5,"glides":true},
 	"zombie": {"hostile":true,"health":20.0,"speed":2.1,"width":0.28,"height":1.8,"damage":3,"drops":[[Nodes.ROTTEN_FLESH,0,2]],"voice":"zombie","pitch":0.9,"burns":true},
 	"skeleton": {"hostile":true,"health":20.0,"speed":2.4,"width":0.28,"height":1.8,"damage":2,"drops":[[Nodes.BONE,0,2]],"voice":"skeleton","pitch":1.1,"burns":true,"ranged":true},
-	"spider": {"hostile":true,"health":16.0,"speed":3.2,"width":0.5,"height":0.8,"damage":2,"drops":[[Nodes.STRING,0,2]],"voice":"spider","pitch":1.0,"neutral_by_day":true,"leaps":true},
+	"spider": {"hostile":true,"health":16.0,"speed":3.2,"width":0.5,"height":0.8,"damage":2,"drops":[[Nodes.STRING,0,2],[VillageContent.SPIDER_EYE,0,1]],"voice":"spider","pitch":1.0,"neutral_by_day":true,"leaps":true},
 	"creeper": {"hostile":true,"health":20.0,"speed":2.0,"width":0.28,"height":1.6,"damage":0,"drops":[[Nodes.GUNPOWDER,0,2]],"voice":"","pitch":1.0,"explodes":true},
 }
-const PASSIVE = ["sheep","cow","pig","chicken"]
-const HOSTILE = ["zombie","zombie","skeleton","spider","creeper","enderman","slime"]
+const PASSIVE = ["sheep","cow","pig","chicken","rabbit","horse"]
+const HOSTILE = ["zombie","zombie","skeleton","spider","creeper","enderman"]
 
 var game: Node3D
 var kind: String = "sheep"
@@ -330,7 +339,7 @@ func center() -> Vector3:
 	return position+Vector3.UP*height*0.55
 
 func aggressive() -> bool:
-	if not hostile or game.gamemode == "creative": return false
+	if not hostile or game.gamemode == "creative" or (not provoked and PotionEffects.level(game.player,"invisibility") > 0 and position.distance_to(game.player.position) > 2+game.player.armor_points()*0.35): return false
 	if info().get("neutral_by_day",false) and game.daylight >= 0.5 and not provoked: return false
 	return true
 
@@ -370,7 +379,8 @@ func _physics_process(delta: float) -> void:
 			direction = -toward if distance < 5 else (toward if distance > 9 else Vector3.ZERO)
 		else: direction = toward
 	elif scared > 0 and not hostile: direction = -toward
-	var speed: float = data.speed
+	if game.leads.attached(self): direction = toward if distance > 2.5 else Vector3.ZERO
+	var speed: float = data.speed*PotionEffects.speed(self)
 	if not hostile and scared > 0: speed = 3.0
 	if data.get("explodes",false):
 		if chasing and distance < 3.2:
@@ -408,7 +418,7 @@ func _physics_process(delta: float) -> void:
 	if chasing and data.damage > 0:
 		if distance < 1.3+width and attack_cooldown <= 0 and not data.get("ranged",false):
 			attack_cooldown = 1.1
-			game.player.hurt(data.damage,false,position)
+			game.player.hurt(maxf(0,data.damage*PotionEffects.melee(self)),false,position)
 			if data.voice != "": game.sound_at(data.voice,position,data.pitch*1.15)
 		if data.get("leaps",false) and distance < 5 and distance > 1.5 and grounded and leap_cooldown <= 0:
 			leap_cooldown = 2.4
@@ -421,7 +431,7 @@ func _physics_process(delta: float) -> void:
 			var pitch: float = (player_pos.y+1.1-origin.y)/maxf(1.0,Vector2(player_pos.x-origin.x,player_pos.z-origin.z).length())
 			var aim: Vector3 = (forward+Vector3.UP*pitch).normalized()*15+Vector3.UP*distance*0.22
 			game.spawn_arrow(origin,aim)
-	if data.get("burns",false) and game.daylight > 0.8 and position.y > game.world.generator.terrain_height(int(floor(position.x)),int(floor(position.z))):
+	if data.get("burns",false) and not has_meta("effect_fire_resistance") and game.daylight > 0.8 and position.y > game.world.generator.terrain_height(int(floor(position.x)),int(floor(position.z))):
 		health -= delta*0.8
 		if fmod(life,0.4) < delta: game.puff(center(),Color("f0a23a"),3)
 		if health <= 0: queue_free(); return
@@ -453,7 +463,8 @@ func _tint(color: Color, amount: float) -> void:
 
 func hit(damage: float, from: Vector3 = Vector3.INF) -> void:
 	if is_inf(from.x): from = game.player.position
-	health -= damage
+	PotionEffects.damaged(self)
+	health -= damage*PotionEffects.resistance(self)
 	provoked = true
 	hurt_flash = 0.2
 	if not hostile: scared = 5
@@ -477,11 +488,14 @@ func shear() -> bool:
 	return true
 
 func die() -> void:
+	PotionEffects.died(self)
 	game.MOD_HOOK_CREATURE_KILLED(self)
 	if kind == "zombie": game.achievements.award("kill_zombie")
 	for entry in info().drops:
-		var amount: int = randi_range(int(entry[1]),int(entry[2]))
-		if amount > 0: game.spawn_drop(center(),int(entry[0]),amount)
+		var amount: int = randi_range(int(entry[1]),int(entry[2]))+randi_range(0,int(get_meta("looting",0)))
+		var item: int = int(entry[0])
+		if PotionEffects.level(self,"burning") > 0 and Nodes.food(Nodes.smelt_result(item)) > 0: item = Nodes.smelt_result(item)
+		if amount > 0: game.spawn_drop(center(),item,amount)
 	game.experience += 2 if hostile else 1
 	game.sound_at("mob_hurt",position,info().pitch*0.7)
 	game.puff(center(),colors[0] if not colors.is_empty() else Color.WHITE,12)

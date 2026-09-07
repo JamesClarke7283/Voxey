@@ -4,7 +4,7 @@ set -euo pipefail
 voxey_source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 voxey_check_dir="$(mktemp -d "${TMPDIR:-/tmp}/voxey-shots.XXXXXX")"
 trap 'rm -rf -- "$voxey_check_dir"' EXIT
-for voxey_folder in scripts scenes shaders tests; do
+for voxey_folder in scripts scenes shaders assets tests; do
   ln -s "$voxey_source_dir/$voxey_folder" "$voxey_check_dir/$voxey_folder"
 done
 cat > "$voxey_check_dir/project.godot" <<'PROJECT'
@@ -30,3 +30,6 @@ godot --path "$voxey_check_dir" --resolution 1280x720 --script res://tests/nethe
 godot --path "$voxey_check_dir" --resolution 1280x720 --script res://tests/depth_tour.gd
 
 godot --path "$voxey_check_dir" --resolution 1280x720 --script res://tests/expansion_tour.gd
+
+godot --path "$voxey_check_dir" --resolution 1280x720 --script res://tests/village_tour.gd
+godot --path "$voxey_check_dir" --resolution 1280x720 --script res://tests/alchemy_tour.gd

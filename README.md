@@ -40,7 +40,7 @@ Choose **Play / choose a world**, create a named world or select an existing one
 
 **Mining feel:** holding the mouse button grows a crack overlay from the exact centre of every face of the node, in nine symmetric stages, while chips fly off the struck face. Sand and gravel are falling nodes: remove their support and they drop as entities until they land.
 
-**Armor:** leather, iron, golden, and diamond helmets, chestplates, leggings, and boots are crafted at a table with the classic patterns. Right-click a piece to wear it, or drop it into the armor column of the inventory screen (each slot accepts only its own piece; Shift-click a piece in your bag to equip it). Every point of defence absorbs 4% of damage, up to 80% for a full diamond set; pieces wear down with each hit and eventually break. Drowning, starving, and falling bypass armor. Worn armor is saved with the world and drops on death.
+**Armor:** leather, iron, golden, and diamond helmets, chestplates, leggings, and boots are crafted at a table with the classic patterns. Right-click a piece to wear it, or drop it into the armor column of the inventory screen (each slot accepts only its own piece; Shift-click a piece in your bag to equip it). Every point of defence absorbs 4% of damage, up to 80% for a full diamond set; pieces wear down with each hit and eventually break. Drowning, starving, and falling bypass armor. Worn armor is saved with the world and goes into the recovery chest on death.
 
 **Creatures:** sheep, cows, pigs, and chickens wander the surface by day; cows always drop 1–2 leather, chickens drop feathers. At night zombies, skeletons, spiders, and creepers spawn away from torchlight. Zombies groan and chase, skeletons keep their distance and shoot arrows, spiders leap and are neutral in daylight unless provoked, and creepers hiss, swell, and explode. Zombies and skeletons burn in sunlight. Craft shears to clip a sheep's coat for wool — it regrows as the sheep grazes — and milk cows with an empty bucket. Creature calls, hurt sounds, hisses, and blasts are synthesized at startup and played positionally. Hostiles drop rotten flesh, bones, string, and gunpowder.
 
@@ -80,7 +80,11 @@ Craft an **enchanting table** from a book, two diamonds, and four obsidian. Righ
 /give <item> [count]      e.g. /give diamond_pickaxe, /give iron_ingot 16
 /spawn <creature>         sheep cow pig chicken zombie skeleton spider creeper piglin magma_cube
 /tp <x> <y> <z>
-/dimension overworld | nether
+/dimension overworld | nether | end
+/locate village | stronghold | fortress | end_city
+/sethome                 save this player profile’s home in this world
+/home                    return to that home, including across dimensions
+/weather clear | rain | thunder
 /xp <points>
 /heal
 /killmobs
@@ -111,7 +115,7 @@ Each world has its own directory:
       save.json.bak    # Previous successful save
 ```
 
-Saves are version 2 (version 1 files still load; the old single chestplate becomes an iron chestplate in the armor slots). Saves use a temporary file, flush, backup, and rename. An invalid primary save falls back to the backup. Autosave runs every 45 seconds during play; F5, leaving to title, and closing the window also save. Old `user://voxey_world.json` saves are imported as **My first world**, retaining the original file. Terrain is regenerated from the seed; modified nodes, growing crops, furnace contents/progress, chests, drops and their ages, grounded arrows, both dimensions, written book contents, enchanted equipment, and crafting ingredients are persisted.
+Saves are version 2 (version 1 files still load; the old single chestplate becomes an iron chestplate in the armor slots). Saves use a temporary file, flush, backup, and rename. An invalid primary save falls back to the backup. Autosave runs every 45 seconds during play; F5, leaving to title, and closing the window also save. Old `user://voxey_world.json` saves are imported as **My first world**, retaining the original file. Terrain is regenerated from the seed; modified nodes, growing crops, furnace contents/progress, chests, drops and their ages, grounded arrows, all three dimensions, written book contents, enchanted equipment, three equipped pouches and their paginated contents, brewing progress and fuel, potion effects and strengths, villages, trades, leads, player homes, and crafting ingredients are persisted.
 
 `VOXEY_DATA_DIR` can override the storage root for portable installations and isolated tests. Sandboxed platforms without a home environment use their writable application directory. The desktop code is portable; this build has been run on Linux. Windows and macOS home-path selection is covered by tests, but native builds on those systems have not been exercised.
 
@@ -119,7 +123,7 @@ Saves are version 2 (version 1 files still load; the old single chestplate becom
 
 ## World and rendering
 
-Voxels are **nodes**. Each **map block** contains 16×16×16 nodes in a compact byte array. The world streams horizontally around the player. The Overworld covers Y −128 through 63 (192 blocks); the Nether and End cover Y 0 through 127 (128 blocks). The End has islands over an open void; the other dimensions have bedrock boundaries. Existing positive-Y terrain coordinates are preserved.
+Voxels are **nodes**. Each **map block** contains 16×16×16 nodes in a 32-bit integer array. The world streams horizontally around the player. The Overworld covers Y −128 through 63 (192 blocks); the Nether and End cover Y 0 through 127 (128 blocks). The End has islands over an open void; the other dimensions have bedrock boundaries. Existing positive-Y terrain coordinates are preserved.
 
 - Worker-thread terrain generation and mesh construction with deterministic noise, caves, ore clusters, cross-boundary trees, meadows, shores, desert, and snow biomes.
 - Greedy meshing merges coplanar faces; neighboring nodes and a one-node halo eliminate internal and map-block-boundary faces. One opaque/cutout surface and one water surface per map block, with a shared repeating texture atlas.
@@ -128,7 +132,7 @@ Voxels are **nodes**. Each **map block** contains 16×16×16 nodes in a compact 
 - Nine crack stages use a full UV square on each face. The crack texture is drawn in one sector and stamped with four-fold rotational symmetry about the exact face centre, so every stage grows evenly outward; forks and web rings appear in later stages.
 - Day/night lighting, fog, voxel clouds, positional torch lights, generated 2D and positional 3D sound effects, textured pickups, falling nodes, mining debris, and explosion craters.
 
-Voxey includes three dimensions, redstone simulation, and a persistent End dragon encounter. It is an original adaptation rather than full Mineclonia parity: multiplayer, fluid-flow simulation, brewing, the Wither, bastions, and the complete mob/content roster are not implemented. Ordinary roaming mobs respawn between sessions; the dragon encounter and defeated city guards persist. Recipes use a fixed registry and vertical ranges are bounded. Assets and game code are original; no Minecraft or Mineclonia assets are bundled.
+Voxey includes three dimensions, redstone simulation, villages and trading, brewing, enchantments, portable pouches, and a persistent End dragon encounter. Multiplayer, general fluid-flow simulation, the Wither, bastions, and parts of Mineclonia’s full content roster remain outside this adaptation. Ordinary roaming mobs respawn between sessions; villagers, linked animals, the new alchemy creatures, and major encounters persist. Vertical ranges remain bounded. Visuals are original procedural assets; trade, potion, and enchantment data adapt Mineclonia’s GPL-3.0 source, with attribution and the license in `docs/`.
 
 ## Validation
 
@@ -151,3 +155,13 @@ A windowed visual smoke test writes screenshots of the crack overlay, creatures,
 ```sh
 ./tests/screenshots.sh
 ```
+
+## Villages, alchemy and pouches
+
+See [the village guide](docs/villages.md) for all 13 professions, leads, slimes and player homes, and [the alchemy guide](docs/alchemy.md) for brewing recipes, all enchantments, and colored pouches.
+
+Pouches have five levels, sixteen colors, and 27–135 slots each. Equip up to three to extend the paginated inventory; additional carried pouches open with right click without adding pages. Craft them from chest and string, combine equal levels to upgrade, and recolor with wool or dye.
+
+Death leaves two bones and a persistent recovery chest. Main inventory items, armor and pouch items go into the chest; inventory pages remain packed inside their pouches. The death screen gives the chest’s coordinates.
+
+The title screen’s player selector creates persistent local profiles. Each profile has its own `/sethome` location in each world, and its own villager reputation. This remains a single-player game: profiles share the world’s inventory and builds.

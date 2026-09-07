@@ -4,14 +4,15 @@ extends RefCounted
 static var atlas_texture: Texture2D
 
 static func make_atlas() -> ImageTexture:
-	var img := Image.create(128, 512, false, Image.FORMAT_RGBA8)
+	var img := Image.create(128, 1024, false, Image.FORMAT_RGBA8)
 	img.fill(Color.TRANSPARENT)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7164
-	for tile in 137:
+	for tile in 137+VillageContent.BLOCKS.size():
 		if tile in range(58,64): continue # Reserved for existing mod nodes.
 		var base: Color = Nodes.color(tile)
-		if tile >= 104: base = Nodes.color(Nodes.EXPANSION_NODES[tile-104])
+		if tile >= 137: base = Nodes.color(VillageContent.BLOCKS[tile-137])
+		if tile >= 104 and tile < 137: base = Nodes.color(Nodes.EXPANSION_NODES[tile-104])
 		if tile >= 94 and tile < 104: base = Nodes.color(Nodes.DEEP_NODES[tile-94])
 		if tile >= 79 and tile < 94: base = Nodes.color(Nodes.LAVA+mini(tile-79,13))
 		if tile >= 64 and tile < 79: base = Nodes.color([Nodes.SANDSTONE,Nodes.SANDSTONE_BRICK,Nodes.ICE,Nodes.SNOW_BLOCK,Nodes.VINE,Nodes.RED_BRICKS,Nodes.HAY_BALE,Nodes.HAY_BALE,Nodes.SUGAR_CANE,Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM,Nodes.MOSSY_COBBLE,Nodes.MOSSY_BRICKS,Nodes.COAL_BLOCK,Nodes.TERRACOTTA][tile-64])
@@ -29,6 +30,7 @@ static func make_atlas() -> ImageTexture:
 			for x in 16:
 				var c: Color = base * rng.randf_range(0.86,1.1)
 				c.a = 1.0
+				if tile >= 137: c = VillageArt.pixel(VillageContent.BLOCKS[tile-137],x,y,c)
 				match tile:
 					104,105:
 						c = Color("55535c" if tile == 105 else "828589")*rng.randf_range(0.85,1.1)
@@ -354,7 +356,7 @@ static func crack_mesh() -> ArrayMesh:
 # every axis. Item drops, falling nodes, and the held block reuse the terrain atlas.
 # The game instance caches these per id.
 static func build_node_mesh(id: int) -> ArrayMesh:
-	var padded := PackedByteArray()
+	var padded := PackedInt32Array()
 	padded.resize(5832)
 	padded[1+18+324] = id
 	var surfaces: Array = BlockMesher.build(padded)

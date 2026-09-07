@@ -415,6 +415,8 @@ const ARMOR_POINTS = [[1, 3, 2, 1], [2, 6, 5, 2], [2, 5, 3, 1], [3, 8, 6, 3]]
 const ARMOR_DURABILITY = [80, 240, 112, 528]
 
 static func title(id: int) -> String:
+	if id == WOOL: return "White wool"
+	if VillageContent.DATA.has(id): return VillageContent.DATA[id].name
 	if id == ELYTRA: return "Elytra"
 	if custom_items.has(id) or custom_nodes.has(id):
 		return String((custom_items.get(id) if custom_items.has(id) else custom_nodes[id]).get("name","Unknown"))
@@ -424,6 +426,7 @@ static func title(id: int) -> String:
 	return NAMES.get(id, "Unknown")
 
 static func color(id: int) -> Color:
+	if VillageContent.DATA.has(id): return Color(VillageContent.DATA[id].color)
 	if id == ELYTRA: return COLORS[ELYTRA]
 	if custom_items.has(id) or custom_nodes.has(id):
 		return Color((custom_items.get(id) if custom_items.has(id) else custom_nodes[id]).get("color","#ffffff"))
@@ -433,13 +436,15 @@ static func color(id: int) -> Color:
 	return COLORS.get(id, Color.WHITE)
 
 static func exists(id: int) -> bool:
-	return NAMES.has(id) or is_tool_id(id) or is_armor(id) or custom_nodes.has(id) or custom_items.has(id)
+	return VillageContent.DATA.has(id) or NAMES.has(id) or is_tool_id(id) or is_armor(id) or custom_nodes.has(id) or custom_items.has(id)
 
 # Every item that can appear in an inventory, for the creative catalog and console.
 static func all_ids() -> Array:
 	var ids: Array = []
 	for id in NAMES:
 		if id != AIR: ids.append(id)
+	ids.append_array(VillageContent.DATA.keys())
+	ids.erase(VillageContent.WOOL_WHITE)
 	ids.append_array(custom_items.keys())
 	ids.append_array(custom_nodes.keys())
 	ids.append_array(range(TOOLS, TOOLS_END))
@@ -449,6 +454,7 @@ static func all_ids() -> Array:
 # Saves from before the armor system stored the single chestplate as id 74;
 # saves from before the two-block bed stored a single bed node as id 24.
 static func migrate(id: int) -> int:
+	if id == VillageContent.WOOL_WHITE: return WOOL
 	if id == LEGACY_ARMOR: return ARMOR
 	if id == LEGACY_BED: return BED_FOOT
 	return id
@@ -484,7 +490,7 @@ static func is_tool_id(id: int) -> bool:
 	return id >= TOOLS and id < TOOLS_END
 
 static func is_armor(id: int) -> bool:
-	return id == ELYTRA or id >= ARMOR_BASE and id < ARMOR_END
+	return VillageContent.DATA.get(id,{}).has("armor") or id == ELYTRA or id >= ARMOR_BASE and id < ARMOR_END
 
 static func tool_kind(id: int) -> int:
 	return (id - TOOLS) % 5 if is_tool_id(id) else -1
@@ -493,18 +499,23 @@ static func tool_tier(id: int) -> int:
 	return clampi((id - TOOLS) / 5, 0, 3) if is_tool_id(id) else -1
 
 static func armor_material(id: int) -> int:
+	if VillageContent.DATA.get(id,{}).has("armor"): return 1
 	return 0 if id == ELYTRA else (id - ARMOR_BASE) / 4 if is_armor(id) else -1
 
 static func armor_piece(id: int) -> int:
+	if VillageContent.DATA.get(id,{}).has("armor"): return ["helmet","chestplate","leggings","boots"].find(VillageContent.DATA[id].armor)
 	return 1 if id == ELYTRA else (id - ARMOR_BASE) % 4 if is_armor(id) else -1
 
 static func armor_id(material: int, piece: int) -> int:
 	return ARMOR_BASE + material * 4 + piece
 
 static func armor_points(id: int) -> int:
+	if id == VillageContent.TURTLE_HELMET: return 2
+	if id in range(VillageContent.CHAIN_HELMET,VillageContent.CHAIN_HELMET+4): return [2,5,4,1][id-VillageContent.CHAIN_HELMET]
 	return ARMOR_POINTS[armor_material(id)][armor_piece(id)] if is_armor(id) and id != ELYTRA else 0
 
 static func durability(id: int) -> int:
+	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("durability",0)
 	if id == ELYTRA: return 433
 	if id == BOW: return 385
 	if id == SHEARS: return 239
@@ -513,18 +524,21 @@ static func durability(id: int) -> int:
 	return 0
 
 static func max_stack(id: int) -> int:
+	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("stack",1 if VillageContent.DATA[id].has("armor") else 64)
 	if id in [WRITABLE_BOOK,WRITTEN_BOOK,BOW,LAVA_BUCKET]: return 1
 	if id in [EGG,ENDER_PEARL]: return 16
 	return 1 if is_tool_id(id) or is_armor(id) or id in [SHEARS,BUCKET,WATER_BUCKET,MILK_BUCKET,SADDLE,MUSHROOM_STEW] else 64
 
 static func solid(id: int) -> bool:
+	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("block",false) and VillageContent.shape(id) not in ["crop","plant","door_open","carpet","banner","frame","painting","candle","lantern","brewing"]
 	if custom_nodes.has(id): return not bool(custom_nodes[id].get("transparent",false))
 	return id not in [AIR,WATER,LAVA,NETHER_PORTAL,END_PORTAL,END_GATEWAY,END_ROD,SOUL_TORCH] and id not in SMALL_CIRCUITS and not plant(id) and id not in [TORCH,LADDER]
 
 static func plant(id: int) -> bool:
-	return id in [WHEAT, RIPE_WHEAT, SAPLING, FLOWER, VINE, SUGAR_CANE, RED_MUSHROOM, BROWN_MUSHROOM]
+	return VillageContent.shape(id) in ["crop","plant"] or id in [WHEAT, RIPE_WHEAT, SAPLING, FLOWER, VINE, SUGAR_CANE, RED_MUSHROOM, BROWN_MUSHROOM]
 
 static func transparent(id: int) -> bool:
+	if VillageContent.DATA.has(id): return VillageContent.shape(id) != "cube"
 	if custom_nodes.has(id): return bool(custom_nodes[id].get("transparent",false))
 	return id in CIRCUIT_NODES or id in [AIR, WATER, LAVA, NETHER_PORTAL, END_PORTAL, END_GATEWAY, END_ROD, SOUL_TORCH, IRON_BARS, GLASS, LADDER, ICE] or plant(id) or id == TORCH
 
@@ -533,6 +547,8 @@ static func falls(id: int) -> bool:
 	return id in [SAND, GRAVEL, SNOW_BLOCK]
 
 static func placeable(id: int) -> bool:
+	if id == WOOL: return true
+	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("block",false) and VillageContent.shape(id) not in ["crop","bed_head","door_open"]
 	if id in EXPANSION_NODES: return id not in [PISTON_HEAD,IRON_DOOR_OPEN,END_FRAME_EYE,END_PORTAL,END_GATEWAY,BLAZE_SPAWNER]
 	if id in DEEP_NODES: return true
 	if id in NETHER_NODES: return id not in [LAVA,NETHER_PORTAL]
@@ -542,6 +558,7 @@ static func placeable(id: int) -> bool:
 	return id > AIR and id < 64 and NAMES.has(id) and id not in [WATER, BEDROCK, RIPE_WHEAT]
 
 static func preferred_tool(id: int) -> int:
+	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("tool",-1 if VillageContent.shape(id) == "crop" or VillageContent.DATA[id].get("family","") in ["wool","carpet","banner","bed","bed_head"] else 0)
 	if id in SMALL_CIRCUITS: return -1
 	if id in EXPANSION_NODES: return 0
 	if id in DEEP_NODES: return 0
@@ -556,6 +573,7 @@ static func preferred_tool(id: int) -> int:
 	return -1
 
 static func hardness(id: int) -> float:
+	if VillageContent.DATA.has(id): return 0.2 if VillageContent.shape(id) == "crop" else 1.5
 	if id in [END_FRAME,END_FRAME_EYE,END_PORTAL,END_GATEWAY]: return INF
 	if id in SMALL_CIRCUITS: return 0.2
 	if id in EXPANSION_NODES: return 3.0
@@ -593,6 +611,7 @@ static func break_time(id: int, tool: int) -> float:
 	return hardness(id) / speed
 
 static func harvestable(id: int, tool: int) -> bool:
+	if id in [VillageContent.EMERALD_ORE,VillageContent.DEEP_EMERALD_ORE]: return tool_kind(tool) == 0 and tool_tier(tool) >= 2
 	if DEEP_ORES.has(id): return harvestable(DEEP_ORES[id],tool)
 	if id in [BEDROCK,END_FRAME,END_FRAME_EYE,END_PORTAL,END_GATEWAY,PISTON_HEAD]: return false
 	if id in [REDSTONE_ORE,DEEP_REDSTONE_ORE]: return tool_kind(tool) == 0 and tool_tier(tool) >= 2
@@ -606,6 +625,13 @@ static func harvestable(id: int, tool: int) -> bool:
 	return true
 
 static func drop(id: int) -> int:
+	if id == VillageContent.SWAMP_GRASS: return DIRT
+	if id == VillageContent.KELP_PLANT: return VillageContent.KELP
+	if id in [VillageContent.COCOA_POD,VillageContent.RIPE_COCOA_POD]: return VillageContent.COCOA_BEANS
+	if id in [VillageContent.EMERALD_ORE,VillageContent.DEEP_EMERALD_ORE]: return VillageContent.EMERALD
+	if VillageContent.is_bed(id): return VillageContent.bed_foot(id)
+	if id == VillageContent.WOODEN_DOOR_OPEN: return VillageContent.WOODEN_DOOR
+	if VillageContent.shape(id) == "crop": return VillageContent.crop_seed(id)
 	if DEEP_ORES.has(id): return drop(DEEP_ORES[id])
 	if id in [REDSTONE_ORE,DEEP_REDSTONE_ORE]: return REDSTONE_WIRE
 	if id in [END_PORTAL,END_GATEWAY,END_FRAME,END_FRAME_EYE,PISTON_HEAD,BLAZE_SPAWNER]: return 0
@@ -622,10 +648,13 @@ const SNOW_BALL_ALIAS = SNOWBALL
 const GLOWSTONE_DUST_ALIAS = GLOWSTONE # glowstone drops itself; kept for clarity
 
 static func food(id: int) -> int:
+	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("food",0)
 	if custom_items.has(id): return clampi(int(custom_items[id].get("food",0)),0,20)
 	return {CHORUS_FRUIT:4,APPLE:4, RAW_MEAT:2, COOKED_MEAT:8, BREAD:6, ROTTEN_FLESH:2, PUMPKIN_PIE:8, MELON_SLICE:2, GOLDEN_APPLE:10, MUSHROOM_STEW:6}.get(id, 0)
 
 static func tile(id: int, face: int) -> int:
+	if id == WOOL: id = VillageContent.WOOL_WHITE
+	if VillageContent.DATA.has(id): return 137+VillageContent.BLOCKS.find(id)
 	if id in EXPANSION_NODES: return 104+EXPANSION_NODES.find(id)
 	if id in DEEP_NODES: return 94+DEEP_NODES.find(id)
 	if id == ENCHANTING_TABLE: return 93 if face == 2 else 88
@@ -653,8 +682,10 @@ static func tile(id: int, face: int) -> int:
 	return id
 
 static func smelt_result(id: int) -> int:
+	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("smelt",0)
 	if DEEP_ORES.has(id): id = DEEP_ORES[id]
 	return {NETHERRACK:NETHER_BRICK_ITEM,IRON_ORE:IRON,GOLD_ORE:GOLD,COPPER_ORE:COPPER,SAND:GLASS,COBBLE:STONE,RAW_MEAT:COOKED_MEAT,LOG:CHARCOAL,CLAY_BALL:BRICK_ITEM,CLAY:TERRACOTTA,COBBLED_DEEPSLATE:DEEPSLATE}.get(id,0)
 
 static func fuel_time(id: int) -> int:
+	if id == VillageContent.DRIED_KELP_BLOCK: return 200
 	return {COAL:80,CHARCOAL:80,COAL_BLOCK:800,LOG:15,PLANKS:15,STICK:5,BOWL:10,LAVA_BUCKET:1000,CRIMSON_STEM:15,WARPED_STEM:15}.get(id,0)

@@ -69,7 +69,7 @@ func _process(delta: float) -> void:
 		for job in remesh_jobs:
 			if job.coord == coord: already = true
 		if already: dirty[coord] = true; break
-		var snapshot: PackedByteArray = _snapshot(coord)
+		var snapshot: PackedInt32Array = _snapshot(coord)
 		var job: Dictionary = {"coord":coord, "result":[]}
 		job.task = WorkerThreadPool.add_task(func(): job.result = BlockMesher.build(snapshot,true))
 		remesh_jobs.append(job)
@@ -185,7 +185,7 @@ func set_node(p: Vector3i, id: int) -> bool:
 	blocks[b].data[local_index(p)] = id
 	circuits.changed(p,old_id,id)
 	edits[p] = id
-	if id in [Nodes.WHEAT,Nodes.SAPLING,Nodes.SUGAR_CANE]: growth[p] = 0.0
+	if id in [Nodes.WHEAT,Nodes.SAPLING,Nodes.SUGAR_CANE] or VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3: growth[p] = 0.0
 	else: growth.erase(p)
 	_mark_dirty(p)
 	if id in [Nodes.WATER,Nodes.LAVA]: react_fluid(p)
@@ -197,8 +197,8 @@ func _mark_dirty(p: Vector3i) -> void:
 	for d in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.UP,Vector3i.DOWN,Vector3i.FORWARD,Vector3i.BACK]:
 		if block_coord(p+d) != block_coord(p): dirty[block_coord(p+d)] = true
 
-func _snapshot(coord: Vector3i) -> PackedByteArray:
-	var data := PackedByteArray()
+func _snapshot(coord: Vector3i) -> PackedInt32Array:
+	var data := PackedInt32Array()
 	data.resize(5832)
 	for y in 18:
 		for z in 18:
@@ -250,7 +250,9 @@ func _simulate() -> void:
 		if not loaded_at(Vector3(p)): continue
 		growth[p] += 1.0
 		var id: int = node_at(p)
-		if id == Nodes.WHEAT and growth[p] > 90:
+		if VillageContent.shape(id) == "crop" and growth[p] >= 30:
+			if VillageContent.DATA[id].stage < 3: set_node(p,id+1)
+		elif id == Nodes.WHEAT and growth[p] > 90:
 			set_node(p,Nodes.RIPE_WHEAT)
 		elif id == Nodes.SAPLING and growth[p] > 120:
 			grow_tree(p)
@@ -262,11 +264,14 @@ func _simulate() -> void:
 				set_node(p+Vector3i.UP,Nodes.SUGAR_CANE)
 	for key in stations:
 		var s: Dictionary = stations[key]
+		if s.get("kind","") == "brewing": Brewing.step(s,1.0); continue
 		if s.get("kind","") != "furnace": continue
 		var input: Dictionary = s.slots[0]
 		var fuel: Dictionary = s.slots[1]
 		var output: Dictionary = s.slots[2]
 		var recipe: int = Nodes.smelt_result(input.id)
+		if s.get("device",0) in [VillageContent.SMOKER,VillageContent.CAMPFIRE] and Nodes.food(recipe) <= 0: recipe = 0
+		if s.get("device",0) == VillageContent.BLAST_FURNACE and recipe not in [Nodes.IRON,Nodes.GOLD,Nodes.COPPER,VillageContent.EMERALD]: recipe = 0
 		if s.burn > 0: s.burn -= 1
 		if recipe == 0 or (output.id != 0 and output.id != recipe) or output.count >= 64: s.progress = 0.0; continue
 		if s.burn <= 0:
@@ -278,7 +283,7 @@ func _simulate() -> void:
 			else:
 				fuel.count -= 1
 				if fuel.count <= 0: fuel.id = 0
-		s.progress += 1.0
+		s.progress += 2.0 if s.get("device",0) in [VillageContent.SMOKER,VillageContent.BLAST_FURNACE] else 1.0
 		if s.progress >= 8:
 			s.progress = 0.0
 			input.count -= 1
@@ -350,7 +355,7 @@ func get_station(p: Vector3i, kind: String) -> Dictionary:
 		var partner: Vector3i = chest_partner(p)
 		if partner != p: return _double_chest(p,partner)
 	var key: String = station_key(p)
-	if not stations.has(key): stations[key] = _new_station(kind,3 if kind == "furnace" else (5 if node_at(p) == Nodes.HOPPER else (9 if node_at(p) in [Nodes.DISPENSER,Nodes.DROPPER] else 27)))
+	if not stations.has(key): stations[key] = _new_station(kind,5 if kind == "brewing" else (3 if kind == "furnace" else (5 if node_at(p) == Nodes.HOPPER else (9 if node_at(p) in [Nodes.DISPENSER,Nodes.DROPPER] else (54 if node_at(p) == VillageContent.RECOVERY_CHEST else 27)))))
 	return stations[key]
 
 func _double_chest(a: Vector3i, b: Vector3i) -> Dictionary:
@@ -474,6 +479,20 @@ func _structure_loot(p: Vector3i) -> void:
 	if stations.has(key): return
 	var station: Dictionary = get_station(p,"chest")
 	var loot: Array = [[Nodes.PAPER,8],[Nodes.BOOK,3],[Nodes.IRON,4],[Nodes.ENDER_PEARL,1],[Nodes.BREAD,4]]
-	if dimension == "nether": loot = [[Nodes.GOLD,5],[Nodes.DIAMOND,1],[Nodes.NETHER_BRICKS,16],[Nodes.SADDLE,1],[Nodes.FLINT_AND_STEEL,1]]
+	if dimension == "overworld" and p.y > 0:
+		loot = [[VillageContent.EMERALD,2+generator.hash_at(p.x,90,p.z)%4],[Nodes.BREAD,3],[VillageContent.CARROT,4],[VillageContent.POTATO,4],[VillageContent.BEETROOT_SEEDS,3],[Nodes.APPLE,2],[VillageContent.COCOA_BEANS,2]]
+	if dimension == "nether": loot = [[Nodes.GOLD,5],[Nodes.DIAMOND,1],[Nodes.NETHER_BRICKS,16],[Nodes.SADDLE,1],[Nodes.FLINT_AND_STEEL,1],[VillageContent.NETHER_WART_ITEM,8]]
 	if dimension == "end": loot = [[Nodes.ELYTRA,1],[Nodes.DIAMOND,5],[Nodes.GOLD,8],[Nodes.ENDER_PEARL,4],[Nodes.END_ROD,16],[Nodes.GOLDEN_APPLE,2]]
 	for i in loot.size(): station.slots[i] = {"id":loot[i][0],"count":loot[i][1],"wear":0}
+	if dimension != "overworld" or p.y < 0:
+		var rng := RandomNumberGenerator.new(); rng.seed = generator.hash_at(p.x,p.y,p.z)
+		station.slots[loot.size()] = {"id":VillageContent.ENCHANTED_BOOK,"count":1,"wear":0,"data":Enchantments.random_book(rng)}
+		if dimension == "overworld":
+			station.slots[loot.size()+1] = {"id":VillageContent.HEAVY_CORE,"count":1,"wear":0}
+			station.slots[loot.size()+2] = {"id":PotionCatalog.find("luck"),"count":1,"wear":0}
+		if dimension == "nether": station.slots[loot.size()+1] = {"id":PotionCatalog.find("withering"),"count":1,"wear":0}
+
+func open_sky(p: Vector3i) -> bool:
+	for y in range(p.y+2,generator.max_y()+1):
+		if Nodes.solid(node_at(Vector3i(p.x,y,p.z))): return false
+	return dimension == "overworld"

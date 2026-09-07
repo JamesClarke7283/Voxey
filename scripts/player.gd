@@ -23,6 +23,7 @@ var dig_timer: float = 0.0
 var use_cooldown: float = 0.0
 var use_latched: bool = false
 var damage_cooldown: float = 0.0
+var riptide_time: float = 0.0
 var survival_timer: float = 0.0
 var walked: float = 0.0
 var bob: float = 0.0
@@ -87,7 +88,7 @@ func look(relative: Vector2) -> void:
 # Total defence points across every worn piece. Each point absorbs 4% of damage.
 func armor_points() -> int:
 	var total: int = 0
-	for slot in armor_slots: total += Nodes.armor_points(slot.id)+Inventory.enchantment(slot,"Protection")
+	for slot in armor_slots: total += Nodes.armor_points(slot.id)
 	return total
 
 func _physics_process(delta: float) -> void:
@@ -103,6 +104,7 @@ func _physics_process(delta: float) -> void:
 	if Input.is_physical_key_pressed(KEY_A): direction.x -= 1
 	if Input.is_physical_key_pressed(KEY_D): direction.x += 1
 	if pad != null and pad.stick.length() > 0.12: direction += Vector3(pad.stick.x,0,pad.stick.y)
+	if is_instance_valid(game.survival.mount): game.survival.ride_step(delta,direction); return
 	var crouch: bool = Input.is_physical_key_pressed(KEY_CTRL) or (pad != null and pad.sneak_held)
 	var sprint: bool = Input.is_physical_key_pressed(KEY_SHIFT) and hunger > 5 and not crouch
 	var speed: float = 7.0 if sprint else (2.1 if crouch else 4.5)
@@ -119,13 +121,15 @@ func _physics_process(delta: float) -> void:
 		return
 	var wet: bool = game.world.node_at(Vector3i((position+Vector3.UP*0.5).floor())) == Nodes.WATER
 	underwater = game.world.node_at(Vector3i(camera.global_position.floor())) == Nodes.WATER
-	if wet: speed *= 0.55
-	if game.world.node_at(Vector3i((position-Vector3.UP*0.1).floor())) == Nodes.SOUL_SAND: speed *= 0.5
+	speed *= PotionEffects.speed(self)
+	if wet: speed *= lerpf(0.55,1.0,minf(3,Enchantments.worn(self,"Depth Strider"))/3.0)
+	if game.world.node_at(Vector3i((position-Vector3.UP*0.1).floor())) == Nodes.SOUL_SAND: speed *= 1.0+Enchantments.worn(self,"Soul Speed")*0.12 if Enchantments.worn(self,"Soul Speed") > 0 else 0.5
 	# Ladders: holding forward (or jump) against a ladder climbs; sneaking holds still.
 	var body_cell: Vector3i = Vector3i(position.floor())
 	var on_ladder: bool = game.world.node_at(body_cell) == Nodes.LADDER or game.world.node_at(body_cell+Vector3i.UP) == Nodes.LADDER
 	direction = basis * direction.normalized()
-	if not gliding:
+	riptide_time = maxf(0,riptide_time-delta)
+	if not gliding and riptide_time <= 0:
 		velocity.x = move_toward(velocity.x,direction.x*speed,delta*35)
 		velocity.z = move_toward(velocity.z,direction.z*speed,delta*35)
 	if levitation > 0:
@@ -160,10 +164,10 @@ func _physics_process(delta: float) -> void:
 	else:
 		if not gliding:
 			velocity.y -= 24.0*delta
-			velocity.y = maxf(velocity.y,-45.0)
+			velocity.y = maxf(velocity.y,-1.6 if PotionEffects.level(self,"slow_falling") else -45.0)
 		if Input.is_physical_key_pressed(KEY_SPACE) or (pad != null and pad.jump_held):
 			if grounded:
-				velocity.y = 8.2
+				velocity.y = 8.2+PotionEffects.level(self,"leaping")*2.6
 				grounded = false
 				hunger -= 0.015
 	var glide_input: bool = Input.is_physical_key_pressed(KEY_SPACE) or (pad != null and pad.jump_held)
@@ -186,17 +190,17 @@ func _physics_process(delta: float) -> void:
 	if survival_timer >= 1.0:
 		survival_timer = 0.0
 		hunger = maxf(0,hunger-0.008)
-		if underwater:
-			breath = maxf(0,breath-1)
+		if underwater and not game.survival.effects.has("water_breathing"):
+			breath = maxf(0,breath-1.0/(1+Enchantments.worn(self,"Respiration")))
 			if breath <= 0: hurt(2,true)
 		else: breath = minf(10,breath+3)
 		if hunger >= 16 and health < 20: health = minf(20,health+0.5); hunger -= 0.2
 		if hunger <= 0 and health > 1: hurt(1,true)
 		var feet: Vector3i = Vector3i(position.floor())
-		if game.world.node_at(feet) == Nodes.LAVA or game.world.node_at(feet+Vector3i.UP) == Nodes.LAVA: hurt(4,true)
+		if not game.survival.effects.has("fire_resistance") and (game.world.node_at(feet) == Nodes.LAVA or game.world.node_at(feet+Vector3i.UP) == Nodes.LAVA): hurt(4,true,Vector3.INF,"fire")
 		for d in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
 			if game.world.node_at(feet+d) == Nodes.CACTUS: hurt(1)
-		if position.y < game.world.generator.min_y()-5: hurt(20,true)
+		if position.y < game.world.generator.min_y()-5: hurt(20,true,Vector3.INF,"void")
 
 func _move(motion: Vector3, crouch: bool, on_ladder: bool = false) -> void:
 	var steps: int = maxi(1,ceili(motion.length()/0.2))
@@ -222,7 +226,7 @@ func _move(motion: Vector3, crouch: bool, on_ladder: bool = false) -> void:
 			if axis == 1 and part.y < 0:
 				grounded = true
 				if velocity.y < -12 and not on_ladder:
-					hurt(floorf((-velocity.y-11)*0.9),true)
+					hurt(floorf((-velocity.y-11)*0.9),true,Vector3.INF,"fall")
 					game.achievements.award("sniper_hurt")
 			velocity[axis] = 0.0
 			part[axis] = 0.0
@@ -233,7 +237,7 @@ func _process(delta: float) -> void:
 	if is_instance_valid(selection): selection.visible = false
 	if is_instance_valid(cracks): cracks.visible = false
 	if not game.playing(): mining = 0; return
-	target = game.world.raycast(camera.global_position,-camera.global_basis.z,5.0,game.inventory.held().id == Nodes.BUCKET)
+	target = game.world.raycast(camera.global_position,-camera.global_basis.z,5.0,game.inventory.held().id in [Nodes.BUCKET,VillageContent.GLASS_BOTTLE,VillageContent.FISHING_ROD,VillageContent.BOAT_OAK,VillageContent.BOAT_ACACIA,VillageContent.BOAT_SPRUCE,VillageContent.BOAT_DARK_OAK,VillageContent.BOAT_BIRCH,VillageContent.KELP,VillageContent.LILY_PAD])
 	if not target.is_empty():
 		selection.visible = true
 		selection.position = Vector3(target.pos)
@@ -260,7 +264,8 @@ func _process(delta: float) -> void:
 						use_cooldown = 0.6
 						if game.gamemode!="creative": game.inventory.damage_tool()
 				else:
-					mob.hit(2+(Nodes.tool_tier(held)+1)*(2 if Nodes.tool_kind(held)==3 else 1)+Inventory.enchantment(game.inventory.held(),"Sharpness")*1.5,position)
+					mob.hit(Enchantments.melee(self,mob),position)
+					mob.knock *= 1+Inventory.enchantment(game.inventory.held(),"Knockback")*0.6
 					if game.gamemode!="creative" and held != Nodes.SHEARS: game.inventory.damage_tool()
 				use_cooldown = 0.45
 				swing = 1
@@ -285,6 +290,7 @@ func mine(delta: float) -> void:
 		dig_timer = 0
 	var duration: float = 0.12 if game.gamemode=="creative" else Nodes.break_time(target.id,held)
 	if game.gamemode != "creative" and Nodes.tool_kind(held) == Nodes.preferred_tool(target.id): duration /= 1.0+Inventory.enchantment(game.inventory.held(),"Efficiency")*0.4
+	if underwater and Enchantments.worn(self,"Aqua Affinity") == 0: duration *= 5.0
 	if is_inf(duration): return
 	mining += delta/duration
 	swing = 0.5+0.5*sin(Time.get_ticks_msec()*0.02)
@@ -309,6 +315,7 @@ func mine(delta: float) -> void:
 func equip_armor(slot: Dictionary) -> bool:
 	if not Nodes.is_armor(slot.id): return false
 	var piece: int = Nodes.armor_piece(slot.id)
+	if game.gamemode != "creative" and Inventory.enchantment(armor_slots[piece],"Curse of Binding") > 0: game.toast("Curse of Binding prevents replacing this armor."); return false
 	var previous: Dictionary = armor_slots[piece].duplicate()
 	armor_slots[piece] = slot.duplicate(true)
 	Inventory.copy_data(slot,previous)
@@ -319,6 +326,7 @@ func equip_armor(slot: Dictionary) -> bool:
 	return true
 
 func use() -> void:
+	if game.survival.use(): return
 	var held: int = game.inventory.held().id
 	if held == Nodes.ENDER_EYE and not target.is_empty() and target.id == Nodes.END_FRAME:
 		if WorldStructures.fill_eye(game.world,target.pos):
@@ -338,7 +346,7 @@ func use() -> void:
 		hunger = minf(20,hunger+Nodes.food(held))
 		if game.gamemode != "creative":
 			game.inventory.consume_selected()
-			if held == Nodes.MUSHROOM_STEW:
+			if held in [Nodes.MUSHROOM_STEW,VillageContent.RABBIT_STEW,VillageContent.SUSPICIOUS_STEW,VillageContent.BEETROOT_SOUP]:
 				var rest: int = game.inventory.add_item(Nodes.BOWL,1)
 				if rest > 0: game.spawn_drop(position+Vector3.UP,Nodes.BOWL,rest)
 		game.sound("eat")
@@ -380,14 +388,20 @@ func use() -> void:
 		return
 	# The bow fires an arrow where you look if you have ammunition.
 	if held == Nodes.BOW:
-		if game.inventory.count_item(Nodes.ARROW_ITEM) > 0 or game.gamemode=="creative":
-			if game.gamemode!="creative": game.inventory.remove_item(Nodes.ARROW_ITEM,1)
+		var ammunition: int = game.survival.ammunition()
+		if ammunition != 0 or game.gamemode=="creative":
+			var infinite: bool = ammunition == Nodes.ARROW_ITEM and Inventory.enchantment(game.inventory.held(),"Infinity") > 0
+			if game.gamemode!="creative" and not infinite: game.inventory.remove_item(ammunition,1)
 			var origin: Vector3 = camera.global_position-camera.global_basis.z*0.4
 			var velocity_value: Vector3 = -camera.global_basis.z*26.0+Vector3.UP*2.2
 			var shot: Arrow = game.spawn_arrow(origin,velocity_value)
 			if shot != null:
 				shot.from_player = true
+				shot.item_id = ammunition if ammunition != 0 else Nodes.ARROW_ITEM
 				shot.damage += Inventory.enchantment(game.inventory.held(),"Power")*2.0
+				shot.recoverable = not infinite and game.gamemode != "creative"
+				shot.flame = Inventory.enchantment(game.inventory.held(),"Flame") > 0
+				shot.punch = Inventory.enchantment(game.inventory.held(),"Punch")
 			if game.gamemode!="creative": game.inventory.damage_tool()
 			game.sound("arrow")
 			swing = 1
@@ -524,9 +538,12 @@ func use() -> void:
 # Damage passes through worn armor unless it bypasses it (drowning, starving,
 # falling). Every piece worn takes wear from a hit. A source position knocks
 # the player away from the attacker.
-func hurt(amount: float, bypass_armor: bool = false, source: Vector3 = Vector3.INF) -> void:
+func hurt(amount: float, bypass_armor: bool = false, source: Vector3 = Vector3.INF, cause: String = "generic") -> void:
 	if game.gamemode=="creative" or damage_cooldown > 0 or health <= 0: return
+	if not bypass_armor and game.survival.blocks_damage(source): return
 	var reduction: float = 0.0 if bypass_armor else minf(0.8,armor_points()*0.04)
+	if cause != "void": amount *= PotionEffects.resistance(self)*Enchantments.protection(self,cause)
+	PotionEffects.damaged(self)
 	health = maxf(0,health-amount*(1.0-reduction))
 	if not bypass_armor:
 		for slot in armor_slots:
@@ -539,6 +556,10 @@ func hurt(amount: float, bypass_armor: bool = false, source: Vector3 = Vector3.I
 				game.sound("break")
 		game.inventory.changed.emit()
 	if not is_inf(source.x):
+		var thorns: int = Enchantments.worn(self,"Thorns")
+		if thorns > 0 and randf() < minf(1.0,thorns*0.15):
+			for mob in game.creatures.get_children():
+				if not mob.is_queued_for_deletion() and mob.position.distance_to(source) < 0.8: mob.hit(randi_range(1,4),position); break
 		var away: Vector3 = ((position-source)*Vector3(1,0,1)).normalized()
 		velocity.x += away.x*5.5
 		velocity.z += away.z*5.5

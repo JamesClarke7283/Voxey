@@ -3,7 +3,8 @@ extends RefCounted
 
 const SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.UP,Vector3i.DOWN,Vector3i.FORWARD,Vector3i.BACK]
 const HORIZONTAL = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]
-const CONTAINERS = [Nodes.CHEST,Nodes.FURNACE,Nodes.DISPENSER,Nodes.DROPPER,Nodes.HOPPER]
+const FURNACES = [Nodes.FURNACE,VillageContent.SMOKER,VillageContent.BLAST_FURNACE,VillageContent.CAMPFIRE]
+const CONTAINERS = [VillageContent.RECOVERY_CHEST,VillageContent.BREWING_STAND,Nodes.CHEST,Nodes.FURNACE,Nodes.DISPENSER,Nodes.DROPPER,Nodes.HOPPER,VillageContent.BARREL,VillageContent.SMOKER,VillageContent.BLAST_FURNACE,VillageContent.CAMPFIRE]
 var world: VoxelWorld
 var tracked: Dictionary = {}
 var power: Dictionary = {}
@@ -242,7 +243,9 @@ func container_signal(p: Vector3i) -> int:
 
 func container(p: Vector3i) -> Array:
 	if world.node_at(p) not in CONTAINERS: return []
-	return world.get_station(p,"furnace" if world.node_at(p) == Nodes.FURNACE else "chest").slots
+	var station: Dictionary = world.get_station(p,"brewing" if world.node_at(p) == VillageContent.BREWING_STAND else ("furnace" if world.node_at(p) in FURNACES else "chest"))
+	if world.node_at(p) in FURNACES: station.device = world.node_at(p)
+	return station.slots
 
 static func insert_one(slots: Array, item: Dictionary) -> bool:
 	for pass_index in 2:
@@ -262,14 +265,21 @@ func hopper(p: Vector3i) -> void:
 	var d := direction(p)
 	if d == Vector3i.UP: d = Vector3i.DOWN
 	var destination: Array = container(p+d)
-	if world.node_at(p+d) == Nodes.FURNACE: destination = [destination[0 if d == Vector3i.DOWN else 1]]
+	if world.node_at(p+d) in FURNACES: destination = [destination[0 if d == Vector3i.DOWN else 1]]
 	for slot in slots:
-		if world.node_at(p+d) == Nodes.FURNACE:
+		if world.node_at(p+d) in FURNACES:
 			if d == Vector3i.DOWN and Nodes.smelt_result(slot.id) == 0: continue
 			if d != Vector3i.DOWN and Nodes.fuel_time(slot.id) <= 0: continue
-		if slot.id != 0 and insert_one(destination,slot): consume_one(slot); break
+		if world.node_at(p+d) == VillageContent.BREWING_STAND:
+			var eligible: Array = []
+			for i in destination.size():
+				if (d == Vector3i.DOWN and i != 0) or (d != Vector3i.DOWN and i == 0): continue
+				if Brewing.accepts(i,slot.id): eligible.append(destination[i])
+			if slot.id != 0 and insert_one(eligible,slot): consume_one(slot); break
+		elif slot.id != 0 and insert_one(destination,slot): consume_one(slot); break
 	var above: Array = container(p+Vector3i.UP)
-	if world.node_at(p+Vector3i.UP) == Nodes.FURNACE: above = [above[2]]
+	if world.node_at(p+Vector3i.UP) in FURNACES: above = [above[2]]
+	if world.node_at(p+Vector3i.UP) == VillageContent.BREWING_STAND: above = above.slice(2,5)
 	for slot in above:
 		if slot.id != 0 and insert_one(slots,slot): consume_one(slot); return
 	for drop in world.get_parent().drops.get_children():

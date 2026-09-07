@@ -49,6 +49,7 @@ static func texture(id: int) -> Texture2D:
 			3:
 				_polygon(img,[[3,4],[6,4],[6,13],[1,13],[1,10],[3,10]],base)
 				_polygon(img,[[10,4],[13,4],[13,10],[15,10],[15,13],[10,13]],base)
+	elif VillageContent.DATA.has(id): VillageItemArt.draw(img,id,base)
 	elif id in [Nodes.BOWL,Nodes.MUSHROOM_STEW]:
 		_polygon(img,[[1,7],[3,5],[13,5],[15,7],[13,12],[10,14],[6,14],[3,12]],base)
 		_polygon(img,[[2,7],[4,6],[12,6],[14,7],[12,9],[4,9]],Color("533a2b") if id == Nodes.BOWL else Color("d49a52"))

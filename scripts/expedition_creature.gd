@@ -1,11 +1,23 @@
 class_name ExpeditionCreature
 extends Creature
 
+var slime_size: int = 2
+var slime_hop: float = 0.0
 var crystal_key: String = ""
 var wings: Array = []
 var beam: MeshInstance3D
 var beam_target: Creature
 var attack_phase: float = 0.0
+
+func _ready() -> void:
+	super._ready()
+	if kind == "slime": set_slime_size(2)
+
+func info() -> Dictionary:
+	var data: Dictionary = super.info()
+	if kind == "slime":
+		data = data.duplicate(); data.damage = slime_size if slime_size > 1 else 0; data.health = slime_size*slime_size
+	return data
 
 func _build_model() -> void:
 	match kind:
@@ -47,7 +59,11 @@ func _build_model() -> void:
 				rod.rotation.y = TAU*(i%4)/4.0+i*0.2
 				legs.append(rod)
 		"slime":
-			_box(Vector3(0,0.5,0),Vector3.ONE*0.95,Color("82b554"),"moss")
+			var skin := _box(Vector3(0,0.5,0),Vector3.ONE*0.95,Color("82b554"),"moss")
+			skin.material_override.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			skin.material_override.albedo_color.a = 0.65
+			_box(Vector3(0,0.5,0),Vector3.ONE*0.63,Color("a1c568"),"moss")
+			_box(Vector3(0,0.32,-0.49),Vector3(0.2,0.055,0.025),Color("29432c"))
 			for side in [-1,1]: _box(Vector3(side*0.2,0.6,-0.49),Vector3(0.15,0.15,0.025),Color("29432c"))
 		"end_crystal":
 			var core := _box(Vector3(0,0.7,0),Vector3.ONE*0.5,Color("e8a0e1"))
@@ -89,6 +105,11 @@ func aggressive() -> bool:
 	return super.aggressive()
 
 func _physics_process(delta: float) -> void:
+	if kind == "slime" and game.playing():
+		slime_hop -= delta
+		if grounded and slime_hop <= 0:
+			velocity.y = 5.4; slime_hop = randf_range(0.6,1.4)
+		model.scale = Vector3.ONE*(slime_size/2.0)*Vector3(1.0+sin(life*7)*0.04,1.0-sin(life*7)*0.06,1.0+sin(life*7)*0.04)
 	if not game.playing(): return
 	if kind == "shulker":
 		life += delta; attack_cooldown -= delta
@@ -201,6 +222,14 @@ func hit(damage: float, from: Vector3 = Vector3.INF) -> void:
 	if kind == "ender_dragon": game.world.adventure_state["dragon_health"] = maxf(0,health)
 
 func die() -> void:
+	PotionEffects.died(self)
+	if kind == "slime":
+		if slime_size > 1:
+			for i in randi_range(2,4):
+				var child: Creature = game.spawn_creature("slime",position+Vector3((i%2-0.5)*0.4,0.1,(i/2-0.5)*0.4))
+				child.set_slime_size(slime_size/2)
+		else: game.spawn_drop(center(),Nodes.SLIME_BALL,randi_range(1,2))
+		game.experience += slime_size; game.puff(center(),Color("8db65e"),10); queue_free(); return
 	if is_queued_for_deletion(): return
 	if kind == "end_crystal":
 		queue_free() # Mark first: nearby crystal explosions cannot re-enter death.
@@ -215,3 +244,9 @@ func die() -> void:
 		if not game.world.adventure_state.has("city_guards"): game.world.adventure_state["city_guards"] = []
 		game.world.adventure_state.city_guards.append(crystal_key)
 	super.die()
+
+func set_slime_size(value: int) -> void:
+	slime_size = value if value in [1,2,4] else 2
+	health = slime_size*slime_size
+	width = 0.235*slime_size; height = 0.49*slime_size
+	model.scale = Vector3.ONE*(slime_size/2.0)
