@@ -14,6 +14,8 @@ var target: Dictionary = {}
 var mining: float = 0.0
 var mining_pos := Vector3i(99999,99999,99999)
 var mining_tool: int = -1
+var selection_cube: Mesh
+var cracks_cube: Mesh
 var selection: MeshInstance3D
 var cracks: MeshInstance3D
 var crack_material: StandardMaterial3D
@@ -22,6 +24,7 @@ var crack_stage: int = -1
 var dig_timer: float = 0.0
 var use_cooldown: float = 0.0
 var use_latched: bool = false
+var eating: Dictionary = {}
 var damage_cooldown: float = 0.0
 var riptide_time: float = 0.0
 var survival_timer: float = 0.0
@@ -65,6 +68,7 @@ func _ready() -> void:
 				mesh.surface_add_vertex(q)
 	mesh.surface_end()
 	selection.mesh = mesh
+	selection_cube = mesh
 	var line_mat := StandardMaterial3D.new()
 	line_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	line_mat.albedo_color = Color(0.08,0.13,0.10,0.65)
@@ -72,6 +76,7 @@ func _ready() -> void:
 	game.add_child.call_deferred(selection)
 	cracks = MeshInstance3D.new()
 	cracks.mesh = Art.crack_mesh()
+	cracks_cube = cracks.mesh
 	crack_material = StandardMaterial3D.new()
 	crack_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	crack_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -91,6 +96,11 @@ func armor_points() -> int:
 	for slot in armor_slots: total += Nodes.armor_points(slot.id)
 	return total
 
+func armor_toughness() -> float:
+	var total: float = 0
+	for slot in armor_slots: total += Nodes.armor_toughness(slot.id)
+	return total
+
 func _physics_process(delta: float) -> void:
 	if game == null or not game.playing(): return
 	if not game.world.loaded_at(position): return
@@ -108,6 +118,7 @@ func _physics_process(delta: float) -> void:
 	var crouch: bool = Input.is_physical_key_pressed(KEY_CTRL) or (pad != null and pad.sneak_held)
 	var sprint: bool = Input.is_physical_key_pressed(KEY_SHIFT) and hunger > 5 and not crouch
 	var speed: float = 7.0 if sprint else (2.1 if crouch else 4.5)
+	if not eating.is_empty(): speed = minf(speed,2.1)
 	var moving: bool = direction.length() > 0.1
 	camera.fov = lerpf(camera.fov,86.0 if sprint and moving and not flying else 78.0,delta*7)
 	if game.gamemode=="creative" and flying:
@@ -200,6 +211,8 @@ func _physics_process(delta: float) -> void:
 		if not game.survival.effects.has("fire_resistance") and (game.world.node_at(feet) == Nodes.LAVA or game.world.node_at(feet+Vector3i.UP) == Nodes.LAVA): hurt(4,true,Vector3.INF,"fire")
 		for d in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
 			if game.world.node_at(feet+d) == Nodes.CACTUS: hurt(1)
+		if Fire.is_fire(game.world.node_at(feet)) or Fire.is_fire(game.world.node_at(feet+Vector3i.UP)):
+			if not game.survival.effects.has("fire_resistance"): PotionEffects.apply(self,"burning",8); hurt(1,true,Vector3.INF,"fire")
 		if position.y < game.world.generator.min_y()-5: hurt(20,true,Vector3.INF,"void")
 
 func _move(motion: Vector3, crouch: bool, on_ladder: bool = false) -> void:
@@ -213,6 +226,16 @@ func _move(motion: Vector3, crouch: bool, on_ladder: bool = false) -> void:
 			next[axis] += part[axis]
 			if crouch and axis != 1 and game.world.intersects(position-Vector3.UP*0.06) and not game.world.intersects(next-Vector3.UP*0.1): continue
 			if not game.world.intersects(next): position = next; continue
+			# A half-block rise is walkable; full-height obstacles still need a jump.
+			if axis != 1 and not crouch and not flying and velocity.y <= 0 and game.world.intersects(position-Vector3.UP*0.06):
+				var raised: Vector3 = next+Vector3.UP*0.501
+				if not game.world.intersects(position+Vector3.UP*0.501) and not game.world.intersects(raised):
+					var low_y: float = next.y; var high_y: float = raised.y
+					for iteration in 10:
+						var mid_y: float = (low_y+high_y)*0.5
+						if game.world.intersects(Vector3(next.x,mid_y,next.z)): low_y = mid_y
+						else: high_y = mid_y
+					next.y = high_y; position = next; grounded = true; continue
 			# Resolve to the surface without tunnelling, even at low frame rates.
 			var low: float = 0.0
 			var high: float = 1.0
@@ -236,11 +259,15 @@ func _process(delta: float) -> void:
 	if game == null: return
 	if is_instance_valid(selection): selection.visible = false
 	if is_instance_valid(cracks): cracks.visible = false
-	if not game.playing(): mining = 0; return
+	if not game.playing(): mining = 0; eating.clear(); return
 	target = game.world.raycast(camera.global_position,-camera.global_basis.z,5.0,game.inventory.held().id in [Nodes.BUCKET,VillageContent.GLASS_BOTTLE,VillageContent.FISHING_ROD,VillageContent.BOAT_OAK,VillageContent.BOAT_ACACIA,VillageContent.BOAT_SPRUCE,VillageContent.BOAT_DARK_OAK,VillageContent.BOAT_BIRCH,VillageContent.KELP,VillageContent.LILY_PAD])
 	if not target.is_empty():
 		selection.visible = true
 		selection.position = Vector3(target.pos)
+		if BuildingShapes.is_shape(target.id):
+			var geometry: Dictionary = BuildingShapes.visuals(BuildingShapes.world_mask(game.world,target.pos))
+			selection.mesh = geometry.outline; cracks.mesh = geometry.cracks
+		else: selection.mesh = selection_cube; cracks.mesh = cracks_cube
 	var held: int = game.inventory.held().id
 	if held != hand_id: _make_hand(held)
 	swing = maxf(0,swing-delta*5)
@@ -249,7 +276,12 @@ func _process(delta: float) -> void:
 	var pad: TouchControls = game.controls if game.touch else null
 	var mine_pressed: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or (pad != null and pad.mine_held)
 	var use_pressed: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or (pad != null and pad.use_pressed)
+	var use_held: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or (pad != null and pad.use_held)
 	if pad != null: pad.use_pressed = false
+	if not eating.is_empty():
+		Eating.update(self,delta,use_held and not mine_pressed)
+		mining = 0
+		return
 	if mine_pressed and use_cooldown <= 0 and game.adventure.deflect_target():
 		use_cooldown = 0.4; swing = 1; return
 	if mine_pressed:
@@ -276,7 +308,7 @@ func _process(delta: float) -> void:
 		mining_pos = Vector3i(99999,99999,99999)
 	if not use_pressed: use_latched = false
 	var circuit_click: bool = not target.is_empty() and target.id in [Nodes.LEVER,Nodes.BUTTON,Nodes.REPEATER,Nodes.COMPARATOR]
-	if use_pressed and use_cooldown <= 0 and (not circuit_click or not use_latched):
+	if (use_pressed or use_held and Nodes.food(held) > 0) and use_cooldown <= 0 and (not circuit_click or not use_latched):
 		use_latched = true
 		use_cooldown = 0.25
 		use()
@@ -322,10 +354,11 @@ func equip_armor(slot: Dictionary) -> bool:
 	slot.id = previous.id; slot.count = previous.count; slot.wear = previous.wear
 	game.inventory.changed.emit()
 	game.sound("equip")
-	game.toast("%s equipped  ·  %d%% damage protection" % [Nodes.title(armor_slots[piece].id),armor_points()*4])
+	game.toast("%s equipped  ·  %d armor points" % [Nodes.title(armor_slots[piece].id),armor_points()])
 	return true
 
 func use() -> void:
+	if Fire.use(game,target): return
 	if game.survival.use(): return
 	var held: int = game.inventory.held().id
 	if held == Nodes.ENDER_EYE and not target.is_empty() and target.id == Nodes.END_FRAME:
@@ -343,15 +376,7 @@ func use() -> void:
 		return
 	if held in [Nodes.WRITABLE_BOOK,Nodes.WRITTEN_BOOK]: game.open_book(); return
 	if Nodes.food(held) > 0 and hunger < 20:
-		hunger = minf(20,hunger+Nodes.food(held))
-		if game.gamemode != "creative":
-			game.inventory.consume_selected()
-			if held in [Nodes.MUSHROOM_STEW,VillageContent.RABBIT_STEW,VillageContent.SUSPICIOUS_STEW,VillageContent.BEETROOT_SOUP]:
-				var rest: int = game.inventory.add_item(Nodes.BOWL,1)
-				if rest > 0: game.spawn_drop(position+Vector3.UP,Nodes.BOWL,rest)
-		game.sound("eat")
-		game.toast("A good meal. Hunger restored.")
-		swing = 1
+		Eating.start(self)
 		return
 	if Nodes.is_armor(held):
 		equip_armor(game.inventory.held())
@@ -377,9 +402,7 @@ func use() -> void:
 		return
 	# Compass points home; clock reads the day and hour.
 	if held == Nodes.COMPASS:
-		var home_delta: Vector3 = game.spawn_point-position
-		var bearing: String = ["east","south-east","south","south-west","west","north-west","north","north-east"][wrapi(roundi(atan2(-home_delta.x,-home_delta.z)/PI*4.0),0,8)]
-		game.toast("Spawn lies %d m to the %s." % [int(home_delta.length()),bearing])
+		game.toast(Lodestones.describe(game,game.inventory.held()))
 		swing = 0.5
 		return
 	if held == Nodes.CLOCK:
@@ -462,10 +485,14 @@ func use() -> void:
 			swing = 1
 			game.api.emit_node_placed(pour,liquid)
 			return
+	if BuildingShapes.try_place(game,target): return
 	var place_id: int = Nodes.WHEAT if held == Nodes.SEEDS else held
 	if not Nodes.placeable(place_id) and not (game.gamemode=="creative" and place_id in [Nodes.WATER,Nodes.LAVA,Nodes.BEDROCK]): return
 	if place_id == Nodes.WATER and game.dimension == "nether": game.toast("Water evaporates in the Nether."); return
 	var destination: Vector3i = p+target.normal
+	if place_id == Nodes.TORCH:
+		place_id = Torches.placed(target.normal)
+		if place_id == 0 or not BuildingShapes.supports(game.world,p,target.normal): return
 	if held == Nodes.SEEDS and id != Nodes.FARMLAND:
 		game.toast("Use a hoe to till dirt before planting seeds.")
 		return
@@ -511,7 +538,7 @@ func use() -> void:
 		game.api.emit_node_placed(head,Nodes.BED_HEAD)
 		return
 	var support: Vector3i = -target.normal if place_id in [Nodes.REDSTONE_TORCH,Nodes.LEVER,Nodes.BUTTON] else Vector3i.DOWN
-	if place_id in Nodes.SMALL_CIRCUITS and place_id != Nodes.IRON_DOOR_OPEN and not Nodes.solid(game.world.node_at(destination+support)):
+	if place_id in Nodes.SMALL_CIRCUITS and place_id != Nodes.IRON_DOOR_OPEN and not BuildingShapes.supports(game.world,destination+support,-support):
 		game.toast("Place this component on a solid block."); return
 	if place_id == Nodes.IRON_DOOR and game.world.node_at(destination+Vector3i.UP) != Nodes.AIR: return
 	if game.world.set_node(destination,place_id):
@@ -529,7 +556,7 @@ func use() -> void:
 		if game.gamemode!="creative": game.inventory.consume_selected()
 		game.sound("place")
 		swing = 1
-		if place_id in [Nodes.TORCH,Nodes.GLOWSTONE]: game.add_torch(destination)
+		if Torches.is_torch(place_id) or place_id == Nodes.GLOWSTONE: game.add_torch(destination)
 		if place_id == Nodes.CHEST and game.world.chest_partner(destination) != destination: game.toast("The chests join into one large chest.")
 		game.settle(destination)
 		game.progress("build")
@@ -541,15 +568,17 @@ func use() -> void:
 func hurt(amount: float, bypass_armor: bool = false, source: Vector3 = Vector3.INF, cause: String = "generic") -> void:
 	if game.gamemode=="creative" or damage_cooldown > 0 or health <= 0: return
 	if not bypass_armor and game.survival.blocks_damage(source): return
-	var reduction: float = 0.0 if bypass_armor else minf(0.8,armor_points()*0.04)
+	var toughness: float = armor_toughness()
+	var reduction: float = 0.0 if bypass_armor else minf(20,maxf(armor_points()/5.0,armor_points()-amount/(2+toughness/4)))/25
+	var uses: int = maxi(1,floori(amount/4))
 	if cause != "void": amount *= PotionEffects.resistance(self)*Enchantments.protection(self,cause)
 	PotionEffects.damaged(self)
 	health = maxf(0,health-amount*(1.0-reduction))
 	if not bypass_armor:
 		for slot in armor_slots:
-			if slot.id == 0: continue
+			if Nodes.armor_points(slot.id) == 0: continue
 			if randf() < float(Inventory.enchantment(slot,"Unbreaking"))/(Inventory.enchantment(slot,"Unbreaking")+1.0): continue
-			slot.wear += 1
+			slot.wear += uses
 			if slot.wear >= Nodes.durability(slot.id):
 				game.toast("Your "+Nodes.title(slot.id).to_lower()+" broke.")
 				slot.id = 0; slot.count = 0; slot.wear = 0; slot.erase("data")

@@ -20,7 +20,7 @@ Existing worlds gain terrain under their former generated bedrock at Y 0. Surfac
 
 | Addition | Behavior |
 | --- | --- |
-| Deepslate | A gradual transition begins near Y −24, becoming deepslate below −32. It takes longer to mine than stone and drops cobbled deepslate. |
+| Deepslate | A gradual transition begins near Y −24, becoming deepslate below −64. It takes longer to mine than stone and drops cobbled deepslate. |
 | Caverns | Larger caves and winding tunnels extend through the negative levels. Lava occupies the deepest cave floors at or below Y −112. |
 | Deep ores | Deepslate variants of diamond, iron, gold, lapis, coal, and copper retain the regular ore's required tool and drops. Diamonds occur below −48; coal and copper become less common at depth. |
 | Building blocks | Four cobbled deepslate make four polished deepslate; four polished deepslate make four deepslate bricks. Cobbled deepslate can also be smelted back to deepslate. |
@@ -30,3 +30,5 @@ Existing worlds gain terrain under their former generated bedrock at Y 0. Surfac
 | Furnace input fixes | The interface accepts the same fuels and ingredients as the furnace simulation, including charcoal, coal blocks, clay, and deep ores. |
 
 Run `./tests/run_tests.sh` for the complete gameplay suite. `tests/depth_checks.gd` covers this update. `tests/depth_tour.gd` additionally exercises the actual mouse-press → drag outside → Escape flow in a rendered window and captures a naturally generated deep cavern.
+
+The latest source bounds and ore comparison are in [the world-generation notes](mineclonia-world-source.md). The Overworld building ceiling is now Y 30927; unoccupied upper space uses implicit air.

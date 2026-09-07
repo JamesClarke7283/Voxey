@@ -2,14 +2,20 @@ class_name ItemIcon
 extends Control
 
 var item_id: int = 0:
-	set(value): item_id = value; queue_redraw()
+	set(value):
+		if item_id != value: item_id = value; queue_redraw()
 var count: int = 0:
-	set(value): count = value; queue_redraw()
+	set(value):
+		if count != value: count = value; queue_redraw()
 var wear: int = 0:
-	set(value): wear = value; queue_redraw()
+	set(value):
+		if wear != value: wear = value; queue_redraw()
 var selected: bool = false:
-	set(value): selected = value; queue_redraw()
-var enchanted: bool = false
+	set(value):
+		if selected != value: selected = value; queue_redraw()
+var enchanted: bool = false:
+	set(value):
+		if enchanted != value: enchanted = value; queue_redraw()
 var show_slot: bool = true
 var number: String = ""
 
@@ -20,14 +26,22 @@ func _ready() -> void:
 func _draw() -> void:
 	var rect := Rect2(Vector2.ZERO,size)
 	if show_slot:
-		draw_style_box(_style(Color("344237") if selected else Color("202b26"),Color("d1bf83") if selected else Color("4d5b47"),2 if selected else 1),rect)
-		if selected: draw_rect(Rect2(3,size.y-5,size.x-6,2),Color("dbca93"))
-	if not number.is_empty(): draw_string(ThemeDB.fallback_font,Vector2(6,14),number,HORIZONTAL_ALIGNMENT_LEFT,-1,11,Color("889584"))
+		draw_style_box(_style(Color("666666") if selected else Color("373737"),Color("eeeeee") if selected else Color("858585"),2 if selected else 1),rect)
+		if selected: draw_rect(Rect2(3,size.y-5,size.x-6,2),Color("ffffff"))
+	if not number.is_empty(): draw_string(ThemeDB.fallback_font,Vector2(6,14),number,HORIZONTAL_ALIGNMENT_LEFT,-1,11,Color("bbbbbb"))
 	if item_id == 0: return
 	var center: Vector2 = size*Vector2(0.5,0.47)
 	var scale_value: float = minf(size.x,size.y)*0.027
-	if item_id in Nodes.SMALL_CIRCUITS:
-		draw_texture_rect(ItemArt.texture(item_id),Rect2(center-Vector2.ONE*16,Vector2.ONE*32),false)
+	if BuildingShapes.is_shape(item_id):
+		if Art.atlas_texture == null: Art.make_atlas()
+		for face in BuildingShapes.icon_faces(item_id):
+			var points := PackedVector2Array(); var uv := PackedVector2Array()
+			for point in face.points: points.append(center+point*scale_value)
+			for point in face.uv: uv.append((face.tile*16+point*15+Vector2.ONE*0.5)/Vector2(Art.atlas_texture.get_size()))
+			draw_polygon(points,PackedColorArray([face.shade]),uv,Art.atlas_texture)
+	elif item_id in Nodes.SMALL_CIRCUITS or item_id == Nodes.TORCH:
+		var extent: float = maxf(16,roundf(minf(size.x,size.y)*0.75/16.0)*16.0)
+		draw_texture_rect(ItemArt.texture(item_id),Rect2(center-Vector2.ONE*extent*0.5,Vector2.ONE*extent),false)
 	elif Nodes.placeable(item_id) or item_id in [Nodes.WATER,Nodes.BEDROCK,Nodes.RIPE_WHEAT]:
 		if Art.atlas_texture == null: Art.make_atlas()
 		var s: float = scale_value
@@ -49,10 +63,10 @@ func _draw() -> void:
 		draw_line(Vector2(7,7),Vector2(size.x-7,7),Color("bb81e8"),2)
 		draw_string(ThemeDB.fallback_font,Vector2(size.x-16,19),"✦",HORIZONTAL_ALIGNMENT_LEFT,-1,15,Color("dcb5ff"))
 	if count > 1:
-		draw_string(ThemeDB.fallback_font,Vector2(size.x-8,size.y-7)-Vector2(str(count).length()*9,0),str(count),HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color("f3efda"))
+		draw_string(ThemeDB.fallback_font,Vector2(size.x-8,size.y-7)-Vector2(str(count).length()*9,0),str(count),HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color("ffffff"))
 	if Nodes.durability(item_id) > 0 and wear > 0:
 		var fraction: float = 1.0-float(wear)/Nodes.durability(item_id)
-		draw_rect(Rect2(7,size.y-10,size.x-14,3),Color("132119"))
+		draw_rect(Rect2(7,size.y-10,size.x-14,3),Color("202020"))
 		draw_rect(Rect2(7,size.y-10,(size.x-14)*fraction,3),Color("a2bf6a") if fraction>0.2 else Color("d67f55"))
 
 func _face(points: PackedVector2Array, tile: int, shade: Color) -> void:

@@ -121,21 +121,23 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	for mob in game.creatures.get_children():
 		if mob.kind == "slime" and not mob.is_queued_for_deletion(): slime_count += 1
 	suite.check(slime_count >= 2,"oozing causes a dying mob to release medium slimes")
-	# Each profile keeps a separate home, including across dimensions and renames.
-	var player_a: String = game.profiles.create("Home test A")
+	# Simulate distinct session identities to verify future multiplayer isolation.
+	var player_a: String = PlayerIdentity.OFFLINE
+	game.identity.session_id = player_a
 	var home_a: Vector3 = game.player.position
 	game.execute_command("/sethome")
-	var player_b: String = game.profiles.create("Home test B")
-	suite.check("No home" in game.execute_command("/home"),"new player profiles cannot use another player's home")
+	var player_b: String = "network-test-player"
+	game.identity.session_id = player_b
+	suite.check("No home" in game.execute_command("/home"),"another session identity cannot use the offline player's home")
 	game.player.position += Vector3(3,0,0); var home_b: Vector3 = game.player.position
 	game.execute_command("/sethome")
-	suite.check(game.player_homes.size() >= 2 and VillageLife.vec(game.player_homes[player_a].position) == home_a and VillageLife.vec(game.player_homes[player_b].position) == home_b,"each profile stores a separate home in the same world")
-	game.profiles.rename(player_a,"Home test renamed"); game.profiles.select(player_a)
-	var profiles := PlayerProfiles.new(game.saves.root_path)
-	suite.check(profiles.active_id == player_a and profiles.entries[player_a] == "Home test renamed","profile identity survives renaming and reload")
+	suite.check(game.player_homes.size() >= 2 and VillageLife.vec(game.player_homes[player_a].position) == home_a and VillageLife.vec(game.player_homes[player_b].position) == home_b,"each session identity stores a separate home in the same world")
+	game.identity.session_id = player_a
+	var identity := PlayerIdentity.new(game.saves.root_path)
+	suite.check(identity.session_id == "player" and not game.hud.has_method("show_profiles"),"offline identity is player with no player selector")
 	game.execute_command("/home")
 	while game.state == "loading": await suite.process_frame
-	suite.check(game.player.position.distance_to(home_a) < 0.2,"home returns the active profile to its own position")
+	suite.check(game.player.position.distance_to(home_a) < 0.2,"home returns the current session player to its own position")
 	var save: Dictionary = game.read_save(game.saves.save_path(game.active_world_id))
 	suite.check(save.homes.has(player_a) and save.homes.has(player_b),"world saves include each player's home")
 	game.travel_dimension("nether")

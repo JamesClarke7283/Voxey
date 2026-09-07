@@ -34,9 +34,9 @@ Choose **Play / choose a world**, create a named world or select an existing one
 
 **Crafting:** place items in the 2×2 inventory grid, or right-click a placed crafting table for a 3×3 grid. Patterns can be moved within the grid; asymmetric tools also accept mirrored patterns. Mushroom stew, pumpkin pie, and mossy stone recipes accept ingredients in any arrangement. Click the output to take it. The recipe guide shows ingredients and a reference pattern; **Fill grid** transfers the required items into the real grid. Shift-fill prepares a batch, and Shift-clicking output crafts into the inventory. Right-click splits a stack or places one item. Drag by pressing an item and moving the pointer. Carry a stack outside the inventory panel and press Escape to drop it and close the screen. Clicking outside drops the stack; right-clicking outside drops one. Q drops one carried or hovered item. Closing with the pointer inside returns unused grid/cursor items; overflow becomes a pickup. Recipe search accepts Q as text.
 
-**Deeper worlds:** the Overworld now reaches bedrock at **Y −128**, matching Mineclonia’s documented lower limit. The old generated floor at Y 0 becomes mineable stone, while existing surface terrain and saved builds retain their coordinates. Deepslate takes over below Y −32, with larger caverns, deep ore variants, and lava below Y −112. The Nether now has a 128-block vertical range. Cave enemies can spawn underground during daylight; torches help keep them away. See [the depth and inventory guide](docs/depth-inventory.md).
+**Deeper worlds:** the Overworld now reaches bedrock at **Y −128**, matching Mineclonia’s documented lower limit. The old generated floor at Y 0 becomes mineable stone, while existing surface terrain and saved builds retain their coordinates. Deepslate takes over below Y −64, with a transition up to −46, with larger caverns, deep ore variants, and lava below Y −112. The Nether has terrain through local Y 128 and building room through Y 256. Overworld builds can reach Y 30927, with horizontal coordinates −30912…30927. Empty upper space is streamed sparsely. Cave enemies can spawn underground during daylight; torches help keep them away. See [the depth and inventory guide](docs/depth-inventory.md).
 
-**Survival progression:** gather oak logs, make planks and a table, then a wooden pickaxe. Mine stone for stone tools and a furnace. Stone picks harvest iron and copper; smelt ore with coal or wood. Iron picks harvest diamond and gold. Diamond tools are the strongest. Tools have durability; using the wrong tool is slower and may not yield a drop.
+**Survival progression:** gather oak logs, make planks and a table, then a wooden pickaxe. Mine stone for stone tools and a furnace. Stone picks harvest iron and copper; smelt ore with coal or wood. Iron picks harvest diamond and gold. Diamond tools can be upgraded to Netherite at a smithing table. Tools have durability; using the wrong tool is slower and may not yield a drop.
 
 **Mining feel:** holding the mouse button grows a crack overlay from the exact centre of every face of the node, in nine symmetric stages, while chips fly off the struck face. Sand and gravel are falling nodes: remove their support and they drop as entities until they land.
 
@@ -70,6 +70,10 @@ Craft an **enchanting table** from a book, two diamonds, and four obsidian. Righ
 
 **Creative:** all items are available through the inventory's **All items** tab. Placement is unlimited, mining is fast, tools don't wear out, and survival damage is disabled. Flight still respects solid terrain. Switching modes keeps the same world and inventory.
 
+Select a saved world and choose **Delete…** to delete it. The confirmation names the world; **Cancel** or Escape keeps it. Confirmed deletion includes its dimensions and backups.
+
+See [the performance and interface update](docs/performance-and-ui.md) for the gray recipe grid, GPU diagnostics, wall torches, inventory rules and measured streaming improvements.
+
 ## Console
 
 ```text
@@ -82,9 +86,10 @@ Craft an **enchanting table** from a book, two diamonds, and four obsidian. Righ
 /tp <x> <y> <z>
 /dimension overworld | nether | end
 /locate village | stronghold | fortress | end_city
-/sethome                 save this player profile’s home in this world
+/sethome                 save this player’s home in this world
 /home                    return to that home, including across dimensions
 /weather clear | rain | thunder
+/gamerule keepInventory true | false
 /xp <points>
 /heal
 /killmobs
@@ -123,7 +128,7 @@ Saves are version 2 (version 1 files still load; the old single chestplate becom
 
 ## World and rendering
 
-Voxels are **nodes**. Each **map block** contains 16×16×16 nodes in a 32-bit integer array. The world streams horizontally around the player. The Overworld covers Y −128 through 63 (192 blocks); the Nether and End cover Y 0 through 127 (128 blocks). The End has islands over an open void; the other dimensions have bedrock boundaries. Existing positive-Y terrain coordinates are preserved.
+Voxels are **nodes**. Each **map block** contains 16×16×16 nodes in a 32-bit integer array. The world streams horizontally around the player. The Overworld permits building from Y −127 through 30927 above its bedrock floor at −128; unedited upper air is implicit. The Nether has a local ceiling at 256, and the End at 24945. Natural terrain currently occupies the lower part of these ranges. The End has islands over an open void. See [the source comparison](docs/mineclonia-world-source.md) for coordinate mapping and remaining terrain differences.
 
 - Worker-thread terrain generation and mesh construction with deterministic noise, caves, ore clusters, cross-boundary trees, meadows, shores, desert, and snow biomes.
 - Greedy meshing merges coplanar faces; neighboring nodes and a one-node halo eliminate internal and map-block-boundary faces. One opaque/cutout surface and one water surface per map block, with a shared repeating texture atlas.
@@ -132,7 +137,7 @@ Voxels are **nodes**. Each **map block** contains 16×16×16 nodes in a 32-bit i
 - Nine crack stages use a full UV square on each face. The crack texture is drawn in one sector and stamped with four-fold rotational symmetry about the exact face centre, so every stage grows evenly outward; forks and web rings appear in later stages.
 - Day/night lighting, fog, voxel clouds, positional torch lights, generated 2D and positional 3D sound effects, textured pickups, falling nodes, mining debris, and explosion craters.
 
-Voxey includes three dimensions, redstone simulation, villages and trading, brewing, enchantments, portable pouches, and a persistent End dragon encounter. Multiplayer, general fluid-flow simulation, the Wither, bastions, and parts of Mineclonia’s full content roster remain outside this adaptation. Ordinary roaming mobs respawn between sessions; villagers, linked animals, the new alchemy creatures, and major encounters persist. Vertical ranges remain bounded. Visuals are original procedural assets; trade, potion, and enchantment data adapt Mineclonia’s GPL-3.0 source, with attribution and the license in `docs/`.
+Voxey includes three dimensions, redstone simulation, villages and trading, brewing, enchantments, portable pouches, Netherite, an initial bastion adaptation and a persistent End dragon encounter. Multiplayer, general fluid-flow simulation, the Wither and parts of Mineclonia’s full content roster remain open in the [parity ledger](docs/mineclonia-parity.md). Ordinary roaming mobs respawn between sessions; villagers, linked animals, alchemy creatures, bastion residents and major encounters persist. Visuals are original procedural assets; source data and noise algorithms retain attribution and licenses in `docs/`.
 
 ## Validation
 
@@ -164,4 +169,16 @@ Pouches have five levels, sixteen colors, and 27–135 slots each. Equip up to t
 
 Death leaves two bones and a persistent recovery chest. Main inventory items, armor and pouch items go into the chest; inventory pages remain packed inside their pouches. The death screen gives the chest’s coordinates.
 
-The title screen’s player selector creates persistent local profiles. Each profile has its own `/sethome` location in each world, and its own villager reputation. This remains a single-player game: profiles share the world’s inventory and builds.
+Offline play uses the fixed player identity `player`, with no player selector. Homes, villager reputation and recovery ownership use stable player keys so future multiplayer sessions can keep them separate. Previously selected local-profile homes and reputation migrate to `player`; other saved identities remain preserved.
+
+## Mineclonia parity work in progress
+
+The [source-backed parity ledger](docs/mineclonia-parity.md) inventories 218 source modules. Full parity is not complete. The [world and Nether source comparison](docs/mineclonia-world-source.md) records implemented rules, tests and remaining differences, including ore generation and world limits.
+
+**Netherite:** mine ancient debris with a diamond pickaxe, smelt it into scrap, and combine four scrap with four gold for an ingot. Find upgrade templates in bastion treasure (`/locate bastion`). A smithing table upgrades diamond gear with one ingot and one template while retaining enchantments and wear. Duplicate a template with seven diamonds and netherrack. Netherite drops survive lava and fire.
+
+**Bastions and piglins:** blackstone bastions have three treasure levels, piglins and a brute. Gold armor keeps unprovoked piglins peaceful; brutes still attack. Use a gold ingot on a piglin to barter. After six seconds it drops one of eighteen source-weighted rewards. Bastion residents, deaths and barter progress persist. The complete source layouts and AI are still being ported.
+
+**Fire and navigation:** fire charges and flint and steel ignite blocks, portals and TNT. Water extinguishes fire; netherrack supports eternal flames. Use a compass on a lodestone to bind it, then use the compass to find that lodestone within its dimension. Bindings stay with the individual compass through inventory moves and saving.
+
+**Stairs and slabs:** 51 material families provide 102 building items, with upper/lower slabs, double slabs, inverted stairs and automatic corners. Players walk up half-height steps, and targeting, mining and dropped models follow the actual shape. Natural tuff and eight additional masonry blocks support the deepslate/tuff crafting chains. See [crafting and placement](docs/building-shapes.md).

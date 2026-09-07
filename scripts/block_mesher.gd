@@ -4,27 +4,43 @@ extends RefCounted
 # Greedy face merging: one quad for a coplanar rectangle of matching nodes.
 # Only packed arrays leave the worker; GPU and scene resources stay on the main thread.
 static func build(data: Variant, external_circuits: bool = false) -> Array:
+	# Classify each tile once instead of doing registry lookups for every face.
+	var flags := PackedByteArray(); flags.resize(data.size())
+	var types: Dictionary = {}
+	for index in data.size():
+		var id: int = data[index]
+		if not types.has(id):
+			var cube: bool = id != 0 and (not BuildingShapes.is_shape(id) or BuildingShapes.variant(id) == 2) and not VillageContent.special(id) and id not in Nodes.CIRCUIT_NODES and not Nodes.plant(id) and id not in [Nodes.TORCH,Nodes.LADDER,Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.NETHER_PORTAL,Nodes.END_PORTAL,Nodes.ENCHANTING_TABLE]
+			var occludes: bool = not Nodes.transparent(id) and id not in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.ENCHANTING_TABLE]
+			types[id] = (1 if cube else 0) | (2 if occludes else 0)
+		flags[index] = types[id]
 	var outputs: Array = [_empty(), _empty()]
 	var has_nodes: bool = false
+	var has_cubes: bool = false
 	for y in 16:
 		for z in 16:
 			for x in 16:
 				var id: int = data[(x+1) + (z+1)*18 + (y+1)*324]
 				if id == 0: continue
 				has_nodes = true
+				if flags[(x+1)+(z+1)*18+(y+1)*324]&1: has_cubes = true
 				if id in Nodes.CIRCUIT_NODES and not external_circuits: _art_box(outputs[0],Vector3(x,y,z)+Vector3(0.5,0.2,0.5),Vector3(0.85,0.4,0.85),Nodes.tile(id,0),Nodes.tile(id,2))
+				elif BuildingShapes.is_shape(id) and BuildingShapes.variant(id) != 2: BuildingShapes.mesh(outputs[0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
+				elif Torches.is_torch(id): _torch(outputs[0],Vector3(x,y,z),id)
 				elif VillageContent.special(id): VillageArt.mesh(outputs[0],Vector3(x,y,z),id)
 				elif id == Nodes.NETHER_PORTAL: _portal(outputs[0],Vector3(x,y,z),data,Vector3i(x,y,z))
 				elif id == Nodes.END_PORTAL: _end_portal(outputs[0],Vector3(x,y,z))
 				elif id == Nodes.ENCHANTING_TABLE: _enchanting_table(outputs[0],Vector3(x,y,z))
 				elif Nodes.plant(id): _plant(outputs[0], Vector3(x,y,z), id)
-				elif id == Nodes.TORCH: _torch(outputs[0], Vector3(x,y,z))
 				elif id == Nodes.LADDER: _ladder(outputs[0], Vector3(x,y,z), data, Vector3i(x,y,z))
 				elif id in [Nodes.BED_FOOT,Nodes.BED_HEAD]: _bed_half(outputs[0], Vector3(x,y,z), id, data, Vector3i(x,y,z))
 	if not has_nodes: return [[], []]
-	for axis in 3:
+	for axis in (range(3) if has_cubes else []):
 		var u: int = (axis + 1) % 3
 		var v: int = (axis + 2) % 3
+		var stride: int = [1,324,18][axis]
+		var u_stride: int = [1,324,18][u]
+		var v_stride: int = [1,324,18][v]
 		for sign_dir in [-1, 1]:
 			var normal := Vector3.ZERO
 			normal[axis] = sign_dir
@@ -34,17 +50,12 @@ static func build(data: Variant, external_circuits: bool = false) -> Array:
 				mask.resize(256)
 				for j in 16:
 					for i in 16:
-						var p := Vector3i.ONE
-						p[axis] += plane
-						p[u] += i
-						p[v] += j
-						var id: int = data[p.x + p.z*18 + p.y*324]
-						if VillageContent.special(id) or id in Nodes.CIRCUIT_NODES or id == 0 or Nodes.plant(id) or id == Nodes.TORCH or id == Nodes.LADDER or id in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.NETHER_PORTAL,Nodes.END_PORTAL,Nodes.ENCHANTING_TABLE]: continue
-						p[axis] += sign_dir
-						var neighbor: int = data[p.x + p.z*18 + p.y*324]
-						# A bed only fills the lower part of its cell. Keep the full
-						# neighbor face so the exposed floor/wall has no holes.
-						if neighbor == id or (not Nodes.transparent(neighbor) and neighbor not in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.ENCHANTING_TABLE]): continue
+						var index: int = 343+plane*stride+i*u_stride+j*v_stride
+						if flags[index]&1 == 0: continue
+						var id: int = data[index]
+						var neighbor_index: int = index+sign_dir*stride
+						var neighbor: int = data[neighbor_index]
+						if neighbor == id or flags[neighbor_index]&2 != 0: continue
 						if id == Nodes.WATER and neighbor == Nodes.GLASS: continue
 						mask[i + j*16] = id
 				var j: int = 0
@@ -114,15 +125,21 @@ static func _plant(out: Array, p: Vector3, id: int) -> void:
 		_quad(out,verts,uv,Vector3.UP,Nodes.tile(id,0),Color.WHITE,false)
 		_quad(out,verts,uv,Vector3.UP,Nodes.tile(id,0),Color.WHITE,true)
 
-static func _torch(out: Array, p: Vector3) -> void:
-	var uv: Array = [Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)]
-	for axis in [0,2]:
-		for side in [-1,1]:
-			var a: Vector3 = p + Vector3(0.43,0,0.43)
-			var b: Vector3 = p + Vector3(0.57,0,0.57)
-			a[axis] = p[axis]+0.5+side*0.07
-			b[axis] = a[axis]
-			_quad(out,[a,b,b+Vector3.UP*0.75,a+Vector3.UP*0.75],uv,Vector3.UP,Nodes.TORCH,Color.WHITE,side == 1)
+static func _torch(out: Array, p: Vector3, id: int = Nodes.TORCH) -> void:
+	var start: int = out[0].size()
+	_art_box(out,Vector3(0,0.375,0),Vector3(0.125,0.75,0.125),Nodes.TORCH,Nodes.TORCH)
+	var rotation := Basis.IDENTITY
+	var base: Vector3 = p+Vector3(0.5,0,0.5)
+	if id in Torches.WALLS:
+		var support: Vector3 = Vector3(Torches.support(id))
+		rotation = Basis(Vector3.UP.cross(-support).normalized(),PI/6.0)
+		base += support*0.4+Vector3.UP*0.15
+	for i in range(start,out[0].size()):
+		out[0][i] = base+rotation*out[0][i]
+		out[1][i] = rotation*out[1][i]
+		# Horizontal end caps sample the flame or the foot of the shaft.
+		if i-start in range(8,12): out[2][i] = Vector2(0.5,0.05)
+		elif i-start in range(12,16): out[2][i] = Vector2(0.5,0.95)
 
 # A ladder is a flat quad mounted against the first solid neighbor (or the
 # west face when free-standing, as when a supporting node was mined first).

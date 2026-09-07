@@ -20,7 +20,8 @@ const KINDS = {
 	"slime": {"hostile":true,"health":4.0,"speed":1.6,"width":0.45,"height":1.0,"damage":2,"drops":[[Nodes.SLIME_BALL,1,3]],"voice":"","pitch":0.8,"leaps":true},
 	"end_crystal": {"hostile":false,"health":1.0,"speed":0.0,"width":0.6,"height":1.4,"damage":0,"drops":[],"voice":"","pitch":1.0},
 	"ender_dragon": {"hostile":true,"health":200.0,"speed":13.0,"width":3.0,"height":4.0,"damage":7,"drops":[],"voice":"","pitch":0.4},
-	"piglin": {"hostile":true,"health":20.0,"speed":2.5,"width":0.3,"height":1.8,"damage":4,"drops":[[Nodes.GOLD_NUGGET,1,4]],"voice":"pig","pitch":0.65},
+	"piglin_brute":{"hostile":true,"health":50.0,"speed":2.5,"width":0.3,"height":1.8,"damage":7,"drops":[],"voice":"pig","pitch":0.55},
+	"piglin": {"hostile":true,"health":16.0,"speed":2.5,"width":0.3,"height":1.8,"damage":4,"drops":[[Nodes.GOLD_NUGGET,1,4]],"voice":"pig","pitch":0.65},
 	"magma_cube": {"hostile":true,"health":16.0,"speed":1.5,"width":0.43,"height":1.0,"damage":3,"drops":[[Nodes.MAGMA_CREAM,1,2]],"voice":"","pitch":0.8,"leaps":true},
 	"sheep": {"hostile":false,"health":8.0,"speed":0.8,"width":0.3,"height":1.1,"damage":0,"drops":[[VillageContent.RAW_MUTTON,1,2],[Nodes.WOOL,1,2]],"voice":"sheep","pitch":1.0},
 	"cow": {"hostile":false,"health":10.0,"speed":0.7,"width":0.36,"height":1.35,"damage":0,"drops":[[VillageContent.RAW_BEEF,1,3],[Nodes.LEATHER,1,2]],"voice":"cow","pitch":0.75},
@@ -82,7 +83,7 @@ func _ready() -> void:
 
 func _build_model() -> void:
 	match kind:
-		"zombie","piglin":
+		"zombie","piglin","piglin_brute":
 			_box(Vector3(0,1.08,0),Vector3(0.48,0.64,0.28),Color("416f72"),"cloth")
 			_box(Vector3(0,1.36,-0.145),Vector3(0.18,0.12,0.025),Color("7a8c55"),"skin")
 			head = _joint(Vector3(0,1.51,-0.015),"Head")
@@ -180,7 +181,7 @@ func _build_model() -> void:
 		"cow","pig","chicken","sheep":
 			_build_animal()
 	# Small anatomical details sharpen the hostile silhouettes.
-	if kind == "piglin":
+	if kind in ["piglin","piglin_brute"]:
 		for part in parts:
 			part.material_override.albedo_texture = CreatureArt.texture("skin",Color("b88b72"))
 		_box(Vector3(0,0.1,-0.28),Vector3(0.29,0.16,0.16),Color("d3a088"),"skin",head)
@@ -189,6 +190,10 @@ func _build_model() -> void:
 			_box(Vector3(side*0.095,0.025,-0.33),Vector3(0.045,0.13,0.045),Color("eee0bc"),"bone",head)
 		_box(Vector3(0,-0.75,0),Vector3(0.07,0.62,0.06),Color("e9bd48"),"",arms[1])
 		_box(Vector3(0,-0.49,0),Vector3(0.25,0.055,0.08),Color("c59635"),"",arms[1])
+		if kind == "piglin_brute":
+			_box(Vector3(0,1.04,-0.025),Vector3(0.56,0.74,0.4),Color("332c2b"),"cloth")
+			_box(Vector3(0,0.77,-0.24),Vector3(0.18,0.15,0.04),Color("e8c253"))
+			_box(Vector3(0.14,-0.75,0),Vector3(0.29,0.26,0.09),Color("e8c253"),"",arms[1])
 	elif kind == "zombie":
 		_box(Vector3(0.15,1.02,-0.151),Vector3(0.075,0.2,0.025),Color("7b8950"),"skin")
 		_box(Vector3(-0.15,0.77,-0.15),Vector3(0.1,0.06,0.03),Color("344c55"),"cloth")
@@ -321,7 +326,7 @@ func animate(delta: float, chasing: bool = false) -> void:
 		if kind == "chicken":
 			arms[i].rotation.z = (-1 if i == 0 else 1)*(0.12+absf(sin(life*14))*(0.8 if not grounded else 0.08))
 			continue
-		var rest: float = 1.35 if kind in ["zombie","piglin"] else (1.3 if i == 1 else 0.7)
+		var rest: float = 1.35 if kind in ["zombie","piglin","piglin_brute"] else (1.3 if i == 1 else 0.7)
 		arms[i].rotation.x = rest+sin(life*4+i)*0.07+sin(life*8+i*PI)*gait*0.1
 	for child in model.get_children():
 		if child.has_meta("tail"): child.rotation.z = sin(life*2.6)*0.2
@@ -496,7 +501,7 @@ func die() -> void:
 		var item: int = int(entry[0])
 		if PotionEffects.level(self,"burning") > 0 and Nodes.food(Nodes.smelt_result(item)) > 0: item = Nodes.smelt_result(item)
 		if amount > 0: game.spawn_drop(center(),item,amount)
-	game.experience += 2 if hostile else 1
+	game.experience += 20 if kind == "piglin_brute" else (2 if hostile else 1)
 	game.sound_at("mob_hurt",position,info().pitch*0.7)
 	game.puff(center(),colors[0] if not colors.is_empty() else Color.WHITE,12)
 	queue_free()

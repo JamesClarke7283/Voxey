@@ -56,6 +56,19 @@ func unload(c: Vector2i) -> void:
 			tracked.erase(p)
 			if visuals.has(p): visuals[p].queue_free(); visuals.erase(p)
 
+func support_changed(p: Vector3i) -> void:
+	var current: int = world.node_at(p)
+	if not BuildingShapes.is_shape(current) and Nodes.solid(current): return
+	for side in SIDES:
+		var q: Vector3i = p+side
+		var id: int = world.node_at(q)
+		if id not in Nodes.SMALL_CIRCUITS or id == Nodes.IRON_DOOR_OPEN: continue
+		var saved: Array = state(q).get("support",[0,-1,0])
+		var support := Vector3i(saved[0],saved[1],saved[2])
+		if q+support != p or BuildingShapes.supports(world,p,-support): continue
+		world.set_node(q,Nodes.AIR)
+		world.get_parent().spawn_drop(Vector3(q)+Vector3.ONE*0.5,id,1)
+
 func refresh(p: Vector3i) -> void:
 	if visuals.has(p): visuals[p].queue_free(); visuals.erase(p)
 	if not tracked.has(p) or not world.loaded_at(Vector3(p)): return
@@ -265,7 +278,8 @@ func hopper(p: Vector3i) -> void:
 	var d := direction(p)
 	if d == Vector3i.UP: d = Vector3i.DOWN
 	var destination: Array = container(p+d)
-	if world.node_at(p+d) in FURNACES: destination = [destination[0 if d == Vector3i.DOWN else 1]]
+	if world.node_at(p+d) in FURNACES and d == Vector3i.DOWN and destination[2].count > 0: destination = []
+	elif world.node_at(p+d) in FURNACES: destination = [destination[0 if d == Vector3i.DOWN else 1]]
 	for slot in slots:
 		if world.node_at(p+d) in FURNACES:
 			if d == Vector3i.DOWN and Nodes.smelt_result(slot.id) == 0: continue
@@ -297,7 +311,13 @@ func dispense(p: Vector3i, projectile: bool) -> void:
 	for slot in slots:
 		if slot.id == 0: continue
 		if not projectile and world.node_at(p+d) in CONTAINERS:
-			if insert_one(container(p+d),slot): consume_one(slot)
+			var destination: Array = container(p+d)
+			if world.node_at(p+d) in FURNACES:
+				var eligible: Array = []
+				var index: int = 0 if d == Vector3i.DOWN else 1
+				if FurnaceRules.accepts(destination,index,slot.id): eligible.append(destination[index])
+				destination = eligible
+			if insert_one(destination,slot): consume_one(slot)
 			return
 		if projectile and slot.id == Nodes.ARROW_ITEM:
 			var shot: Arrow = game.spawn_arrow(origin,Vector3(d)*24)

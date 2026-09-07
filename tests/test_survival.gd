@@ -232,10 +232,10 @@ func run() -> void:
 	check(game.player.armor_slots[1].id==Nodes.armor_id(1,1) and game.inventory.slots[2].id==0 and game.player.armor_points()==6,"right click wears a chestplate in its own slot")
 	game.player.damage_cooldown=0
 	game.player.hurt(10)
-	check(is_equal_approx(game.player.health,12.4) and game.player.armor_slots[1].wear==1,"iron chestplate absorbs 24% of damage and takes wear")
+	check(is_equal_approx(game.player.health,10.48) and game.player.armor_slots[1].wear==2,"iron chestplate uses source damage reduction and hit-based wear")
 	game.player.damage_cooldown=0
 	game.player.hurt(10,true)
-	check(is_equal_approx(game.player.health,2.4) and game.player.armor_slots[1].wear==1,"bypassing damage ignores armor and does not wear it")
+	check(is_equal_approx(game.player.health,0.48) and game.player.armor_slots[1].wear==2,"bypassing damage ignores armor and does not wear it")
 	game.player.health=20
 	game.player.armor_slots[1].wear=Nodes.durability(Nodes.armor_id(1,1))-1
 	game.player.damage_cooldown=0
@@ -368,13 +368,15 @@ func run() -> void:
 	while is_instance_valid(creeper) and Time.get_ticks_msec()<timeout: await process_frame
 	game.pause()
 	check(not is_instance_valid(creeper) and game.player.health<20,"a creeper next to the player explodes and hurts them")
-	for kind in Creature.PASSIVE: game.spawn_creature(kind,game.player.position+Vector3(2,0,-3))
+	var passive_fixtures: Array = []
+	for kind in Creature.PASSIVE: passive_fixtures.append(game.spawn_creature(kind,game.player.position+Vector3(2,0,-3)))
 	game.resume()
 	timeout=Time.get_ticks_msec()+900
 	while Time.get_ticks_msec()<timeout: await process_frame
 	game.pause()
 	var roaming: int=0
-	for mob in game.creatures.get_children():
+	# Ambient spawns may join during the timed test; verify the actual fixtures.
+	for mob in passive_fixtures:
 		if is_instance_valid(mob) and not mob.hostile and mob.position.y>0: roaming+=1
 	check(roaming==Creature.PASSIVE.size(),"passive creatures roam without falling through the world")
 	for mob in game.creatures.get_children(): mob.free()
@@ -698,7 +700,7 @@ func run() -> void:
 	game.player.armor_slots[0]={"id":Nodes.armor_id(0,0),"count":1,"wear":4}
 	check(game.save_game("user://voxey_test.json"),"a world with worn armor saves")
 	var armor_save: Dictionary=game.read_save("user://voxey_test.json")
-	check(int(armor_save.armor[0].id)==Nodes.armor_id(0,0) and int(armor_save.armor[0].wear)==4 and int(armor_save.version)==2,"save stores worn armor with wear")
+	check(int(armor_save.armor[0].id)==Nodes.armor_id(0,0) and int(armor_save.armor[0].wear)==4 and int(armor_save.version)==game.SAVE_VERSION,"save stores worn armor with wear")
 	await load("res://tests/nether_checks.gd").run(self,game)
 	await load("res://tests/depth_checks.gd").run(self,game)
 	await load("res://tests/expansion_checks.gd").run(self,game)

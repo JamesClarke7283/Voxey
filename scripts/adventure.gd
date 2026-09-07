@@ -63,6 +63,7 @@ func update(delta: float) -> void:
 		clock = 0
 		if game.dimension == "end": ensure_end(); city_guards()
 		else: restore_placed_crystals()
+		if game.dimension == "nether": Bastions.populate(game)
 	if spawn_clock > 8:
 		spawn_clock = 0
 		if game.dimension == "nether": fortress_spawn()

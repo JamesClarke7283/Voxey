@@ -32,7 +32,7 @@ Slimes spawn on swamp surfaces on dark nights, weighted by the moon phase, and b
 
 ## Player homes
 
-Choose or create a player profile on the title screen. `/sethome` saves that profile’s current location and facing in the current world. `/home` returns to it across any of the three dimensions. A player without a home receives instructions to set one. Profiles retain their identity when renamed. Homes are separate per player and per world; inventory and builds belong to the shared single-player world.
+`/sethome` saves your location and facing in the current world. `/home` returns across any of the three dimensions. Offline play always uses `player`; there is no player selector. Homes and reputation are keyed by session player identity for future multiplayer. Existing homes from the previously active local profile migrate automatically, while other saved identities remain preserved.
 
 ## Other workstations
 

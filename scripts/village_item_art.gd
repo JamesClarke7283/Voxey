@@ -4,7 +4,26 @@ extends RefCounted
 static func draw(img: Image, id: int, base: Color) -> void:
 	var d: Dictionary = VillageContent.DATA.get(id,{})
 	var family: String = d.get("family","")
-	if family == "pouch":
+	if family == "disc":
+		for y in 16:
+			for x in 16:
+				var r: float = Vector2(x-7.5,y-7.5).length()
+				if r < 7 and r > 1: img.set_pixel(x,y,base if r < 3 else Color("2d3135"))
+	elif family == "fire_charge":
+		ItemArt._polygon(img,[[2,11],[4,6],[8,1],[9,6],[13,3],[14,11],[11,15],[5,15]],base)
+		ItemArt._polygon(img,[[5,12],[8,7],[11,11],[9,14]],Color("ffd36b"))
+	elif family == "template":
+		ItemArt._polygon(img,[[3,1],[12,1],[14,4],[14,13],[2,13],[2,4]],base)
+		img.fill_rect(Rect2i(4,3,8,8),Color("49393d"))
+		ItemArt._polygon(img,[[8,3],[12,7],[10,7],[10,11],[6,11],[6,7],[4,7]],Color("89c7cc"))
+	elif family == "ingot":
+		ItemArt._polygon(img,[[3,5],[11,3],[15,6],[13,11],[5,13],[1,10]],base)
+		ItemArt._line(img,Vector2(4,6),Vector2(11,4),base.lightened(0.35))
+		ItemArt._line(img,Vector2(5,11),Vector2(12,9),base.darkened(0.25),2)
+	elif family == "scrap":
+		ItemArt._polygon(img,[[3,3],[7,2],[10,5],[14,6],[12,12],[7,14],[5,10],[1,9]],base)
+		ItemArt._line(img,Vector2(4,5),Vector2(10,8),base.lightened(0.22),2)
+	elif family == "pouch":
 		var level: int = Pouches.level_of(id)
 		var left: int = 5-level
 		var right: int = 10+level

@@ -114,6 +114,10 @@ func _init() -> void:
 	VillageContent.recipes(self)
 	PotionCatalog.recipes(self)
 	Pouches.recipes(self)
+	Netherite.recipes(self)
+	Bastions.recipes(self)
+	BuildingShapes.recipes(self)
+	Masonry.recipes(self)
 
 func _shapeless(label: String, id: int, count: int, ingredients: Array) -> void:
 	_recipe(label,id,count,ingredients,2)
@@ -246,7 +250,22 @@ func damage_tool() -> bool:
 	if randf() < float(enchantment(slot,"Unbreaking"))/(enchantment(slot,"Unbreaking")+1.0): return false
 	slot.wear += 1
 	if slot.wear >= Nodes.durability(slot.id):
-		consume_selected()
+		var broken_id: int = slot.id
+		var metadata: Dictionary = slot.get("data",{}).duplicate(true)
+		slot.count -= 1
+		if slot.count > 0: slot.wear = 0
+		else:
+			slots[selected] = {"id":0,"count":0,"wear":0}
+			# Search all carried pages. Tool type, tier, name and enchantments must
+			# match; retain the replacement's own remaining durability.
+			for i in slots.size():
+				var candidate: Dictionary = slots[i]
+				if i == selected or candidate.id != broken_id or candidate.count <= 0 or candidate.get("data",{}) != metadata: continue
+				slots[selected] = candidate.duplicate(true); slots[selected].count = 1
+				candidate.count -= 1
+				if candidate.count == 0: slots[i] = {"id":0,"count":0,"wear":0}
+				break
+		changed.emit()
 		return true
 	changed.emit()
 	return false
@@ -291,6 +310,11 @@ static func clean_slot(slot, allow_pouches: bool = true) -> Dictionary:
 	if slot.get("data") is Dictionary and result.count > 0:
 		var raw: Dictionary = slot.data
 		var metadata: Dictionary = {}
+		if raw.get("custom_name") is String and not raw.custom_name.is_empty(): metadata["custom_name"] = str(raw.custom_name).left(64)
+		if id == Nodes.COMPASS and raw.get("lodestone") is Dictionary:
+			var point: Dictionary = WorldBounds.clean_location(raw.lodestone)
+			if not point.is_empty(): metadata["lodestone"] = {"dimension":point.dimension,"position":point.position}
+		if raw.has("anvil_uses"): metadata["anvil_uses"] = clampi(int(raw.anvil_uses),0,30)
 		if Pouches.is_pouch(id) and raw.get("contents") is Array:
 			var clean: Array = []
 			for i in mini(Pouches.size_of(id),raw.contents.size()): clean.append(clean_slot(raw.contents[i],false))

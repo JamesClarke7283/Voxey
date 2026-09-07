@@ -19,6 +19,7 @@ var jump_held: bool = false
 var sneak_held: bool = false
 var mine_held: bool = false
 var use_pressed: bool = false
+var use_held: bool = false
 var _stick_origin := Vector2.ZERO
 var _stick_touch: int = -1
 var _look_touch: int = -1
@@ -43,7 +44,7 @@ func _build_stick() -> void:
 	add_child(stick_base)
 	var ring := Panel.new()
 	ring.size = Vector2.ONE*STICK_RADIUS*2.0
-	ring.add_theme_stylebox_override("panel",_ring_style(Color(0.05,0.1,0.08,0.35),Color(0.85,0.9,0.8,0.35)))
+	ring.add_theme_stylebox_override("panel",_ring_style(Color(0.08,0.08,0.08,0.35),Color(0.9,0.9,0.9,0.35)))
 	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stick_base.add_child(ring)
 	stick_nub = Panel.new()
@@ -67,17 +68,17 @@ func _touch_button(label: String, callback: Callable, toggle: bool = false) -> T
 	button.toggle_mode = toggle
 	button.custom_minimum_size = Vector2.ONE*BUTTON_SIZE
 	button.add_theme_font_size_override("font_size",17)
-	button.add_theme_color_override("font_pressed_color",Color("becb82"))
+	button.add_theme_color_override("font_pressed_color",Color("e1e1e1"))
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05,0.1,0.08,0.42)
-	style.border_color = Color(0.85,0.9,0.8,0.4)
+	style.bg_color = Color(0.08,0.08,0.08,0.42)
+	style.border_color = Color(0.9,0.9,0.9,0.4)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(14)
 	for state in ["normal","hover","pressed","focus"]:
 		button.add_theme_stylebox_override(state,style.duplicate())
 	var pressed_style: StyleBoxFlat = style.duplicate()
-	pressed_style.bg_color = Color(0.2,0.32,0.18,0.7)
-	pressed_style.border_color = Color("becb82")
+	pressed_style.bg_color = Color(0.3,0.3,0.3,0.7)
+	pressed_style.border_color = Color("e1e1e1")
 	button.add_theme_stylebox_override("pressed",pressed_style)
 	button.pressed.connect(callback)
 	return button
@@ -109,6 +110,8 @@ func show_game_controls() -> void:
 	mine.button_up.connect(func(): mine_held=false)
 	button_box.add_child(mine)
 	var use := _touch_button("✋",_on_use_press,false)
+	use.button_down.connect(func(): use_held=true)
+	use.button_up.connect(func(): use_held=false)
 	use.position = mine.position+Vector2(-BUTTON_SIZE-14,0)
 	button_box.add_child(use)
 	if game.gamemode=="creative":
@@ -147,6 +150,7 @@ func _reset() -> void:
 	sneak_held = false
 	mine_held = false
 	use_pressed = false
+	use_held = false
 	_stick_touch = -1
 	_look_touch = -1
 	if is_instance_valid(stick_nub): stick_nub.position = Vector2.ONE*(STICK_RADIUS*2.0-56.0)*0.5

@@ -119,6 +119,7 @@ static func protection(player: VoxeyPlayer, cause: String) -> float:
 static func melee(player: VoxeyPlayer, mob: Creature) -> float:
 	var slot: Dictionary = player.game.inventory.held()
 	var damage: float = 2+(Nodes.tool_tier(slot.id)+1)*(2 if Nodes.tool_kind(slot.id)==3 else 1)
+	damage = VillageContent.DATA.get(slot.id,{}).get("attack_damage",damage)
 	if slot.id == VillageContent.TRIDENT: damage = 9
 	if slot.id == VillageContent.MACE:
 		var fall: float = maxf(0,-player.velocity.y-8)/4
@@ -154,10 +155,17 @@ static func mend(game: Node3D, amount: float) -> float:
 	return remaining
 
 static func harvest(id: int, slot: Dictionary) -> Array:
+	if BuildingShapes.is_shape(id): return [[BuildingShapes.item(id),BuildingShapes.count(id)]]
 	var silk: int = Inventory.enchantment(slot,"Silk Touch")
-	var ores: Array = [Nodes.COAL_ORE,Nodes.DIAMOND_ORE,Nodes.LAPIS_ORE,Nodes.REDSTONE_ORE,Nodes.NETHER_QUARTZ_ORE,VillageContent.EMERALD_ORE,VillageContent.DEEP_EMERALD_ORE]+Nodes.DEEP_ORES.keys()
+	var ores: Array = [MinecloniaOres.NETHER_GOLD,Nodes.COAL_ORE,Nodes.DIAMOND_ORE,Nodes.LAPIS_ORE,Nodes.REDSTONE_ORE,Nodes.NETHER_QUARTZ_ORE,VillageContent.EMERALD_ORE,VillageContent.DEEP_EMERALD_ORE]+Nodes.DEEP_ORES.keys()
 	if silk and (ores.has(id) or id in [Nodes.STONE,Nodes.DEEPSLATE,Nodes.GRASS,Nodes.GLASS,Nodes.ICE,Nodes.LEAVES,Nodes.BOOKSHELF,VillageContent.COBWEB]): return [[id,1]]
 	var fortune: int = Inventory.enchantment(slot,"Fortune")
+	if id == Bastions.GILDED:
+		if silk: return [[id,1]]
+		var chance: float = [0.1,1.0/21,1.0/6,1.0][clampi(fortune,0,3)]
+		return [[Nodes.GOLD_NUGGET,randi_range(2,5)]] if randf() < chance else [[id,1]]
+	if id == MinecloniaOres.NETHER_GOLD:
+		return [[Nodes.GOLD_NUGGET,randi_range(2,6)*(maxi(1,randi_range(0,fortune+1)) if fortune else 1)]]
 	if fortune > 0:
 		if id == Nodes.GRAVEL: return [[Nodes.FLINT if fortune >= 3 or randf() < 0.1*(fortune+1) else Nodes.GRAVEL,1]]
 		if ores.has(id):

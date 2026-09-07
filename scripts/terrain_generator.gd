@@ -4,8 +4,9 @@ extends RefCounted
 const SIZE = 16
 const HEIGHT = 64 # Existing Overworld ceiling; surface coordinates are unchanged.
 const OVERWORLD_MIN = -128
-const NETHER_HEIGHT = 128
+const NETHER_HEIGHT = 129
 const SEA = 21
+var ore_cache: Dictionary = {}
 var dimension: String = "overworld"
 var world_seed: int
 var hills := FastNoiseLite.new()
@@ -32,10 +33,13 @@ func min_y() -> int:
 	return OVERWORLD_MIN if dimension == "overworld" else 0
 
 func max_y() -> int:
-	return HEIGHT if dimension == "overworld" else NETHER_HEIGHT
+	return WorldBounds.maximum(dimension)+1
+
+func terrain_ceiling() -> int:
+	return HEIGHT if dimension == "overworld" else (NETHER_HEIGHT if dimension == "nether" else 128)
 
 func block_levels() -> Array:
-	var levels: Array = range(0,max_y()/SIZE)
+	var levels: Array = range(0,ceili(terrain_ceiling()/16.0))
 	if min_y() < 0: levels.append_array(range(min_y()/SIZE,0))
 	return levels
 
@@ -70,7 +74,7 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 	# An 18-node halo gives the mesher complete boundary information. Trees are
 	# seeded in world coordinates, including roots outside the requested column.
 	var data := PackedInt32Array()
-	data.resize(18 * 18 * max_y())
+	data.resize(18 * 18 * terrain_ceiling())
 	var deep := PackedInt32Array()
 	deep.resize(18*18*absi(min_y()))
 	var stronghold := WorldStructures.stronghold(world_seed,Vector2i(floori((coord.x*16)/512.0),floori((coord.y*16)/512.0)))
@@ -82,7 +86,7 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 			var wx: int = base_x + x
 			var wz: int = base_z + z
 			if dimension == "end":
-				for y in max_y(): data[x+z*18+y*324] = WorldStructures.end_node(wx,y,wz,detail)
+				for y in terrain_ceiling(): data[x+z*18+y*324] = WorldStructures.end_node(wx,y,wz,detail)
 				for tower in end_towers:
 					var r: int = 2 if tower.y < 70 else 3
 					if Vector2(wx-tower.x,wz-tower.z).length_squared() <= r*r:
@@ -99,11 +103,12 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 					for y in range(45,49): data[x+z*18+y*324] = Nodes.AIR
 				continue
 			if dimension == "nether":
-				for y in max_y():
+				var metrics: Dictionary = {"floor":terrain_height(wx,wz),"roof":108+int(detail.get_noise_2d(wx+500,wz)*8),"region":biome(wx,wz)}
+				for y in terrain_ceiling():
 					var structure_id: int = WorldStructures.fortress_node(Vector3i(wx,y,wz))
-					data[x+z*18+y*324] = structure_id if structure_id >= 0 else nether_node(wx,y,wz)
+					data[x+z*18+y*324] = structure_id if structure_id >= 0 else nether_node(wx,y,wz,false,metrics)
 				continue
-			for y in range(min_y(),0): deep[x+z*18+(y-min_y())*324] = deep_node(wx,y,wz)
+			for y in range(min_y(),0): deep[x+z*18+(y-min_y())*324] = deep_node(wx,y,wz,false)
 			if absi(wx-stronghold.x) <= 24 and absi(wz-stronghold.z) <= 11:
 				for y in range(stronghold.y,stronghold.y+10):
 					var structure_id: int = WorldStructures.stronghold_node(Vector3i(wx,y,wz),stronghold)
@@ -124,16 +129,9 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 					if y > 2 and y < h - 4 and caves.get_noise_3d(wx, y * 1.3, wz) > 0.39:
 						id = Nodes.LAVA if y <= 7 else Nodes.AIR
 					else:
-						var ore: int = hash_at(wx / 2, y / 2, wz / 2) % 1000
-						if ore < 33: id = Nodes.COAL_ORE
-						elif ore < 53 and y < 25: id = Nodes.IRON_ORE
-						elif ore < 59 and y < 12: id = Nodes.DIAMOND_ORE
-						elif ore < 70 and y < 18: id = Nodes.GOLD_ORE
-						elif ore < 92 and y < 32: id = Nodes.COPPER_ORE
-						elif ore < 105 and y < 22: id = Nodes.LAPIS_ORE
-						elif ore in [106,107] and y < h-6: id = VillageContent.EMERALD_ORE
-						elif ore in range(110,140): id = [VillageContent.GRANITE,VillageContent.DIORITE,VillageContent.ANDESITE][ore%3]
-						elif ore > 981: id = Nodes.GRAVEL
+						var stone_variant: int = hash_at(wx/2,y/2,wz/2)%1000
+						if stone_variant in range(110,140): id = [VillageContent.GRANITE,VillageContent.DIORITE,VillageContent.ANDESITE][stone_variant%3]
+						elif stone_variant > 981: id = Nodes.GRAVEL
 				data[x + z * 18 + y * 324] = id
 			if biome(wx,wz) == "Swamp":
 				if h > SEA: data[x+z*18+h*324] = VillageContent.MUD if hash_at(wx/3,93,wz/3)%5 == 0 else VillageContent.SWAMP_GRASS
@@ -197,14 +195,29 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 						var index: int = lx+lz*18+(h+dy)*324
 						if data[index] == Nodes.AIR: data[index] = Nodes.VINE
 	if dimension == "overworld": VillageGenerator.overlay(self,coord,data)
+	for placement in MinecloniaBlobs.placements(self,coord)+MinecloniaOres.placements(self,coord):
+		var p: Vector3i = placement.pos
+		var index: int = p.x-base_x+(p.z-base_z)*18+(p.y-min_y() if p.y < 0 else p.y)*324
+		if p.y < 0:
+			if placement.hosts.has(deep[index]): deep[index] = placement.id
+		elif placement.hosts.has(data[index]): data[index] = placement.id
+	if dimension == "nether": Bastions.overlay(self,coord,data)
 	for p in edits:
 		var lx: int = p.x - base_x
 		var lz: int = p.z - base_z
-		if lx >= 0 and lx < 18 and lz >= 0 and lz < 18 and p.y >= min_y() and p.y < max_y():
+		if lx >= 0 and lx < 18 and lz >= 0 and lz < 18 and p.y >= min_y() and p.y < terrain_ceiling():
 			if p.y < 0: deep[lx+lz*18+(p.y-min_y())*324] = edits[p]
 			else: data[lx + lz * 18 + p.y * 324] = edits[p]
 	var blocks: Array = []
-	for by in block_levels():
+	var special: Dictionary = {}
+	var reactive: Dictionary = {}
+	var fuel_cache: Dictionary = {}
+	var levels: Array = block_levels()
+	for p in edits:
+		if p.y >= terrain_ceiling() and p.y < max_y():
+			var by: int = floori(p.y/16.0)
+			if not levels.has(by): levels.append(by)
+	for by in levels:
 		var padded := PackedInt32Array()
 		padded.resize(18 * 18 * 18)
 		var compact := PackedInt32Array()
@@ -216,21 +229,39 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 					var id: int = Nodes.AIR
 					if wy < min_y(): id = Nodes.AIR if dimension == "end" else Nodes.BEDROCK
 					elif wy < 0: id = deep[x+z*18+(wy-min_y())*324]
-					elif wy < max_y(): id = data[x+z*18+wy*324]
+					elif wy < terrain_ceiling(): id = data[x+z*18+wy*324]
+					var p := Vector3i(base_x+x,wy,base_z+z)
+					if wy >= terrain_ceiling() and edits.has(p): id = edits[p]
 					padded[x + z * 18 + y * 324] = id
 					if x > 0 and x < 17 and y > 0 and y < 17 and z > 0 and z < 17:
 						compact[(x-1) + (z-1)*16 + (y-1)*256] = id
+		# Index gameplay nodes on the worker, using its complete halo. Ordinary
+		# terrain and inert lava never need a main-thread scan on arrival.
+		for y in 16:
+			for z in 16:
+				for x in 16:
+					var index: int = x+z*16+y*256
+					var id: int = compact[index]
+					if id in Nodes.CIRCUIT_NODES or id == Nodes.CHEST or Fire.is_fire(id):
+						special[Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)] = id
+					if id != Nodes.LAVA and id != Nodes.WATER: continue
+					var center: int = x+1+(z+1)*18+(y+1)*324
+					for offset in [-1,1,-18,18,-324,324]:
+						var neighbor: int = padded[center+offset]
+						if not fuel_cache.has(neighbor): fuel_cache[neighbor] = Fire.flammable(neighbor)
+						if id == Nodes.LAVA and (neighbor == Nodes.WATER or fuel_cache[neighbor]) or id == Nodes.WATER and neighbor == Nodes.LAVA:
+							reactive[Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)] = id
 		blocks.append({"y":by,"data":compact, "surfaces":BlockMesher.build(padded,true)})
-	return {"coord":coord, "blocks":blocks}
+	return {"coord":coord, "blocks":blocks,"special":special,"reactive":reactive}
 
 # World-coordinate evaluation keeps terrain and vegetation identical in halos.
-func nether_node(x: int, y: int, z: int) -> int:
+func nether_node(x: int, y: int, z: int, ores: bool = true, metrics: Dictionary = {}) -> int:
+	if ores: return ore_at(Vector3i(x,y,z),nether_node(x,y,z,false))
 	if y == 0 or y == NETHER_HEIGHT-1: return Nodes.BEDROCK
-	var floor_y: int = terrain_height(x,z)
-	var roof: int = 108+int(detail.get_noise_2d(x+500,z)*8)
-	var region: String = biome(x,z)
+	var floor_y: int = int(metrics.floor) if not metrics.is_empty() else terrain_height(x,z)
+	var roof: int = int(metrics.roof) if not metrics.is_empty() else 108+int(detail.get_noise_2d(x+500,z)*8)
+	var region: String = str(metrics.region) if not metrics.is_empty() else biome(x,z)
 	if y <= floor_y or y >= roof or (y > 10 and absf(caves.get_noise_3d(x,y*0.7,z)) > 0.49):
-		if hash_at(x/2,y/2,z/2)%71 < 4 and y > 3: return Nodes.NETHER_QUARTZ_ORE
 		if y == floor_y:
 			match region:
 				"Soul sand valley": return Nodes.SOUL_SAND
@@ -261,23 +292,27 @@ func nether_node(x: int, y: int, z: int) -> int:
 	return Nodes.AIR
 
 # Negative levels extend old worlds without shifting terrain or player builds.
-func deep_node(x: int, y: int, z: int) -> int:
+func deep_node(x: int, y: int, z: int, ores: bool = true) -> int:
+	if ores: return ore_at(Vector3i(x,y,z),deep_node(x,y,z,false))
 	if y <= OVERWORLD_MIN: return Nodes.BEDROCK
 	if y < OVERWORLD_MIN+4 and hash_at(x,y,z)%5 < OVERWORLD_MIN+4-y: return Nodes.BEDROCK
-	var deepslate: bool = y < -32 or (y < -24 and hash_at(x,y,z)%8 < -24-y)
+	var deepslate: bool = y < -64 or (y <= -46 and hash_at(x,y,z)%18 < -46-y)
 	var stone: int = Nodes.DEEPSLATE if deepslate else Nodes.STONE
 	var tunnel: float = caves.get_noise_3d(x,y*1.3,z)
 	var cavern: float = detail.get_noise_3d(x*0.7,y*1.2,z*0.7)
 	if y > OVERWORLD_MIN+4 and (tunnel > 0.33 or (y < -12 and cavern > 0.32)):
 		return Nodes.LAVA if y <= -112 else Nodes.AIR
-	var ore: int = hash_at(floori(x/2.0),floori(y/2.0),floori(z/2.0))%1000
-	if ore >= 120 and ore < 145 and y < -16: return Nodes.DEEP_REDSTONE_ORE if deepslate else Nodes.REDSTONE_ORE
-	if ore < 22 and y < -48: return Nodes.DEEP_DIAMOND_ORE
-	if ore < 50: return Nodes.DEEP_IRON_ORE if deepslate else Nodes.IRON_ORE
-	if ore < 65: return Nodes.DEEP_GOLD_ORE if deepslate else Nodes.GOLD_ORE
-	if ore < 80: return Nodes.DEEP_LAPIS_ORE if deepslate else Nodes.LAPIS_ORE
-	if ore < 105 and y > -64: return Nodes.DEEP_COAL_ORE if deepslate else Nodes.COAL_ORE
-	if ore < 120 and y > -48: return Nodes.DEEP_COPPER_ORE if deepslate else Nodes.COPPER_ORE
-	if ore in [146,147]: return VillageContent.DEEP_EMERALD_ORE if deepslate else VillageContent.EMERALD_ORE
-	if ore > 984: return Nodes.GRAVEL
+	if hash_at(x,y,z)%1000 > 984: return Nodes.GRAVEL
 	return stone
+
+func ore_at(p: Vector3i, host: int) -> int:
+	var c := Vector2i(floori(p.x/16.0),floori(p.z/16.0))
+	if not ore_cache.has(c):
+		var indexed: Dictionary = {}
+		for placement in MinecloniaBlobs.placements(self,c)+MinecloniaOres.placements(self,c):
+			if not indexed.has(placement.pos): indexed[placement.pos] = []
+			indexed[placement.pos].append(placement)
+		ore_cache[c] = indexed
+	for placement in ore_cache[c].get(p,[]):
+		if placement.hosts.has(host): host = placement.id
+	return host

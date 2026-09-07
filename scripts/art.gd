@@ -63,8 +63,9 @@ static func make_atlas() -> ImageTexture:
 						if tile == 97 and (y%4 == 0 or (x+y/4*4)%8 == 0): c = rock.darkened(0.4)
 						if tile >= 98 and (x/2*7+y/2*11)%13 < 4: c = base.lightened(0.15)
 					79:
-						c = Color("f56b1d").lerp(Color("ffd05c"),float((x/2+y/3*3)%7)/7.0)
-						if (x+y/2)%8 == 0: c = Color("bd351a")
+						# Broad, seamless pools avoid the old single-pixel stripe shimmer.
+						var heat: float = 0.5+0.22*sin(float(x/2)*TAU/8.0)+0.20*cos(float(y/2)*TAU/8.0)+0.08*sin(float(x/2+y/2)*TAU/8.0)
+						c = Color("cf4b16").lerp(Color("ffc64a"),clampf(heat,0,1))
 					80,85,86:
 						if (x/3+y/2*3)%5 == 0: c = base.darkened(0.32)
 						if y%5 == 0: c = base.lightened(0.18)

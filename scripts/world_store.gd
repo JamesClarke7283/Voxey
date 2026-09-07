@@ -80,3 +80,38 @@ static func write_json(path: String, data: Dictionary) -> bool:
 	file.flush()
 	file.close()
 	return DirAccess.rename_absolute(path+".tmp",path) == OK
+
+# Called only after the world menu's confirmation. Never follow links while
+# deleting: a world can contain mod-created files outside its own directory.
+func delete_world(id: String) -> bool:
+	error_message = ""
+	if not valid_id(id): error_message = "Invalid world ID."; return false
+	var path: String = world_path(id)
+	if not DirAccess.dir_exists_absolute(path): error_message = "That world no longer exists."; return false
+	var marker_path: String = root_path.path_join("legacy_imported.json")
+	var marker: Dictionary = read_json(marker_path)
+	if marker.get("world","") == id:
+		marker["deleted"] = true
+		if not write_json(marker_path,marker): error_message = "Could not update the world's import record."; return false
+	var parent := DirAccess.open(worlds_path)
+	var error: Error = DirAccess.remove_absolute(path) if parent.is_link(id) else _remove_directory(path)
+	if error != OK:
+		error_message = "Could not remove every world file. Check the saves folder's permissions."
+		return false
+	return true
+
+static func _remove_directory(path: String) -> Error:
+	var directory := DirAccess.open(path)
+	if directory == null: return DirAccess.get_open_error()
+	directory.include_hidden = true
+	var error: Error = directory.list_dir_begin()
+	if error != OK: return error
+	var entry: String = directory.get_next()
+	while not entry.is_empty():
+		var child: String = path.path_join(entry)
+		if directory.current_is_dir() and not directory.is_link(entry): error = _remove_directory(child)
+		else: error = DirAccess.remove_absolute(child)
+		if error != OK: directory.list_dir_end(); return error
+		entry = directory.get_next()
+	directory.list_dir_end()
+	return DirAccess.remove_absolute(path)

@@ -2,8 +2,8 @@ extends Node3D
 
 const LEGACY_SAVE_PATH = "user://voxey_world.json"
 const SaveStore = preload("res://scripts/world_store.gd")
-const SAVE_VERSION = 2
-const SAVE_VERSIONS = [1, 2]
+const SAVE_VERSION = 3
+const SAVE_VERSIONS = [1,2,3]
 const MOD_ENTRY = preload("res://scripts/voxey_mods.gd")
 var world: VoxelWorld
 var player: VoxeyPlayer
@@ -25,10 +25,14 @@ var torch_lights: Dictionary = {}
 var state: String = "title"
 var day_time: float = 0.30
 var daylight: float = 1.0
-var profiles: PlayerProfiles
+var cave_sample_position := Vector3i(99999,99999,99999)
+var cave_sample_revision: int = -1
+var cave_sample_world: int = 0
+var cave_shelter: float = 0
+var identity: PlayerIdentity
 var player_homes: Dictionary = {}
 var player_id: String:
-	get: return profiles.active_id if profiles != null else ""
+	get: return identity.session_id if identity != null else PlayerIdentity.OFFLINE
 var spawn_point := Vector3(8,35,8)
 var experience: float = 0.0:
 	set(value):
@@ -50,6 +54,7 @@ var sound_times: Dictionary = {}
 var audio_index: int = 0
 var autosave: float = 0.0
 var spawn_timer: float = 0.0
+var achievement_timer: float = 0.0
 var pending_save: Dictionary = {}
 var settings: Dictionary = {}
 var clouds: Node3D
@@ -58,6 +63,7 @@ var saves
 var active_world_id: String = ""
 var world_name: String = "New world"
 var gamemode: String = "survival"
+var game_rules: Dictionary = GameRules.DEFAULTS.duplicate()
 var console_messages: Array[String] = ["Voxey console. Type /help for commands."]
 var last_space_press: int = 0
 var api: VoxeyAPI
@@ -74,7 +80,7 @@ func _ready() -> void:
 	api = VoxeyAPI.new("engine",self)
 	achievements = VoxeyAchievements.new(self)
 	saves = SaveStore.new()
-	profiles = PlayerProfiles.new(saves.root_path)
+	identity = PlayerIdentity.new(saves.root_path)
 	_migrate_legacy_save()
 	RenderingServer.set_default_clear_color(Color("9dbac0"))
 	atlas = Art.make_atlas()
@@ -233,7 +239,9 @@ func _process(delta: float) -> void:
 		if journal_step == 3:
 			for id in range(80,100):
 				if inventory.count_item(id)>0: journal_step=4; toast("You're ready to explore. Make this world yours."); break
-		_check_achievements()
+		achievement_timer += delta
+		if achievement_timer >= 1.0:
+			achievement_timer = 0.0; _check_achievements()
 	_update_day()
 	clouds.position.x = player.position.x + fmod(Time.get_ticks_msec()*0.0006,40)
 	clouds.position.z = player.position.z
@@ -244,6 +252,8 @@ func _process(delta: float) -> void:
 		if light.visible: visible_torches += 1
 
 func _update_day() -> void:
+	environment.environment.ambient_light_sky_contribution = 1.0
+	environment.environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	clouds.visible = dimension == "overworld"
 	environment.environment.background_mode = Environment.BG_COLOR if dimension != "overworld" else Environment.BG_SKY
 	environment.environment.fog_density = 0.035 if dimension == "nether" else 0.009
@@ -287,14 +297,28 @@ func _update_day() -> void:
 	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
 	environment.environment.fog_light_color = sky_mat.sky_horizon_color
 	if state not in ["title","loading"]:
-		var depth: float = world.generator.terrain_height(floori(player.position.x),floori(player.position.z))-player.position.y
-		var underground: float = clampf((depth-4.0)/12.0,0,1)
+		var sample_position := Vector3i(player.position.floor())
+		if sample_position != cave_sample_position or cave_sample_revision != world.sky_revision or cave_sample_world != world.get_instance_id():
+			cave_sample_position = sample_position; cave_sample_revision = world.sky_revision; cave_sample_world = world.get_instance_id()
+			cave_shelter = CaveLight.shelter(world,Vector3(sample_position)+Vector3(0.5,0.5,0.5))
+		var underground: float = cave_shelter
+		sunlight.light_energy *= 1.0-underground
+		environment.environment.ambient_light_color = environment.environment.ambient_light_color.lerp(Color("9499a0"),underground)
+		environment.environment.ambient_light_sky_contribution = 1.0-underground
+		environment.environment.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED if underground >= 1.0 else Environment.REFLECTION_SOURCE_SKY
 		environment.environment.ambient_light_energy = lerpf(environment.environment.ambient_light_energy,0.06,underground)
 		environment.environment.fog_light_color = sky_mat.sky_horizon_color.lerp(Color("141b20"),underground)
 		if survival.weather() != "clear":
 			sunlight.light_energy *= 0.55
 			sky_mat.sky_top_color = sky_mat.sky_top_color.lerp(Color("495c6c"),0.6)
 			sky_mat.sky_horizon_color = sky_mat.sky_horizon_color.lerp(Color("6b7d85"),0.65)
+		if underground >= 1.0:
+			# Assign constants directly; no sun color, sky reflection or dusk fog
+			# enters a sheltered cave. Torches supply their own local lighting.
+			sunlight.light_energy = 0.0
+			environment.environment.ambient_light_energy = 0.06
+			environment.environment.ambient_light_color = Color("9499a0")
+			environment.environment.fog_light_color = Color("141b20")
 		if survival.effects.has("night_vision"): environment.environment.ambient_light_energy = 0.8
 
 func day_number() -> int:
@@ -328,6 +352,7 @@ func start_new(seed_text: String, display_name: String = "New world", mode: Stri
 	dimension = "overworld"
 	dimension_states.clear()
 	player_homes.clear()
+	game_rules = GameRules.DEFAULTS.duplicate()
 	portal_cooldown = 0
 	inventory = _reset_inventory()
 	day_time = 0.30
@@ -414,7 +439,7 @@ func _finish_loading() -> void:
 		player.rotation.y=0.3
 		player.camera.rotation.x=-0.12
 	for p in world.edits:
-		if world.edits[p] in [Nodes.TORCH,Nodes.GLOWSTONE,Nodes.SHROOMLIGHT]: add_torch(p)
+		if Torches.is_torch(world.edits[p]) or world.edits[p] in [Nodes.GLOWSTONE,Nodes.SHROOMLIGHT]: add_torch(p)
 	player.velocity=Vector3.ZERO
 	player.flying=false
 	player.camera.make_current()
@@ -425,6 +450,9 @@ func _finish_loading() -> void:
 	MOD_ENTRY.fire("on_world_entered",[world_name,world.seed_value])
 
 func _safe_spawn(near: Vector3) -> Vector3:
+	if near.y >= world.generator.terrain_ceiling():
+		var sky_floor: Vector3 = world.cave_spawn(near,16)
+		if not is_inf(sky_floor.x): return sky_floor
 	if near.y < 0:
 		for radius in range(0,12):
 			for offset in [Vector3(radius,0,0),Vector3(-radius,0,0),Vector3(0,0,radius),Vector3(0,0,-radius)]:
@@ -435,7 +463,7 @@ func _safe_spawn(near: Vector3) -> Vector3:
 			var x: int = floori(near.x)+offset.x
 			var z: int = floori(near.z)+offset.y
 			if not world.loaded_at(Vector3(x,0,z)): continue
-			for y in range(world.generator.max_y()-3,world.generator.min_y(),-1):
+			for y in range(mini(floori(near.y)+16,world.generator.terrain_ceiling()-1),world.generator.min_y(),-1):
 				var id: int = world.node_at(Vector3i(x,y,z))
 				if id in [Nodes.WATER,Nodes.LAVA]: break
 				if Nodes.solid(id) and id!=Nodes.LEAVES and id!=Nodes.LOG:
@@ -631,6 +659,7 @@ func explode(center: Vector3, radius: float, source: Node = null) -> void:
 				var p := Vector3i(floori(center.x)+x,floori(center.y)+y,floori(center.z)+z)
 				var id: int = world.node_at(p)
 				if id in [Nodes.AIR,Nodes.BEDROCK,Nodes.OBSIDIAN,Nodes.WATER,Nodes.LAVA,Nodes.END_FRAME,Nodes.END_FRAME_EYE,Nodes.END_PORTAL,Nodes.END_GATEWAY,Nodes.NETHER_PORTAL]: continue
+				if VillageContent.DATA.get(id,{}).get("blast_resistance",0) >= 1200: continue
 				if id == Nodes.TNT: ignite_tnt(p,randf_range(0.3,0.9)); continue
 				if id in [Nodes.BED_FOOT,Nodes.BED_HEAD]:
 					# Remove the whole bed, drop one item, count one node.
@@ -664,7 +693,7 @@ func spawn_creature(kind: String, pos: Vector3) -> Creature:
 		var settler := VillageMob.new(); settler.game = self; settler.kind = kind; settler.position = pos
 		creatures.add_child(settler); villages.manual(settler); return settler
 	if not Creature.KINDS.has(kind): return null
-	var mob: Creature = ExpeditionCreature.new() if kind in ["ghast","blaze","slime","enderman","end_crystal","ender_dragon","shulker"] else Creature.new()
+	var mob: Creature = ExpeditionCreature.new() if kind in ["ghast","blaze","slime","enderman","end_crystal","ender_dragon","shulker"] else (NetherResident.new() if kind in ["piglin","piglin_brute"] else Creature.new())
 	mob.game=self; mob.position=pos; mob.kind=kind
 	creatures.add_child(mob)
 	return mob
@@ -732,12 +761,12 @@ func _spawn_creature() -> void:
 func add_torch(p: Vector3i) -> void:
 	if torch_lights.has(p): return
 	var light := OmniLight3D.new()
-	light.position=Vector3(p)+Vector3(0.5,0.85,0.5)
+	light.position=Torches.flame_position(p,world.edits.get(p,world.node_at(p)))
 	# Glowstone glows a touch wider and cooler than a torch flame.
 	var glow: bool = world.node_at(p)==Nodes.GLOWSTONE
 	light.omni_range=10 if glow else 8
 	light.light_color=Color("e8dba0") if glow else Color("ffbc60")
-	light.light_energy=2.1 if glow else 1.6
+	light.light_energy=1.1 if glow else 0.8
 	light.shadow_enabled=false
 	add_child(light)
 	torch_lights[p]=light
@@ -759,7 +788,7 @@ func die() -> void:
 	if state == "dead": return
 	PotionEffects.died(player)
 	api.emit_player_died()
-	DeathRecovery.leave(self)
+	if not game_rules.keepInventory: DeathRecovery.leave(self)
 	if is_instance_valid(controls): controls.hide_all()
 	state="dead"
 	world.active=false
@@ -823,6 +852,7 @@ func _resize_ui() -> void:
 		"inventory": hud.show_inventory(hud.station,hud.station_data)
 		"dead": hud.show_death()
 		"worlds": hud.show_worlds()
+		"delete_world": hud.show_delete_world(hud.delete_world_entry)
 		"new_world": hud.show_new_world()
 		"console": hud.show_console()
 		"loading": hud.show_loading()
@@ -830,7 +860,6 @@ func _resize_ui() -> void:
 		"map": survival.show_map()
 		"book": hud.show_book(hud.book_index)
 		"enchanting": hud.show_enchanting(hud.enchanting_pos)
-		"profiles": hud.show_profiles()
 		"trading": hud.show_trading(villages.trading_key)
 	if touch and state=="playing" and is_instance_valid(controls): controls.show_game_controls()
 
@@ -845,7 +874,7 @@ func save_game(path: String = "") -> bool:
 	inventory.sync_pouches()
 	var snapshot: Dictionary = dimension_snapshot()
 	dimension_states[dimension] = snapshot
-	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":snapshot.edits,"growth":snapshot.growth,"stations":snapshot.stations,"block_states":snapshot.block_states,"adventure":snapshot.adventure,"inventory":inventory.slots.slice(0,Inventory.BASE_SLOTS),"pouches":inventory.pouch_slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"homes":player_homes.duplicate(true),"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"effects":survival.effect_snapshot(),"armor":player.armor_slots,"time":day_time,"experience":experience,"journal":journal_step,"drops":snapshot.drops,"arrows":snapshot.arrows,"leads":snapshot.leads,"animals":snapshot.animals,"dimension":dimension,"dimensions":dimension_states,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
+	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":snapshot.edits,"growth":snapshot.growth,"stations":snapshot.stations,"block_states":snapshot.block_states,"adventure":snapshot.adventure,"inventory":inventory.slots.slice(0,Inventory.BASE_SLOTS),"pouches":inventory.pouch_slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"homes":player_homes.duplicate(true),"gamerules":game_rules.duplicate(),"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"effects":survival.effect_snapshot(),"armor":player.armor_slots,"time":day_time,"experience":experience,"journal":journal_step,"drops":snapshot.drops,"arrows":snapshot.arrows,"leads":snapshot.leads,"animals":snapshot.animals,"dimension":dimension,"dimensions":dimension_states,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
 	var file := FileAccess.open(path+".tmp",FileAccess.WRITE)
 	if file==null: toast("Couldn't save the world: storage is unavailable."); return false
 	file.store_string(JSON.stringify(data))
@@ -876,6 +905,14 @@ func read_save(path: String = "") -> Dictionary:
 func continue_world() -> void:
 	hud.show_worlds()
 
+func delete_world(id: String) -> bool:
+	if state != "title": toast("Return to the title screen before deleting a world."); return false
+	if not saves.delete_world(id): toast(saves.error_message); return false
+	if active_world_id == id:
+		active_world_id = ""; pending_save.clear()
+	toast("World deleted.")
+	return true
+
 func enter_world(id: String, mode: String) -> void:
 	if not saves.valid_id(id): return
 	var data: Dictionary=read_save(saves.save_path(id))
@@ -893,6 +930,11 @@ func enter_world(id: String, mode: String) -> void:
 	hud.show_loading()
 
 func load_world_data(data: Dictionary) -> void:
+	identity.migrate_save(data)
+	if int(data.get("version",2)) < 3:
+		Netherite.migrate_wear(data)
+		data["version"] = 3
+	game_rules = GameRules.restore(data.get("gamerules",{}))
 	pending_save=data
 	active_world_id=String(data.get("world_id",active_world_id))
 	world_name=String(data.get("name","New world"))
@@ -948,7 +990,7 @@ func load_world_data(data: Dictionary) -> void:
 	var load_position: Array=data.get("spawn",data.position) if player.health<=0 and dimension == "overworld" else data.position
 	world.target=Vector3(load_position[0],load_position[1],load_position[2])
 	for p in world.edits:
-		if world.edits[p] in [Nodes.TORCH,Nodes.GLOWSTONE]: add_torch(p)
+		if Torches.is_torch(world.edits[p]) or world.edits[p] == Nodes.GLOWSTONE: add_torch(p)
 	state="loading"
 	world.active=false
 
@@ -1118,12 +1160,13 @@ func puff(pos: Vector3, color: Color, amount: int = 10, speed: float = 3.0) -> v
 	_emit(pos,cube,amount,0.6,speed*0.4,speed)
 
 func performance_snapshot() -> Dictionary:
-	return {"fps":Engine.get_frames_per_second(),"map_blocks":world.blocks.size(),"columns":world.columns.size(),"draw_calls":RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),"primitives":RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),"generation_jobs":world.jobs.size(),"remesh_jobs":world.remesh_jobs.size()}
+	return {"gpu":RenderingServer.get_video_adapter_name(),"renderer":RenderingServer.get_current_rendering_method(),"fps":Engine.get_frames_per_second(),"map_blocks":world.blocks.size(),"columns":world.columns.size(),"draw_calls":RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),"primitives":RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),"generation_jobs":world.jobs.size(),"remesh_jobs":world.remesh_jobs.size()}
 
 func _migrate_legacy_save() -> void:
 	var marker: String = saves.root_path.path_join("legacy_imported.json")
 	if not FileAccess.file_exists(LEGACY_SAVE_PATH): return
 	var imported: Dictionary = saves.read_json(marker)
+	if imported.get("deleted",false): return
 	var id: String = String(imported.get("world",""))
 	if not id.is_empty():
 		# An older playtest may still have been saving while the new build was
@@ -1163,7 +1206,8 @@ func execute_command(command: String) -> String:
 		"gamemode":
 			if parts.size()!=2 or not set_gamemode(parts[1].to_lower()): response="Usage: /gamemode survival | creative"
 			else: response="Game mode set to "+gamemode.capitalize()+"."
-		"help": response="/gamemode survival | creative  ·  /time day | night  ·  /seed  ·  /save  ·  /spawnpoint\n/give <item> [count]  ·  /spawn <creature>  ·  /tp <x> <y> <z>  ·  /heal  ·  /killmobs\n/dimension overworld | nether | end  ·  /xp <points>  ·  /locate village | stronghold | fortress | end_city\n/sethome  ·  /home  ·  /weather clear | rain | thunder\nCreative: F or double Space toggles flight. Space rises; Shift descends."
+		"help": response="/gamemode survival | creative  ·  /time day | night  ·  /seed  ·  /save  ·  /spawnpoint\n/give <item> [count]  ·  /spawn <creature>  ·  /tp <x> <y> <z>  ·  /heal  ·  /killmobs\n/dimension overworld | nether | end  ·  /xp <points>  ·  /locate village | stronghold | fortress | bastion | end_city\n/sethome  ·  /home  ·  /weather clear | rain | thunder\n/gamerule keepInventory [true | false]\nCreative: F or double Space toggles flight. Space rises; Shift descends."
+		"gamerule": response = GameRules.command(self,parts)
 		"seed": response="World seed: "+str(world.seed_value)
 		"save": response="World saved to "+saves.save_path(active_world_id) if save_game() else "The world could not be saved."
 		"weather":
@@ -1187,9 +1231,12 @@ func execute_command(command: String) -> String:
 			if dimension != "overworld": response="Set your spawn in the Overworld."
 			else: spawn_point=player.position; response="Spawn point set."
 		"locate":
-			if parts.size() < 2: response = "Usage: /locate village | stronghold | fortress | end_city"
+			if parts.size() < 2: response = "Usage: /locate village | stronghold | fortress | bastion | end_city"
 			elif parts[1] == "village": response = "Village: "+str(VillageGenerator.nearest(TerrainGenerator.new(world.seed_value),player.position).center+Vector3i(4,1,4))+" in the Overworld."
 			elif parts[1] == "stronghold": response = "Stronghold: "+str(WorldStructures.nearest_stronghold(world.seed_value,player.position))
+			elif parts[1] == "bastion":
+				var bastion: Dictionary = Bastions.nearest(TerrainGenerator.new(world.seed_value,"nether"),player.position)
+				response = "Nether bastion: "+str(bastion.center) if not bastion.is_empty() else "No bastion found inside the world boundary."
 			elif parts[1] == "fortress": response = "Nether fortress: "+str(Vector3i(roundi((player.position.x-60)/160)*160+60,29,roundi((player.position.z-60)/160)*160+60))
 			elif parts[1] == "end_city": response = "End city: (288, 43, 0) in the End highlands."
 			else: response = "Unknown structure."
@@ -1217,6 +1264,7 @@ func execute_command(command: String) -> String:
 				response=kind.capitalize()+" spawned."
 		"tp":
 			if parts.size()!=4 or not (parts[1].is_valid_float() and parts[2].is_valid_float() and parts[3].is_valid_float()): response="Usage: /tp <x> <y> <z>"
+			elif not WorldBounds.contains(Vector3(float(parts[1]),float(parts[2]),float(parts[3])),dimension): response="That position is outside this dimension’s world bounds."
 			else:
 				teleport(Vector3(float(parts[1]),float(parts[2]),float(parts[3])))
 				response="Teleported to %s %s %s." % [parts[1],parts[2],parts[3]]
@@ -1244,6 +1292,8 @@ func teleport(destination: Vector3) -> void:
 	hud.show_loading()
 
 func dimension_snapshot() -> Dictionary:
+	for mob in creatures.get_children():
+		if mob is NetherResident and not mob.is_queued_for_deletion(): mob.store_record()
 	villages.snapshot()
 	AlchemyWorld.snapshot(self)
 	for mob in creatures.get_children():
@@ -1274,6 +1324,7 @@ func travel_dimension(destination: String, respawning: bool = false) -> void:
 	var end_travel: bool = destination == "end" or dimension == "end"
 	if destination == "end": arrival = Vector3(51.5,45.01,0.5)
 	if respawning or (end_travel and destination == "overworld"): arrival = spawn_point
+	arrival = WorldBounds.clamp_arrival(arrival,destination)
 	var seed_number: int = world.seed_value
 	var render_radius: int = world.radius
 	dimension = destination
@@ -1421,6 +1472,8 @@ func close_inventory() -> void:
 	resume()
 
 func _input(event: InputEvent) -> void:
+	if state == "title" and hud.screen == "delete_world" and event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
+		hud.show_worlds(); get_viewport().set_input_as_handled(); return
 	if state != "inventory": return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
@@ -1437,12 +1490,7 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 static func clean_home(value: Variant) -> Dictionary:
-	if not value is Dictionary or value.get("dimension","") not in ["overworld","nether","end"]: return {}
-	var position_data: Variant = value.get("position")
-	if not position_data is Array or position_data.size() != 3: return {}
-	for coordinate in position_data:
-		if not (coordinate is int or coordinate is float) or not is_finite(float(coordinate)): return {}
-	return {"dimension":String(value.dimension),"position":position_data.duplicate(),"yaw":float(value.get("yaw",0)),"pitch":float(value.get("pitch",0))}
+	return WorldBounds.clean_location(value)
 
 func teleport_home() -> String:
 	var home_location: Dictionary = player_homes.get(player_id,{})

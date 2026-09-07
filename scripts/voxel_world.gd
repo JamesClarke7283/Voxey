@@ -7,6 +7,7 @@ var dimension: String = "overworld"
 var seed_value: int = 8675309
 var generator: TerrainGenerator
 var blocks: Dictionary = {}
+var hazards: Dictionary = {}
 var columns: Dictionary = {}
 var edits: Dictionary = {}
 var stations: Dictionary = {}
@@ -19,10 +20,15 @@ var jobs: Array = []
 var remesh_jobs: Array = []
 var dirty: Dictionary = {}
 var desired: Vector2i = Vector2i(999999,999999)
-var radius: int = 4
+var generation_queue: Array = []
+var radius: int = 4:
+	set(value):
+		if value != radius:
+			radius = value; desired = Vector2i(999999,999999)
 var target: Vector3 = Vector3(8,30,8)
 var material: ShaderMaterial
 var water_material: ShaderMaterial
+var sky_revision: int = 0
 var tick: float = 0.0
 var active: bool = true
 var last_mesh_ms: float = 0.0
@@ -44,6 +50,14 @@ func _process(delta: float) -> void:
 	var center := Vector2i(floori(target.x/16.0),floori(target.z/16.0))
 	if center != desired:
 		desired = center
+		generation_queue.clear()
+		for z in range(-radius,radius+1):
+			for x in range(-radius,radius+1):
+				var c: Vector2i = center+Vector2i(x,z)
+				if WorldBounds.horizontal(Vector3i(c.x*16,0,c.y*16)) and not columns.has(c): generation_queue.append(c)
+		# Pop the nearest request from the end. The queue changes only when the
+		# player crosses a column boundary or changes view distance.
+		generation_queue.sort_custom(func(a: Vector2i,b: Vector2i): return a.distance_squared_to(center) > b.distance_squared_to(center))
 		for c in columns.keys():
 			if maxi(absi(c.x-center.x),absi(c.y-center.y)) > radius + 1: _unload(c)
 	var started: int = Time.get_ticks_usec()
@@ -73,16 +87,9 @@ func _process(delta: float) -> void:
 		var job: Dictionary = {"coord":coord, "result":[]}
 		job.task = WorkerThreadPool.add_task(func(): job.result = BlockMesher.build(snapshot,true))
 		remesh_jobs.append(job)
-	if jobs.size() < 2:
-		var nearest := Vector2i(999999,999999)
-		var best: int = 999999
-		for z in range(-radius,radius+1):
-			for x in range(-radius,radius+1):
-				var c: Vector2i = center + Vector2i(x,z)
-				if columns.has(c) or pending.has(c): continue
-				var dist: int = x*x+z*z
-				if dist < best: best = dist; nearest = c
-		if best < 999999: _queue_column(nearest)
+	while jobs.size() < 2 and not generation_queue.is_empty():
+		var nearest: Vector2i = generation_queue.pop_back()
+		if not columns.has(nearest) and not pending.has(nearest): _queue_column(nearest)
 	if active:
 		if get_parent() != null and get_parent().has_method("playing") and get_parent().playing(): circuits.update(delta)
 		tick += delta
@@ -101,6 +108,7 @@ func _queue_column(coord: Vector2i) -> void:
 	pending[coord] = true
 
 func _apply_column(result: Dictionary) -> void:
+	sky_revision += 1
 	var c: Vector2i = result.coord
 	columns[c] = true
 	for entry in result.blocks:
@@ -115,18 +123,28 @@ func _apply_column(result: Dictionary) -> void:
 	for p in edits:
 		if p.x >= c.x*16-1 and p.x <= c.x*16+16 and p.z >= c.y*16-1 and p.z <= c.y*16+16:
 			var b: Vector3i = block_coord(p)
-			if blocks.has(b):
+			if not blocks.has(b) and b.x == c.x and b.z == c.y and p.y >= generator.terrain_ceiling() and p.y < generator.max_y(): _create_air_block(b)
+			if blocks.has(b) and blocks[b].data[local_index(p)] != edits[p]:
 				blocks[b].data[local_index(p)] = edits[p]
 				_mark_dirty(p)
-	for x in range(c.x*16-1,c.x*16+17):
-		for z in range(c.y*16-1,c.y*16+17):
-			for y in range(generator.min_y()+1,generator.max_y()):
-				var p := Vector3i(x,y,z)
-				var id: int = node_at(p)
-				if id == Nodes.LAVA: react_fluid(p)
-				if x >= c.x*16 and x < c.x*16+16 and z >= c.y*16 and z < c.y*16+16:
-					if id in Nodes.CIRCUIT_NODES: circuits.register(p,id)
-					if id == Nodes.CHEST and not edits.has(p): _structure_loot(p)
+	for p in result.get("special",{}):
+		var id: int = node_at(p)
+		if id in Nodes.CIRCUIT_NODES: circuits.register(p,id)
+		if id == Nodes.CHEST and not edits.has(p): _structure_loot(p)
+		if Fire.is_fire(id): Fire.track(self,p)
+	for p in result.get("reactive",{}):
+		react_fluid(p)
+		Fire.track(self,p)
+	# Changes made after the worker snapshot must also update simulation indexes.
+	for p in edits:
+		if p.x < c.x*16-1 or p.x > c.x*16+16 or p.z < c.y*16-1 or p.z > c.y*16+16: continue
+		if not loaded_at(Vector3(p)): continue
+		var id: int = node_at(p)
+		if id in Nodes.CIRCUIT_NODES: circuits.register(p,id)
+		if Fire.is_fire(id) or id == Nodes.LAVA: Fire.track(self,p)
+		if id in [Nodes.LAVA,Nodes.WATER]: react_fluid(p)
+		if Fire.flammable(id):
+			for side in SIDES: Fire.track(self,p+side)
 	column_loaded.emit()
 
 func _apply_mesh(coord: Vector3i, surfaces: Array) -> void:
@@ -148,11 +166,12 @@ func _apply_mesh(coord: Vector3i, surfaces: Array) -> void:
 
 func _unload(c: Vector2i) -> void:
 	columns.erase(c)
+	for p in hazards.keys():
+		if block_coord(p).x == c.x and block_coord(p).z == c.y: hazards.erase(p)
 	circuits.unload(c)
-	for y in generator.block_levels():
-		var b := Vector3i(c.x,y,c.y)
-		if blocks.has(b): blocks[b].root.queue_free(); blocks.erase(b)
-		dirty.erase(b)
+	for b in blocks.keys():
+		if b.x == c.x and b.z == c.y:
+			blocks[b].root.queue_free(); blocks.erase(b); dirty.erase(b)
 
 static func block_coord(p: Vector3i) -> Vector3i:
 	return Vector3i(floori(p.x/16.0),floori(p.y/16.0),floori(p.z/16.0))
@@ -161,10 +180,12 @@ static func local_index(p: Vector3i) -> int:
 	return posmod(p.x,16) + posmod(p.z,16)*16 + posmod(p.y,16)*256
 
 func node_at(p: Vector3i) -> int:
+	if not WorldBounds.horizontal(p): return Nodes.BEDROCK
 	if p.y < generator.min_y(): return Nodes.AIR if dimension == "end" else Nodes.BEDROCK
-	if p.y >= generator.max_y(): return Nodes.AIR
+	if p.y >= generator.max_y(): return Nodes.BEDROCK
 	var b: Vector3i = block_coord(p)
 	if blocks.has(b): return blocks[b].data[local_index(p)]
+	if p.y >= generator.terrain_ceiling() and loaded_at(Vector3(p)): return Nodes.AIR
 	# Treat unloaded terrain as solid for movement; streaming never drops a player.
 	return Nodes.BEDROCK
 
@@ -172,7 +193,8 @@ func area_ready(p: Vector3) -> bool:
 	var center := Vector2i(floori(p.x/16.0),floori(p.z/16.0))
 	for z in range(-1,2):
 		for x in range(-1,2):
-			if not columns.has(center+Vector2i(x,z)): return false
+			var c: Vector2i = center+Vector2i(x,z)
+			if WorldBounds.horizontal(Vector3i(c.x*16,0,c.y*16)) and not columns.has(c): return false
 	return true
 
 func loaded_at(p: Vector3) -> bool:
@@ -180,17 +202,43 @@ func loaded_at(p: Vector3) -> bool:
 
 func set_node(p: Vector3i, id: int) -> bool:
 	var b: Vector3i = block_coord(p)
-	if p.y <= generator.min_y() or p.y >= generator.max_y() or not blocks.has(b): return false
+	if not WorldBounds.horizontal(p) or p.y <= generator.min_y() or p.y >= generator.max_y(): return false
+	if not blocks.has(b):
+		if p.y < generator.terrain_ceiling() or not loaded_at(Vector3(p)): return false
+		_create_air_block(b)
 	var old_id: int = blocks[b].data[local_index(p)]
+	if Nodes.solid(old_id) != Nodes.solid(id): sky_revision += 1
 	blocks[b].data[local_index(p)] = id
+	Fire.track(self,p)
+	if Fire.flammable(id) or Fire.flammable(old_id):
+		for side in Fire.SIDES: Fire.track(self,p+side)
 	circuits.changed(p,old_id,id)
 	edits[p] = id
 	if id in [Nodes.WHEAT,Nodes.SAPLING,Nodes.SUGAR_CANE] or VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3: growth[p] = 0.0
 	else: growth.erase(p)
 	_mark_dirty(p)
+	if BuildingShapes.stair(old_id) or BuildingShapes.stair(id):
+		for dx in range(-1,2):
+			for dz in range(-1,2):
+				var neighbor: Vector3i = p+Vector3i(dx,0,dz)
+				dirty[block_coord(neighbor)] = true
+				Torches.support_changed(self,neighbor)
+				circuits.support_changed(neighbor)
 	if id in [Nodes.WATER,Nodes.LAVA]: react_fluid(p)
 	if id != Nodes.NETHER_PORTAL: validate_portals_near(p)
+	Torches.support_changed(self,p)
+	circuits.support_changed(p)
+	var game: Node = get_parent()
+	if game != null and game.has_method("remove_torch"):
+		if Torches.is_torch(old_id): game.remove_torch(p)
+		if Torches.is_torch(id): game.add_torch(p)
 	return true
+
+func _create_air_block(coord: Vector3i) -> void:
+	var root := Node3D.new(); root.name = "SkyBlock_%d_%d_%d"%[coord.x,coord.y,coord.z]
+	root.position = Vector3(coord*16); add_child(root)
+	var data := PackedInt32Array(); data.resize(4096)
+	blocks[coord] = {"data":data,"root":root,"meshes":[]}
 
 func _mark_dirty(p: Vector3i) -> void:
 	dirty[block_coord(p)] = true
@@ -200,14 +248,29 @@ func _mark_dirty(p: Vector3i) -> void:
 func _snapshot(coord: Vector3i) -> PackedInt32Array:
 	var data := PackedInt32Array()
 	data.resize(5832)
-	for y in 18:
-		for z in 18:
-			for x in 18:
-				var p: Vector3i = coord*16+Vector3i(x-1,y-1,z-1)
-				var id: int = node_at(p)
-				# Keep the outer streaming wall invisible.
-				if p.y > generator.min_y() and id == Nodes.BEDROCK and not blocks.has(block_coord(p)): id = Nodes.AIR
-				data[x+z*18+y*324] = id
+	# Resolve the 27 blocks once, then copy contiguous rows. Missing neighbors
+	# remain invisible, while the bottom world boundary still occludes faces.
+	for dy in range(-1,2):
+		var y0: int = 0 if dy < 0 else (1 if dy == 0 else 17)
+		var y1: int = 17 if dy == 0 else y0+1
+		for dz in range(-1,2):
+			var z0: int = 0 if dz < 0 else (1 if dz == 0 else 17)
+			var z1: int = 17 if dz == 0 else z0+1
+			for dx in range(-1,2):
+				var x0: int = 0 if dx < 0 else (1 if dx == 0 else 17)
+				var x1: int = 17 if dx == 0 else x0+1
+				var b: Vector3i = coord+Vector3i(dx,dy,dz)
+				var source: PackedInt32Array = blocks[b].data if blocks.has(b) else PackedInt32Array()
+				for y in range(y0,y1):
+					for z in range(z0,z1):
+						var dst: int = z*18+y*324
+						var src: int = ((z+15)%16)*16+((y+15)%16)*256
+						if source.is_empty():
+							var wy: int = coord.y*16+y-1
+							if wy <= generator.min_y() and dimension != "end":
+								for x in range(x0,x1): data[dst+x] = Nodes.BEDROCK
+						else:
+							for x in range(x0,x1): data[dst+x] = source[src+(x+15)%16]
 	return data
 
 func intersects(pos: Vector3, half_width: float = 0.29, height: float = 1.8) -> bool:
@@ -216,7 +279,13 @@ func intersects(pos: Vector3, half_width: float = 0.29, height: float = 1.8) -> 
 	for y in range(lo.y,hi.y+1):
 		for z in range(lo.z,hi.z+1):
 			for x in range(lo.x,hi.x+1):
-				if Nodes.solid(node_at(Vector3i(x,y,z))): return true
+				var p := Vector3i(x,y,z)
+				var id: int = node_at(p)
+				if not Nodes.solid(id): continue
+				if not BuildingShapes.is_shape(id): return true
+				var body := AABB(pos-Vector3(half_width,-0.002,half_width),Vector3(half_width*2,height-0.004,half_width*2))
+				for box in BuildingShapes.boxes(BuildingShapes.world_mask(self,p)):
+					if body.intersects(AABB(Vector3(p)+box.position,box.size)): return true
 	return false
 
 # Amanatides-Woo voxel traversal: precise targeting without per-node colliders.
@@ -234,7 +303,10 @@ func raycast(origin: Vector3, direction: Vector3, reach: float = 5.0, liquids: b
 	for iteration in 128:
 		var id: int = node_at(cell)
 		if id != Nodes.AIR and id not in [Nodes.NETHER_PORTAL,Nodes.END_PORTAL] and (liquids or id != Nodes.WATER):
-			return {"pos":cell,"normal":normal,"id":id,"distance":distance}
+			if BuildingShapes.is_shape(id):
+				var hit: Dictionary = shape_hit(cell,origin,direction,reach)
+				if not hit.is_empty(): return hit
+			else: return {"pos":cell,"normal":normal,"id":id,"distance":distance,"point":origin+direction*distance}
 		var axis: int = 0 if t_max.x < t_max.y else 1
 		if t_max.z < t_max[axis]: axis = 2
 		distance = t_max[axis]
@@ -245,7 +317,33 @@ func raycast(origin: Vector3, direction: Vector3, reach: float = 5.0, liquids: b
 		normal[axis] = -step_dir[axis]
 	return {}
 
+func shape_hit(p: Vector3i, origin: Vector3, direction: Vector3, reach: float) -> Dictionary:
+	var nearest: Dictionary = {}
+	var closest: float = reach+0.00001
+	for box in BuildingShapes.boxes(BuildingShapes.world_mask(self,p)):
+		var low: Vector3 = Vector3(p)+box.position
+		var high: Vector3 = low+box.size
+		var enter: float = 0; var leave: float = reach
+		var normal := Vector3i.ZERO
+		var valid: bool = true
+		for axis in 3:
+			if absf(direction[axis]) < 0.000001:
+				if origin[axis] < low[axis] or origin[axis] > high[axis]: valid = false; break
+				continue
+			var a: float = (low[axis]-origin[axis])/direction[axis]
+			var b: float = (high[axis]-origin[axis])/direction[axis]
+			var near: float = minf(a,b)
+			if near > enter:
+				enter = near; normal = Vector3i.ZERO; normal[axis] = -1 if direction[axis] > 0 else 1
+			leave = minf(leave,maxf(a,b))
+			if enter > leave: valid = false; break
+		if valid and enter < closest:
+			closest = enter
+			nearest = {"pos":p,"normal":normal,"id":node_at(p),"distance":enter,"point":origin+direction*enter}
+	return nearest
+
 func _simulate() -> void:
+	Fire.update(self)
 	for p in growth.keys():
 		if not loaded_at(Vector3(p)): continue
 		growth[p] += 1.0
@@ -275,7 +373,7 @@ func _simulate() -> void:
 		if s.burn > 0: s.burn -= 1
 		if recipe == 0 or (output.id != 0 and output.id != recipe) or output.count >= 64: s.progress = 0.0; continue
 		if s.burn <= 0:
-			var burn: int = Nodes.fuel_time(fuel.id)
+			var burn: float = Nodes.fuel_time(fuel.id)
 			if burn == 0: continue
 			s.burn = burn
 			if fuel.id == Nodes.LAVA_BUCKET:
@@ -478,6 +576,8 @@ func _structure_loot(p: Vector3i) -> void:
 	var key: String = station_key(p)
 	if stations.has(key): return
 	var station: Dictionary = get_station(p,"chest")
+	if dimension == "nether" and not Bastions.at(generator,p).is_empty():
+		Bastions.fill(station,generator.hash_at(p.x,p.y,p.z)); return
 	var loot: Array = [[Nodes.PAPER,8],[Nodes.BOOK,3],[Nodes.IRON,4],[Nodes.ENDER_PEARL,1],[Nodes.BREAD,4]]
 	if dimension == "overworld" and p.y > 0:
 		loot = [[VillageContent.EMERALD,2+generator.hash_at(p.x,90,p.z)%4],[Nodes.BREAD,3],[VillageContent.CARROT,4],[VillageContent.POTATO,4],[VillageContent.BEETROOT_SEEDS,3],[Nodes.APPLE,2],[VillageContent.COCOA_BEANS,2]]
@@ -493,6 +593,9 @@ func _structure_loot(p: Vector3i) -> void:
 		if dimension == "nether": station.slots[loot.size()+1] = {"id":PotionCatalog.find("withering"),"count":1,"wear":0}
 
 func open_sky(p: Vector3i) -> bool:
-	for y in range(p.y+2,generator.max_y()+1):
+	if dimension != "overworld": return false
+	for y in range(p.y+2,mini(generator.terrain_ceiling(),generator.max_y())):
 		if Nodes.solid(node_at(Vector3i(p.x,y,p.z))): return false
-	return dimension == "overworld"
+	for point in edits:
+		if point.x == p.x and point.z == p.z and point.y > p.y+1 and Nodes.solid(edits[point]): return false
+	return true

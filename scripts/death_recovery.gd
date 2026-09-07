@@ -12,7 +12,7 @@ static func leave(game: Node3D) -> void:
 	var sources: Array = game.inventory.slots.slice(0,Inventory.BASE_SLOTS)+game.inventory.pouch_slots+game.player.armor_slots+game.inventory.grid+[game.hud.cursor]
 	for i in sources.size():
 		if Inventory.enchantment(sources[i],"Curse of Vanishing") == 0: storage.slots[i] = sources[i].duplicate(true)
-	storage["label"] = "Recovery chest · "+str(game.profiles.entries.get(game.player_id,"Player"))
+	storage["label"] = "Recovery chest · "+game.player_id
 	storage["owner"] = game.player_id
 	storage["origin"] = [game.player.position.x,game.player.position.y,game.player.position.z]
 	game.world.adventure_state.erase("last_recovery")
@@ -58,4 +58,4 @@ static func find_position(world: VoxelWorld, origin: Vector3) -> Vector3i:
 	return NO_POSITION
 
 static func usable(world: VoxelWorld, p: Vector3i) -> bool:
-	return p.y > world.generator.min_y() and p.y < world.generator.max_y() and world.blocks.has(VoxelWorld.block_coord(p)) and world.node_at(p) == Nodes.AIR
+	return p.y > world.generator.min_y() and p.y < world.generator.max_y() and world.loaded_at(Vector3(p)) and world.node_at(p) == Nodes.AIR

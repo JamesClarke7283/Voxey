@@ -71,7 +71,6 @@ func run() -> void:
 	game.inventory.add_item(Nodes.TOOLS+18); game.inventory.add_item(VillageContent.TRIDENT); game.inventory.add_item(VillageContent.MACE); game.inventory.add_item(Nodes.BOOK,4); game.inventory.add_item(Nodes.LAPIS,32)
 	game.world.set_node(p,Nodes.ENCHANTING_TABLE)
 	game.open_enchanting(p); await shot("36_enchantments")
-	game.hud.show_profiles(); await shot("37_player_profiles")
 	game.queue_free()
 	for i in 4: await process_frame
 	quit(1 if failed else 0)

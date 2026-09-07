@@ -86,7 +86,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var column: Dictionary = nether.generate_column(Vector2i.ZERO,{})
 	var same: Dictionary = nether.generate_column(Vector2i.ZERO,{})
 	suite.check(column.blocks[1].data == same.blocks[1].data,"Nether terrain generation is deterministic")
-	suite.check(column.blocks[TerrainGenerator.NETHER_HEIGHT/16-1].data[15*256] == Nodes.BEDROCK and column.blocks[0].data[0] == Nodes.BEDROCK,"Nether has a bedrock ceiling and floor")
+	suite.check(column.blocks[8].data[0] == Nodes.BEDROCK and column.blocks[0].data[0] == Nodes.BEDROCK,"Nether has a bedrock ceiling and floor")
 	var has_water: bool = false; var has_lava: bool = false
 	for block in column.blocks:
 		has_water = has_water or block.data.has(Nodes.WATER)

@@ -11,7 +11,12 @@ static func texture(id: int) -> Texture2D:
 	var img := Image.create(16,16,false,Image.FORMAT_RGBA8)
 	var base: Color = Nodes.color(id)
 	var dark := Color("36332d")
-	if id in Nodes.SMALL_CIRCUITS:
+	if id == Nodes.TORCH:
+		_line(img,Vector2(3,14),Vector2(10,7),Color("624126"),3)
+		_line(img,Vector2(4,13),Vector2(11,6),Color("bd925c"),2)
+		_polygon(img,[[8,7],[8,3],[10,4],[11,1],[14,4],[14,7],[12,9]],Color("f6a52f"))
+		_polygon(img,[[10,7],[10,5],[12,3],[13,5],[12,8]],Color("fff0a0"))
+	elif id in Nodes.SMALL_CIRCUITS:
 		if id == Nodes.REDSTONE_WIRE:
 			for p in [Vector2i(2,10),Vector2i(5,7),Vector2i(10,8),Vector2i(7,11)]: img.fill_rect(Rect2i(p,Vector2i(4,3)),Color("c02d3a"))
 		elif id in [Nodes.REPEATER,Nodes.COMPARATOR]:

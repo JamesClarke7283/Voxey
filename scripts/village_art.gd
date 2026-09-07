@@ -2,9 +2,12 @@ class_name VillageArt
 extends RefCounted
 
 static func pixel(id: int, x: int, y: int, noise: Color) -> Color:
+	if id in Masonry.BLOCKS: return Masonry.pixel(id,x,y,noise)
 	var d: Dictionary = VillageContent.DATA[id]
 	var base := Color(d.color)
 	var shape: String = d.get("shape","cube")
+	if Fire.is_fire(id):
+		return Color("ffe87a") if y > 10 and x in range(4,12) else (Color("ef8a30") if y > (x*7)%11 else Color.TRANSPARENT)
 	if id == VillageContent.COBWEB:
 		var web: bool = x == y or x+y == 15 or x in [7,8] or y in [7,8] or maxi(absi(x-7),absi(y-7)) in [3,6]
 		return Color("d9e2d7") if web else Color.TRANSPARENT
@@ -14,6 +17,21 @@ static func pixel(id: int, x: int, y: int, noise: Color) -> Color:
 		var stem: bool = y >= 13-int(d.stage)*3 and (x%5 == 2 or ((x+y)%7 < 2 and y > 5))
 		if not stem: return Color.TRANSPARENT
 		return base if d.stage == 3 and y > 11 else Color("609143")
+	if id in [Bastions.BRICKS,Bastions.POLISHED]:
+		return base.darkened(0.45) if y%8 == 0 or posmod(x+(8 if y/8%2 else 0),16) == 0 else noise
+	if id == Bastions.CHISELED:
+		return base.darkened(0.5) if maxi(absi(x-7),absi(y-7)) in [4,6] else noise
+	if id in [Bastions.GILDED,MinecloniaOres.NETHER_GOLD]:
+		return Color("e2b74d") if (x/2*7+y/2*11)%13 < 3 else noise.darkened(0.22)
+	if id == Bastions.CRYING_OBSIDIAN:
+		return Color("a773ce") if x%5 == 0 and y%7 in [3,4,5] else noise.darkened(0.23)
+	if id == Bastions.LODESTONE:
+		return base.darkened(0.45) if x in [1,14] or y in [1,14] or maxi(absi(x-7),absi(y-7)) in [2,4] else noise
+	if id == Netherite.ANCIENT_DEBRIS:
+		var ring: int = maxi(absi(x-7),absi(y-7))
+		return Color("b38b79") if ring%4 == 1 else (Color("453835") if ring%4 == 0 else noise)
+	if id == Netherite.BLOCK:
+		return base.lightened(0.2) if x in [1,14] or y in [1,14] else (base.darkened(0.25) if x in [0,15] or y in [0,15,7,8] else noise)
 	if id == VillageContent.RECOVERY_CHEST:
 		if x in [0,1,14,15] or y in [0,1,6,7,14,15]: return Color("4c4c44")
 		if (x in range(5,11) and y in [9,10]) or (x in [4,5,10,11] and y in [8,11]): return Color("e6ddbd")

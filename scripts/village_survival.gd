@@ -60,6 +60,10 @@ func use() -> bool:
 	var held: int = game.inventory.held().id
 	var target: Dictionary = game.player.target
 	var mob: Creature = game.target_mob()
+	if held == Nodes.COMPASS and not target.is_empty() and target.id == Bastions.LODESTONE: return Lodestones.bind(game,target.pos)
+	if mob is NetherResident and held == Nodes.GOLD:
+		if not mob.barter(): game.toast("This piglin will not barter right now.")
+		return true
 	if Pouches.is_pouch(held): open_pouch(game.inventory.selected); return true
 	if mob != null and (held == VillageContent.LEAD or held == 0 and game.leads.attached(mob)):
 		if game.leads.attached(mob): game.leads.detach(mob)
@@ -332,12 +336,29 @@ func show_station(p: Vector3i, id: int) -> void:
 			var slot: Dictionary = game.inventory.slots[i]
 			if Nodes.durability(slot.id) <= 0 and slot.id != VillageContent.ENCHANTED_BOOK: continue
 			var index: int = i
+			if id == VillageContent.SMITHING_TABLE and Netherite.upgrade_id(slot.id) != 0:
+				actions.append([Nodes.title(slot.id)+" → Netherite · 1 ingot + 1 template",func():
+					if not Netherite.upgrade(game.inventory,index): game.toast("Bring one netherite ingot and one upgrade template.")
+					else: game.sound("equip")
+					show_station(p,id)])
 			var description: String = "Remove enchantments, recover XP" if id == VillageContent.GRINDSTONE else ("Apply first compatible enchanted book · 1 XP level" if id == VillageContent.ANVIL else "Repair 25% · 1 matching material")
 			actions.append([Nodes.title(slot.id)+" — "+description,func(): equipment_work(index,id); show_station(p,id)])
 	elif id == VillageContent.STONECUTTER:
 		for pair in [[Nodes.STONE,Nodes.BRICKS],[Nodes.BRICKS,VillageContent.CHISELED_BRICKS],[VillageContent.GRANITE,VillageContent.POLISHED_GRANITE],[VillageContent.DIORITE,VillageContent.POLISHED_DIORITE],[VillageContent.ANDESITE,VillageContent.POLISHED_ANDESITE],[VillageContent.QUARTZ_BLOCK,VillageContent.QUARTZ_PILLAR],[Nodes.DEEPSLATE,Nodes.POLISHED_DEEPSLATE]]:
 			var input: int = pair[0]; var output: int = pair[1]
 			actions.append(["1 "+Nodes.title(input)+" → 1 "+Nodes.title(output),func(): exchange([[input,1]],output)])
+		for base in BuildingShapes.MATERIALS:
+			for source in BuildingShapes.stonecutter_inputs(base):
+				var input: int = source
+				var slab: int = BuildingShapes.slab_for(base); var stair: int = BuildingShapes.stair_for(base)
+				actions.append([BuildingShapes.title(slab)+" × 2 · 1 "+Nodes.title(input),func(): exchange([[input,1]],slab,2)])
+				actions.append([BuildingShapes.title(stair)+" · 1 "+Nodes.title(input),func(): exchange([[input,1]],stair)])
+		var masonry: Dictionary = Masonry.cuts()
+		for output_id in masonry:
+			for source_id in masonry[output_id]:
+				var input: int = source_id; var output: int = output_id
+				actions.append(["1 "+Nodes.title(input)+" → 1 "+Nodes.title(output),func(): exchange([[input,1]],output)])
+
 	elif id == VillageContent.LOOM:
 		for dye in VillageContent.DATA:
 			if VillageContent.DATA[dye].get("family","") != "dye": continue
@@ -397,6 +418,7 @@ func equipment_work(index: int, device: int) -> bool:
 		var material: int = Nodes.DIAMOND if Nodes.tool_tier(slot.id) == 3 or Nodes.is_armor(slot.id) and Nodes.armor_material(slot.id) == 3 else (Nodes.LEATHER if Nodes.is_armor(slot.id) and Nodes.armor_material(slot.id) == 0 else Nodes.IRON)
 		if Nodes.tool_tier(slot.id) == 0: material = Nodes.PLANKS
 		if Nodes.tool_tier(slot.id) == 1: material = Nodes.COBBLE
+		material = VillageContent.DATA.get(slot.id,{}).get("repair_material",material)
 		if not game.inventory.remove_item(material,1): game.toast("Repair needs "+Nodes.title(material)+"."); return false
 		slot.wear = maxi(0,int(slot.wear)-ceili(Nodes.durability(slot.id)*0.25)); game.inventory.changed.emit(); return true
 	for book_index in game.inventory.slots.size():

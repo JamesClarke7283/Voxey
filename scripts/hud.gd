@@ -1,11 +1,11 @@
 class_name VoxeyHUD
 extends Control
 
-const INK = Color("16251f")
-const PANEL = Color("202e27")
-const TEXT = Color("eee9d5")
-const MUTED = Color("a8b39b")
-const ACCENT = Color("becb82")
+const INK = Color("202020")
+const PANEL = Color("484848")
+const TEXT = Color("f0f0f0")
+const MUTED = Color("c3c3c3")
+const ACCENT = Color("e1e1e1")
 var game: Node3D
 var layer: Control
 var hotbar: Array = []
@@ -37,13 +37,14 @@ var elapsed_refresh: float = 0.0
 var grid_ui: Array = []
 var output_icon: ItemIcon
 var output_button: Button
-var recipe_list: VBoxContainer
+var recipe_list: GridContainer
 var recipe_search: LineEdit
 var requirements_label: Label
 var fill_button: Button
 var result_label: Label
 var catalog_mode: bool = false
 var world_detail: Control
+var delete_world_entry: Dictionary = {}
 var console_input: LineEdit
 var console_output: RichTextLabel
 var armor_ui: Array = []
@@ -61,13 +62,13 @@ func _ready() -> void:
 	theme_value.set_color("font_color","Label",TEXT)
 	theme_value.set_color("font_color","Button",TEXT)
 	theme_value.set_color("font_hover_color","Button",Color.WHITE)
-	theme_value.set_color("font_disabled_color","Button",Color("6d7b6c"))
+	theme_value.set_color("font_disabled_color","Button",Color("909090"))
 	for type_name in ["Button","LineEdit"]:
-		theme_value.set_stylebox("normal",type_name,_style(Color("304332"),Color("546443"),1,6))
-		theme_value.set_stylebox("hover",type_name,_style(Color("435639"),ACCENT,1,6))
-		theme_value.set_stylebox("pressed",type_name,_style(Color("26382b"),ACCENT,2,6))
+		theme_value.set_stylebox("normal",type_name,_style(Color("646464"),Color("858585"),1,6))
+		theme_value.set_stylebox("hover",type_name,_style(Color("7a7a7a"),ACCENT,1,6))
+		theme_value.set_stylebox("pressed",type_name,_style(Color("383838"),ACCENT,2,6))
 		theme_value.set_stylebox("focus",type_name,_style(Color(0,0,0,0),ACCENT,2,6))
-		theme_value.set_stylebox("disabled",type_name,_style(Color("28332b"),Color("3b4636"),1,6))
+		theme_value.set_stylebox("disabled",type_name,_style(Color("3b3b3b"),Color("555555"),1,6))
 	theme = theme_value
 	layer = Control.new()
 	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -145,7 +146,7 @@ func _panel(parent: Node, rect: Rect2, color: Color = PANEL) -> Panel:
 	var panel := Panel.new()
 	panel.position = rect.position
 	panel.size = rect.size
-	panel.add_theme_stylebox_override("panel",_style(color,Color("4b5944"),1,8))
+	panel.add_theme_stylebox_override("panel",_style(color,Color("777777"),1,8))
 	parent.add_child(panel)
 	return panel
 
@@ -157,7 +158,7 @@ func show_title() -> void:
 	screen = "title"
 	var shade := TextureRect.new()
 	var gradient := Gradient.new()
-	gradient.colors = PackedColorArray([Color(0.055,0.105,0.085,0.96),Color(0.055,0.105,0.085,0.8),Color(0.055,0.105,0.085,0.04)])
+	gradient.colors = PackedColorArray([Color(0.08,0.08,0.08,0.96),Color(0.08,0.08,0.08,0.8),Color(0.08,0.08,0.08,0.04)])
 	gradient.offsets = PackedFloat32Array([0,0.32,1])
 	var tex := GradientTexture2D.new()
 	tex.gradient = gradient
@@ -172,7 +173,7 @@ func show_title() -> void:
 	_label(layer,"V  /  VOXEY",Vector2(38,24),18,ACCENT)
 	_label(layer,"A LITTLE WILD. ENTIRELY YOURS.",origin,13,ACCENT)
 	var title := _label(layer,"VOXEY",origin+Vector2(-5,21),int(title_size),TEXT)
-	title.add_theme_color_override("font_shadow_color",Color("0c1c15"))
+	title.add_theme_color_override("font_shadow_color",Color("141414"))
 	title.add_theme_constant_override("shadow_offset_y",6)
 	_label(layer,"One node. Endless possibilities.",origin+Vector2(0,title_size*0.5+92),23,TEXT)
 	_label(layer,"Gather, craft, and find your own way.\nA living voxel wilderness awaits.",origin+Vector2(0,title_size*0.5+137),16,MUTED)
@@ -180,11 +181,10 @@ func show_title() -> void:
 	start_button.add_theme_font_size_override("font_size",19)
 	_button(layer,"Create a new world",Rect2(origin+Vector2(0,title_size*0.5+285),Vector2(minf(340,size.x-90),44)),show_new_world)
 	_label(layer,"SURVIVAL & CREATIVE  ·  YOUR OWN WORLDS",origin+Vector2(0,title_size*0.5+351),11,MUTED)
-	_button(layer,"Player: "+str(game.profiles.entries.get(game.player_id,"Player")),Rect2(origin+Vector2(0,title_size*0.5+376),Vector2(minf(340,size.x-90),38)),show_profiles)
 	_label(layer,"VOXEY    ·    SINGLE PLAYER    ·    INFINITE HORIZONS",Vector2(38,size.y-40),11,MUTED)
-	var version_tag := _panel(layer,Rect2(Vector2(size.x-224,20),Vector2(186,32)),Color(0.05,0.1,0.08,0.6))
+	var version_tag := _panel(layer,Rect2(Vector2(size.x-224,20),Vector2(186,32)),Color(0.08,0.08,0.08,0.6))
 	_label(version_tag,"v"+Game.VERSION+"  ·  "+Game.VERSION_NAME,Vector2(14,7),13,ACCENT)
-	var tag := _panel(layer,Rect2(Vector2(size.x-290,size.y-96),Vector2(254,58)),Color(0.09,0.16,0.13,0.75))
+	var tag := _panel(layer,Rect2(Vector2(size.x-290,size.y-96),Vector2(254,58)),Color(0.12,0.12,0.12,0.75))
 	_label(tag,"THE OVERWORLD",Vector2(16,10),10,ACCENT)
 	_label(tag,"Oakwood meadow  /  Day 1",Vector2(16,27),14,TEXT)
 
@@ -232,7 +232,7 @@ func show_pause() -> void:
 	_clear()
 	screen = "pause"
 	_dim()
-	var panel := _panel(layer,_panel_rect(Vector2(480,530)))
+	var panel := _fitted_panel(Vector2(480,580))
 	_label(panel,"TAKE A BREATHER",Vector2(34,26),12,ACCENT)
 	_label(panel,"A moment of quiet.",Vector2(34,49),30)
 	_label(panel,"v"+Game.VERSION+" "+Game.VERSION_NAME+"    ·    "+game.world_name,Vector2(34,93),13,MUTED)
@@ -263,14 +263,21 @@ func show_pause() -> void:
 	audio_button.button_pressed = game.audio_enabled
 	audio_button.toggled.connect(func(value: bool): game.audio_enabled=value)
 	panel.add_child(audio_button)
-	_button(panel,"Field guide",Rect2(34,358,198,43),show_guide)
-	if game.touch:
-		_button(panel,"Achievements",Rect2(246,358,200,43),show_achievements)
-	else:
-		_button(panel,"Achievements",Rect2(246,358,122,43),show_achievements)
-		_button(panel,"Fullscreen",Rect2(380,358,66,43),game.toggle_fullscreen)
-	_button(panel,"Save & return to title",Rect2(34,420,412,46),game.return_to_title)
-	_label(panel,"World edits and inventory autosave every 45 seconds.",Vector2(34,483),12,MUTED)
+	var actions := GridContainer.new()
+	actions.position = Vector2(34,354)
+	actions.size.x = 412
+	actions.columns = 2
+	actions.add_theme_constant_override("h_separation",12)
+	actions.add_theme_constant_override("v_separation",12)
+	panel.add_child(actions)
+	for action in [["Field guide",show_guide],["Achievements",show_achievements]]:
+		var button := _button(actions,action[0],Rect2(0,0,200,43),action[1])
+		button.custom_minimum_size = Vector2(200,43)
+	if not game.touch:
+		var button := _button(actions,"Fullscreen",Rect2(0,0,200,43),game.toggle_fullscreen)
+		button.custom_minimum_size = Vector2(200,43)
+	_button(panel,"Save & return to title",Rect2(34,464,412,46),game.return_to_title)
+	_label(panel,"World edits and inventory autosave every 45 seconds.",Vector2(34,534),12,MUTED)
 
 func show_achievements() -> void:
 	_clear()
@@ -316,7 +323,8 @@ func show_guide() -> void:
 	text_value += "\n\n06   THE NETHER\nWater touching cave lava makes obsidian. Mine it with a diamond pickaxe. Build a 4 × 5 obsidian frame with a 2 × 3 opening, light it with flint and steel, and step inside. Return through a portal. Water evaporates there; beds cannot set spawn.\n\n07   BOOKS & ENCHANTING\nCows always drop leather. Three paper + leather make a book; add a feather + charcoal for a writable book. Hold it and right click to write. A book, two diamonds, and four obsidian make an enchanting table. Mine lapis underground; right click the table to upgrade equipment using lapis and XP levels. Leave a one-block air gap between the table and nearby bookshelves.\n\n08   RECOVER YOUR ARROWS\nArrows stuck in the world last ten active minutes. Walk near them to pick them up. Ground items stay put until the entire pickup fits in your inventory."
 	text_value += "\n\n09   INTO THE DEEP\nThe Overworld now reaches bedrock at Y -128. Find deepslate, larger caverns and deep ores below zero. Carry torches: cave enemies can appear even during the day. Four cobbled deepslate make polished deepslate; four polished blocks make bricks. Lava buckets fuel furnaces and leave an empty bucket.\n\n10   DROP WHAT YOU CARRY\nQ throws one item. In inventory, press an item to carry it, move outside the panel, then press Escape to drop the stack and close. Left-click outside drops a stack; right-click drops one. Thrown items have a short pickup delay. Esc with the pointer inside returns carried items to your bag."
 	text_value += "\n\n11   REDSTONE\nMine redstone ore deep underground with an iron pickaxe. Dust carries power up to 15 blocks. Right click levers and buttons; walk on plates. Repeaters face away from you and restore power; right click to set a 1–4 tick delay. Comparators read container fullness and switch compare/subtract modes. Torches invert the power of their supporting block. Observers pulse when the block at their face changes. Pistons push up to 12 blocks; sticky pistons pull one back. Hoppers move items when unpowered; powered dispensers fire arrows and droppers eject one item. Hold Ctrl to place against interactive blocks.\n\n12   FIND THE END\nExplore Nether fortresses for blazes and their rods. Craft blaze powder, then combine it with ender pearls from endermen to make Eyes of Ender. Throw an Eye in the Overworld and follow it to an underground stronghold. Fill all twelve portal frames with Eyes and step into the portal. Pearls teleport you to their landing spot, costing health.\n\n13   THE DRAGON\nShoot the healing crystals atop the End’s ten obsidian towers; two have iron cages. Fight the dragon with your bow or strike when it perches. Avoid its purple breath and the void. Victory gives XP, a dragon egg, and a portal home. Four crafted crystals placed on the cardinal edges of the exit fountain summon another dragon. Victory also opens a gateway near the arrival platform, leading to the outer islands and a return gateway. Beyond the main island lie chorus groves and purpur cities guarded by shulkers. Their homing shots cause levitation. Find elytra in the treasure chests, equip them in your chest slot, and hold Jump while falling to glide. Aim to steer and dive; worn-out wings stop gliding."
-	text_value += "\n\n14   VILLAGES & LEADS\nUse /locate village to find a settlement. Right click villagers to trade with emeralds. Working restocks their trades, and trading unlocks five profession levels. Ctrl + right click with food feeds villagers; two fed adults and a spare bed allow a baby. Craft two leads from five string and one slime ball. Use a lead on an animal or villager and walk to pull it. Use a lead or an empty hand again to release it. Slimes spawn in dark swamps and in seeded underground chunks below Y -24.\n\n15   YOUR OWN HOME\nChoose a player profile on the title screen. /sethome saves this player's position and facing in this world. /home returns there, even from another dimension. Renaming a profile keeps its home.\n\n16   BREWING\nA blaze rod and cobblestone make a brewing stand. Fill glass bottles with water. The stand takes one ingredient, blaze powder fuel and up to three bottles. Batches take 10 seconds; one blaze powder fuels 20. Water + nether wart makes awkward potion. Try sugar for swiftness, a ghast tear for regeneration or magma cream for fire resistance. Redstone extends duration; glowstone dust strengthens effects. Gunpowder makes splash bottles; dragon breath makes lingering bottles. Surround a lingering potion with eight arrows to tip them. Drink milk to clear effects.\n\n17   ENCHANTED GEAR\nChoose an enchantment at the table. Books can be enchanted too. Combine equal-level books at an anvil to reach higher levels; conflicts are rejected. Librarians, treasure and fishing supply treasure enchantments. Mending repairs worn or held gear with new XP. Grindstones remove enchantments but keep curses. Check tooltips for every level.\n\n18   COLORED POUCHES\nCraft a level 1 pouch with one chest and four string at a table. Add wool to choose its color. Combine two pouches of the same level to upgrade, up to level 5: 27, 54, 81, 108 and 135 slots. Both inputs keep their cargo; empty some first if it cannot fit. Equip up to three in the pouch slots to add inventory pages. The hotbar stays visible on every page. Carried pouches add no pages but can still be opened: right click one in inventory, or hold and use it. Pouches have their own page arrows and Back button. Unequipping takes the contents along. Craft a pouch with wool or dye to recolor it. Pouches cannot hold other pouches. All sixteen wool colors can be recolored with dyes.\n\n19   DEATH & RECOVERY\nDying leaves two bones and a recovery chest. Your main backpack, armor, equipped pouches, crafting ingredients and cursor stack go into the chest. Items on extra inventory pages remain inside their pouches. The chest persists; its coordinates appear on the death screen. Right click to retrieve your items, then re-equip the pouches to restore their pages. Another death leaves a separate chest."
+	text_value += "\n\n14   VILLAGES & LEADS\nUse /locate village to find a settlement. Right click villagers to trade with emeralds. Working restocks their trades, and trading unlocks five profession levels. Ctrl + right click with food feeds villagers; two fed adults and a spare bed allow a baby. Craft two leads from five string and one slime ball. Use a lead on an animal or villager and walk to pull it. Use a lead or an empty hand again to release it. Slimes spawn in dark swamps and in seeded underground chunks below Y -24.\n\n15   YOUR OWN HOME\n/sethome saves your position and facing in this world. /home returns there, even from another dimension. Offline, your player name is player.\n\n16   BREWING\nA blaze rod and cobblestone make a brewing stand. Fill glass bottles with water. The stand takes one ingredient, blaze powder fuel and up to three bottles. Batches take 10 seconds; one blaze powder fuels 20. Water + nether wart makes awkward potion. Try sugar for swiftness, a ghast tear for regeneration or magma cream for fire resistance. Redstone extends duration; glowstone dust strengthens effects. Gunpowder makes splash bottles; dragon breath makes lingering bottles. Surround a lingering potion with eight arrows to tip them. Drink milk to clear effects.\n\n17   ENCHANTED GEAR\nChoose an enchantment at the table. Books can be enchanted too. Combine equal-level books at an anvil to reach higher levels; conflicts are rejected. Librarians, treasure and fishing supply treasure enchantments. Mending repairs worn or held gear with new XP. Grindstones remove enchantments but keep curses. Check tooltips for every level.\n\n18   COLORED POUCHES\nCraft a level 1 pouch with one chest and four string at a table. Add wool to choose its color. Combine two pouches of the same level to upgrade, up to level 5: 27, 54, 81, 108 and 135 slots. Both inputs keep their cargo; empty some first if it cannot fit. Equip up to three in the pouch slots to add inventory pages. The hotbar stays visible on every page. Carried pouches add no pages but can still be opened: right click one in inventory, or hold and use it. Pouches have their own page arrows and Back button. Unequipping takes the contents along. Craft a pouch with wool or dye to recolor it. Pouches cannot hold other pouches. All sixteen wool colors can be recolored with dyes.\n\n19   DEATH & RECOVERY\nDying leaves two bones and a recovery chest. Your main backpack, armor, equipped pouches, crafting ingredients and cursor stack go into the chest. Items on extra inventory pages remain inside their pouches. The chest persists; its coordinates appear on the death screen. Right click to retrieve your items, then re-equip the pouches to restore their pages. Another death leaves a separate chest."
+	text_value += "\n\n20   NETHERITE & BASTIONS\nMine ancient debris with a diamond pickaxe. Smelt four debris for four scrap, then combine with four gold for an ingot. Bastion chests can contain upgrade templates. At a smithing table, upgrade diamond gear with one ingot and one template. Duplicate templates using seven diamonds and netherrack. /locate bastion finds a blackstone stronghold in the Nether. Gold armor pacifies piglins; brutes still attack. Give a piglin one gold ingot to receive a barter reward after six seconds.\n\n21   FIRE & LODESTONES\nFlint and steel or fire charges ignite blocks, portals and TNT. Netherrack supports eternal fire; water extinguishes flames. Use a compass on a lodestone to bind that compass. Use it again to get a bearing. It works within the lodestone’s dimension and stops tracking if the lodestone is destroyed."
 	var scroll := ScrollContainer.new()
 	scroll.position = Vector2(32,100); scroll.size = Vector2(726,350)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -344,8 +352,8 @@ func show_inventory(kind: String = "hand", data: Dictionary = {}) -> void:
 	_label(panel,{"hand":"A little ingenuity.","table":"The crafting table.","furnace":"Into the fire.","brewing":"A little alchemy.","chest":data.get("label","One large chest." if tall else "Room for everything.")}[kind],Vector2(28,44),28)
 	_button(panel,"×",Rect2(1029,22,43,40),game.resume)
 	if game.gamemode=="creative":
-		_button(panel,"Recipes",Rect2(24,94,136,28),func(): catalog_mode=false; _populate_recipes())
-		_button(panel,"All items",Rect2(168,94,140,28),func(): catalog_mode=true; _populate_recipes())
+		_compact_button(panel,"Recipes",Rect2(24,94,136,28),func(): catalog_mode=false; _populate_recipes())
+		_compact_button(panel,"All items",Rect2(168,94,140,28),func(): catalog_mode=true; _populate_recipes())
 	else: _label(panel,"RECIPE GUIDE",Vector2(28,105),12,MUTED)
 	recipe_search = LineEdit.new()
 	recipe_search.position = Vector2(24,129)
@@ -358,9 +366,11 @@ func show_inventory(kind: String = "hand", data: Dictionary = {}) -> void:
 	scroll.size = Vector2(284,367)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	panel.add_child(scroll)
-	recipe_list = VBoxContainer.new()
+	recipe_list = GridContainer.new()
+	recipe_list.columns = 5
 	recipe_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	recipe_list.add_theme_constant_override("separation",5)
+	recipe_list.add_theme_constant_override("h_separation",5)
+	recipe_list.add_theme_constant_override("v_separation",5)
 	scroll.add_child(recipe_list)
 	_populate_recipes()
 	_label(panel,"Look up a pattern, or arrange your own.\nFill grid places the ingredients for you.",Vector2(28,556),12,MUTED)
@@ -418,7 +428,7 @@ func show_inventory(kind: String = "hand", data: Dictionary = {}) -> void:
 	layer.add_child(cursor_icon)
 	# Touch has no Shift/right-click: on-screen toggles provide both semantics.
 	if game.touch:
-		var toggle_panel := _panel(layer,Rect2(Vector2(8,size.y-124),Vector2(198,116)),Color(0.06,0.11,0.08,0.85))
+		var toggle_panel := _panel(layer,Rect2(Vector2(8,size.y-124),Vector2(198,116)),Color(0.08,0.08,0.08,0.85))
 		split_toggle = CheckButton.new()
 		split_toggle.text = "Split mode"
 		split_toggle.position = Vector2(10,8)
@@ -441,33 +451,37 @@ func _select_recipe(index: int) -> void:
 func _populate_recipes() -> void:
 	if not is_instance_valid(recipe_list): return
 	for child in recipe_list.get_children(): recipe_list.remove_child(child); child.queue_free()
-	var query: String = recipe_search.text.to_lower() if is_instance_valid(recipe_search) else ""
+	var query: String = recipe_search.text.strip_edges().to_lower() if is_instance_valid(recipe_search) else ""
 	if catalog_mode:
 		for id in Nodes.all_ids():
 			if not query.is_empty() and not query in Nodes.title(id).to_lower(): continue
-			var button := Button.new()
-			button.text="      "+Nodes.title(id)
-			button.alignment=HORIZONTAL_ALIGNMENT_LEFT
-			button.custom_minimum_size=Vector2(261,37)
-			button.add_theme_font_size_override("font_size",14)
-			button.pressed.connect(_creative_take.bind(id))
-			recipe_list.add_child(button)
-			var icon := ItemIcon.new()
-			icon.position=Vector2(8,2); icon.size=Vector2(30,32); icon.item_id=id; icon.show_slot=false
-			button.add_child(icon)
-		return
-	for i in game.inventory.recipes.size():
-		var recipe: Dictionary = game.inventory.recipes[i]
-		if not query.is_empty() and not query in String(recipe.name).to_lower(): continue
-		var can: bool = game.inventory.can_craft(recipe,station)
-		var button := Button.new()
-		button.text = ("•  " if can else "   ")+recipe.name
-		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		button.custom_minimum_size = Vector2(261,37)
-		button.add_theme_font_size_override("font_size",14)
-		button.add_theme_color_override("font_color",ACCENT if can else MUTED)
-		button.pressed.connect(_select_recipe.bind(i))
-		recipe_list.add_child(button)
+			_recipe_cell(id,Nodes.title(id),_creative_take.bind(id))
+	else:
+		for i in game.inventory.recipes.size():
+			var recipe: Dictionary = game.inventory.recipes[i]
+			if not query.is_empty() and not query in String(recipe.name).to_lower(): continue
+			var can: bool = game.inventory.can_craft(recipe,station)
+			var description: String = recipe.name+"\n"+("Crafting table" if recipe.station == "table" else "Hand crafting")
+			description += "\n"+("Ready to craft" if can else "Select to see ingredients")
+			var button: RecipeButton = _recipe_cell(recipe.id,description,_select_recipe.bind(i))
+			button.set_meta("recipe_index",i)
+			if can: button.add_theme_stylebox_override("normal",_style(Color("727272"),Color("d6d6d6"),2,2))
+	if recipe_list.get_child_count() == 0:
+		var label := Label.new(); label.text = "No matching items"; recipe_list.add_child(label)
+
+func _recipe_cell(id: int, description: String, callback: Callable) -> RecipeButton:
+	var button := RecipeButton.new()
+	button.item_id = id
+	button.tooltip_text = description
+	button.custom_minimum_size = Vector2(49,49)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.pressed.connect(callback)
+	recipe_list.add_child(button)
+	var icon := ItemIcon.new()
+	icon.item_id = id; icon.show_slot = false
+	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	button.add_child(icon)
+	return button
 
 func _recipe_preview() -> void:
 	for child in preview.get_children(): preview.remove_child(child); child.queue_free()
@@ -657,10 +671,7 @@ func _slot_click(index: int, is_station: bool, right: bool, is_grid: bool = fals
 	if station_data.get("kind","") == "pouch" and ((is_station and Pouches.is_pouch(cursor.id)) or (not is_station and Pouches.is_pouch(slot.id) and (shift_mode or Input.is_physical_key_pressed(KEY_SHIFT)))): return
 	if is_armor and cursor.id != 0 and Nodes.armor_piece(cursor.id) != index: return
 	if is_station and station == "brewing" and not Brewing.accepts(index,cursor.id): return
-	if is_station and station == "furnace" and cursor.id != 0:
-		if index == 2: return
-		if index == 1 and Nodes.fuel_time(cursor.id) == 0: return
-		if index == 0 and Nodes.smelt_result(cursor.id) == 0: return
+	if is_station and station == "furnace" and not FurnaceRules.accepts(station_data.slots,index,cursor.id): return
 	if (Input.is_physical_key_pressed(KEY_SHIFT) or shift_mode) and cursor.id == 0 and slot.id != 0:
 		if is_station or is_grid or is_armor:
 			var exclude_start: int = -1; var exclude_end: int = -1
@@ -671,12 +682,13 @@ func _slot_click(index: int, is_station: bool, right: bool, is_grid: bool = fals
 			if slot.count == 0: slot.id = 0; slot.wear = 0; slot.erase("data")
 		elif Nodes.is_armor(slot.id) and game.player.armor_slots[Nodes.armor_piece(slot.id)].id == 0:
 			game.player.equip_armor(slot)
-		elif station in ["chest","brewing"]:
+		elif station in ["chest","brewing","furnace"]:
 			if station_data.get("equipped",-1) >= 0:
 				var offset: int = game.inventory.pouch_offset(station_data.equipped)
 				if index >= offset and index < offset+station_data.slots.size(): return
 			for destination_index in station_data.slots.size():
 				if station == "brewing" and not Brewing.accepts(destination_index,slot.id): continue
+				if station == "furnace" and not FurnaceRules.accepts(station_data.slots,destination_index,slot.id): continue
 				var destination: Dictionary = station_data.slots[destination_index]
 				if destination.id == 0 or (destination.id == slot.id and destination.wear == slot.wear and destination.get("data",{}) == slot.get("data",{})):
 					var moved: int = mini(slot.count,Nodes.max_stack(slot.id)-int(destination.count))
@@ -733,7 +745,7 @@ func refresh_slots() -> void:
 	for i in armor_ui.size():
 		_update_icon(armor_ui[i],game.player.armor_slots[i],false)
 		if game.player.armor_slots[i].id == 0: armor_ui[i].get_parent().tooltip_text = Nodes.ARMOR_PIECES[i].capitalize()+" slot"
-	if is_instance_valid(armor_label): armor_label.text = "%d / 20 defence\n%d%% protection" % [game.player.armor_points(),game.player.armor_points()*4]
+	if is_instance_valid(armor_label): armor_label.text = "%d / 20 defence\n%d toughness" % [game.player.armor_points(),game.player.armor_toughness()]
 	if is_instance_valid(cursor_icon): _update_icon(cursor_icon,cursor,false)
 	if screen=="inventory" and station in ["hand","table"]: _refresh_crafting()
 
@@ -741,7 +753,7 @@ func _update_icon(icon: ItemIcon, slot: Dictionary, selected_value: bool) -> voi
 	icon.enchanted = not slot.get("data",{}).get("enchantments",{}).is_empty() and slot.id != 0
 	icon.item_id=slot.id; icon.count=slot.count; icon.wear=slot.wear; icon.selected=selected_value
 	if icon.get_parent() is Button:
-		var description: String = Nodes.title(slot.id) if slot.id else "Empty slot"
+		var description: String = str(slot.get("data",{}).get("custom_name",Nodes.title(slot.id))) if slot.id else "Empty slot"
 		for enchant in slot.get("data",{}).get("enchantments",{}): description += "\n%s %d" % [enchant,slot.data.enchantments[enchant]]
 		if Pouches.is_pouch(slot.id): description += "\n%d slots · Right click to open\nEquip in one of three pouch slots to extend inventory.\nCombine two of the same level to upgrade (maximum 5).\nCraft with wool or dye to recolor; contents are preserved."%Pouches.size_of(slot.id)
 		if PotionCatalog.ITEMS.has(slot.id): description += "\n"+PotionCatalog.description(slot.id)
@@ -760,12 +772,14 @@ func show_death() -> void:
 	if not recovery.is_empty():
 		var p: Array = recovery.position
 		message = "Recovery chest · %s · %d, %d, %d"%[game.dimension.capitalize(),p[0],p[1],p[2]]
-	_label(panel,message+"\nPouch contents stay packed. The chest persists.",Vector2(32,113),14,MUTED,436)
+	message += "\nPouch contents stay packed. The chest persists."
+	if game.game_rules.keepInventory: message = "Your inventory, pouches, armor and XP are kept."
+	_label(panel,message,Vector2(32,113),14,MUTED,436)
 	_button(panel,"Return to your spawn",Rect2(32,205,436,52),game.respawn)
 
 func _dim() -> void:
 	var rect := ColorRect.new()
-	rect.color = Color(0.025,0.055,0.04,0.76)
+	rect.color = Color(0.025,0.025,0.025,0.76)
 	rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layer.add_child(rect)
 
@@ -797,17 +811,17 @@ func _draw() -> void:
 		if player.underwater: draw_rect(Rect2(Vector2.ZERO,size),Color(0.12,0.4,0.62,0.28))
 		draw_line(center-Vector2(6,0),center+Vector2(6,0),Color(0.94,0.95,0.85,0.85),2)
 		draw_line(center-Vector2(0,6),center+Vector2(0,6),Color(0.94,0.95,0.85,0.85),2)
-		draw_style_box(_style(Color(0.08,0.14,0.10,0.76),Color(0.5,0.6,0.4,0.2),1),Rect2(24,24,253,65))
+		draw_style_box(_style(Color(0.12,0.12,0.12,0.76),Color(0.6,0.6,0.6,0.2),1),Rect2(24,24,253,65))
 		draw_string(font,Vector2(40,48),"V /  "+("Deepslate caverns" if game.dimension == "overworld" and player.position.y < -32 else ("Deep caves" if game.dimension == "overworld" and player.position.y < 0 else game.world.generator.biome(int(player.position.x),int(player.position.z)))),HORIZONTAL_ALIGNMENT_LEFT,-1,16,TEXT)
 		draw_string(font,Vector2(40,72),"%d   /   %d   /   %d" % [player.position.x,player.position.y,player.position.z],HORIZONTAL_ALIGNMENT_LEFT,-1,12,MUTED)
 		var time_label: String = "THE END" if game.dimension == "end" else "THE NETHER" if game.dimension == "nether" else "DAY %d  ·  %s" % [game.day_number(),game.time_name()]
-		draw_style_box(_style(Color(0.08,0.14,0.10,0.76)),Rect2(size.x-217,24,193,45))
+		draw_style_box(_style(Color(0.12,0.12,0.12,0.76)),Rect2(size.x-217,24,193,45))
 		draw_circle(Vector2(size.x-193,46),7,Color("e8cc80") if game.daylight>0.4 else Color("bdcede"))
 		draw_string(font,Vector2(size.x-175,51),time_label,HORIZONTAL_ALIGNMENT_LEFT,-1,12,TEXT)
 		if not player.target.is_empty():
 			var node_name: String = Nodes.title(player.target.id)
 			var width: float = font.get_string_size(node_name,HORIZONTAL_ALIGNMENT_LEFT,-1,15).x+36
-			draw_style_box(_style(Color(0.08,0.14,0.10,0.8)),Rect2(center.x-width/2,30,width,35))
+			draw_style_box(_style(Color(0.12,0.12,0.12,0.8)),Rect2(center.x-width/2,30,width,35))
 			draw_string(font,Vector2(center.x-width/2+18,53),node_name,HORIZONTAL_ALIGNMENT_LEFT,-1,15,TEXT)
 			if not Nodes.harvestable(player.target.id,game.inventory.held().id):
 				draw_string(font,Vector2(center.x-100,84),"A better pickaxe is needed",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("e0b07a"))
@@ -827,7 +841,7 @@ func _draw() -> void:
 		var bar_w: float = 536.0*bar_scale
 		var bar_h: float = 107.0*bar_scale
 		var bar_y: float = size.y-bar_h-(62.0 if game.touch else 0.0)
-		draw_style_box(_style(Color(0.07,0.13,0.09,0.84),Color(0.44,0.54,0.34,0.5),1),Rect2(center.x-bar_w*0.5,bar_y,bar_w,bar_h))
+		draw_style_box(_style(Color(0.12,0.12,0.12,0.84),Color(0.6,0.6,0.6,0.5),1),Rect2(center.x-bar_w*0.5,bar_y,bar_w,bar_h))
 		var left: float = center.x-255.0*bar_scale
 		var row_y: float = bar_y+16.0*bar_scale
 		for i in (10 if game.gamemode=="survival" else 0):
@@ -847,9 +861,9 @@ func _draw() -> void:
 		if game.world.adventure_state.has("raid"):
 			var raid: Dictionary = game.world.adventure_state.raid
 			draw_string(font,Vector2(center.x-140,160),"RAID · Wave %d / 3 · %d pillagers"%[int(raid.wave),int(raid.get("alive",0))],HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color("e8aaa0"))
-		var selected_name: String = Nodes.title(game.inventory.held().id) if game.inventory.held().id else "Empty hand"
+		var selected_name: String = str(game.inventory.held().get("data",{}).get("custom_name",Nodes.title(game.inventory.held().id))) if game.inventory.held().id else "Empty hand"
 		var text_width: float = font.get_string_size(selected_name,HORIZONTAL_ALIGNMENT_LEFT,-1,16).x
-		draw_style_box(_style(Color(0.07,0.13,0.09,0.8)),Rect2(center.x-text_width/2-14,bar_y-32,text_width+28,32))
+		draw_style_box(_style(Color(0.12,0.12,0.12,0.8)),Rect2(center.x-text_width/2-14,bar_y-32,text_width+28,32))
 		draw_string(font,Vector2(center.x-text_width/2,bar_y-9),selected_name,HORIZONTAL_ALIGNMENT_LEFT,-1,16,TEXT)
 		var defence: int = player.armor_points()
 		if defence>0 and game.gamemode=="survival":
@@ -861,21 +875,22 @@ func _draw() -> void:
 			var craft_hint: String = "Tap the bag button. Turn your logs into planks." if game.touch else "Press E. Turn your logs into planks."
 			var place_hint: String = "Craft a table, then place it with the ✋ button." if game.touch else "Craft a table, then place it with RMB."
 			var tasks: Array = [["A HUMBLE BEGINNING",mine_hint],["MAKE SOMETHING",craft_hint],["ROOM TO GROW",place_hint],["THE NEXT CHAPTER","Use your table to craft a wooden pickaxe."]]
-			draw_style_box(_style(Color(0.08,0.14,0.10,0.78)),Rect2(24,size.y-177,286,85))
+			draw_style_box(_style(Color(0.12,0.12,0.12,0.78)),Rect2(24,size.y-177,286,85))
 			draw_string(font,Vector2(40,size.y-151),tasks[game.journal_step][0],HORIZONTAL_ALIGNMENT_LEFT,-1,11,ACCENT)
 			draw_string(font,Vector2(40,size.y-125),tasks[game.journal_step][1],HORIZONTAL_ALIGNMENT_LEFT,-1,13,TEXT)
 		if not game.touch:
-			draw_style_box(_style(Color(0.07,0.13,0.09,0.75)),Rect2(size.x-236,size.y-89,212,65))
+			draw_style_box(_style(Color(0.12,0.12,0.12,0.75)),Rect2(size.x-236,size.y-89,212,65))
 			draw_string(font,Vector2(size.x-223,size.y-64),"E  Inventory     ESC  Pause",HORIZONTAL_ALIGNMENT_LEFT,-1,12,TEXT)
 			draw_string(font,Vector2(size.x-223,size.y-41),"LMB  Mine       RMB  Use",HORIZONTAL_ALIGNMENT_LEFT,-1,12,MUTED)
 		if debug:
 			var info: String = "%d FPS  ·  %d map blocks  ·  %d columns\n%d generation jobs  ·  %d remesh jobs\nSeed %d  ·  Greedy meshing  ·  16³ nodes / block" % [Engine.get_frames_per_second(),game.world.blocks.size(),game.world.columns.size(),game.world.jobs.size(),game.world.remesh_jobs.size(),game.world.seed_value]
-			draw_style_box(_style(Color(0,0,0,0.72)),Rect2(24,105,410,83))
-			for i in 3: draw_string(font,Vector2(36,129+i*23),info.split("\n")[i],HORIZONTAL_ALIGNMENT_LEFT,-1,13,TEXT)
+			info += "\nGPU: "+RenderingServer.get_video_adapter_name()+"\nRenderer: "+RenderingServer.get_current_rendering_method()
+			draw_style_box(_style(Color(0,0,0,0.72)),Rect2(24,105,510,130))
+			for i in 5: draw_string(font,Vector2(36,129+i*23),info.split("\n")[i],HORIZONTAL_ALIGNMENT_LEFT,-1,13,TEXT)
 		if flash>0: draw_rect(Rect2(Vector2.ZERO,size),Color(0.6,0.15,0.1,flash*0.6))
 	if toast_time>0:
 		var width: float = font.get_string_size(toast_text,HORIZONTAL_ALIGNMENT_LEFT,-1,15).x+40
-		draw_style_box(_style(Color(0.09,0.17,0.12,0.95),Color("6e8552"),1),Rect2(size.x/2-width/2,100,width,42))
+		draw_style_box(_style(Color(0.12,0.12,0.12,0.95),Color("858585"),1),Rect2(size.x/2-width/2,100,width,42))
 		draw_string(font,Vector2(size.x/2-width/2+20,127),toast_text,HORIZONTAL_ALIGNMENT_LEFT,-1,15,TEXT)
 
 func _heart(p: Vector2, full: bool) -> void:
@@ -907,7 +922,7 @@ func show_worlds() -> void:
 	_clear()
 	screen="worlds"
 	_dim()
-	var panel := _panel(layer,_panel_rect(Vector2(900,560)))
+	var panel := _fitted_panel(Vector2(900,560))
 	_label(panel,"A PLACE TO CALL YOUR OWN",Vector2(30,24),12,ACCENT)
 	_label(panel,"Your worlds.",Vector2(30,46),32)
 	_button(panel,"+ New world",Rect2(700,32,170,44),show_new_world)
@@ -923,6 +938,7 @@ func show_worlds() -> void:
 	for entry in worlds:
 		var button := Button.new()
 		button.custom_minimum_size=Vector2(473,80)
+		button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		button.alignment=HORIZONTAL_ALIGNMENT_LEFT
 		button.text="          "+String(entry.name)+"\n          Day %d  ·  Seed %s  ·  %s" % [int(entry.get("day",1)),str(entry.seed),String(entry.get("mode","survival")).capitalize()]
 		button.add_theme_font_size_override("font_size",15)
@@ -932,7 +948,7 @@ func show_worlds() -> void:
 		icon.position=Vector2(12,13); icon.size=Vector2(51,51); icon.item_id=Nodes.GRASS; icon.show_slot=false
 		button.add_child(icon)
 	if worlds.is_empty(): _label(list,"Your next adventure starts here.\nCreate a world to begin.",Vector2.ZERO,17,MUTED)
-	world_detail=_panel(panel,Rect2(552,110,318,355),Color("26362c"))
+	world_detail=_panel(panel,Rect2(552,110,318,355),Color("383838"))
 	if not worlds.is_empty(): _world_details(worlds[0])
 	else:
 		_label(world_detail,"Endless possibilities.",Vector2(24,27),21)
@@ -946,7 +962,9 @@ func show_worlds() -> void:
 
 func _world_details(entry: Dictionary) -> void:
 	for child in world_detail.get_children(): world_detail.remove_child(child); child.queue_free()
-	_label(world_detail,String(entry.name),Vector2(24,23),24,TEXT,267)
+	var name_label: Label = _label(world_detail,String(entry.name),Vector2(24,23),22,TEXT,267)
+	name_label.max_lines_visible = 2
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_label(world_detail,"CHOOSE HOW TO PLAY",Vector2(24,98),11,ACCENT)
 	var mode := OptionButton.new()
 	mode.position=Vector2(24,125); mode.size=Vector2(270,43)
@@ -954,7 +972,22 @@ func _world_details(entry: Dictionary) -> void:
 	mode.selected=1 if entry.get("mode","survival")=="creative" else 0
 	world_detail.add_child(mode)
 	_label(world_detail,"Survival: gather, craft, and stay alive.\nCreative: all items, flight, and no damage.\n\nChange anytime with /gamemode.",Vector2(24,188),13,MUTED,270)
-	_button(world_detail,"Enter world  →",Rect2(24,288,270,45),func(): game.enter_world(entry.id,"creative" if mode.selected==1 else "survival"))
+	_button(world_detail,"Enter world  →",Rect2(24,288,160,45),func(): game.enter_world(entry.id,"creative" if mode.selected==1 else "survival"))
+	_button(world_detail,"Delete…",Rect2(196,288,98,45),show_delete_world.bind(entry))
+
+func show_delete_world(entry: Dictionary) -> void:
+	delete_world_entry = entry.duplicate(true)
+	_clear()
+	screen = "delete_world"
+	_dim()
+	var panel: Panel = _fitted_panel(Vector2(560,340))
+	_label(panel,"Delete this world?",Vector2(30,26),28)
+	_label(panel,String(entry.get("name","World")),Vector2(30,82),22,TEXT,500)
+	_label(panel,"This deletes its terrain, items, dimensions and backups.\nThis cannot be undone.",Vector2(30,171),15,MUTED,500)
+	var cancel: Button = _button(panel,"Cancel",Rect2(30,265,236,45),show_worlds)
+	_button(panel,"Delete world",Rect2(282,265,248,45),func():
+		if game.delete_world(str(entry.get("id",""))): show_worlds())
+	cancel.grab_focus()
 
 func show_new_world() -> void:
 	_clear()
@@ -1153,7 +1186,7 @@ func show_trading(key: String, selected_offer: int = -1) -> void:
 		if offer.tier != last_tier:
 			last_tier = offer.tier
 			var heading := Label.new(); heading.text = VillageContent.RANKS[last_tier-1]+(" · locked" if last_tier > level else ""); heading.add_theme_color_override("font_color",MUTED); rows.add_child(heading)
-		var row := Panel.new(); row.custom_minimum_size = Vector2(820,61); row.add_theme_stylebox_override("panel",_style(Color("23352f") if offer.tier <= level else Color("252b2c"))); rows.add_child(row)
+		var row := Panel.new(); row.custom_minimum_size = Vector2(820,61); row.add_theme_stylebox_override("panel",_style(Color("484848") if offer.tier <= level else Color("383838"))); rows.add_child(row)
 		var x: float = 12
 		for cost in game.villages.costs(person,offer):
 			_trade_icon(row,cost[0],cost[1],Vector2(x,9),{}); x += 85
@@ -1180,28 +1213,3 @@ func _trade_icon(parent: Control, id: int, count: int, at: Vector2, data: Dictio
 	_update_icon(icon,{"id":id,"count":1,"wear":0,"data":data},false)
 	icon.tooltip_text = Nodes.title(id)+(str(data.enchantments) if data.has("enchantments") else "")
 	_label(parent,"×%d"%count,at+Vector2(45,12),14,TEXT)
-
-func show_profiles() -> void:
-	_clear(); screen = "profiles"; _dim()
-	var panel := _fitted_panel(Vector2(580,480))
-	_label(panel,"CHOOSE YOUR PLAYER",Vector2(26,22),26,ACCENT)
-	_label(panel,"Each player keeps their own /sethome location in each world.",Vector2(26,66),15,MUTED)
-	var picker := OptionButton.new(); picker.position = Vector2(26,110); picker.size = Vector2(528,46); panel.add_child(picker)
-	var ids: Array = game.profiles.entries.keys()
-	for i in ids.size():
-		picker.add_item(game.profiles.entries[ids[i]])
-		if ids[i] == game.player_id: picker.select(i)
-	picker.item_selected.connect(func(index: int):
-		if not game.profiles.select(ids[index]): game.toast("Could not save the player profile.")
-		show_profiles())
-	_label(panel,"New player name",Vector2(26,191),15,MUTED)
-	var name_field := LineEdit.new(); name_field.max_length = 32; name_field.position = Vector2(26,223); name_field.size = Vector2(360,44); name_field.placeholder_text = "Player name"; panel.add_child(name_field)
-	_button(panel,"Add player",Rect2(402,223,152,44),func():
-		if game.profiles.create(name_field.text).is_empty(): game.toast("Enter a player name; profiles need writable storage.")
-		else: show_profiles())
-	_label(panel,"Rename current player",Vector2(26,296),15,MUTED)
-	var rename_field := LineEdit.new(); rename_field.max_length = 32; rename_field.position = Vector2(26,328); rename_field.size = Vector2(360,44); rename_field.text = game.profiles.entries.get(game.player_id,""); panel.add_child(rename_field)
-	_button(panel,"Rename",Rect2(402,328,152,44),func():
-		if game.profiles.rename(game.player_id,rename_field.text): show_profiles()
-		else: game.toast("The player name could not be saved."))
-	_button(panel,"Done",Rect2(26,415,528,40),show_title)
