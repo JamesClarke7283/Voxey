@@ -128,10 +128,10 @@ func _physics_process(delta: float) -> void:
 		velocity=direction*12.0
 		_move(velocity*delta,false)
 		camera.position.y=1.62
-		underwater=game.world.node_at(Vector3i(camera.global_position.floor()))==Nodes.WATER
+		underwater=Fluids.contains(game.world,camera.global_position,Nodes.WATER)
 		return
-	var wet: bool = game.world.node_at(Vector3i((position+Vector3.UP*0.5).floor())) == Nodes.WATER
-	underwater = game.world.node_at(Vector3i(camera.global_position.floor())) == Nodes.WATER
+	var wet: bool = Fluids.contains(game.world,position+Vector3.UP*0.5,Nodes.WATER)
+	underwater = Fluids.contains(game.world,camera.global_position,Nodes.WATER)
 	speed *= PotionEffects.speed(self)
 	if wet: speed *= lerpf(0.55,1.0,minf(3,Enchantments.worn(self,"Depth Strider"))/3.0)
 	if game.world.node_at(Vector3i((position-Vector3.UP*0.1).floor())) == Nodes.SOUL_SAND: speed *= 1.0+Enchantments.worn(self,"Soul Speed")*0.12 if Enchantments.worn(self,"Soul Speed") > 0 else 0.5
@@ -170,7 +170,7 @@ func _physics_process(delta: float) -> void:
 		var facing: Vector3 = (basis * Vector3.FORWARD)
 		if velocity.y > 1.0 and not Nodes.solid(game.world.node_at(Vector3i((position+Vector3.UP*1.9).floor()))):
 			var ahead: Vector3i = Vector3i((position+facing*0.45).floor())
-			if not game.world.intersects(position+facing*0.9,0.29,1.4) and game.world.node_at(ahead+Vector3i.UP) != Nodes.WATER:
+			if not game.world.intersects(position+facing*0.9,0.29,1.4) and not Fluids.water(game.world.node_at(ahead+Vector3i.UP)):
 				velocity.y = maxf(velocity.y,6.4)
 	else:
 		if not gliding:
@@ -208,7 +208,7 @@ func _physics_process(delta: float) -> void:
 		if hunger >= 16 and health < 20: health = minf(20,health+0.5); hunger -= 0.2
 		if hunger <= 0 and health > 1: hurt(1,true)
 		var feet: Vector3i = Vector3i(position.floor())
-		if not game.survival.effects.has("fire_resistance") and (game.world.node_at(feet) == Nodes.LAVA or game.world.node_at(feet+Vector3i.UP) == Nodes.LAVA): hurt(4,true,Vector3.INF,"fire")
+		if not game.survival.effects.has("fire_resistance") and (Fluids.contains(game.world,position+Vector3.UP*0.1,Nodes.LAVA) or Fluids.contains(game.world,position+Vector3.UP,Nodes.LAVA)): hurt(4,true,Vector3.INF,"fire")
 		for d in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
 			if game.world.node_at(feet+d) == Nodes.CACTUS: hurt(1)
 		if Fire.is_fire(game.world.node_at(feet)) or Fire.is_fire(game.world.node_at(feet+Vector3i.UP)):
@@ -327,7 +327,7 @@ func mine(delta: float) -> void:
 	mining += delta/duration
 	swing = 0.5+0.5*sin(Time.get_ticks_msec()*0.02)
 	cracks.visible = true
-	cracks.position = Vector3(target.pos)+Vector3.ONE*0.5
+	cracks.position = Vector3(target.pos)+(Vector3.ZERO if BuildingShapes.is_shape(target.id) else Vector3.ONE*0.5)
 	var stage: int = clampi(int(mining*9),0,8)
 	if stage != crack_stage:
 		crack_stage = stage
@@ -477,7 +477,7 @@ func use() -> void:
 		if held == Nodes.WATER_BUCKET and game.dimension == "nether": game.toast("Water evaporates in the Nether."); return
 		var liquid: int = Nodes.WATER if held == Nodes.WATER_BUCKET else Nodes.LAVA
 		var pour: Vector3i = p+target.normal
-		if game.world.node_at(pour) == Nodes.AIR and game.world.set_node(pour,liquid):
+		if (game.world.node_at(pour) == Nodes.AIR or Fluids.flowing(game.world.node_at(pour))) and game.world.set_node(pour,liquid):
 			if game.gamemode!="creative":
 				game.inventory.consume_selected()
 				game.inventory.add_item(Nodes.BUCKET,1)

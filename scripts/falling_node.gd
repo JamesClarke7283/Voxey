@@ -31,7 +31,7 @@ func land(cell: Vector3i) -> void:
 	if Nodes.solid(current) or not game.world.loaded_at(Vector3(cell)):
 		game.spawn_drop(Vector3(cell)+Vector3.ONE*0.5,node_id)
 		return
-	if current != Nodes.AIR and current != Nodes.WATER:
+	if current != Nodes.AIR and not Fluids.liquid(current):
 		if current == Nodes.TORCH: game.remove_torch(cell)
 		game.spawn_drop(Vector3(cell)+Vector3.ONE*0.5,Nodes.drop(current))
 	if game.world.set_node(cell,node_id): game.sound_at("thud",Vector3(cell)+Vector3.ONE*0.5)

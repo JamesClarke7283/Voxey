@@ -22,7 +22,7 @@ The rendered movement benchmark covered 72.6 blocks in 12 seconds at view distan
 
 - Menus, panels, slots and touch controls use neutral gray. Pause actions fit in rows and the panel scales to the window.
 - The recipe guide uses five columns of item icons, with search, craftable outlines and larger texture/name previews on hover. Clicking an icon still shows its recipe and supports Fill grid.
-- Underground ambient light and fog stay fixed through dusk, night and weather changes. Surface lighting returns when leaving the cave.
+- Deep sheltered caves keep fixed ambient light and fog through dusk, night and weather changes. The follow-up [environment fix](environment-update.md) preserves daylight in excavated pits and near outdoor openings.
 - Lava's atlas coordinates are rounded before emissive classification, avoiding unstable floating-point equality tests. Its texture uses broad seamless pools. Torch inventory sprites have a transparent background, and torch models have correctly oriented sides and end caps.
 - Torches attach to the floor or any of four walls. Their orientation persists in saves; removing the support drops the torch and removes its light.
 - A broken tool is replaced in its original hotbar position by a carried tool with the same ID and metadata, including name and enchantments. The spare retains its own wear. Equipped pouch pages participate in the search.
@@ -35,3 +35,7 @@ The rendered movement benchmark covered 72.6 blocks in 12 seconds at view distan
 The existing four suites passed 931 checks after the performance changes. `tests/polish_runner.gd` adds 64 checks covering snapshot equivalence, lighting, tool and pouch transactions, furnace insertion paths, torches, gamerule persistence/deaths, search and confirmed world deletion. `tests/polish_tour.gd` checks the rendered menus, tooltip and lava/torch scene. Tests use isolated save directories and do not delete user worlds.
 
 ![Searchable gray recipe grid with a larger torch preview](polish-inventory.png)
+
+The final environment update, including stair/masonry content and active fluid support, measured median column generation at 323.69 ms in the Overworld and 234.04 ms in the Nether. Main-thread application remained 1.09 ms and 0.73 ms respectively; neighborhood snapshots were about 0.51 ms. These four-column CPU samples are retained under `environment_cpu` in the raw measurements.
+
+The completed fluid update’s rendered route covered 72.57 blocks in 12 seconds at view distance 4: 721 frames, median 16.667 ms, 95th percentile 16.836 ms, maximum 17.298 ms and 60 FPS at the configured cap. There were 319 draw calls and no unintended kelp drops. This route measures normal streaming with fluid simulation enabled; the separate environment tour verifies active waterfalls. The complete regression run passed 1,175 checks.

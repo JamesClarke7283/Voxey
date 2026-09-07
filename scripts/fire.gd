@@ -13,7 +13,7 @@ static func flammable(id: int) -> bool:
 
 static func track(world: VoxelWorld, p: Vector3i) -> void:
 	var id: int = world.node_at(p)
-	if is_fire(id) or id == Nodes.LAVA and not nearby_fuel(world,p).is_empty(): world.hazards[p] = id
+	if is_fire(id) or Fluids.lava(id) and not nearby_fuel(world,p).is_empty(): world.hazards[p] = id
 	else: world.hazards.erase(p)
 
 static func nearby_fuel(world: VoxelWorld, p: Vector3i) -> Array:
@@ -47,8 +47,8 @@ static func update(world: VoxelWorld) -> void:
 	world.adventure_state["fire_clock"] = ticks
 	for p in world.hazards.keys():
 		var id: int = world.node_at(p)
-		if id != Nodes.LAVA and not is_fire(id): world.hazards.erase(p); continue
-		if id == Nodes.LAVA:
+		if not Fluids.lava(id) and not is_fire(id): world.hazards.erase(p); continue
+		if Fluids.lava(id):
 			if ticks%15 == 0 and randi_range(1,9) == 1:
 				for y in [1,2]:
 					var q: Vector3i = p+Vector3i(randi_range(-y,y),y,randi_range(-y,y))
@@ -56,7 +56,7 @@ static func update(world: VoxelWorld) -> void:
 			continue
 		var wet: bool = false
 		for side in SIDES:
-			if world.node_at(p+side) == Nodes.WATER: wet = true
+			if Fluids.water(world.node_at(p+side)): wet = true
 		if id == FLAME and world.dimension == "overworld" and world.adventure_state.get("weather","clear") != "clear" and world.open_sky(p): wet = true
 		if wet: world.set_node(p,Nodes.AIR); continue
 		var fuel: Array = nearby_fuel(world,p)

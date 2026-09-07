@@ -60,6 +60,7 @@ func run() -> void:
 		game.day_time = time; game._update_day()
 		values.append([game.sunlight.light_energy,game.environment.environment.ambient_light_energy,game.environment.environment.ambient_light_color,game.environment.environment.fog_light_color])
 	check(game.cave_shelter == 1 and values[0] == values[1] and values[1] == values[2],"deep sheltered caves keep constant lighting through dusk and night")
+	load("res://tests/fluid_checks.gd").run(self,game)
 	print("ENVIRONMENT TESTS: %d passed, %d failed"%[passed,failed])
 	game.queue_free()
 	for i in 4: await process_frame

@@ -130,7 +130,7 @@ func _physics_process(delta: float) -> void:
 	if kind == "enderman":
 		var eye: Vector3 = center()-game.player.camera.global_position
 		if eye.length() < 24 and (-game.player.camera.global_basis.z).dot(eye.normalized()) > 0.985 and _sees_player(): provoked = true
-		if game.world.node_at(Vector3i(position.floor())) == Nodes.WATER or (provoked and position.distance_to(game.player.position) > 8 and leap_cooldown <= 0):
+		if Fluids.water(game.world.node_at(Vector3i(position.floor()))) or (provoked and position.distance_to(game.player.position) > 8 and leap_cooldown <= 0):
 			teleport_near(game.player.position if provoked else position)
 			leap_cooldown = 4
 	super._physics_process(delta)

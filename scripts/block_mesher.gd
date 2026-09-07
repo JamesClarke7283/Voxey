@@ -10,9 +10,9 @@ static func build(data: Variant, external_circuits: bool = false) -> Array:
 	for index in data.size():
 		var id: int = data[index]
 		if not types.has(id):
-			var cube: bool = id != 0 and (not BuildingShapes.is_shape(id) or BuildingShapes.variant(id) == 2) and not VillageContent.special(id) and id not in Nodes.CIRCUIT_NODES and not Nodes.plant(id) and id not in [Nodes.TORCH,Nodes.LADDER,Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.NETHER_PORTAL,Nodes.END_PORTAL,Nodes.ENCHANTING_TABLE]
+			var cube: bool = id != 0 and not Fluids.flowing(id) and (not BuildingShapes.is_shape(id) or BuildingShapes.variant(id) == 2) and not VillageContent.special(id) and id not in Nodes.CIRCUIT_NODES and not Nodes.plant(id) and id not in [Nodes.TORCH,Nodes.LADDER,Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.NETHER_PORTAL,Nodes.END_PORTAL,Nodes.ENCHANTING_TABLE]
 			var occludes: bool = not Nodes.transparent(id) and id not in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.ENCHANTING_TABLE]
-			types[id] = (1 if cube else 0) | (2 if occludes else 0)
+			types[id] = (1 if cube else 0) | (2 if occludes else 0) | (4 if Fluids.source(id) else 0) | (8 if Fluids.flowing(id) else 0) | (16 if Fluids.water(id) else 0)
 		flags[index] = types[id]
 	var outputs: Array = [_empty(), _empty()]
 	var has_nodes: bool = false
@@ -20,10 +20,17 @@ static func build(data: Variant, external_circuits: bool = false) -> Array:
 	for y in 16:
 		for z in 16:
 			for x in 16:
-				var id: int = data[(x+1) + (z+1)*18 + (y+1)*324]
+				var center: int = x+1+(z+1)*18+(y+1)*324
+				var id: int = data[center]
 				if id == 0: continue
 				has_nodes = true
-				if flags[(x+1)+(z+1)*18+(y+1)*324]&1: has_cubes = true
+				if flags[center]&1: has_cubes = true
+				if flags[center]&8: Fluids.mesh(outputs[1 if flags[center]&16 else 0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
+				elif flags[center]&4:
+					for offset in [-1,1,-18,18]:
+						if flags[center+offset]&8 and Fluids.base(data[center+offset]) == id:
+							Fluids.mesh(outputs[1 if id == Nodes.WATER else 0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
+							break
 				if id in Nodes.CIRCUIT_NODES and not external_circuits: _art_box(outputs[0],Vector3(x,y,z)+Vector3(0.5,0.2,0.5),Vector3(0.85,0.4,0.85),Nodes.tile(id,0),Nodes.tile(id,2))
 				elif BuildingShapes.is_shape(id) and BuildingShapes.variant(id) != 2: BuildingShapes.mesh(outputs[0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
 				elif Torches.is_torch(id): _torch(outputs[0],Vector3(x,y,z),id)
@@ -56,6 +63,7 @@ static func build(data: Variant, external_circuits: bool = false) -> Array:
 						var neighbor_index: int = index+sign_dir*stride
 						var neighbor: int = data[neighbor_index]
 						if neighbor == id or flags[neighbor_index]&2 != 0: continue
+						if flags[index]&4 and Fluids.base(neighbor) == id: continue
 						if id == Nodes.WATER and neighbor == Nodes.GLASS: continue
 						mask[i + j*16] = id
 				var j: int = 0

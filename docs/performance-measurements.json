@@ -187,5 +187,72 @@
     "remesh_jobs": 0,
     "renderer": "gl_compatibility",
     "samples": 721
+  },
+  "environment_cpu": [
+    {
+      "blocks": 48,
+      "dimension": "overworld",
+      "generation_ms": [
+        341.024,
+        307.193,
+        327.757,
+        319.621
+      ],
+      "main_thread_apply_ms": [
+        1.139,
+        1.079,
+        1.021,
+        1.093
+      ],
+      "remesh_snapshot_ms": [
+        0.5,
+        0.479,
+        0.525,
+        0.513
+      ]
+    },
+    {
+      "blocks": 36,
+      "dimension": "nether",
+      "generation_ms": [
+        222.717,
+        225.212,
+        248.281,
+        242.865
+      ],
+      "main_thread_apply_ms": [
+        0.611,
+        0.711,
+        0.833,
+        0.741
+      ],
+      "remesh_snapshot_ms": [
+        0.507,
+        0.466,
+        0.544,
+        0.507
+      ]
+    }
+  ],
+  "environment_streaming": {
+    "columns": 69,
+    "creatures": 1,
+    "distance_blocks": 72.5715179443359,
+    "draw_calls": 319,
+    "drop_types": {},
+    "drops": 0,
+    "flow_pending": 0,
+    "flow_states": 0,
+    "fps": 60.0,
+    "frame_ms_max": 17.298,
+    "frame_ms_median": 16.667,
+    "frame_ms_p95": 16.836,
+    "generation_jobs": 2,
+    "gpu": "NVIDIA GeForce RTX 5090",
+    "map_blocks": 828,
+    "primitives": 180134,
+    "remesh_jobs": 0,
+    "renderer": "gl_compatibility",
+    "samples": 721
   }
 }

@@ -81,6 +81,10 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var bowls_before: int = game.inventory.count_item(Nodes.BOWL)
 	game.player.hunger = 10
 	game.player.use()
+	var eating_state: String = game.state
+	game.state = "playing"
+	Eating.update(game.player,Eating.DURATION,true)
+	game.state = eating_state
 	suite.check(game.player.hunger == 16 and game.inventory.count_item(Nodes.BOWL) == bowls_before+1,"eating stew restores six hunger and returns its bowl")
 	game.inventory.slots[0] = {"id":Nodes.GOLD_NUGGET,"count":9,"wear":0}
 	suite.check(game.save_game("user://voxey_content_test.json"),"expanded inventory saves successfully")

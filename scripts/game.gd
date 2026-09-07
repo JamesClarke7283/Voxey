@@ -465,7 +465,7 @@ func _safe_spawn(near: Vector3) -> Vector3:
 			if not world.loaded_at(Vector3(x,0,z)): continue
 			for y in range(mini(floori(near.y)+16,world.generator.terrain_ceiling()-1),world.generator.min_y(),-1):
 				var id: int = world.node_at(Vector3i(x,y,z))
-				if id in [Nodes.WATER,Nodes.LAVA]: break
+				if Fluids.liquid(id): break
 				if Nodes.solid(id) and id!=Nodes.LEAVES and id!=Nodes.LOG:
 					var pos := Vector3(x+0.5,y+1.01,z+0.5)
 					if not world.intersects(pos): return pos
@@ -658,7 +658,7 @@ func explode(center: Vector3, radius: float, source: Node = null) -> void:
 				if offset.length() > radius-randf()*0.7: continue
 				var p := Vector3i(floori(center.x)+x,floori(center.y)+y,floori(center.z)+z)
 				var id: int = world.node_at(p)
-				if id in [Nodes.AIR,Nodes.BEDROCK,Nodes.OBSIDIAN,Nodes.WATER,Nodes.LAVA,Nodes.END_FRAME,Nodes.END_FRAME_EYE,Nodes.END_PORTAL,Nodes.END_GATEWAY,Nodes.NETHER_PORTAL]: continue
+				if Fluids.liquid(id) or id in [Nodes.AIR,Nodes.BEDROCK,Nodes.OBSIDIAN,Nodes.WATER,Nodes.LAVA,Nodes.END_FRAME,Nodes.END_FRAME_EYE,Nodes.END_PORTAL,Nodes.END_GATEWAY,Nodes.NETHER_PORTAL]: continue
 				if VillageContent.DATA.get(id,{}).get("blast_resistance",0) >= 1200: continue
 				if id == Nodes.TNT: ignite_tnt(p,randf_range(0.3,0.9)); continue
 				if id in [Nodes.BED_FOOT,Nodes.BED_HEAD]:

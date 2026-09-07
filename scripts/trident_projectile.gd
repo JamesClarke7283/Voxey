@@ -39,7 +39,7 @@ func _physics_process(delta: float) -> void:
 		for mob in game.creatures.get_children():
 			if not mob.is_queued_for_deletion() and position.distance_to(mob.center()) < mob.width+0.25:
 				var damage: float = 8
-				if game.world.node_at(Vector3i(mob.position.floor())) == Nodes.WATER or mob.kind == "turtle": damage += Inventory.enchantment(stack,"Impaling")*2.5
+				if Fluids.water(game.world.node_at(Vector3i(mob.position.floor()))) or mob.kind == "turtle": damage += Inventory.enchantment(stack,"Impaling")*2.5
 				mob.hit(damage,position-velocity)
 				if Inventory.enchantment(stack,"Channeling") and game.survival.weather() == "thunder" and game.world.open_sky(Vector3i(mob.position.floor())):
 					PotionEffects.apply(mob,"burning",8); mob.hit(5)

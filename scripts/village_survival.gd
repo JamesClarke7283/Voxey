@@ -47,13 +47,13 @@ func update(delta: float) -> void:
 		effect_tick = 0; refresh_displays(); DeathRecovery.retry(game)
 	if is_instance_valid(boat):
 		var p: Vector3 = game.player.position
-		if Input.is_physical_key_pressed(KEY_CTRL) or (game.world.node_at(Vector3i((p-Vector3.UP*0.4).floor())) != Nodes.WATER and game.world.node_at(Vector3i(p.floor())) != Nodes.WATER):
+		if Input.is_physical_key_pressed(KEY_CTRL) or (not Fluids.water(game.world.node_at(Vector3i((p-Vector3.UP*0.4).floor()))) and not Fluids.water(game.world.node_at(Vector3i(p.floor())))):
 			game.player.flying = boat_was_flying
 			game.spawn_drop(p+Vector3.UP,boat_id); boat.queue_free(); boat = null; boat_id = 0
 		else:
 			game.player.velocity.y = maxf(game.player.velocity.y,0)
 			var water: Vector3i = Vector3i((p-Vector3.UP*0.4).floor())
-			if game.world.node_at(water) == Nodes.WATER: game.player.position.y = water.y+1.05
+			if Fluids.water(game.world.node_at(water)): game.player.position.y = water.y+1.05
 			boat.position = p; boat.rotation.y = game.player.rotation.y
 
 func use() -> bool:
@@ -89,7 +89,7 @@ func use() -> bool:
 		var slot: Dictionary = game.inventory.held()
 		var riptide: int = Inventory.enchantment(slot,"Riptide")
 		if riptide > 0:
-			if game.player.underwater or game.world.node_at(Vector3i(game.player.position.floor())) == Nodes.WATER or (weather() != "clear" and game.world.open_sky(Vector3i(game.player.position.floor()))):
+			if game.player.underwater or Fluids.water(game.world.node_at(Vector3i(game.player.position.floor()))) or (weather() != "clear" and game.world.open_sky(Vector3i(game.player.position.floor()))):
 				game.player.velocity = -game.player.camera.global_basis.z*(15+riptide*6); game.player.velocity.y = maxf(7,game.player.velocity.y)
 				game.player.riptide_time = 0.7; game.inventory.damage_tool()
 			else: game.toast("Riptide needs water or rain.")
@@ -126,13 +126,13 @@ func use() -> bool:
 		if held == VillageContent.EMPTY_MAP: _consume(); give(VillageContent.FILLED_MAP,1)
 		show_map(); return true
 	if VillageContent.DATA.get(held,{}).get("family","") == "boat":
-		if not target.is_empty() and target.id == Nodes.WATER: launch_boat(held,target.pos)
+		if not target.is_empty() and Fluids.water(target.id): launch_boat(held,target.pos)
 		else: game.toast("Place your boat on water.")
 		return true
 	if held == VillageContent.CROSSBOW: fire_crossbow(); return true
 	if target.is_empty(): return false
 	var p: Vector3i = target.pos; var id: int = target.id
-	if held == VillageContent.GLASS_BOTTLE and id == Nodes.WATER:
+	if held == VillageContent.GLASS_BOTTLE and Fluids.water(id):
 		_consume(); give(VillageContent.WATER_BOTTLE,1); return true
 	if held == VillageContent.COD_BUCKET and target.normal == Vector3i.UP:
 		if game.world.set_node(p+Vector3i.UP,Nodes.WATER): _consume(); give(Nodes.BUCKET,1); game.spawn_drop(Vector3(p)+Vector3.UP*1.4,VillageContent.RAW_COD,1)
@@ -249,7 +249,7 @@ func fish(target: Dictionary) -> void:
 			game.experience += 2; game.toast("Caught "+Nodes.title(caught).to_lower()+"!")
 		else: game.toast("The fish got away. Reel in when bubbles appear.")
 		bobber.queue_free(); bobber = null; game.inventory.damage_tool(); return
-	if target.is_empty() or target.id != Nodes.WATER: game.toast("Cast into water. Use again when the bobber bubbles."); return
+	if target.is_empty() or not Fluids.water(target.id): game.toast("Cast into water. Use again when the bobber bubbles."); return
 	bobber = MeshInstance3D.new(); var mesh := BoxMesh.new(); mesh.size = Vector3(0.15,0.18,0.15); bobber.mesh = mesh
 	var mat := StandardMaterial3D.new(); mat.albedo_color = Color("e87664"); bobber.material_override = mat
 	bobber.position = Vector3(target.pos)+Vector3(0.5,1.02,0.5); game.entities.add_child(bobber)

@@ -211,7 +211,10 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 	var blocks: Array = []
 	var special: Dictionary = {}
 	var reactive: Dictionary = {}
+	var flowing: Dictionary = {}
 	var fuel_cache: Dictionary = {}
+	var fluid_cache: Dictionary = {}
+	var replaceable_cache: Dictionary = {}
 	var levels: Array = block_levels()
 	for p in edits:
 		if p.y >= terrain_ceiling() and p.y < max_y():
@@ -244,15 +247,21 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 					var id: int = compact[index]
 					if id in Nodes.CIRCUIT_NODES or id == Nodes.CHEST or Fire.is_fire(id):
 						special[Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)] = id
-					if id != Nodes.LAVA and id != Nodes.WATER: continue
+					if not fluid_cache.has(id): fluid_cache[id] = Fluids.base(id)
+					if fluid_cache[id] == 0: continue
 					var center: int = x+1+(z+1)*18+(y+1)*324
+					var fluid_pos := Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)
+					if Fluids.flowing(id): flowing[fluid_pos] = id
 					for offset in [-1,1,-18,18,-324,324]:
 						var neighbor: int = padded[center+offset]
+						if not replaceable_cache.has(neighbor): replaceable_cache[neighbor] = Fluids.replaceable(neighbor)
+						if offset != 324 and replaceable_cache[neighbor]: flowing[fluid_pos] = id
 						if not fuel_cache.has(neighbor): fuel_cache[neighbor] = Fire.flammable(neighbor)
-						if id == Nodes.LAVA and (neighbor == Nodes.WATER or fuel_cache[neighbor]) or id == Nodes.WATER and neighbor == Nodes.LAVA:
+						if not fluid_cache.has(neighbor): fluid_cache[neighbor] = Fluids.base(neighbor)
+						if fluid_cache[id] == Nodes.LAVA and (fluid_cache[neighbor] == Nodes.WATER or fuel_cache[neighbor]) or fluid_cache[id] == Nodes.WATER and fluid_cache[neighbor] == Nodes.LAVA:
 							reactive[Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)] = id
 		blocks.append({"y":by,"data":compact, "surfaces":BlockMesher.build(padded,true)})
-	return {"coord":coord, "blocks":blocks,"special":special,"reactive":reactive}
+	return {"coord":coord, "blocks":blocks,"special":special,"reactive":reactive,"flowing":flowing}
 
 # World-coordinate evaluation keeps terrain and vegetation identical in halos.
 func nether_node(x: int, y: int, z: int, ores: bool = true, metrics: Dictionary = {}) -> int:

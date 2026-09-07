@@ -20,6 +20,16 @@ func run() -> void:
 		game.player.position.x += elapsed*0.006
 	times.sort()
 	var report: Dictionary = game.performance_snapshot()
+	report["drops"] = game.drops.get_child_count()
+	report["drop_types"] = {}
+	for drop in game.drops.get_children():
+		var title: String = Nodes.title(drop.item_id)
+		report.drop_types[title] = int(report.drop_types.get(title,0))+1
+	report["creatures"] = game.creatures.get_child_count()
+	report["flow_pending"] = game.world.fluids.pending[0].size()+game.world.fluids.pending[1].size()
+	report["flow_states"] = 0
+	for id in game.world.edits.values():
+		if Fluids.flowing(id): report.flow_states += 1
 	report["samples"] = times.size()
 	report["frame_ms_median"] = times[times.size()/2]
 	report["frame_ms_p95"] = times[int(times.size()*0.95)]

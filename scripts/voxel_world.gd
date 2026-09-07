@@ -15,6 +15,7 @@ var growth: Dictionary = {}
 var block_states: Dictionary = {}
 var adventure_state: Dictionary = {}
 var circuits: RedstoneCircuit
+var fluids: Fluids
 var pending: Dictionary = {}
 var jobs: Array = []
 var remesh_jobs: Array = []
@@ -38,6 +39,7 @@ func configure(seed_number: int, atlas: Texture2D, dimension_name: String = "ove
 	seed_value = seed_number
 	generator = TerrainGenerator.new(seed_value,dimension)
 	circuits = RedstoneCircuit.new(self)
+	fluids = Fluids.new(self)
 	material = ShaderMaterial.new()
 	material.shader = preload("res://shaders/terrain.gdshader")
 	material.set_shader_parameter("atlas",atlas)
@@ -91,6 +93,7 @@ func _process(delta: float) -> void:
 		var nearest: Vector2i = generation_queue.pop_back()
 		if not columns.has(nearest) and not pending.has(nearest): _queue_column(nearest)
 	if active:
+		fluids.update(delta)
 		if get_parent() != null and get_parent().has_method("playing") and get_parent().playing(): circuits.update(delta)
 		tick += delta
 		if tick >= 1.0:
@@ -135,16 +138,18 @@ func _apply_column(result: Dictionary) -> void:
 	for p in result.get("reactive",{}):
 		react_fluid(p)
 		Fire.track(self,p)
+	for p in result.get("flowing",{}): fluids.activate(p)
 	# Changes made after the worker snapshot must also update simulation indexes.
 	for p in edits:
 		if p.x < c.x*16-1 or p.x > c.x*16+16 or p.z < c.y*16-1 or p.z > c.y*16+16: continue
 		if not loaded_at(Vector3(p)): continue
 		var id: int = node_at(p)
 		if id in Nodes.CIRCUIT_NODES: circuits.register(p,id)
-		if Fire.is_fire(id) or id == Nodes.LAVA: Fire.track(self,p)
-		if id in [Nodes.LAVA,Nodes.WATER]: react_fluid(p)
+		if Fire.is_fire(id) or Fluids.lava(id): Fire.track(self,p)
+		if Fluids.liquid(id): react_fluid(p); fluids.activate(p)
 		if Fire.flammable(id):
 			for side in SIDES: Fire.track(self,p+side)
+	fluids.column_loaded(c)
 	column_loaded.emit()
 
 func _apply_mesh(coord: Vector3i, surfaces: Array) -> void:
@@ -165,6 +170,7 @@ func _apply_mesh(coord: Vector3i, surfaces: Array) -> void:
 	# concave physics shape rebuilds are needed when a node changes.
 
 func _unload(c: Vector2i) -> void:
+	sky_revision += 1
 	columns.erase(c)
 	for p in hazards.keys():
 		if block_coord(p).x == c.x and block_coord(p).z == c.y: hazards.erase(p)
@@ -224,10 +230,11 @@ func set_node(p: Vector3i, id: int) -> bool:
 				dirty[block_coord(neighbor)] = true
 				Torches.support_changed(self,neighbor)
 				circuits.support_changed(neighbor)
-	if id in [Nodes.WATER,Nodes.LAVA]: react_fluid(p)
+	if Fluids.liquid(id): react_fluid(p)
 	if id != Nodes.NETHER_PORTAL: validate_portals_near(p)
 	Torches.support_changed(self,p)
 	circuits.support_changed(p)
+	fluids.changed(p,old_id,node_at(p))
 	var game: Node = get_parent()
 	if game != null and game.has_method("remove_torch"):
 		if Torches.is_torch(old_id): game.remove_torch(p)
@@ -302,8 +309,8 @@ func raycast(origin: Vector3, direction: Vector3, reach: float = 5.0, liquids: b
 	var distance: float = 0.0
 	for iteration in 128:
 		var id: int = node_at(cell)
-		if id != Nodes.AIR and id not in [Nodes.NETHER_PORTAL,Nodes.END_PORTAL] and (liquids or id != Nodes.WATER):
-			if BuildingShapes.is_shape(id):
+		if id != Nodes.AIR and id not in [Nodes.NETHER_PORTAL,Nodes.END_PORTAL] and (liquids or not Fluids.liquid(id)):
+			if BuildingShapes.is_shape(id) or Fluids.flowing(id):
 				var hit: Dictionary = shape_hit(cell,origin,direction,reach)
 				if not hit.is_empty(): return hit
 			else: return {"pos":cell,"normal":normal,"id":id,"distance":distance,"point":origin+direction*distance}
@@ -320,7 +327,9 @@ func raycast(origin: Vector3, direction: Vector3, reach: float = 5.0, liquids: b
 func shape_hit(p: Vector3i, origin: Vector3, direction: Vector3, reach: float) -> Dictionary:
 	var nearest: Dictionary = {}
 	var closest: float = reach+0.00001
-	for box in BuildingShapes.boxes(BuildingShapes.world_mask(self,p)):
+	var id: int = node_at(p)
+	var boxes: Array = [AABB(Vector3.ZERO,Vector3(1,1.0 if Fluids.base(node_at(p+Vector3i.UP)) == Fluids.base(id) else Fluids.height(id),1))] if Fluids.flowing(id) else BuildingShapes.boxes(BuildingShapes.world_mask(self,p))
+	for box in boxes:
 		var low: Vector3 = Vector3(p)+box.position
 		var high: Vector3 = low+box.size
 		var enter: float = 0; var leave: float = reach
@@ -394,7 +403,7 @@ func can_plant_cane(p: Vector3i) -> bool:
 	if node_at(soil) == Nodes.SUGAR_CANE: return true
 	if node_at(soil) not in [Nodes.DIRT,Nodes.GRASS,Nodes.SAND]: return false
 	for side in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
-		if node_at(soil+side) == Nodes.WATER: return true
+		if Fluids.water(node_at(soil+side)): return true
 	return false
 
 func grow_tree(p: Vector3i) -> void:
@@ -501,14 +510,17 @@ func _exit_tree() -> void:
 const SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.UP,Vector3i.DOWN,Vector3i.FORWARD,Vector3i.BACK]
 
 func react_fluid(p: Vector3i) -> void:
-	if node_at(p) == Nodes.LAVA:
+	var id: int = node_at(p)
+	if Fluids.lava(id):
 		for d in SIDES:
-			if node_at(p+d) == Nodes.WATER:
-				set_node(p,Nodes.OBSIDIAN)
+			if Fluids.water(node_at(p+d)):
+				if id == Nodes.LAVA: set_node(p,Nodes.OBSIDIAN)
+				elif d == Vector3i.DOWN: set_node(p+d,Nodes.STONE)
+				else: set_node(p,Nodes.COBBLE)
 				return
-	elif node_at(p) == Nodes.WATER:
+	elif Fluids.water(id):
 		for d in SIDES:
-			if node_at(p+d) == Nodes.LAVA: set_node(p+d,Nodes.OBSIDIAN)
+			if Fluids.lava(node_at(p+d)): react_fluid(p+d)
 
 # A standard 4 x 5 frame, with optional corners and a 2 x 3 opening.
 func portal_frame(base: Vector3i, axis: Vector3i) -> bool:

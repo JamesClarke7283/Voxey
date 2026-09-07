@@ -51,7 +51,7 @@ static func find_position(world: VoxelWorld, origin: Vector3) -> Vector3i:
 					var p: Vector3i = center+Vector3i(x,y,z)
 					if usable(world,p): return p
 	# A drowned/burning player can leave a chest in the fluid they occupied.
-	if world.node_at(center) in [Nodes.WATER,Nodes.LAVA]: return center
+	if Fluids.liquid(world.node_at(center)): return center
 	for height in range(world.generator.min_y()+1,world.generator.max_y()):
 		var p := Vector3i(center.x,height,center.z)
 		if usable(world,p): return p

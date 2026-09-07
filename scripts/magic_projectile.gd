@@ -47,7 +47,7 @@ func _physics_process(delta: float) -> void:
 		if not game.world.loaded_at(next): return # Pause at streaming boundaries.
 		if kind == "pearl" and game.world.node_at(Vector3i(next.floor())) == Nodes.END_GATEWAY:
 			game.adventure.enter_gateway(); queue_free(); return
-		if game.world.intersects(next,0.06,0.12) or game.world.node_at(Vector3i(next.floor())) in [Nodes.WATER,Nodes.LAVA]:
+		if game.world.intersects(next,0.06,0.12) or Fluids.liquid(game.world.node_at(Vector3i(next.floor()))):
 			impact(next)
 			return
 		position = next
@@ -90,7 +90,7 @@ func safe_destination(at: Vector3) -> Vector3:
 				var cell := origin+Vector3i(dx,dy,dz)
 				var q := Vector3(cell)+Vector3(0.5,0.01,0.5)
 				if not game.world.loaded_at(q) or game.world.intersects(q): continue
-				if game.world.node_at(cell) in [Nodes.WATER,Nodes.LAVA]: continue
+				if Fluids.liquid(game.world.node_at(cell)): continue
 				if not Nodes.solid(game.world.node_at(cell+Vector3i.DOWN)): continue
 				var d: float = q.distance_squared_to(at)
 				if d < best: best = d; closest = q

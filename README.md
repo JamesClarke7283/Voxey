@@ -46,7 +46,7 @@ Choose **Play / choose a world**, create a named world or select an existing one
 
 **Nether, enchanting, and books:** build a 4×5 obsidian frame (2×3 opening; corners optional), light the inside with flint and steel, and stand in the portal for one second. The Nether has lava seas and falls, quartz ore, glowstone, five biomes, giant fungi, nether-brick fortresses with blaze spawners and loot, piglins, magma cubes, ghasts, and endermen. Travel scales horizontal coordinates by 8; each dimension keeps its own edits, storage, and pickups. Water evaporates there, and beds cannot set spawn.
 
-Water touching lava from any of the six sides converts the lava source to obsidian. Deep caves now generate lava and lapis ore. Mine obsidian with a diamond pickaxe; buckets collect and place water or lava sources.
+Water and lava now flow downward before spreading on support, and dependent flows drain when their source is removed. Water touching lava from any of the six sides converts the lava source to obsidian. Deep caves now generate lava and lapis ore. Mine obsidian with a diamond pickaxe; buckets collect and place water or lava sources.
 
 Craft an **enchanting table** from a book, two diamonds, and four obsidian. Right-click it, select equipment, and spend lapis plus XP levels. The HUD shows your current level and progress toward the next one. Bookshelves with a one-block air gap unlock stronger tiers. **Books** use three paper and one leather, in any arrangement; cows now always drop 1–2 leather. Combine a book, feather, and charcoal for a **writable book**. Right-click to write, close to keep a draft, or sign to make it read-only. Written text and enchantments stay attached through inventory moves, chests, drops, death, and saves. See [the Nether and enchanting guide](docs/nether-enchanting.md).
 
@@ -64,7 +64,7 @@ Craft an **enchanting table** from a book, two diamonds, and four obsidian. Righ
 
 **Mods:** drop a folder into `mods/` (or `~/.voxey/mods/`) with a `mod.json` manifest and an entry script, and it receives the sandboxed `VoxeyAPI`: register new nodes and items, read and change the world, give or take inventory items, and subscribe to gameplay hooks (`on_node_broken`, `on_player_hurt`, …). A broken mod is skipped with a logged error; it never blocks the game. See `docs/modding/` for the full guide, API reference, and worked examples. `mods/survival_tweaks/` ships as a live example.
 
-**Food and shelter:** eat apples, cook meat, or till dirt with a hoe and plant seeds. Wheat matures after 90 active world seconds; three wheat make bread. Sheep also provide wool for beds. The bed is a proper two-node bed — the recipe lays a foot and a head half in the direction you face, each rendered as a half-height mattress with a pillow end; right-click either half to set spawn and sleep at night when no hostile creature is nearby, and breaking either half removes the whole bed and drops one item. Old saves with the single-node bed load as the new foot half. Saplings grow in 120 seconds. Torches illuminate the surroundings and prevent nearby hostile spawns. Death leaves recoverable item drops, which expire after five active minutes.
+**Food and shelter:** hold right-click to eat (1.61 seconds for most foods, 0.8 seconds for dried kelp); release to cancel. Eat apples, cook meat, or till dirt with a hoe and plant seeds. Wheat matures after 90 active world seconds; three wheat make bread. Sheep also provide wool for beds. The bed is a proper two-node bed — the recipe lays a foot and a head half in the direction you face, each rendered as a half-height mattress with a pillow end; right-click either half to set spawn and sleep at night when no hostile creature is nearby, and breaking either half removes the whole bed and drops one item. Old saves with the single-node bed load as the new foot half. Saplings grow in 120 seconds. Torches illuminate the surroundings and prevent nearby hostile spawns. Death leaves recoverable item drops, which expire after five active minutes.
 
 **Storage chests:** a chest (8 planks at a table) holds 27 stacks; right-click to open, Shift-click to move stacks in or out. Place a second chest directly beside one and they join into a single large chest with 54 slots that keeps everything already inside. A chest never joins more than one neighbour, and breaking one half drops that half's items while the other half keeps its own 27. Contents drop when a chest is broken and are saved with the world.
 
@@ -137,7 +137,7 @@ Voxels are **nodes**. Each **map block** contains 16×16×16 nodes in a 32-bit i
 - Nine crack stages use a full UV square on each face. The crack texture is drawn in one sector and stamped with four-fold rotational symmetry about the exact face centre, so every stage grows evenly outward; forks and web rings appear in later stages.
 - Day/night lighting, fog, voxel clouds, positional torch lights, generated 2D and positional 3D sound effects, textured pickups, falling nodes, mining debris, and explosion craters.
 
-Voxey includes three dimensions, redstone simulation, villages and trading, brewing, enchantments, portable pouches, Netherite, an initial bastion adaptation and a persistent End dragon encounter. Multiplayer, general fluid-flow simulation, the Wither and parts of Mineclonia’s full content roster remain open in the [parity ledger](docs/mineclonia-parity.md). Ordinary roaming mobs respawn between sessions; villagers, linked animals, alchemy creatures, bastion residents and major encounters persist. Visuals are original procedural assets; source data and noise algorithms retain attribution and licenses in `docs/`.
+Voxey includes three dimensions, redstone simulation, villages and trading, brewing, enchantments, portable pouches, Netherite, an initial bastion adaptation and a persistent End dragon encounter. Multiplayer, the Wither and parts of Mineclonia’s full content roster remain open in the [parity ledger](docs/mineclonia-parity.md). Ordinary roaming mobs respawn between sessions; villagers, linked animals, alchemy creatures, bastion residents and major encounters persist. Visuals are original procedural assets; source data and noise algorithms retain attribution and licenses in `docs/`.
 
 ## Validation
 
@@ -171,7 +171,7 @@ Death leaves two bones and a persistent recovery chest. Main inventory items, ar
 
 Offline play uses the fixed player identity `player`, with no player selector. Homes, villager reputation and recovery ownership use stable player keys so future multiplayer sessions can keep them separate. Previously selected local-profile homes and reputation migrate to `player`; other saved identities remain preserved.
 
-## Mineclonia parity work in progress
+## Mineclonia parity work (paused)
 
 The [source-backed parity ledger](docs/mineclonia-parity.md) inventories 218 source modules. Full parity is not complete. The [world and Nether source comparison](docs/mineclonia-world-source.md) records implemented rules, tests and remaining differences, including ore generation and world limits.
 
@@ -182,3 +182,5 @@ The [source-backed parity ledger](docs/mineclonia-parity.md) inventories 218 sou
 **Fire and navigation:** fire charges and flint and steel ignite blocks, portals and TNT. Water extinguishes fire; netherrack supports eternal flames. Use a compass on a lodestone to bind it, then use the compass to find that lodestone within its dimension. Bindings stay with the individual compass through inventory moves and saving.
 
 **Stairs and slabs:** 51 material families provide 102 building items, with upper/lower slabs, double slabs, inverted stairs and automatic corners. Players walk up half-height steps, and targeting, mining and dropped models follow the actual shape. Natural tuff and eight additional masonry blocks support the deepslate/tuff crafting chains. See [crafting and placement](docs/building-shapes.md).
+
+The [eating, daylight and fluid-flow update](docs/environment-update.md) completes the current requested fixes. Further feature parity work is paused.

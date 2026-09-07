@@ -415,6 +415,7 @@ const ARMOR_POINTS = [[1, 3, 2, 1], [2, 6, 5, 2], [2, 5, 3, 1], [3, 8, 6, 3]]
 const ARMOR_DURABILITY = [80, 240, 112, 528]
 
 static func title(id: int) -> String:
+	if Fluids.flowing(id): return "Flowing water" if Fluids.water(id) else "Flowing lava"
 	if BuildingShapes.is_shape(id): return BuildingShapes.title(id)
 	if id == WOOL: return "White wool"
 	if VillageContent.DATA.has(id): return VillageContent.DATA[id].name
@@ -427,6 +428,7 @@ static func title(id: int) -> String:
 	return NAMES.get(id, "Unknown")
 
 static func color(id: int) -> Color:
+	if Fluids.flowing(id): return color(Fluids.base(id))
 	if BuildingShapes.is_shape(id): return color(BuildingShapes.material(id))
 	if VillageContent.DATA.has(id): return Color(VillageContent.DATA[id].color)
 	if id == ELYTRA: return COLORS[ELYTRA]
@@ -438,6 +440,7 @@ static func color(id: int) -> Color:
 	return COLORS.get(id, Color.WHITE)
 
 static func exists(id: int) -> bool:
+	if Fluids.flowing(id): return true
 	if BuildingShapes.is_shape(id): return true
 	return VillageContent.DATA.has(id) or NAMES.has(id) or is_tool_id(id) or is_armor(id) or custom_nodes.has(id) or custom_items.has(id)
 
@@ -541,6 +544,7 @@ static func max_stack(id: int) -> int:
 	return 1 if is_tool_id(id) or is_armor(id) or id in [SHEARS,BUCKET,WATER_BUCKET,MILK_BUCKET,SADDLE,MUSHROOM_STEW] else 64
 
 static func solid(id: int) -> bool:
+	if Fluids.flowing(id): return false
 	if BuildingShapes.is_shape(id): return true
 	if Torches.is_torch(id): return false
 	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("block",false) and VillageContent.shape(id) not in ["crop","plant","door_open","carpet","banner","frame","painting","candle","lantern","brewing"]
@@ -551,6 +555,7 @@ static func plant(id: int) -> bool:
 	return VillageContent.shape(id) in ["crop","plant"] or id in [WHEAT, RIPE_WHEAT, SAPLING, FLOWER, VINE, SUGAR_CANE, RED_MUSHROOM, BROWN_MUSHROOM]
 
 static func transparent(id: int) -> bool:
+	if Fluids.flowing(id): return true
 	if BuildingShapes.is_shape(id): return BuildingShapes.variant(id) != 2
 	if VillageContent.DATA.has(id): return VillageContent.shape(id) != "cube"
 	if custom_nodes.has(id): return bool(custom_nodes[id].get("transparent",false))
@@ -561,6 +566,7 @@ static func falls(id: int) -> bool:
 	return id in [SAND, GRAVEL, SNOW_BLOCK]
 
 static func placeable(id: int) -> bool:
+	if Fluids.flowing(id): return false
 	if BuildingShapes.is_shape(id): return id == BuildingShapes.item(id)
 	if id in Torches.WALLS: return false
 	if id == WOOL: return true
@@ -590,6 +596,7 @@ static func preferred_tool(id: int) -> int:
 	return -1
 
 static func hardness(id: int) -> float:
+	if Fluids.flowing(id): return INF
 	if BuildingShapes.is_shape(id): return hardness(BuildingShapes.material(id))
 	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("hardness",0.2 if VillageContent.shape(id) == "crop" else 1.5)
 	if id in [END_FRAME,END_FRAME_EYE,END_PORTAL,END_GATEWAY]: return INF
@@ -629,6 +636,7 @@ static func break_time(id: int, tool: int) -> float:
 	return hardness(id) / speed
 
 static func harvestable(id: int, tool: int) -> bool:
+	if Fluids.flowing(id): return false
 	if BuildingShapes.is_shape(id): return harvestable(BuildingShapes.material(id),tool)
 	if id in [Netherite.ANCIENT_DEBRIS,Netherite.BLOCK,Bastions.CRYING_OBSIDIAN]: return tool_kind(tool) == 0 and tool_tier(tool) >= 3
 	if id in [VillageContent.EMERALD_ORE,VillageContent.DEEP_EMERALD_ORE]: return tool_kind(tool) == 0 and tool_tier(tool) >= 2
@@ -645,6 +653,7 @@ static func harvestable(id: int, tool: int) -> bool:
 	return true
 
 static func drop(id: int) -> int:
+	if Fluids.flowing(id): return 0
 	if BuildingShapes.is_shape(id): return BuildingShapes.item(id)
 	if Torches.is_torch(id): return TORCH
 	if Fire.is_fire(id): return AIR
@@ -677,6 +686,7 @@ static func food(id: int) -> int:
 	return {CHORUS_FRUIT:4,APPLE:4, RAW_MEAT:2, COOKED_MEAT:8, BREAD:6, ROTTEN_FLESH:2, PUMPKIN_PIE:8, MELON_SLICE:2, GOLDEN_APPLE:10, MUSHROOM_STEW:6}.get(id, 0)
 
 static func tile(id: int, face: int) -> int:
+	if Fluids.flowing(id): return tile(Fluids.base(id),face)
 	if BuildingShapes.is_shape(id): return tile(BuildingShapes.material(id),face)
 	if Torches.is_torch(id): return TORCH
 	if id == WOOL: id = VillageContent.WOOL_WHITE

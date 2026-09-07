@@ -60,7 +60,7 @@ static func update(target: Node3D, delta: float) -> void:
 		if player: target.game.survival.effects[effect] = remaining
 		else: target.set_meta("effect_"+effect,remaining)
 		if effect not in ["poison","regeneration","withering","burning"]: continue
-		if effect == "burning" and (level(target,"fire_resistance") > 0 or target.game.world.node_at(Vector3i(target.position.floor())) == Nodes.WATER): continue
+		if effect == "burning" and (level(target,"fire_resistance") > 0 or Fluids.water(target.game.world.node_at(Vector3i(target.position.floor())))): continue
 		var interval: float = {"poison":1.25,"regeneration":2.5,"withering":2.0,"burning":1.0}[effect]/pow(2.0,potency-1)
 		var timer: float = float(target.get_meta("effectclock_"+effect,0))+delta
 		while timer >= interval and target.health > 0 and not target.is_queued_for_deletion():

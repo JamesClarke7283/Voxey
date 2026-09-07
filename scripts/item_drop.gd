@@ -31,7 +31,7 @@ func _physics_process(delta: float) -> void:
 	age += delta
 	pickup_delay = maxf(0,pickup_delay-delta)
 	if age >= (600.0 if item_id == Nodes.ARROW_ITEM else 300.0): queue_free(); return
-	if age > 2 and game.world.node_at(Vector3i(position.floor())) in [Nodes.LAVA,Fire.FLAME,Fire.ETERNAL] and not VillageContent.DATA.get(item_id,{}).get("fire_immune",false):
+	if age > 2 and (Fluids.contains(game.world,position,Nodes.LAVA) or Fire.is_fire(game.world.node_at(Vector3i(position.floor())))) and not VillageContent.DATA.get(item_id,{}).get("fire_immune",false):
 		queue_free(); return
 	rotation.y += delta
 	mesh_instance.position.y = sin(age*3)*0.04
