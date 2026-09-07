@@ -483,7 +483,7 @@ func run() -> void:
 	game.player.use()
 	check(placed_count.size()==1 and placed_count[0]==Nodes.PLANKS,"placing a node fires on_node_placed")
 	check(test_api.get_node(Vector3i(feet.x,feet.y+4,feet.z))==Nodes.PLANKS,"api reads world nodes")
-	check(not test_api.set_node(Vector3i(0,-5,0),Nodes.STONE),"api refuses out-of-range node edits")
+	check(not test_api.set_node(Vector3i(0,TerrainGenerator.OVERWORLD_MIN-1,0),Nodes.STONE),"api refuses out-of-range node edits")
 	check(test_api.count_item(Nodes.PLANKS)>=1 and test_api.give_item(Nodes.PLANKS,2)>=1 and test_api.take_item(Nodes.PLANKS,2),"api moves items in and out of the inventory")
 	var drop_count: int=game.drops.get_child_count()
 	test_api.spawn_drop(Vector3(game.player.position),Nodes.DIRT,2)
@@ -697,6 +697,8 @@ func run() -> void:
 	check(game.save_game("user://voxey_test.json"),"a world with worn armor saves")
 	var armor_save: Dictionary=game.read_save("user://voxey_test.json")
 	check(int(armor_save.armor[0].id)==Nodes.armor_id(0,0) and int(armor_save.armor[0].wear)==4 and int(armor_save.version)==2,"save stores worn armor with wear")
+	await load("res://tests/nether_checks.gd").run(self,game)
+	await load("res://tests/depth_checks.gd").run(self,game)
 	for path in ["user://voxey_test.json","user://voxey_test.json.bak","user://voxey_test.json.tmp"]:
 		if FileAccess.file_exists(path): DirAccess.remove_absolute(path)
 	print("VOXEY TESTS: %d passed, %d failed in %.2fs" % [passed,failed,(Time.get_ticks_msec()-start)/1000.0])

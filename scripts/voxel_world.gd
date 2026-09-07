@@ -3,6 +3,7 @@ extends Node3D
 
 signal column_loaded
 const SIZE = 16
+var dimension: String = "overworld"
 var seed_value: int = 8675309
 var generator: TerrainGenerator
 var blocks: Dictionary = {}
@@ -23,9 +24,10 @@ var tick: float = 0.0
 var active: bool = true
 var last_mesh_ms: float = 0.0
 
-func configure(seed_number: int, atlas: Texture2D) -> void:
+func configure(seed_number: int, atlas: Texture2D, dimension_name: String = "overworld") -> void:
+	dimension = dimension_name
 	seed_value = seed_number
-	generator = TerrainGenerator.new(seed_value)
+	generator = TerrainGenerator.new(seed_value,dimension)
 	material = ShaderMaterial.new()
 	material.shader = preload("res://shaders/terrain.gdshader")
 	material.set_shader_parameter("atlas",atlas)
@@ -87,7 +89,7 @@ func _queue_column(coord: Vector2i) -> void:
 	var local_edits: Dictionary = {}
 	for p in edits:
 		if p.x >= coord.x*16-1 and p.x <= coord.x*16+16 and p.z >= coord.y*16-1 and p.z <= coord.y*16+16: local_edits[p] = edits[p]
-	var gen := TerrainGenerator.new(seed_value)
+	var gen := TerrainGenerator.new(seed_value,dimension)
 	var job: Dictionary = {"coord":coord,"result":{}}
 	job.task = WorkerThreadPool.add_task(func(): job.result = gen.generate_column(coord,local_edits),false,"Generate map blocks")
 	jobs.append(job)
@@ -96,13 +98,12 @@ func _queue_column(coord: Vector2i) -> void:
 func _apply_column(result: Dictionary) -> void:
 	var c: Vector2i = result.coord
 	columns[c] = true
-	for y in 4:
-		var coord := Vector3i(c.x,y,c.y)
+	for entry in result.blocks:
+		var coord := Vector3i(c.x,int(entry.y),c.y)
 		var root := Node3D.new()
-		root.name = "MapBlock_%d_%d_%d" % [c.x,y,c.y]
+		root.name = "MapBlock_%d_%d_%d" % [c.x,coord.y,c.y]
 		root.position = Vector3(coord * SIZE)
 		add_child(root)
-		var entry: Dictionary = result.blocks[y]
 		blocks[coord] = {"data":entry.data,"root":root,"meshes":[]}
 		_apply_mesh(coord,entry.surfaces)
 	# Reconcile edits made while the worker was running, including border halos.
@@ -112,6 +113,11 @@ func _apply_column(result: Dictionary) -> void:
 			if blocks.has(b):
 				blocks[b].data[local_index(p)] = edits[p]
 				_mark_dirty(p)
+	for x in range(c.x*16-1,c.x*16+17):
+		for z in range(c.y*16-1,c.y*16+17):
+			for y in range(generator.min_y()+1,generator.max_y()):
+				var p := Vector3i(x,y,z)
+				if node_at(p) == Nodes.LAVA: react_fluid(p)
 	column_loaded.emit()
 
 func _apply_mesh(coord: Vector3i, surfaces: Array) -> void:
@@ -133,7 +139,7 @@ func _apply_mesh(coord: Vector3i, surfaces: Array) -> void:
 
 func _unload(c: Vector2i) -> void:
 	columns.erase(c)
-	for y in 4:
+	for y in generator.block_levels():
 		var b := Vector3i(c.x,y,c.y)
 		if blocks.has(b): blocks[b].root.queue_free(); blocks.erase(b)
 		dirty.erase(b)
@@ -145,8 +151,8 @@ static func local_index(p: Vector3i) -> int:
 	return posmod(p.x,16) + posmod(p.z,16)*16 + posmod(p.y,16)*256
 
 func node_at(p: Vector3i) -> int:
-	if p.y < 0: return Nodes.BEDROCK
-	if p.y >= 64: return Nodes.AIR
+	if p.y < generator.min_y(): return Nodes.BEDROCK
+	if p.y >= generator.max_y(): return Nodes.AIR
 	var b: Vector3i = block_coord(p)
 	if blocks.has(b): return blocks[b].data[local_index(p)]
 	# Treat unloaded terrain as solid for movement; streaming never drops a player.
@@ -164,12 +170,14 @@ func loaded_at(p: Vector3) -> bool:
 
 func set_node(p: Vector3i, id: int) -> bool:
 	var b: Vector3i = block_coord(p)
-	if p.y <= 0 or p.y >= 64 or not blocks.has(b): return false
+	if p.y <= generator.min_y() or p.y >= generator.max_y() or not blocks.has(b): return false
 	blocks[b].data[local_index(p)] = id
 	edits[p] = id
 	if id in [Nodes.WHEAT,Nodes.SAPLING,Nodes.SUGAR_CANE]: growth[p] = 0.0
 	else: growth.erase(p)
 	_mark_dirty(p)
+	if id in [Nodes.WATER,Nodes.LAVA]: react_fluid(p)
+	if id != Nodes.NETHER_PORTAL: validate_portals_near(p)
 	return true
 
 func _mark_dirty(p: Vector3i) -> void:
@@ -186,7 +194,7 @@ func _snapshot(coord: Vector3i) -> PackedByteArray:
 				var p: Vector3i = coord*16+Vector3i(x-1,y-1,z-1)
 				var id: int = node_at(p)
 				# Keep the outer streaming wall invisible.
-				if p.y > 0 and id == Nodes.BEDROCK and not blocks.has(block_coord(p)): id = Nodes.AIR
+				if p.y > generator.min_y() and id == Nodes.BEDROCK and not blocks.has(block_coord(p)): id = Nodes.AIR
 				data[x+z*18+y*324] = id
 	return data
 
@@ -200,7 +208,7 @@ func intersects(pos: Vector3, half_width: float = 0.29, height: float = 1.8) -> 
 	return false
 
 # Amanatides-Woo voxel traversal: precise targeting without per-node colliders.
-func raycast(origin: Vector3, direction: Vector3, reach: float = 5.0) -> Dictionary:
+func raycast(origin: Vector3, direction: Vector3, reach: float = 5.0, liquids: bool = false) -> Dictionary:
 	var cell := Vector3i(origin.floor())
 	var step_dir := Vector3i(signi(int(signf(direction.x))),signi(int(signf(direction.y))),signi(int(signf(direction.z))))
 	var t_delta := Vector3(INF,INF,INF)
@@ -213,7 +221,7 @@ func raycast(origin: Vector3, direction: Vector3, reach: float = 5.0) -> Diction
 	var distance: float = 0.0
 	for iteration in 128:
 		var id: int = node_at(cell)
-		if id != Nodes.AIR and id != Nodes.WATER:
+		if id != Nodes.AIR and id != Nodes.NETHER_PORTAL and (liquids or id != Nodes.WATER):
 			return {"pos":cell,"normal":normal,"id":id,"distance":distance}
 		var axis: int = 0 if t_max.x < t_max.y else 1
 		if t_max.z < t_max[axis]: axis = 2
@@ -246,15 +254,18 @@ func _simulate() -> void:
 		var input: Dictionary = s.slots[0]
 		var fuel: Dictionary = s.slots[1]
 		var output: Dictionary = s.slots[2]
-		var recipe: int = {Nodes.IRON_ORE:Nodes.IRON,Nodes.GOLD_ORE:Nodes.GOLD,Nodes.COPPER_ORE:Nodes.COPPER,Nodes.SAND:Nodes.GLASS,Nodes.COBBLE:Nodes.STONE,Nodes.RAW_MEAT:Nodes.COOKED_MEAT,Nodes.LOG:Nodes.CHARCOAL,Nodes.CLAY_BALL:Nodes.BRICK_ITEM,Nodes.CLAY:Nodes.TERRACOTTA}.get(input.id,0)
+		var recipe: int = Nodes.smelt_result(input.id)
 		if s.burn > 0: s.burn -= 1
 		if recipe == 0 or (output.id != 0 and output.id != recipe) or output.count >= 64: s.progress = 0.0; continue
 		if s.burn <= 0:
-			var burn: int = {Nodes.COAL:80,Nodes.CHARCOAL:80,Nodes.COAL_BLOCK:800,Nodes.LOG:15,Nodes.PLANKS:15,Nodes.STICK:5,Nodes.BOWL:10}.get(fuel.id,0)
+			var burn: int = Nodes.fuel_time(fuel.id)
 			if burn == 0: continue
 			s.burn = burn
-			fuel.count -= 1
-			if fuel.count <= 0: fuel.id = 0
+			if fuel.id == Nodes.LAVA_BUCKET:
+				fuel.id = Nodes.BUCKET; fuel.count = 1; fuel.wear = 0
+			else:
+				fuel.count -= 1
+				if fuel.count <= 0: fuel.id = 0
 		s.progress += 1.0
 		if s.progress >= 8:
 			s.progress = 0.0
@@ -371,3 +382,76 @@ func detach_station(p: Vector3i, partner: Vector3i = Vector3i(99999,99999,99999)
 func _exit_tree() -> void:
 	for job in jobs: WorkerThreadPool.wait_for_task_completion(job.task)
 	for job in remesh_jobs: WorkerThreadPool.wait_for_task_completion(job.task)
+
+const SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.UP,Vector3i.DOWN,Vector3i.FORWARD,Vector3i.BACK]
+
+func react_fluid(p: Vector3i) -> void:
+	if node_at(p) == Nodes.LAVA:
+		for d in SIDES:
+			if node_at(p+d) == Nodes.WATER:
+				set_node(p,Nodes.OBSIDIAN)
+				return
+	elif node_at(p) == Nodes.WATER:
+		for d in SIDES:
+			if node_at(p+d) == Nodes.LAVA: set_node(p+d,Nodes.OBSIDIAN)
+
+# A standard 4 x 5 frame, with optional corners and a 2 x 3 opening.
+func portal_frame(base: Vector3i, axis: Vector3i) -> bool:
+	for x in range(-1,3):
+		for y in range(-1,4):
+			if x in [-1,2] and y in [-1,3]: continue
+			var id: int = node_at(base+axis*x+Vector3i.UP*y)
+			if x in [-1,2] or y in [-1,3]:
+				if id != Nodes.OBSIDIAN: return false
+			elif id not in [Nodes.AIR,Nodes.NETHER_PORTAL]: return false
+	return true
+
+func ignite_portal(near: Vector3i) -> bool:
+	for axis in [Vector3i.RIGHT,Vector3i.BACK]:
+		for dx in range(-2,2):
+			for dy in range(-3,2):
+				var base: Vector3i = near+axis*dx+Vector3i.UP*dy
+				if not portal_frame(base,axis): continue
+				for x in 2:
+					for y in 3: set_node(base+axis*x+Vector3i.UP*y,Nodes.NETHER_PORTAL)
+				return true
+	return false
+
+func validate_portals_near(p: Vector3i) -> void:
+	for d in SIDES:
+		var start: Vector3i = p+d
+		if node_at(start) != Nodes.NETHER_PORTAL: continue
+		var connected: Array = [start]
+		var i: int = 0
+		while i < connected.size() and connected.size() < 64:
+			var cell: Vector3i = connected[i]; i += 1
+			for step in SIDES:
+				if node_at(cell+step) == Nodes.NETHER_PORTAL and not connected.has(cell+step): connected.append(cell+step)
+		var valid: bool = false
+		for cell in connected:
+			for axis in [Vector3i.RIGHT,Vector3i.BACK]:
+				if portal_frame(cell,axis): valid = true
+		if not valid:
+			# Batch clear prevents recursive validation of a half-removed portal.
+			for cell in connected:
+				blocks[block_coord(cell)].data[local_index(cell)] = Nodes.AIR
+				edits[cell] = Nodes.AIR
+				_mark_dirty(cell)
+
+# Find a dry floor near the requested height without teleporting cave mobs to
+# the surface. Empty space must fit a standing player or humanoid creature.
+func cave_spawn(near: Vector3, vertical_reach: int = 12) -> Vector3:
+	var x: int = floori(near.x)
+	var z: int = floori(near.z)
+	if not loaded_at(near): return Vector3.INF
+	for distance in vertical_reach+1:
+		for direction in [-1,1]:
+			var y: int = floori(near.y)+distance*direction
+			if y <= generator.min_y() or y >= generator.max_y()-2: continue
+			var feet := Vector3i(x,y,z)
+			var support: int = node_at(feet+Vector3i.DOWN)
+			if not Nodes.solid(support) or support in [Nodes.LOG,Nodes.LEAVES]: continue
+			if node_at(feet) != Nodes.AIR or node_at(feet+Vector3i.UP) != Nodes.AIR: continue
+			var pos := Vector3(x+0.5,y+0.01,z+0.5)
+			if not intersects(pos): return pos
+	return Vector3.INF

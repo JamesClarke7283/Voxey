@@ -4,6 +4,7 @@ extends Node3D
 var game: Node3D
 var velocity := Vector3.ZERO
 var life: float = 0.0
+var damage: float = 6.0
 var stuck: bool = false
 var from_player: bool = false
 
@@ -25,6 +26,13 @@ func _ready() -> void:
 	tip_mat.albedo_color = Color("c9ccc4")
 	tip.material_override = tip_mat
 	add_child(tip)
+	for axis in 2:
+		var feather := MeshInstance3D.new()
+		var feather_mesh := BoxMesh.new()
+		feather_mesh.size = Vector3(0.16,0.018,0.16) if axis == 0 else Vector3(0.018,0.16,0.16)
+		feather.mesh = feather_mesh; feather.position.z = 0.21
+		feather.material_override = tip_mat
+		add_child(feather)
 	_orient()
 
 func _orient() -> void:
@@ -33,24 +41,33 @@ func _orient() -> void:
 func _physics_process(delta: float) -> void:
 	if not game.playing(): return
 	life += delta
-	if life > 8 or (stuck and life > 2.5): queue_free(); return
-	if stuck: return
-	velocity.y -= 12*delta
-	var next: Vector3 = position+velocity*delta
-	if game.world.intersects(next,0.03,0.06):
-		stuck = true
-		life = 1.0
-		game.sound_at("thud",position,1.4)
+	if stuck:
+		if life >= 600.0: queue_free(); return
+		if position.distance_to(game.player.position+Vector3.UP*0.8) < 1.6 and game.inventory.capacity(Nodes.ARROW_ITEM) >= 1:
+			game.inventory.add_item(Nodes.ARROW_ITEM)
+			game.sound("pickup")
+			queue_free()
 		return
-	position = next
+	if life > 30: queue_free(); return
+	velocity.y -= 12*delta
+	var motion: Vector3 = velocity*delta
+	var steps: int = maxi(1,ceili(motion.length()/0.08))
+	for step in steps:
+		var next: Vector3 = position+motion/steps
+		if game.world.intersects(next,0.03,0.06):
+			stuck = true
+			life = 0.0
+			game.sound_at("thud",position,1.4)
+			return
+		position = next
+		if from_player:
+			for mob in game.creatures.get_children():
+				if not mob.is_queued_for_deletion() and position.distance_to(mob.center()) < maxf(0.55,mob.width+0.2):
+					mob.hit(damage,position-velocity)
+					queue_free()
+					return
+		elif position.distance_to(game.player.position+Vector3.UP*0.9) < 0.65:
+			game.player.hurt(3,false,position-velocity)
+			queue_free()
+			return
 	_orient()
-	if from_player:
-		# Player arrows hit creatures.
-		for mob in game.creatures.get_children():
-			if position.distance_to(mob.center()) < maxf(0.75,mob.width+0.4):
-				mob.hit(6.0,position-velocity)
-				queue_free()
-				return
-	elif position.distance_to(game.player.position+Vector3.UP*0.9) < 0.8:
-		game.player.hurt(3,false,position-velocity)
-		queue_free()

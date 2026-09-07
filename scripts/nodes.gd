@@ -116,6 +116,38 @@ const MOSSY_COBBLE = 59
 const MOSSY_BRICKS = 60
 const COAL_BLOCK = 61
 const TERRACOTTA = 62
+const LAVA = 180
+const NETHERRACK = 181
+const SOUL_SAND = 182
+const BASALT = 183
+const NETHER_BRICKS = 184
+const NETHER_QUARTZ_ORE = 185
+const CRIMSON_NYLIUM = 186
+const WARPED_NYLIUM = 187
+const NETHER_PORTAL = 188
+const ENCHANTING_TABLE = 189
+const LAPIS_ORE = 190
+const CRIMSON_STEM = 191
+const WARPED_STEM = 192
+const SHROOMLIGHT = 193
+const DEEPSLATE = 194
+const COBBLED_DEEPSLATE = 195
+const POLISHED_DEEPSLATE = 196
+const DEEPSLATE_BRICKS = 197
+const DEEP_DIAMOND_ORE = 198
+const DEEP_IRON_ORE = 199
+const DEEP_GOLD_ORE = 206
+const DEEP_LAPIS_ORE = 207
+const DEEP_COAL_ORE = 208
+const DEEP_COPPER_ORE = 209
+const DEEP_NODES = [194,195,196,197,198,199,206,207,208,209]
+const DEEP_ORES = {198:12,199:11,206:34,207:190,208:10,209:35}
+const LAPIS = 262
+const WRITABLE_BOOK = 263
+const WRITTEN_BOOK = 264
+const QUARTZ = 265
+const LAVA_BUCKET = 266
+const NETHER_NODES = [180,181,182,183,184,185,186,187,188,189,190,191,192,193]
 const CHARCOAL = 256
 const BOWL = 257
 const MUSHROOM_STEW = 258
@@ -134,6 +166,37 @@ static var custom_nodes := {}
 static var custom_tiles := {}
 static var custom_items := {}
 const NAMES = {
+	194:"Deepslate",
+	195:"Cobbled deepslate",
+	196:"Polished deepslate",
+	197:"Deepslate bricks",
+	198:"Deepslate diamond ore",
+	199:"Deepslate iron ore",
+	206:"Deepslate gold ore",
+	207:"Deepslate lapis ore",
+	208:"Deepslate coal ore",
+	209:"Deepslate copper ore",
+
+	180:"Lava",
+	181:"Netherrack",
+	182:"Soul sand",
+	183:"Basalt",
+	184:"Nether bricks",
+	185:"Nether quartz ore",
+	186:"Crimson nylium",
+	187:"Warped nylium",
+	188:"Nether portal",
+	189:"Enchanting table",
+	190:"Lapis lazuli ore",
+	191:"Crimson stem",
+	192:"Warped stem",
+	193:"Shroomlight",
+	262:"Lapis lazuli",
+	263:"Writable book",
+	264:"Written book",
+	265:"Nether quartz",
+	266:"Lava bucket",
+
 	0:"Air", 1:"Grass", 2:"Dirt", 3:"Stone", 4:"Sand", 5:"Water", 6:"Oak log", 7:"Oak leaves", 8:"Oak planks", 9:"Cobblestone",
 	10:"Coal ore", 11:"Iron ore", 12:"Diamond ore", 13:"Snow", 14:"Cactus", 15:"Crafting table", 16:"Furnace", 17:"Chest", 18:"Torch",
 	19:"Glass", 20:"Stone bricks", 21:"Farmland", 22:"Wheat seedling", 23:"Oak sapling", 24:"Bed", 25:"Obsidian", 26:"Gravel", 27:"Wildflower", 28:"Bedrock", 29:"Ripe wheat",
@@ -151,6 +214,37 @@ const NAMES = {
 	256:"Charcoal", 257:"Bowl", 258:"Mushroom stew", 259:"Gold nugget", 260:"Iron nugget", 261:"Egg"
 }
 const COLORS = {
+	194:Color("4b4d53"),
+	195:Color("505359"),
+	196:Color("54575e"),
+	197:Color("454851"),
+	198:Color("53979a"),
+	199:Color("9b8981"),
+	206:Color("ac954e"),
+	207:Color("375db4"),
+	208:Color("30353a"),
+	209:Color("9d7864"),
+
+	180:Color("ed651b"),
+	181:Color("813d3a"),
+	182:Color("655044"),
+	183:Color("48474e"),
+	184:Color("402b34"),
+	185:Color("a47569"),
+	186:Color("a33e4e"),
+	187:Color("328d82"),
+	188:Color("9a4bd1"),
+	189:Color("662e43"),
+	190:Color("537cac"),
+	191:Color("713b50"),
+	192:Color("337369"),
+	193:Color("efa25e"),
+	262:Color("285fc3"),
+	263:Color("9c643d"),
+	264:Color("7948a6"),
+	265:Color("eee3dd"),
+	266:Color("f17b2c"),
+
 	1:Color("709f40"), 2:Color("906244"), 3:Color("898b87"), 4:Color("dacc91"), 5:Color("438eac"), 6:Color("725137"), 7:Color("52863b"),
 	8:Color("c39760"), 9:Color("777d7a"), 10:Color("787e7e"), 11:Color("95958c"), 12:Color("728d8c"), 13:Color("e1edf0"), 14:Color("4c8849"),
 	15:Color("a3794c"), 16:Color("626d71"), 17:Color("a47d43"), 18:Color("ffca67"), 19:Color("aadbdc"), 20:Color("8f9693"), 21:Color("684831"),
@@ -269,36 +363,45 @@ static func armor_points(id: int) -> int:
 	return ARMOR_POINTS[armor_material(id)][armor_piece(id)] if is_armor(id) else 0
 
 static func durability(id: int) -> int:
+	if id == BOW: return 385
+	if id == SHEARS: return 239
 	if is_tool_id(id): return DURABILITY[tool_tier(id)]
 	if is_armor(id): return ARMOR_DURABILITY[armor_material(id)]
 	return 0
 
 static func max_stack(id: int) -> int:
+	if id in [WRITABLE_BOOK,WRITTEN_BOOK,BOW,LAVA_BUCKET]: return 1
 	if id == EGG: return 16
 	return 1 if is_tool_id(id) or is_armor(id) or id in [SHEARS,BUCKET,WATER_BUCKET,MILK_BUCKET,SADDLE,MUSHROOM_STEW] else 64
 
 static func solid(id: int) -> bool:
 	if custom_nodes.has(id): return not bool(custom_nodes[id].get("transparent",false))
-	return id != AIR and id != WATER and not plant(id) and id not in [TORCH,LADDER]
+	return id not in [AIR,WATER,LAVA,NETHER_PORTAL] and not plant(id) and id not in [TORCH,LADDER]
 
 static func plant(id: int) -> bool:
 	return id in [WHEAT, RIPE_WHEAT, SAPLING, FLOWER, VINE, SUGAR_CANE, RED_MUSHROOM, BROWN_MUSHROOM]
 
 static func transparent(id: int) -> bool:
 	if custom_nodes.has(id): return bool(custom_nodes[id].get("transparent",false))
-	return id in [AIR, WATER, GLASS, LADDER, ICE] or plant(id) or id == TORCH
+	return id in [AIR, WATER, LAVA, NETHER_PORTAL, GLASS, LADDER, ICE] or plant(id) or id == TORCH
 
 # Sand and gravel are Luanti-style falling nodes: they drop when unsupported.
 static func falls(id: int) -> bool:
 	return id in [SAND, GRAVEL, SNOW_BLOCK]
 
 static func placeable(id: int) -> bool:
+	if id in DEEP_NODES: return true
+	if id in NETHER_NODES: return id not in [LAVA,NETHER_PORTAL]
 	if custom_nodes.has(id) and not bool(custom_nodes[id].get("unobtainable",false)): return true
 	# The legacy single-node bed is no longer obtainable; only the two-block bed is.
 	if id == LEGACY_BED: return false
 	return id > AIR and id < 64 and NAMES.has(id) and id not in [WATER, BEDROCK, RIPE_WHEAT]
 
 static func preferred_tool(id: int) -> int:
+	if id in DEEP_NODES: return 0
+	if id in [CRIMSON_STEM,WARPED_STEM,BOOKSHELF]: return 1
+	if id == SOUL_SAND: return 2
+	if id in NETHER_NODES: return 0
 	if id in [RED_BRICKS,MOSSY_COBBLE,MOSSY_BRICKS,COAL_BLOCK,TERRACOTTA]: return 0
 	if id == HAY_BALE: return 4
 	if id in [STONE, COBBLE, COAL_ORE, IRON_ORE, DIAMOND_ORE, FURNACE, BRICKS, OBSIDIAN, GOLD_ORE, COPPER_ORE, GOLD_NODE, COPPER_NODE, IRON_NODE, DIAMOND_NODE, SANDSTONE, SANDSTONE_BRICK, BOOKSHELF, IRON_BLOCK, GOLD_BLOCK, DIAMOND_BLOCK, GLOWSTONE]: return 0
@@ -307,11 +410,14 @@ static func preferred_tool(id: int) -> int:
 	return -1
 
 static func hardness(id: int) -> float:
+	if id in DEEP_NODES: return 4.5 if DEEP_ORES.has(id) else 3.5
 	if id in [RED_BRICKS,MOSSY_COBBLE,MOSSY_BRICKS,TERRACOTTA]: return 2.0
 	if id == COAL_BLOCK: return 5.0
 	if id == HAY_BALE: return 0.5
 	if custom_nodes.has(id): return float(custom_nodes[id].get("hardness",1.0))
-	if id == BEDROCK: return INF
+	if id in [BEDROCK,LAVA,NETHER_PORTAL]: return INF
+	if id == NETHERRACK: return 0.4
+	if id == ENCHANTING_TABLE: return 5.0
 	if id == OBSIDIAN: return 18.0
 	if id in [IRON_BLOCK, DIAMOND_BLOCK]: return 5.0
 	if id == GOLD_BLOCK: return 3.0
@@ -338,19 +444,22 @@ static func break_time(id: int, tool: int) -> float:
 	return hardness(id) / speed
 
 static func harvestable(id: int, tool: int) -> bool:
+	if DEEP_ORES.has(id): return harvestable(DEEP_ORES[id],tool)
 	if id == BEDROCK: return false
 	if id == VINE: return tool == SHEARS
 	if preferred_tool(id) == 0:
 		if tool_kind(tool) != 0 and tool != SHEARS: return false
 		if tool == SHEARS and id not in [BOOKSHELF]: return id in [BOOKSHELF]
-		if id in [IRON_ORE,COPPER_ORE]: return tool_tier(tool) >= 1
+		if id in [IRON_ORE,COPPER_ORE,LAPIS_ORE]: return tool_tier(tool) >= 1
 		if id in [DIAMOND_ORE,GOLD_ORE,GOLD_NODE,DIAMOND_NODE]: return tool_tier(tool) >= 2
 		if id == OBSIDIAN: return tool_tier(tool) >= 3
 	return true
 
 static func drop(id: int) -> int:
+	if DEEP_ORES.has(id): return drop(DEEP_ORES[id])
+	if id == DEEPSLATE: return COBBLED_DEEPSLATE
 	return {GRASS:DIRT, STONE:COBBLE, COAL_ORE:COAL, DIAMOND_ORE:DIAMOND, FARMLAND:DIRT, WHEAT:SEEDS, RIPE_WHEAT:GRAIN,
-		LEAVES:SAPLING, ICE:0, CLAY:CLAY_BALL, GLOWSTONE:GLOWSTONE_DUST_ALIAS,
+		LAPIS_ORE:LAPIS, NETHER_QUARTZ_ORE:QUARTZ, LAVA:0, NETHER_PORTAL:0, LEAVES:SAPLING, ICE:0, CLAY:CLAY_BALL, GLOWSTONE:GLOWSTONE_DUST_ALIAS,
 		PUMPKIN:PUMPKIN, MELON:MELON_SLICE, BOOKSHELF:BOOKSHELF, SNOW_BLOCK:SNOW_BALL_ALIAS,
 		BED_FOOT:BED_FOOT, BED_HEAD:BED_FOOT}.get(id, id)
 
@@ -363,6 +472,9 @@ static func food(id: int) -> int:
 	return {APPLE:4, RAW_MEAT:2, COOKED_MEAT:8, BREAD:6, ROTTEN_FLESH:2, PUMPKIN_PIE:8, MELON_SLICE:2, GOLDEN_APPLE:10, MUSHROOM_STEW:6}.get(id, 0)
 
 static func tile(id: int, face: int) -> int:
+	if id in DEEP_NODES: return 94+DEEP_NODES.find(id)
+	if id == ENCHANTING_TABLE: return 93 if face == 2 else 88
+	if id in NETHER_NODES: return 79+id-LAVA
 	if custom_tiles.has(id): return custom_tiles[id]
 	if id == GRASS: return 30 if face == 2 else (2 if face == 3 else 1)
 	if id == LOG and face in [2, 3]: return 31
@@ -384,3 +496,10 @@ static func tile(id: int, face: int) -> int:
 	if id == BED_FOOT: return 56
 	if id == BED_HEAD: return 57
 	return id
+
+static func smelt_result(id: int) -> int:
+	if DEEP_ORES.has(id): id = DEEP_ORES[id]
+	return {IRON_ORE:IRON,GOLD_ORE:GOLD,COPPER_ORE:COPPER,SAND:GLASS,COBBLE:STONE,RAW_MEAT:COOKED_MEAT,LOG:CHARCOAL,CLAY_BALL:BRICK_ITEM,CLAY:TERRACOTTA,COBBLED_DEEPSLATE:DEEPSLATE}.get(id,0)
+
+static func fuel_time(id: int) -> int:
+	return {COAL:80,CHARCOAL:80,COAL_BLOCK:800,LOG:15,PLANKS:15,STICK:5,BOWL:10,LAVA_BUCKET:1000,CRIMSON_STEM:15,WARPED_STEM:15}.get(id,0)

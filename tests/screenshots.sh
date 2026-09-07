@@ -23,3 +23,8 @@ godot --headless --path "$voxey_check_dir" --editor --import --quit > "$voxey_ch
 godot --path "$voxey_check_dir" --resolution 1280x720 --script res://tests/screenshot_tour.gd
 
 godot --path "$voxey_check_dir" --resolution 1280x920 --script res://tests/asset_gallery.gd
+
+godot --path "$voxey_check_dir" --resolution 1280x920 --script res://tests/creature_gallery.gd
+godot --path "$voxey_check_dir" --resolution 1280x720 --script res://tests/nether_tour.gd
+
+godot --path "$voxey_check_dir" --resolution 1280x720 --script res://tests/depth_tour.gd

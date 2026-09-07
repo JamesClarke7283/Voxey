@@ -8,10 +8,12 @@ static func make_atlas() -> ImageTexture:
 	img.fill(Color.TRANSPARENT)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7164
-	for tile in 79:
+	for tile in 104:
 		if tile in range(58,64): continue # Reserved for existing mod nodes.
 		var base: Color = Nodes.color(tile)
-		if tile >= 64: base = Nodes.color([Nodes.SANDSTONE,Nodes.SANDSTONE_BRICK,Nodes.ICE,Nodes.SNOW_BLOCK,Nodes.VINE,Nodes.RED_BRICKS,Nodes.HAY_BALE,Nodes.HAY_BALE,Nodes.SUGAR_CANE,Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM,Nodes.MOSSY_COBBLE,Nodes.MOSSY_BRICKS,Nodes.COAL_BLOCK,Nodes.TERRACOTTA][tile-64])
+		if tile >= 94: base = Nodes.color(Nodes.DEEP_NODES[tile-94])
+		if tile >= 79 and tile < 94: base = Nodes.color(Nodes.LAVA+mini(tile-79,13))
+		if tile >= 64 and tile < 79: base = Nodes.color([Nodes.SANDSTONE,Nodes.SANDSTONE_BRICK,Nodes.ICE,Nodes.SNOW_BLOCK,Nodes.VINE,Nodes.RED_BRICKS,Nodes.HAY_BALE,Nodes.HAY_BALE,Nodes.SUGAR_CANE,Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM,Nodes.MOSSY_COBBLE,Nodes.MOSSY_BRICKS,Nodes.COAL_BLOCK,Nodes.TERRACOTTA][tile-64])
 		if tile == 41: base = Color("a08a6a")
 		if tile == 30: base = Color("719f43")
 		if tile == 31: base = Color("bb945e")
@@ -27,6 +29,41 @@ static func make_atlas() -> ImageTexture:
 				var c: Color = base * rng.randf_range(0.86,1.1)
 				c.a = 1.0
 				match tile:
+					94,95,96,97,98,99,100,101,102,103:
+						var rock := Color("484b52")
+						c = rock*(0.88+float((x/3*3+y/2*7)%5)*0.04)
+						if tile == 95 and ((x+y/4*3)%6 == 0 or y%5 == 0): c = rock.darkened(0.3)
+						if tile == 96 and (x in [0,15] or y in [0,15]): c = rock.lightened(0.18)
+						if tile == 97 and (y%4 == 0 or (x+y/4*4)%8 == 0): c = rock.darkened(0.4)
+						if tile >= 98 and (x/2*7+y/2*11)%13 < 4: c = base.lightened(0.15)
+					79:
+						c = Color("f56b1d").lerp(Color("ffd05c"),float((x/2+y/3*3)%7)/7.0)
+						if (x+y/2)%8 == 0: c = Color("bd351a")
+					80,85,86:
+						if (x/3+y/2*3)%5 == 0: c = base.darkened(0.32)
+						if y%5 == 0: c = base.lightened(0.18)
+					81:
+						if (x%8 in [2,5] and y%8 in [2,3]) or (x%8 in [3,4] and y%8 == 5): c = base.darkened(0.5)
+					82,90,91:
+						if x%4 == 0: c = base.darkened(0.4)
+						elif y%7 == 0: c = base.lightened(0.18)
+					83:
+						if y%4 == 0 or (x+y/4*4)%8 == 0: c = base.darkened(0.6)
+					84,89:
+						c = Nodes.color(Nodes.NETHERRACK if tile == 84 else Nodes.STONE)*rng.randf_range(0.85,1.1)
+						if (x/2*7+y/2*11)%13 < 4: c = Color("efe2d2") if tile == 84 else Color("2957c3")
+					87:
+						c = Color("58227d").lerp(Color("bd70ee"),float((x*x+y*y)/3%13)/13.0)
+					88,93:
+						c = Color("30233f")
+						if tile == 88 and y < 4: c = Color("963c51")
+						if tile == 88 and x in [1,2,13,14] and y > 11: c = Color("57d4cb")
+						if tile == 93:
+							c = Color("963c51")
+							if x in range(2,14) and y in range(3,13): c = Color("e6d7b4") if x != 8 else Color("9c7958")
+							if y in [5,7,9] and x in [3,4,5,10,11,12]: c = Color("76614f")
+					92:
+						if (x/3+y/3*2)%4 == 0: c = Color("ffdc86")
 					3,25,28:
 						# Broad mineral planes with sparse seams, instead of white noise.
 						c = base * (0.93 + float((x/4*3+y/3*7)%5)*0.025)

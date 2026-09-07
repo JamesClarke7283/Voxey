@@ -22,6 +22,8 @@ func _init() -> void:
 			_recipe(Nodes.title(id), id, 1, patterns[kind], 3, "table")
 	_recipe("Furnace", Nodes.FURNACE, 1, [9,9,9,9,0,9,9,9,9], 3, "table")
 	_recipe("Chest", Nodes.CHEST, 1, [8,8,8,8,0,8,8,8,8], 3, "table")
+	_recipe("Polished deepslate",Nodes.POLISHED_DEEPSLATE,4,[Nodes.COBBLED_DEEPSLATE,Nodes.COBBLED_DEEPSLATE,Nodes.COBBLED_DEEPSLATE,Nodes.COBBLED_DEEPSLATE],2)
+	_recipe("Deepslate bricks",Nodes.DEEPSLATE_BRICKS,4,[Nodes.POLISHED_DEEPSLATE,Nodes.POLISHED_DEEPSLATE,Nodes.POLISHED_DEEPSLATE,Nodes.POLISHED_DEEPSLATE],2)
 	_recipe("Stone bricks", Nodes.BRICKS, 4, [3,3,3,3], 2)
 	_recipe("Bread", Nodes.BREAD, 1, [71,71,71,0,0,0,0,0,0], 3, "table")
 	_recipe("Bed", Nodes.BED_FOOT, 1, [75,75,75,8,8,8,0,0,0], 3, "table")
@@ -47,7 +49,10 @@ func _init() -> void:
 	_recipe("Ladder", Nodes.LADDER, 3, [Nodes.STICK,0,Nodes.STICK,Nodes.STICK,Nodes.STICK,Nodes.STICK,Nodes.STICK,0,Nodes.STICK], 3)
 	_recipe("Bookshelf", Nodes.BOOKSHELF, 1, [Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS,Nodes.BOOK,Nodes.BOOK,Nodes.BOOK,Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS], 3, "table")
 	_recipe("Paper", Nodes.PAPER, 3, [Nodes.SUGAR_CANE,Nodes.SUGAR_CANE,Nodes.SUGAR_CANE], 3, "table")
-	_recipe("Book", Nodes.BOOK, 1, [Nodes.PAPER,Nodes.PAPER,Nodes.PAPER,Nodes.LEATHER], 2)
+	_shapeless("Book", Nodes.BOOK, 1, [Nodes.PAPER,Nodes.PAPER,Nodes.PAPER,Nodes.LEATHER])
+	_shapeless("Writable book", Nodes.WRITABLE_BOOK, 1, [Nodes.BOOK,Nodes.FEATHER,Nodes.CHARCOAL])
+	_recipe("Enchanting table",Nodes.ENCHANTING_TABLE,1,[0,Nodes.BOOK,0,Nodes.DIAMOND,Nodes.OBSIDIAN,Nodes.DIAMOND,Nodes.OBSIDIAN,Nodes.OBSIDIAN,Nodes.OBSIDIAN],3,"table")
+	_recipe("Nether bricks",Nodes.NETHER_BRICKS,4,[Nodes.NETHERRACK,Nodes.NETHERRACK,Nodes.NETHERRACK,Nodes.NETHERRACK],2)
 	_shapeless("Pumpkin pie", Nodes.PUMPKIN_PIE, 1, [Nodes.PUMPKIN,Nodes.SUGAR,Nodes.EGG])
 	_recipe("Golden apple", Nodes.GOLDEN_APPLE, 1, [Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.APPLE,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD,Nodes.GOLD], 3, "table")
 	_recipe("Bow", Nodes.BOW, 1, [0,Nodes.STICK,Nodes.STRING,Nodes.STICK,0,Nodes.STRING,0,Nodes.STICK,Nodes.STRING], 3, "table")
@@ -98,13 +103,28 @@ func count_item(id: int) -> int:
 	return n
 
 # Return leftover quantity: callers can leave a physical drop if the bag is full.
-func add_item(id: int, amount: int = 1, wear: int = 0) -> int:
+func capacity(id: int, wear: int = 0, data: Dictionary = {}) -> int:
+	var available: int = 0
+	for slot in slots:
+		if slot.id == 0: available += Nodes.max_stack(id)
+		elif slot.id == id and slot.wear == wear and slot.get("data",{}) == data: available += Nodes.max_stack(id)-int(slot.count)
+	return available
+
+static func copy_data(to: Dictionary, source: Dictionary) -> void:
+	to.erase("data")
+	if source.id != 0 and not source.get("data",{}).is_empty(): to["data"] = source.data.duplicate(true)
+
+static func enchantment(slot: Dictionary, kind: String) -> int:
+	return int(slot.get("data",{}).get("enchantments",{}).get(kind,0)) if slot.id != 0 else 0
+
+func add_item(id: int, amount: int = 1, wear: int = 0, data: Dictionary = {}) -> int:
 	if id == 0 or amount <= 0: return 0
 	for pass_index in 2:
 		for slot in slots:
-			if (pass_index == 0 and slot.id == id and slot.wear == wear) or (pass_index == 1 and slot.id == 0):
+			if (pass_index == 0 and slot.id == id and slot.wear == wear and slot.get("data",{}) == data) or (pass_index == 1 and slot.id == 0):
 				var moved: int = mini(amount, Nodes.max_stack(id) - int(slot.count))
 				if moved <= 0: continue
+				copy_data(slot,{"id":id,"data":data})
 				slot.id = id
 				slot.wear = wear
 				slot.count += moved
@@ -122,7 +142,7 @@ func remove_item(id: int, amount: int = 1) -> bool:
 		var taken: int = mini(amount, int(slot.count))
 		slot.count -= taken
 		amount -= taken
-		if slot.count == 0: slot.id = 0; slot.wear = 0
+		if slot.count == 0: slot.id = 0; slot.wear = 0; slot.erase("data")
 		if amount == 0: break
 	changed.emit()
 	return true
@@ -130,12 +150,13 @@ func remove_item(id: int, amount: int = 1) -> bool:
 func consume_selected(amount: int = 1) -> void:
 	var slot: Dictionary = held()
 	slot.count = maxi(0, slot.count - amount)
-	if slot.count == 0: slot.id = 0; slot.wear = 0
+	if slot.count == 0: slot.id = 0; slot.wear = 0; slot.erase("data")
 	changed.emit()
 
 func damage_tool() -> bool:
 	var slot: Dictionary = held()
-	if not Nodes.is_tool_id(slot.id): return false
+	if Nodes.durability(slot.id) <= 0: return false
+	if randf() < float(enchantment(slot,"Unbreaking"))/(enchantment(slot,"Unbreaking")+1.0): return false
 	slot.wear += 1
 	if slot.wear >= Nodes.durability(slot.id):
 		consume_selected()
@@ -165,6 +186,18 @@ static func clean_slot(slot) -> Dictionary:
 	var id: int = Nodes.migrate(int(slot.get("id", 0)))
 	if not Nodes.exists(id) or id == Nodes.AIR: return {"id":0,"count":0,"wear":0}
 	var result: Dictionary = {"id":id, "count":clampi(int(slot.get("count",0)), 0, Nodes.max_stack(id)), "wear":maxi(0,int(slot.get("wear",0)))}
+	if slot.get("data") is Dictionary and result.count > 0:
+		var raw: Dictionary = slot.data
+		var metadata: Dictionary = {}
+		if id in [Nodes.WRITABLE_BOOK,Nodes.WRITTEN_BOOK]:
+			metadata["title"] = str(raw.get("title","Untitled")).left(64)
+			metadata["text"] = str(raw.get("text","")).left(12000)
+		if raw.get("enchantments") is Dictionary:
+			var ench: Dictionary = {}
+			for kind in ["Sharpness","Efficiency","Protection","Power","Unbreaking"]:
+				if raw.enchantments.has(kind): ench[kind] = clampi(int(raw.enchantments[kind]),1,3)
+			if not ench.is_empty(): metadata["enchantments"] = ench
+		if not metadata.is_empty(): result["data"] = metadata
 	if result.count == 0: result.id = 0; result.wear = 0
 	return result
 
@@ -225,7 +258,7 @@ func take_grid_result(station: String) -> Dictionary:
 	for slot in grid:
 		if slot.id == 0: continue
 		slot.count -= 1
-		if slot.count == 0: slot.id = 0; slot.wear = 0
+		if slot.count == 0: slot.id = 0; slot.wear = 0; slot.erase("data")
 	changed.emit()
 	return {"id":recipes[index].id,"count":recipes[index].count,"wear":0}
 
@@ -233,9 +266,9 @@ func grid_to_inventory() -> Array:
 	var overflow: Array = []
 	for slot in grid:
 		if slot.id == 0: continue
-		var rest: int = add_item(slot.id,slot.count,slot.wear)
-		if rest > 0: overflow.append({"id":slot.id,"count":rest,"wear":slot.wear})
-		slot.id = 0; slot.count = 0; slot.wear = 0
+		var rest: int = add_item(slot.id,slot.count,slot.wear,slot.get("data",{}))
+		if rest > 0: overflow.append({"id":slot.id,"count":rest,"wear":slot.wear,"data":slot.get("data",{}).duplicate(true)})
+		slot.id = 0; slot.count = 0; slot.wear = 0; slot.erase("data")
 	changed.emit()
 	return overflow
 

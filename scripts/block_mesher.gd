@@ -12,7 +12,9 @@ static func build(data: PackedByteArray) -> Array:
 				var id: int = data[(x+1) + (z+1)*18 + (y+1)*324]
 				if id == 0: continue
 				has_nodes = true
-				if Nodes.plant(id): _plant(outputs[0], Vector3(x,y,z), id)
+				if id == Nodes.NETHER_PORTAL: _portal(outputs[0],Vector3(x,y,z),data,Vector3i(x,y,z))
+				elif id == Nodes.ENCHANTING_TABLE: _enchanting_table(outputs[0],Vector3(x,y,z))
+				elif Nodes.plant(id): _plant(outputs[0], Vector3(x,y,z), id)
 				elif id == Nodes.TORCH: _torch(outputs[0], Vector3(x,y,z))
 				elif id == Nodes.LADDER: _ladder(outputs[0], Vector3(x,y,z), data, Vector3i(x,y,z))
 				elif id in [Nodes.BED_FOOT,Nodes.BED_HEAD]: _bed_half(outputs[0], Vector3(x,y,z), id, data, Vector3i(x,y,z))
@@ -34,12 +36,12 @@ static func build(data: PackedByteArray) -> Array:
 						p[u] += i
 						p[v] += j
 						var id: int = data[p.x + p.z*18 + p.y*324]
-						if id == 0 or Nodes.plant(id) or id == Nodes.TORCH or id == Nodes.LADDER or id in [Nodes.BED_FOOT,Nodes.BED_HEAD]: continue
+						if id == 0 or Nodes.plant(id) or id == Nodes.TORCH or id == Nodes.LADDER or id in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.NETHER_PORTAL,Nodes.ENCHANTING_TABLE]: continue
 						p[axis] += sign_dir
 						var neighbor: int = data[p.x + p.z*18 + p.y*324]
 						# A bed only fills the lower part of its cell. Keep the full
 						# neighbor face so the exposed floor/wall has no holes.
-						if neighbor == id or (not Nodes.transparent(neighbor) and neighbor not in [Nodes.BED_FOOT,Nodes.BED_HEAD]): continue
+						if neighbor == id or (not Nodes.transparent(neighbor) and neighbor not in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.ENCHANTING_TABLE]): continue
 						if id == Nodes.WATER and neighbor == Nodes.GLASS: continue
 						mask[i + j*16] = id
 				var j: int = 0
@@ -170,3 +172,29 @@ static func _bed_half(out: Array, p: Vector3, id: int, data: PackedByteArray, ce
 		else: a = p+Vector3(1,0,0); b = p+Vector3(0,0,0)
 		# Both Z faces use the opposite vertex order to the X faces.
 		_quad(out,[a,b,b+Vector3.UP*h,a+Vector3.UP*h],uv,Vector3(d.x,0,d.z),top_tile,frame,d.z != 0)
+
+static func _portal(out: Array, p: Vector3, data: PackedByteArray, cell: Vector3i) -> void:
+	var c: Vector3i = cell+Vector3i.ONE
+	var along_x: bool = data[c.x+1+c.z*18+c.y*324] == Nodes.NETHER_PORTAL or data[c.x-1+c.z*18+c.y*324] == Nodes.NETHER_PORTAL
+	var a: Vector3 = p+Vector3(0,0,0.5) if along_x else p+Vector3(0.5,0,0)
+	var b: Vector3 = a+(Vector3.RIGHT if along_x else Vector3.BACK)
+	var points: Array = [a,b,b+Vector3.UP,a+Vector3.UP]
+	var uv: Array = [Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)]
+	var normal: Vector3 = Vector3.FORWARD if along_x else Vector3.RIGHT
+	_quad(out,points,uv,normal,87,Color.WHITE,false)
+	_quad(out,points,uv,-normal,87,Color.WHITE,true)
+
+static func _art_box(out: Array, center: Vector3, extent: Vector3, side_tile: int, top_tile: int) -> void:
+	for face in 6:
+		var normal: Vector3 = [Vector3.RIGHT,Vector3.LEFT,Vector3.UP,Vector3.DOWN,Vector3.BACK,Vector3.FORWARD][face]
+		var right: Vector3 = [Vector3.FORWARD,Vector3.BACK,Vector3.RIGHT,Vector3.RIGHT,Vector3.RIGHT,Vector3.LEFT][face]
+		var up: Vector3 = normal.cross(right)
+		var points: Array = []
+		for corner in [Vector2(-1,-1),Vector2(1,-1),Vector2(1,1),Vector2(-1,1)]: points.append(center+(normal+right*corner.x+up*corner.y)*extent*0.5)
+		_quad(out,points,[Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)],normal,top_tile if face == 2 else side_tile,Color.WHITE,true)
+
+static func _enchanting_table(out: Array, p: Vector3) -> void:
+	_art_box(out,p+Vector3(0.5,0.31,0.5),Vector3(1,0.62,1),88,88)
+	# A hovering open book with a gilt spine and separate page blocks.
+	_art_box(out,p+Vector3(0.5,0.82,0.5),Vector3(0.66,0.08,0.45),8,93)
+	_art_box(out,p+Vector3(0.5,0.87,0.5),Vector3(0.035,0.035,0.46),49,49)

@@ -133,7 +133,7 @@ static func _bed_render_checks(suite: SceneTree, atlas: Image) -> void:
 		var mesh: ArrayMesh = Art.build_node_mesh(id)
 		var arrays: Array = mesh.surface_get_arrays(0)
 		suite.check(_outward(mesh),Nodes.title(id)+" faces outward on every side")
-		suite.check(arrays[Mesh.ARRAY_VERTEX].size() == 24 and arrays[Mesh.ARRAY_NORMAL].count(Vector3.DOWN) == 4,Nodes.title(id)+" has a closed mesh including its underside")
+		suite.check(arrays[Mesh.ARRAY_VERTEX].size() == 24 and Array(arrays[Mesh.ARRAY_NORMAL]).filter(func(n): return n.dot(Vector3.DOWN) > 0.999).size() == 4,Nodes.title(id)+" has a closed mesh including its underside")
 		var opaque: bool = true
 		var tile: int = Nodes.tile(id,2)
 		for y in 16:

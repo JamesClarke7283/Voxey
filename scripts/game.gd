@@ -27,6 +27,10 @@ var day_time: float = 0.30
 var daylight: float = 1.0
 var spawn_point := Vector3(8,35,8)
 var experience: float = 0.0
+var dimension: String = "overworld"
+var dimension_states: Dictionary = {}
+var portal_cooldown: float = 0.0
+var portal_time: float = 0.0
 var journal_step: int = 0
 var audio_enabled: bool = true
 var audio_players: Array = []
@@ -186,6 +190,13 @@ func _process(delta: float) -> void:
 	if state == "loading" and world.area_ready(world.target): _finish_loading()
 	if state != "title" and state != "loading": world.target = player.position
 	if playing():
+		portal_cooldown = maxf(0,portal_cooldown-delta)
+		if portal_cooldown <= 0 and world.node_at(Vector3i(player.position.floor())) == Nodes.NETHER_PORTAL:
+			portal_time += delta
+			if portal_time >= 1.0:
+				travel_dimension("overworld" if dimension == "nether" else "nether")
+				return
+		else: portal_time = 0.0
 		day_time += delta/1200.0
 		autosave += delta
 		spawn_timer += delta
@@ -207,6 +218,22 @@ func _process(delta: float) -> void:
 		if light.visible: visible_torches += 1
 
 func _update_day() -> void:
+	clouds.visible = dimension != "nether"
+	environment.environment.background_mode = Environment.BG_COLOR if dimension == "nether" else Environment.BG_SKY
+	environment.environment.fog_density = 0.035 if dimension == "nether" else 0.009
+	if dimension == "nether":
+		daylight = 0.1
+		sunlight.light_energy = 0.05
+		environment.environment.background_color = Color("351619")
+		var nether_sky: ProceduralSkyMaterial = environment.environment.sky.sky_material
+		nether_sky.sky_top_color = Color("291115")
+		nether_sky.sky_horizon_color = Color("58282b")
+		nether_sky.ground_horizon_color = Color("58282b")
+		nether_sky.ground_bottom_color = Color("291115")
+		environment.environment.fog_light_color = Color("58282b")
+		environment.environment.ambient_light_color = Color("dc8b70")
+		environment.environment.ambient_light_energy = 0.65
+		return
 	var phase: float = fposmod(day_time,1.0)
 	daylight = clampf(sin((phase-0.05)*TAU)*1.6+0.15,0.05,1.0)
 	sunlight.rotation_degrees.x = -phase*360+20
@@ -215,10 +242,16 @@ func _update_day() -> void:
 	environment.environment.ambient_light_energy = lerpf(0.20,0.48,daylight)
 	environment.environment.ambient_light_color = Color("7784b1").lerp(Color("c2d6bd"),daylight)
 	var sky_mat: ProceduralSkyMaterial = environment.environment.sky.sky_material
+	sky_mat.ground_bottom_color = Color("547461")
 	sky_mat.sky_top_color = Color("101c35").lerp(Color("6cabbf"),daylight)
 	sky_mat.sky_horizon_color = Color("293950").lerp(Color("d2dac0"),daylight)
 	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
 	environment.environment.fog_light_color = sky_mat.sky_horizon_color
+	if state not in ["title","loading"]:
+		var depth: float = world.generator.terrain_height(floori(player.position.x),floori(player.position.z))-player.position.y
+		var underground: float = clampf((depth-4.0)/12.0,0,1)
+		environment.environment.ambient_light_energy = lerpf(environment.environment.ambient_light_energy,0.06,underground)
+		environment.environment.fog_light_color = sky_mat.sky_horizon_color.lerp(Color("141b20"),underground)
 
 func day_number() -> int:
 	return floori(day_time)+1
@@ -248,15 +281,18 @@ func start_new(seed_text: String, display_name: String = "New world", mode: Stri
 	if active_world_id.is_empty(): toast("Couldn't create the world. Check your saves folder."); return
 	gamemode = mode if mode in ["survival","creative"] else "survival"
 	pending_save = {}
+	dimension = "overworld"
+	dimension_states.clear()
+	portal_cooldown = 0
 	inventory = _reset_inventory()
 	day_time = 0.30
 	experience = 0
 	journal_step = 0
 	player.health=20; player.hunger=20; player.breath=10
-	for slot in player.armor_slots: slot.id=0; slot.count=0; slot.wear=0
+	for slot in player.armor_slots: slot.id=0; slot.count=0; slot.wear=0; slot.erase("data")
 	player.velocity=Vector3.ZERO
 	_clear_entities()
-	if world.seed_value != seed_number or not world.edits.is_empty(): _replace_world(seed_number)
+	if world.dimension != dimension or world.seed_value != seed_number or not world.edits.is_empty(): _replace_world(seed_number)
 	spawn_point = Vector3(8,world.generator.terrain_height(8,8)+2,8)
 	world.target = spawn_point
 	state = "loading"
@@ -278,7 +314,7 @@ func _replace_world(seed_number: int) -> void:
 	world.free()
 	world = VoxelWorld.new()
 	world.name="World"
-	world.configure(seed_number,atlas)
+	world.configure(seed_number,atlas,dimension)
 	world.active=false
 	add_child(world)
 	position_menu_camera()
@@ -291,17 +327,35 @@ func _finish_loading() -> void:
 		spawn_point=Vector3(spawn_data[0],spawn_data[1],spawn_data[2])
 		player.rotation.y=float(pending_save.get("yaw",0))
 		player.camera.rotation.x=float(pending_save.get("pitch",0))
-		if player.health<=0: player.health=20; player.hunger=20; player.position=spawn_point
+		if player.health<=0:
+			player.health=20; player.hunger=20
+			if dimension == "nether":
+				# Restore persisted drops before taking the player home.
+				pending_save["respawn_overworld"] = true
+			else: player.position=spawn_point
 		if world.intersects(player.position): player.position=_safe_spawn(player.position)
 		for entry in pending_save.get("drops",[]):
 			var pos: Array = entry.position
-			spawn_drop(Vector3(pos[0],pos[1],pos[2]),Nodes.migrate(int(entry.id)),int(entry.count),int(entry.get("wear",0)))
+			var restored_drop := spawn_drop(Vector3(pos[0],pos[1],pos[2]),Nodes.migrate(int(entry.id)),int(entry.count),int(entry.get("wear",0)),Inventory.clean_slot(entry).get("data",{}),float(entry.get("age",0)))
+			if restored_drop != null: restored_drop.pickup_delay = float(entry.get("pickup_delay",0.6))
+		for entry in pending_save.get("arrows",[]):
+			var pos: Array = entry.position
+			var shot := spawn_arrow(Vector3(pos[0],pos[1],pos[2]),Vector3.ZERO)
+			shot.stuck = true; shot.life = float(entry.get("life",0))
+			var rot: Array = entry.get("rotation",[0,0,0])
+			shot.rotation = Vector3(rot[0],rot[1],rot[2])
+		if pending_save.get("respawn_overworld",false):
+			travel_dimension("overworld",true)
+			return
+		if pending_save.get("arrival_portal",false): _arrival_portal()
 		pending_save={}
 	else:
 		spawn_point=_safe_spawn(spawn_point)
 		player.position=spawn_point
 		player.rotation.y=0.3
 		player.camera.rotation.x=-0.12
+	for p in world.edits:
+		if world.edits[p] in [Nodes.TORCH,Nodes.GLOWSTONE,Nodes.SHROOMLIGHT]: add_torch(p)
 	player.velocity=Vector3.ZERO
 	player.flying=false
 	player.camera.make_current()
@@ -312,18 +366,23 @@ func _finish_loading() -> void:
 	MOD_ENTRY.fire("on_world_entered",[world_name,world.seed_value])
 
 func _safe_spawn(near: Vector3) -> Vector3:
+	if near.y < 0:
+		for radius in range(0,12):
+			for offset in [Vector3(radius,0,0),Vector3(-radius,0,0),Vector3(0,0,radius),Vector3(0,0,-radius)]:
+				var cave_pos: Vector3 = world.cave_spawn(near+offset,16)
+				if not is_inf(cave_pos.x): return cave_pos
 	for radius in range(0,12):
 		for offset in [Vector2i(radius,0),Vector2i(-radius,0),Vector2i(0,radius),Vector2i(0,-radius)]:
 			var x: int = floori(near.x)+offset.x
 			var z: int = floori(near.z)+offset.y
 			if not world.loaded_at(Vector3(x,0,z)): continue
-			for y in range(59,1,-1):
+			for y in range(world.generator.max_y()-3,world.generator.min_y(),-1):
 				var id: int = world.node_at(Vector3i(x,y,z))
-				if id==Nodes.WATER: break
+				if id in [Nodes.WATER,Nodes.LAVA]: break
 				if Nodes.solid(id) and id!=Nodes.LEAVES and id!=Nodes.LOG:
 					var pos := Vector3(x+0.5,y+1.01,z+0.5)
 					if not world.intersects(pos): return pos
-					break
+					if dimension != "nether": break
 	return Vector3(8.5,world.generator.terrain_height(8,8)+8,8.5)
 
 func resume() -> void:
@@ -366,6 +425,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode==KEY_F11: toggle_fullscreen(); return
 		if state in ["title","loading"]: return
+		if state in ["book","enchanting"]:
+			if event.physical_keycode == KEY_ESCAPE: resume()
+			return
 		if state == "console":
 			if event.physical_keycode == KEY_ESCAPE: resume()
 			return
@@ -381,17 +443,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		match event.physical_keycode:
 			KEY_ESCAPE:
 				if state=="playing": pause()
-				elif state in ["paused","inventory"]: resume()
+				elif state == "inventory": close_inventory()
+				elif state == "paused": resume()
 			KEY_E:
 				if state=="playing": open_inventory()
 				elif state=="inventory": resume()
 			KEY_F3: hud.debug=not hud.debug
 			KEY_F5: save_game(); toast("World saved")
 			KEY_Q:
-				if playing() and inventory.held().id!=0:
-					var slot: Dictionary=inventory.held()
-					spawn_drop(player.camera.global_position-player.camera.global_basis.z,slot.id,1,slot.wear)
-					inventory.consume_selected()
+				if playing(): drop_stack(inventory.held(),1)
 		if playing() and event.physical_keycode>=KEY_1 and event.physical_keycode<=KEY_9:
 			inventory.selected=event.physical_keycode-KEY_1
 			hud.refresh_slots()
@@ -434,13 +494,14 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.SEEDS,1+randi()%2)
 		elif id==Nodes.GRAVEL and randf()<0.25:
 			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.FLINT)
+		elif id in [Nodes.LAPIS_ORE,Nodes.DEEP_LAPIS_ORE]: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.LAPIS,randi_range(4,9))
 		elif id == Nodes.CLAY: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.CLAY_BALL,4)
 		elif id!=Nodes.GLASS: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.drop(id))
-		if id in [Nodes.COAL_ORE,Nodes.IRON_ORE,Nodes.DIAMOND_ORE]: experience += 1
+		if Nodes.DEEP_ORES.has(id) or id in [Nodes.COAL_ORE,Nodes.IRON_ORE,Nodes.DIAMOND_ORE,Nodes.LAPIS_ORE,Nodes.NETHER_QUARTZ_ORE]: experience += 1
 		if id==Nodes.LOG: achievements.award("first_log")
 		if id==Nodes.STONE: achievements.award("mine_stone")
-		if id==Nodes.DIAMOND_ORE: achievements.award("diamonds")
-	for slot in world.detach_station(p,partner): spawn_drop(Vector3(p)+Vector3.ONE*0.5,slot.id,slot.count,slot.wear)
+		if id in [Nodes.DIAMOND_ORE,Nodes.DEEP_DIAMOND_ORE]: achievements.award("diamonds")
+	for slot in world.detach_station(p,partner): spawn_drop(Vector3(p)+Vector3.ONE*0.5,slot.id,slot.count,slot.wear,slot.get("data",{}))
 	remove_torch(p)
 	var above: Vector3i=p+Vector3i.UP
 	var upper: int=world.node_at(above)
@@ -465,7 +526,7 @@ func _bed_partner(p: Vector3i, id: int) -> Vector3i:
 # Unsupported sand and gravel become falling entities, then the node above is
 # checked in turn so a whole column comes down together.
 func settle(p: Vector3i) -> void:
-	for step in 64:
+	for step in world.generator.max_y()-world.generator.min_y():
 		var id: int = world.node_at(p)
 		if not Nodes.falls(id) or Nodes.solid(world.node_at(p+Vector3i.DOWN)): return
 		if not world.set_node(p,Nodes.AIR): return
@@ -507,7 +568,7 @@ func explode(center: Vector3, radius: float, source: Node = null) -> void:
 					if other != p and world.node_at(other) in [Nodes.BED_FOOT,Nodes.BED_HEAD]: world.set_node(other,Nodes.AIR)
 				var partner: Vector3i = world.chest_partner(p) if id == Nodes.CHEST else p
 				if not world.set_node(p,Nodes.AIR): continue
-				for slot in world.detach_station(p,partner): spawn_drop(Vector3(p)+Vector3.ONE*0.5,slot.id,slot.count,slot.wear)
+				for slot in world.detach_station(p,partner): spawn_drop(Vector3(p)+Vector3.ONE*0.5,slot.id,slot.count,slot.wear,slot.get("data",{}))
 				remove_torch(p)
 				if randf() < 0.3: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.drop(id))
 				removed.append(p)
@@ -536,11 +597,13 @@ func _clear_entities() -> void:
 	for child in drops.get_children(): child.queue_free()
 	for child in entities.get_children(): child.queue_free()
 
-func spawn_drop(pos: Vector3, id: int, amount: int = 1, wear: int = 0) -> void:
-	if amount<=0 or id==0: return
+func spawn_drop(pos: Vector3, id: int, amount: int = 1, wear: int = 0, metadata: Dictionary = {}, age: float = 0.0) -> ItemDrop:
+	if amount<=0 or id==0: return null
 	var drop := ItemDrop.new()
+	drop.data=metadata.duplicate(true); drop.age=age
 	drop.game=self; drop.item_id=id; drop.amount=amount; drop.wear=wear; drop.position=pos
 	drops.add_child(drop)
+	return drop
 
 func target_mob() -> Creature:
 	var origin: Vector3=player.camera.global_position
@@ -556,17 +619,19 @@ func target_mob() -> Creature:
 
 func _spawn_creature() -> void:
 	if creatures.get_child_count()>=12: return
-	var hostile: bool=daylight<0.35
+	var underground: bool = dimension == "overworld" and player.position.y < world.generator.terrain_height(floori(player.position.x),floori(player.position.z))-6
+	var hostile: bool=daylight<0.35 or underground
 	var angle: float=randf()*TAU
 	var pos: Vector3=player.position+Vector3(cos(angle),0,sin(angle))*randf_range(14,32)
 	if not world.loaded_at(pos): return
-	pos=_safe_spawn(pos)
+	pos = world.cave_spawn(pos) if underground or dimension == "nether" else _safe_spawn(pos)
+	if is_inf(pos.x): return
 	if pos.distance_to(player.position)<10: return
 	if hostile:
 		for p in torch_lights:
 			if Vector3(p).distance_to(pos)<10: return
 	elif creatures.get_child_count()>=7: return
-	var pool: Array = Creature.HOSTILE if hostile else Creature.PASSIVE
+	var pool: Array = ["piglin","magma_cube","magma_cube"] if dimension == "nether" else (Creature.HOSTILE if hostile else Creature.PASSIVE)
 	var biome: String = world.generator.biome(int(pos.x),int(pos.z))
 	if not hostile and "desert" in biome and randf() < 0.6: return
 	spawn_creature(pool[randi()%pool.size()],pos)
@@ -585,6 +650,9 @@ func add_torch(p: Vector3i) -> void:
 	torch_lights[p]=light
 
 func sleep_at(p: Vector3i) -> void:
+	if dimension == "nether":
+		toast("Beds cannot set your spawn in the Nether.")
+		return
 	spawn_point=_safe_spawn(Vector3(p)+Vector3(1,0,0))
 	if daylight>0.4: toast("Spawn set. Come back at night to sleep."); return
 	for mob in creatures.get_children():
@@ -599,11 +667,11 @@ func die() -> void:
 	hud.return_cursor()
 	if is_instance_valid(controls): controls.hide_all()
 	for slot in inventory.slots:
-		if slot.id: spawn_drop(player.position+Vector3.UP,slot.id,slot.count,slot.wear)
-		slot.id=0; slot.count=0; slot.wear=0
+		if slot.id: spawn_drop(player.position+Vector3.UP,slot.id,slot.count,slot.wear,slot.get("data",{}))
+		slot.id=0; slot.count=0; slot.wear=0; slot.erase("data")
 	for slot in player.armor_slots:
-		if slot.id: spawn_drop(player.position+Vector3.UP,slot.id,1,slot.wear)
-		slot.id=0; slot.count=0; slot.wear=0
+		if slot.id: spawn_drop(player.position+Vector3.UP,slot.id,1,slot.wear,slot.get("data",{}))
+		slot.id=0; slot.count=0; slot.wear=0; slot.erase("data")
 	state="dead"
 	world.active=false
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
@@ -612,6 +680,9 @@ func die() -> void:
 
 func respawn() -> void:
 	player.health=20; player.hunger=20; player.breath=10; player.velocity=Vector3.ZERO
+	if dimension == "nether":
+		travel_dimension("overworld",true)
+		return
 	player.position=spawn_point
 	world.target=spawn_point
 	if world.loaded_at(spawn_point): player.position=_safe_spawn(spawn_point); resume()
@@ -664,6 +735,8 @@ func _resize_ui() -> void:
 		"new_world": hud.show_new_world()
 		"console": hud.show_console()
 		"loading": hud.show_loading()
+		"book": hud.show_book(hud.book_index)
+		"enchanting": hud.show_enchanting(hud.enchanting_pos)
 	if touch and state=="playing" and is_instance_valid(controls): controls.show_game_controls()
 
 func has_save() -> bool:
@@ -674,15 +747,9 @@ func save_game(path: String = "") -> bool:
 	var world_save: bool = path.is_empty()
 	if world_save: path=saves.save_path(active_world_id)
 	if path.is_empty(): return false
-	var changes: Array=[]
-	for p in world.edits: changes.append([p.x,p.y,p.z,world.edits[p]])
-	var growing: Array=[]
-	for p in world.growth: growing.append([p.x,p.y,p.z,world.growth[p]])
-	var dropped: Array=[]
-	for drop in drops.get_children():
-		if drop.is_queued_for_deletion(): continue
-		dropped.append({"position":[drop.position.x,drop.position.y,drop.position.z],"id":drop.item_id,"count":drop.amount,"wear":drop.wear})
-	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":changes,"growth":growing,"stations":world.stations,"inventory":inventory.slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"armor":player.armor_slots,"time":day_time,"experience":experience,"journal":journal_step,"drops":dropped,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
+	var snapshot: Dictionary = dimension_snapshot()
+	dimension_states[dimension] = snapshot
+	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":snapshot.edits,"growth":snapshot.growth,"stations":snapshot.stations,"inventory":inventory.slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"armor":player.armor_slots,"time":day_time,"experience":experience,"journal":journal_step,"drops":snapshot.drops,"arrows":snapshot.arrows,"dimension":dimension,"dimensions":dimension_states,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
 	var file := FileAccess.open(path+".tmp",FileAccess.WRITE)
 	if file==null: toast("Couldn't save the world: storage is unavailable."); return false
 	file.store_string(JSON.stringify(data))
@@ -735,6 +802,10 @@ func load_world_data(data: Dictionary) -> void:
 	world_name=String(data.get("name","New world"))
 	gamemode=String(data.get("gamemode","survival"))
 	if gamemode not in ["survival","creative"]: gamemode="survival"
+	dimension = String(data.get("dimension","overworld"))
+	if dimension not in ["overworld","nether"]: dimension = "overworld"
+	dimension_states = data.get("dimensions",{}).duplicate(true)
+	portal_cooldown = 4.0
 	_clear_entities()
 	_replace_world(int(data.seed))
 	for entry in data.edits:
@@ -766,7 +837,7 @@ func load_world_data(data: Dictionary) -> void:
 	world.radius=clampi(int(preferences.get("distance",4)),2,6)
 	player.sensitivity=clampf(float(preferences.get("sensitivity",0.0022)),0.0006,0.005)
 	audio_enabled=bool(preferences.get("audio",true))
-	var load_position: Array=data.get("spawn",data.position) if player.health<=0 else data.position
+	var load_position: Array=data.get("spawn",data.position) if player.health<=0 and dimension == "overworld" else data.position
 	world.target=Vector3(load_position[0],load_position[1],load_position[2])
 	for p in world.edits:
 		if world.edits[p] in [Nodes.TORCH,Nodes.GLOWSTONE]: add_torch(p)
@@ -984,7 +1055,7 @@ func execute_command(command: String) -> String:
 		"gamemode":
 			if parts.size()!=2 or not set_gamemode(parts[1].to_lower()): response="Usage: /gamemode survival | creative"
 			else: response="Game mode set to "+gamemode.capitalize()+"."
-		"help": response="/gamemode survival | creative  ·  /time day | night  ·  /seed  ·  /save  ·  /spawnpoint\n/give <item> [count]  ·  /spawn <creature>  ·  /tp <x> <y> <z>  ·  /heal  ·  /killmobs\nCreative: F or double Space toggles flight. Space rises; Shift descends."
+		"help": response="/gamemode survival | creative  ·  /time day | night  ·  /seed  ·  /save  ·  /spawnpoint\n/give <item> [count]  ·  /spawn <creature>  ·  /tp <x> <y> <z>  ·  /heal  ·  /killmobs\n/dimension overworld | nether  ·  /xp <points>\nCreative: F or double Space toggles flight. Space rises; Shift descends."
 		"seed": response="World seed: "+str(world.seed_value)
 		"save": response="World saved to "+saves.save_path(active_world_id) if save_game() else "The world could not be saved."
 		"time":
@@ -992,7 +1063,15 @@ func execute_command(command: String) -> String:
 			else:
 				day_time=floorf(day_time)+(0.3 if parts[1]=="day" else 0.7)
 				response="Time set to "+parts[1]+"."
-		"spawnpoint": spawn_point=player.position; response="Spawn point set."
+		"spawnpoint":
+			if dimension == "nether": response="Set your spawn in the Overworld."
+			else: spawn_point=player.position; response="Spawn point set."
+		"dimension":
+			if parts.size() != 2 or parts[1] not in ["overworld","nether"]: response="Usage: /dimension overworld | nether"
+			else: travel_dimension(parts[1]); response="Entering "+parts[1].capitalize()+"."
+		"xp":
+			if parts.size() != 2 or not parts[1].is_valid_int(): response="Usage: /xp <points>"
+			else: experience=maxf(0,experience+int(parts[1])); response="XP level %d" % xp_level()
 		"give":
 			var id: int=Nodes.lookup(parts[1]) if parts.size()>=2 else 0
 			if parts.size()<2: response="Usage: /give <item> [count]   e.g. /give diamond_pickaxe or /give iron_ingot 16"
@@ -1036,3 +1115,159 @@ func teleport(destination: Vector3) -> void:
 	world.target=destination
 	state="loading"
 	hud.show_loading()
+
+func dimension_snapshot() -> Dictionary:
+	var changes: Array = []
+	for p in world.edits: changes.append([p.x,p.y,p.z,world.edits[p]])
+	var growing: Array = []
+	for p in world.growth: growing.append([p.x,p.y,p.z,world.growth[p]])
+	var dropped: Array = []
+	for drop in drops.get_children():
+		if not drop.is_queued_for_deletion(): dropped.append({"position":[drop.position.x,drop.position.y,drop.position.z],"id":drop.item_id,"count":drop.amount,"wear":drop.wear,"data":drop.data.duplicate(true),"age":drop.age,"pickup_delay":drop.pickup_delay})
+	var arrows: Array = []
+	for entity in entities.get_children():
+		if entity is Arrow and entity.stuck and not entity.is_queued_for_deletion():
+			arrows.append({"position":[entity.position.x,entity.position.y,entity.position.z],"rotation":[entity.rotation.x,entity.rotation.y,entity.rotation.z],"life":entity.life})
+	return {"edits":changes,"growth":growing,"stations":world.stations.duplicate(true),"drops":dropped,"arrows":arrows,"position":[player.position.x,player.position.y,player.position.z]}
+
+func travel_dimension(destination: String, respawning: bool = false) -> void:
+	if destination == dimension or destination not in ["overworld","nether"]: return
+	hud.return_cursor()
+	dimension_states[dimension] = dimension_snapshot()
+	var arrival: Vector3 = player.position*Vector3(0.125,1,0.125) if destination == "nether" else player.position*Vector3(8,1,8)
+	if respawning: arrival = spawn_point
+	var seed_number: int = world.seed_value
+	var render_radius: int = world.radius
+	dimension = destination
+	_clear_entities()
+	_replace_world(seed_number)
+	world.radius = render_radius
+	var saved: Dictionary = dimension_states.get(destination,{})
+	for entry in saved.get("edits",[]): world.edits[Vector3i(entry[0],entry[1],entry[2])] = int(entry[3])
+	for entry in saved.get("growth",[]): world.growth[Vector3i(entry[0],entry[1],entry[2])] = float(entry[3])
+	world.stations = saved.get("stations",{}).duplicate(true)
+	arrival.y = world.generator.terrain_height(int(arrival.x),int(arrival.z))+1.01 if not respawning else arrival.y
+	pending_save = {"position":[arrival.x,arrival.y,arrival.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"drops":saved.get("drops",[]),"arrows":saved.get("arrows",[]),"arrival_portal":not respawning}
+	world.target = arrival
+	player.velocity = Vector3.ZERO
+	portal_time = 0.0
+	portal_cooldown = 4.0
+	state = "loading"
+	hud.show_loading()
+
+func _arrival_portal() -> void:
+	# Reuse a nearby portal so returning travel does not carve up existing builds.
+	var closest := Vector3.INF
+	var distance: float = 32.0
+	for p in world.edits:
+		if world.edits[p] != Nodes.NETHER_PORTAL or not world.loaded_at(Vector3(p)): continue
+		if world.node_at(p+Vector3i.DOWN) != Nodes.OBSIDIAN: continue
+		var point: Vector3 = Vector3(p)+Vector3(0.5,0.01,0.5)
+		if point.distance_to(player.position) < distance:
+			distance = point.distance_to(player.position); closest = point
+	if not is_inf(closest.x): player.position = closest; return
+	var base := Vector3i(floori(player.position.x),clampi(floori(player.position.y),15,42),floori(player.position.z))
+	for x in range(-2,4):
+		for z in range(-2,3):
+			world.set_node(base+Vector3i(x,-1,z),Nodes.OBSIDIAN)
+			for y in range(0,4): world.set_node(base+Vector3i(x,y,z),Nodes.AIR)
+	for x in range(-1,3):
+		for y in range(-1,4):
+			world.set_node(base+Vector3i(x,y,0),Nodes.OBSIDIAN if x in [-1,2] or y in [-1,3] else Nodes.AIR)
+	world.ignite_portal(base)
+	player.position = Vector3(base)+Vector3(0.5,0.01,0.5)
+
+func xp_level() -> int:
+	var level: int = 0
+	var remaining: float = experience
+	while remaining >= 7+level*2:
+		remaining -= 7+level*2
+		level += 1
+	return level
+
+func xp_progress() -> float:
+	var level: int = xp_level()
+	return (experience-float(level*level+6*level))/(7+2*level)
+
+func bookshelf_power(p: Vector3i) -> int:
+	var count: int = 0
+	for x in range(-2,3):
+		for z in range(-2,3):
+			if maxi(absi(x),absi(z)) != 2: continue
+			for y in 2:
+				var gap := Vector3i(roundi(x*0.5),y,roundi(z*0.5))
+				if world.node_at(p+Vector3i(x,y,z)) == Nodes.BOOKSHELF and world.node_at(p+gap) == Nodes.AIR: count += 1
+	return mini(15,count)
+
+func enchant_item(index: int, tier: int, p: Vector3i) -> bool:
+	if index < 0 or index >= inventory.slots.size() or tier < 1 or tier > 3 or world.node_at(p) != Nodes.ENCHANTING_TABLE: return false
+	var slot: Dictionary = inventory.slots[index]
+	var kind: String = ""
+	if Nodes.is_tool_id(slot.id): kind = "Sharpness" if Nodes.tool_kind(slot.id) == 3 else "Efficiency"
+	elif Nodes.is_armor(slot.id): kind = "Protection"
+	elif slot.id == Nodes.BOW: kind = "Power"
+	else: return false
+	if not slot.get("data",{}).get("enchantments",{}).is_empty(): toast("This item is already enchanted."); return false
+	var shelves: int = bookshelf_power(p)
+	var required: int = [1,10,30][tier-1]
+	if shelves < [0,5,15][tier-1]: toast("More bookshelves are needed, with an air gap around the table."); return false
+	if gamemode != "creative":
+		if xp_level() < required or inventory.count_item(Nodes.LAPIS) < tier: toast("You need level %d and %d lapis lazuli." % [required,tier]); return false
+		var level: int = xp_level()
+		inventory.remove_item(Nodes.LAPIS,tier)
+		experience -= float(level*level+6*level-(level-tier)*(level-tier)-6*(level-tier))
+	slot["data"] = {"enchantments":{kind:tier,"Unbreaking":tier}}
+	inventory.changed.emit()
+	sound("craft")
+	toast("%s %d · Unbreaking %d" % [kind,tier,tier])
+	return true
+
+func open_enchanting(p: Vector3i) -> void:
+	state = "enchanting"; world.active = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if is_instance_valid(controls): controls.hide_all()
+	hud.show_enchanting(p)
+
+func open_book() -> void:
+	if inventory.held().id not in [Nodes.WRITABLE_BOOK,Nodes.WRITTEN_BOOK]: return
+	state = "book"; world.active = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if is_instance_valid(controls): controls.hide_all()
+	hud.show_book(inventory.selected)
+
+# All manual drops use the same metadata-preserving transaction and throw.
+func drop_stack(slot: Dictionary, amount: int = 1) -> bool:
+	if slot.get("id",0) == 0 or amount <= 0: return false
+	var count: int = mini(amount,int(slot.count))
+	var forward: Vector3 = -player.camera.global_basis.z
+	var origin: Vector3 = player.position+Vector3.UP*1.2
+	var ahead: Vector3 = origin+forward*0.4
+	if not world.intersects(ahead,0.1,0.2): origin = ahead
+	var drop := spawn_drop(origin,int(slot.id),count,int(slot.wear),slot.get("data",{}))
+	if drop == null: return false
+	drop.velocity = forward*5.0+Vector3.UP*1.5
+	drop.pickup_delay = 1.5
+	slot.count -= count
+	if slot.count == 0: slot.clear(); slot.merge({"id":0,"count":0,"wear":0})
+	inventory.changed.emit()
+	return true
+
+func close_inventory() -> void:
+	if hud.cursor.id != 0 and hud.pointer_outside_inventory(): hud.drop_cursor(false)
+	resume()
+
+func _input(event: InputEvent) -> void:
+	if state != "inventory": return
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.physical_keycode == KEY_ESCAPE:
+			close_inventory()
+			get_viewport().set_input_as_handled()
+		elif event.physical_keycode == KEY_Q:
+			var focused: Control = get_viewport().gui_get_focus_owner()
+			if focused is LineEdit or focused is TextEdit: return
+			hud.drop_hovered_one()
+			get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton and event.pressed and hud.cursor.id != 0 and hud.pointer_outside_inventory():
+		if event.button_index in [MOUSE_BUTTON_LEFT,MOUSE_BUTTON_RIGHT]:
+			hud.drop_cursor(event.button_index == MOUSE_BUTTON_RIGHT)
+			get_viewport().set_input_as_handled()

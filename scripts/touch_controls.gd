@@ -132,10 +132,7 @@ func show_game_controls() -> void:
 	chat.position = Vector2(column_x,top+132)
 	button_box.add_child(chat)
 	var drop := _touch_button("↓",func():
-		if game.inventory.held().id!=0:
-			var slot: Dictionary=game.inventory.held()
-			game.spawn_drop(game.player.camera.global_position-game.player.camera.global_basis.z,slot.id,1,slot.wear)
-			game.inventory.consume_selected())
+		if game.playing(): game.drop_stack(game.inventory.held(),1))
 	drop.custom_minimum_size = Vector2(52,52)
 	drop.position = Vector2(column_x,top+198)
 	button_box.add_child(drop)

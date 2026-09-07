@@ -9,6 +9,7 @@ var wear: int = 0:
 	set(value): wear = value; queue_redraw()
 var selected: bool = false:
 	set(value): selected = value; queue_redraw()
+var enchanted: bool = false
 var show_slot: bool = true
 var number: String = ""
 
@@ -42,6 +43,9 @@ func _draw() -> void:
 		var extent: float = roundf(minf(size.x,size.y)*0.72/16.0)*16.0
 		if extent < 16: extent = 16
 		draw_texture_rect(ItemArt.texture(item_id),Rect2((center-Vector2.ONE*extent*0.5).floor(),Vector2.ONE*extent),false)
+	if enchanted:
+		draw_line(Vector2(7,7),Vector2(size.x-7,7),Color("bb81e8"),2)
+		draw_string(ThemeDB.fallback_font,Vector2(size.x-16,19),"✦",HORIZONTAL_ALIGNMENT_LEFT,-1,15,Color("dcb5ff"))
 	if count > 1:
 		draw_string(ThemeDB.fallback_font,Vector2(size.x-8,size.y-7)-Vector2(str(count).length()*9,0),str(count),HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color("f3efda"))
 	if Nodes.durability(item_id) > 0 and wear > 0:

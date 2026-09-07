@@ -42,7 +42,7 @@ static func texture(id: int) -> Texture2D:
 	elif id in [Nodes.GOLD_NUGGET,Nodes.IRON_NUGGET]:
 		_polygon(img,[[6,4],[10,3],[13,6],[11,11],[7,13],[3,10],[4,6]],base)
 		img.fill_rect(Rect2i(6,5,3,2),base.lightened(0.45))
-	elif id in [Nodes.COAL,Nodes.CHARCOAL,Nodes.FLINT,Nodes.DIAMOND,Nodes.CLAY_BALL,Nodes.SNOWBALL]:
+	elif id in [Nodes.COAL,Nodes.CHARCOAL,Nodes.FLINT,Nodes.DIAMOND,Nodes.CLAY_BALL,Nodes.SNOWBALL,Nodes.LAPIS,Nodes.QUARTZ]:
 		_polygon(img,[[5,2],[10,1],[14,5],[13,11],[9,14],[3,13],[1,8]],base)
 		_polygon(img,[[5,3],[10,2],[12,5],[7,7],[3,8]],base.lightened(0.23))
 		_polygon(img,[[8,8],[13,6],[11,11],[7,13]],base.darkened(0.22))
@@ -78,11 +78,11 @@ static func texture(id: int) -> Texture2D:
 		_line(img,Vector2(4,2),Vector2(4,14),Color("ded7bb"))
 		for pair in [[4,2,9,4],[9,4,12,8],[12,8,9,12],[9,12,4,14]]:
 			_line(img,Vector2(pair[0],pair[1]),Vector2(pair[2],pair[3]),Color("a87b48"),2)
-	elif id in [Nodes.BUCKET,Nodes.MILK_BUCKET,Nodes.WATER_BUCKET]:
+	elif id in [Nodes.BUCKET,Nodes.MILK_BUCKET,Nodes.WATER_BUCKET,Nodes.LAVA_BUCKET]:
 		_polygon(img,[[2,5],[14,5],[12,14],[4,14]],Color("aab7b8"))
-		_polygon(img,[[3,5],[5,3],[11,3],[13,5],[11,7],[5,7]],Color("495d65") if id == Nodes.BUCKET else (Color("69afd1") if id == Nodes.WATER_BUCKET else Color("f3edd9")))
+		_polygon(img,[[3,5],[5,3],[11,3],[13,5],[11,7],[5,7]],Color("495d65") if id == Nodes.BUCKET else (Color("69afd1") if id == Nodes.WATER_BUCKET else (Color("f17b2c") if id == Nodes.LAVA_BUCKET else Color("f3edd9"))))
 		_line(img,Vector2(5,9),Vector2(6,12),Color("e2e8df"))
-	elif id in [Nodes.PAPER,Nodes.BOOK]:
+	elif id in [Nodes.PAPER,Nodes.BOOK,Nodes.WRITABLE_BOOK,Nodes.WRITTEN_BOOK]:
 		_polygon(img,[[3,2],[12,1],[14,12],[5,14],[2,12]],base)
 		_polygon(img,[[5,3],[11,2],[12,10],[5,12]],Color("f2e5c6"))
 		for y in [5,7,9]: _line(img,Vector2(6,y),Vector2(10,y-1),Color("bdba9e"))

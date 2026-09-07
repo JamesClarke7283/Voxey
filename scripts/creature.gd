@@ -4,8 +4,10 @@ extends Node3D
 # Every mob shares one controller. KINDS describes the differences: shape, speed,
 # hit points, drops, voice, and the special behaviours enabled by flags.
 const KINDS = {
+	"piglin": {"hostile":true,"health":20.0,"speed":2.5,"width":0.3,"height":1.8,"damage":4,"drops":[[Nodes.GOLD_NUGGET,1,4]],"voice":"pig","pitch":0.65},
+	"magma_cube": {"hostile":true,"health":16.0,"speed":1.5,"width":0.43,"height":1.0,"damage":3,"drops":[[Nodes.COAL,1,2]],"voice":"","pitch":0.8,"leaps":true},
 	"sheep": {"hostile":false,"health":8.0,"speed":0.8,"width":0.3,"height":1.1,"damage":0,"drops":[[Nodes.RAW_MEAT,1,2],[Nodes.WOOL,1,2]],"voice":"sheep","pitch":1.0},
-	"cow": {"hostile":false,"health":10.0,"speed":0.7,"width":0.36,"height":1.35,"damage":0,"drops":[[Nodes.RAW_MEAT,1,3],[Nodes.LEATHER,0,2]],"voice":"cow","pitch":0.75},
+	"cow": {"hostile":false,"health":10.0,"speed":0.7,"width":0.36,"height":1.35,"damage":0,"drops":[[Nodes.RAW_MEAT,1,3],[Nodes.LEATHER,1,2]],"voice":"cow","pitch":0.75},
 	"pig": {"hostile":false,"health":10.0,"speed":0.9,"width":0.3,"height":0.9,"damage":0,"drops":[[Nodes.RAW_MEAT,1,3]],"voice":"pig","pitch":1.0},
 	"chicken": {"hostile":false,"health":4.0,"speed":1.0,"width":0.18,"height":0.65,"damage":0,"drops":[[Nodes.RAW_MEAT,1,1],[Nodes.FEATHER,1,2]],"voice":"chicken","pitch":1.5,"glides":true},
 	"zombie": {"hostile":true,"health":20.0,"speed":2.1,"width":0.28,"height":1.8,"damage":3,"drops":[[Nodes.ROTTEN_FLESH,0,2]],"voice":"zombie","pitch":0.9,"burns":true},
@@ -35,6 +37,7 @@ var hurt_flash: float = 0.0
 var life: float = 0.0
 var legs: Array = []
 var arms: Array = []
+var bow_hand: Node3D
 var head: Node3D
 var gait: float = 0.0
 var egg_timer: float = 90.0
@@ -63,7 +66,7 @@ func _ready() -> void:
 
 func _build_model() -> void:
 	match kind:
-		"zombie":
+		"zombie","piglin":
 			_box(Vector3(0,1.08,0),Vector3(0.48,0.64,0.28),Color("416f72"),"cloth")
 			_box(Vector3(0,1.36,-0.145),Vector3(0.18,0.12,0.025),Color("7a8c55"),"skin")
 			head = _joint(Vector3(0,1.51,-0.015),"Head")
@@ -75,7 +78,7 @@ func _build_model() -> void:
 				var arm := _joint(Vector3(side*0.335,1.31,0),"Arm")
 				_box(Vector3(0,-0.11,0),Vector3(0.18,0.25,0.22),Color("416f72"),"cloth",arm)
 				_box(Vector3(0,-0.39,0),Vector3(0.16,0.33,0.19),Color("81935d"),"skin",arm)
-				arm.rotation.x = -1.35
+				arm.rotation.x = 1.35
 				arms.append(arm)
 				var leg := _joint(Vector3(side*0.13,0.77,0),"Hip")
 				_box(Vector3(0,-0.33,0),Vector3(0.21,0.65,0.24),Color("465063"),"cloth",leg)
@@ -102,7 +105,7 @@ func _build_model() -> void:
 				legs.append(leg)
 				var arm := _joint(Vector3(side*0.27,1.34,0),"Arm")
 				_box(Vector3(0,-0.29,0),Vector3(0.09,0.58,0.1),Color("d5d3bf"),"bone",arm)
-				arm.rotation.x = -1.3 if side == 1 else -0.7
+				arm.rotation.x = 1.3 if side == 1 else 0.7
 				arms.append(arm)
 			_box(Vector3(0,0.09,-0.175),Vector3(0.04,0.065,0.03),Color("4c5149"),"",head)
 			_box(Vector3(0,-0.035,-0.025),Vector3(0.3,0.055,0.29),Color("d5d3bf"),"bone",head)
@@ -110,7 +113,8 @@ func _build_model() -> void:
 				_box(Vector3(x,0.01,-0.17),Vector3(0.045,0.055,0.025),Color("dddaca"),"bone",head)
 			# Bow is attached to the hand and follows the aiming pose.
 			var bow := _joint(Vector3(0,-0.57,0),"Bow",arms[1])
-			bow.rotation.x = 1.3
+			bow.rotation.x = -1.3
+			bow_hand = bow
 			for i in 5:
 				var limb := _box(Vector3(0,(i-2)*0.135,-0.12+absf(i-2)*0.045),Vector3(0.045,0.17,0.045),Color("8b603b"),"wood",bow)
 				limb.rotation.x = (i-2)*0.22
@@ -150,42 +154,121 @@ func _build_model() -> void:
 					_box(Vector3(0,-0.19,0),Vector3(0.23,0.38,0.29),Color("547b3e"),"moss",leg)
 					_box(Vector3(0,-0.38,-0.015),Vector3(0.23,0.07,0.32),Color("344b2b"),"moss",leg)
 					legs.append(leg)
+		"magma_cube":
+			for i in 4:
+				_box(Vector3(0,0.14+i*0.23,0),Vector3(0.84,0.17,0.84),Color("492526"),"moss")
+				var core := _box(Vector3(0,0.24+i*0.2,0),Vector3(0.73,0.07,0.73),Color("f28826"))
+				core.material_override.emission_enabled = true
+				core.material_override.emission = Color("e4551b")
+			for side in [-1,1]: _box(Vector3(side*0.2,0.69,-0.431),Vector3(0.15,0.14,0.025),Color("ffca4b"))
+		"cow","pig","chicken","sheep":
+			_build_animal()
+	# Small anatomical details sharpen the hostile silhouettes.
+	if kind == "piglin":
+		for part in parts:
+			part.material_override.albedo_texture = CreatureArt.texture("skin",Color("b88b72"))
+		_box(Vector3(0,0.1,-0.28),Vector3(0.29,0.16,0.16),Color("d3a088"),"skin",head)
+		for side in [-1,1]:
+			_box(Vector3(side*0.27,0.22,-0.02),Vector3(0.15,0.24,0.12),Color("bc8c74"),"skin",head)
+			_box(Vector3(side*0.095,0.025,-0.33),Vector3(0.045,0.13,0.045),Color("eee0bc"),"bone",head)
+		_box(Vector3(0,-0.75,0),Vector3(0.07,0.62,0.06),Color("e9bd48"),"",arms[1])
+		_box(Vector3(0,-0.49,0),Vector3(0.25,0.055,0.08),Color("c59635"),"",arms[1])
+	elif kind == "zombie":
+		_box(Vector3(0.15,1.02,-0.151),Vector3(0.075,0.2,0.025),Color("7b8950"),"skin")
+		_box(Vector3(-0.15,0.77,-0.15),Vector3(0.1,0.06,0.03),Color("344c55"),"cloth")
+	elif kind == "skeleton":
+		_box(Vector3(0,1.13,-0.16),Vector3(0.055,0.38,0.055),Color("d5d3bf"),"bone")
+		for side in [-1,1]:
+			_box(Vector3(side*0.15,0.075,-0.16),Vector3(0.07,0.06,0.055),Color("c0c0ad"),"bone",head)
+	elif kind == "spider":
+		for side in [-1,1]:
+			_box(Vector3(side*0.065,0.0,-0.19),Vector3(0.045,0.045,0.02),Color("f35a32"),"",head)
+			_box(Vector3(side*0.21,0.76,0.3),Vector3(0.16,0.025,0.4),Color("745151"),"shell")
+	elif kind == "creeper":
+		for y in [0.6,0.8,1.0]:
+			_box(Vector3(0,y,0.18),Vector3(0.08,0.13,0.035),Color("334e32"),"moss")
+
+func _animal_leg(pos: Vector3, length: float, width_value: float, skin_color: Color, hoof: Color) -> void:
+	var leg := _joint(pos,"Hip")
+	_box(Vector3(0,-length*0.5,0),Vector3(width_value,length,width_value),skin_color,"fur",leg)
+	_box(Vector3(0,-length+0.05,-0.025),Vector3(width_value+0.015,0.1,width_value+0.05),hoof,"",leg)
+	legs.append(leg)
+
+func _animal_eyes(parent: Node3D, x: float, y: float, z: float) -> void:
+	for side in [-1,1]:
+		_box(Vector3(side*x,y,z),Vector3(0.085,0.085,0.022),Color("eee6d7"),"",parent)
+		_box(Vector3(side*(x-0.012),y-0.005,z-0.015),Vector3(0.037,0.054,0.018),Color("292629"),"",parent)
+
+func _build_animal() -> void:
+	match kind:
 		"cow":
-			_box(Vector3(0,0.85,0),Vector3(0.78,0.7,1.25),Color("5b3d2b"))
-			_box(Vector3(0.2,0.95,0.1),Vector3(0.3,0.3,0.4),Color("f0e9dc"))
-			_box(Vector3(0,1.05,-0.78),Vector3(0.44,0.44,0.46),Color("6b4a35"))
-			_box(Vector3(0,0.9,-1.0),Vector3(0.3,0.16,0.06),Color("d9b6a2"))
-			for side in [-1,1]: _box(Vector3(side*0.25,1.28,-0.7),Vector3(0.08,0.12,0.08),Color("e7dcc4"))
-			_box(Vector3(0,0.48,0.35),Vector3(0.3,0.14,0.3),Color("e6a9a0"))
-			for x in [-0.25,0.25]:
-				for z in [-0.4,0.4]: legs.append(_box(Vector3(x,0.27,z),Vector3(0.18,0.55,0.18),Color("4a3224")))
-		"pig":
-			_box(Vector3(0,0.55,0),Vector3(0.62,0.55,1.0),Color("e8a7a0"))
-			_box(Vector3(0,0.65,-0.62),Vector3(0.44,0.42,0.38),Color("edb0a8"))
-			_box(Vector3(0,0.58,-0.84),Vector3(0.2,0.12,0.08),Color("d68f88"))
-			for side in [-1,1]: _box(Vector3(side*0.13,0.75,-0.8),Vector3(0.06,0.06,0.02),Color("2b1f24"))
-			for x in [-0.2,0.2]:
-				for z in [-0.32,0.32]: legs.append(_box(Vector3(x,0.15,z),Vector3(0.16,0.3,0.16),Color("d99a93")))
-		"chicken":
-			_box(Vector3(0,0.42,0),Vector3(0.36,0.34,0.5),Color("f2f0e6"))
-			_box(Vector3(0,0.7,-0.22),Vector3(0.22,0.3,0.22),Color("f6f4ec"))
-			_box(Vector3(0,0.68,-0.38),Vector3(0.1,0.08,0.12),Color("e5a13a"))
-			_box(Vector3(0,0.58,-0.34),Vector3(0.08,0.1,0.06),Color("d43d3a"))
+			_box(Vector3(0,0.83,0.08),Vector3(0.72,0.65,1.12),Color("f0e7d4"),"cow")
+			head = _joint(Vector3(0,1.0,-0.58),"Head")
+			_box(Vector3(0,0.04,-0.11),Vector3(0.45,0.46,0.43),Color("f0e7d4"),"cow",head)
+			_box(Vector3(0,-0.1,-0.37),Vector3(0.39,0.19,0.18),Color("cfaa9b"),"skin",head)
+			_animal_eyes(head,0.135,0.09,-0.334)
 			for side in [-1,1]:
-				_box(Vector3(side*0.06,0.74,-0.33),Vector3(0.04,0.04,0.02),Color("22201c"))
-				_box(Vector3(side*0.2,0.42,0),Vector3(0.05,0.24,0.34),Color("e9e6da"))
-				legs.append(_box(Vector3(side*0.08,0.14,0),Vector3(0.05,0.28,0.05),Color("e5a13a")))
-		_:
-			_box(Vector3(0,0.73,0),Vector3(0.68,0.65,1.0),Color("e0dec6"))
-			_box(Vector3(0,0.9,-0.57),Vector3(0.42,0.43,0.4),Color("c9b9a0"))
-			_box(Vector3(-0.22,0.95,-0.68),Vector3(0.03,0.065,0.09),Color("303b32"))
-			_box(Vector3(0.22,0.95,-0.68),Vector3(0.03,0.065,0.09),Color("303b32"))
-			for x in [-0.23,0.23]:
-				for z in [-0.32,0.32]: legs.append(_box(Vector3(x,0.22,z),Vector3(0.15,0.44,0.16),Color("877965")))
-			# The wool coat is a separate layer so shearing can hide it.
-			wool_parts.append(_box(Vector3(0,0.88,0.1),Vector3(0.82,0.72,0.95),Color("e5e0ce")))
-			wool_parts.append(_box(Vector3(0,1.0,-0.62),Vector3(0.6,0.62,0.4),Color("eae5d4")))
-			wool_parts.append(_box(Vector3(0,0.55,0.42),Vector3(0.55,0.3,0.3),Color("e5e0ce")))
+				_box(Vector3(side*0.105,-0.08,-0.466),Vector3(0.055,0.042,0.018),Color("644749"),"",head)
+				_box(Vector3(side*0.3,0.13,-0.06),Vector3(0.19,0.105,0.14),Color("765743"),"fur",head)
+				_box(Vector3(side*0.19,0.34,0),Vector3(0.09,0.18,0.09),Color("ddcdb1"),"bone",head)
+			_box(Vector3(0,0.47,0.26),Vector3(0.3,0.15,0.3),Color("d7a398"),"skin")
+			for x in [-0.09,0.09]:
+				for z in [0.17,0.35]: _box(Vector3(x,0.36,z),Vector3(0.055,0.09,0.055),Color("bd827d"),"skin")
+			for x in [-0.25,0.25]:
+				for z in [-0.3,0.45]: _animal_leg(Vector3(x,0.52,z),0.51,0.16,Color("d8cbb8"),Color("40372e"))
+			var tail := _joint(Vector3(0,0.97,0.65),"Tail")
+			_box(Vector3(0,-0.2,0.02),Vector3(0.055,0.4,0.06),Color("d2c4ab"),"fur",tail)
+			_box(Vector3(0,-0.42,0.02),Vector3(0.12,0.13,0.1),Color("4a382c"),"fur",tail)
+			tail.set_meta("tail",true)
+		"pig":
+			_box(Vector3(0,0.54,0.06),Vector3(0.65,0.5,0.95),Color("e6a29b"),"pig")
+			head = _joint(Vector3(0,0.66,-0.48),"Head")
+			_box(Vector3(0,0,-0.07),Vector3(0.46,0.42,0.39),Color("ecada6"),"pig",head)
+			_box(Vector3(0,-0.055,-0.32),Vector3(0.26,0.17,0.14),Color("d78989"),"skin",head)
+			_animal_eyes(head,0.15,0.07,-0.273)
+			for side in [-1,1]:
+				_box(Vector3(side*0.065,-0.05,-0.394),Vector3(0.045,0.065,0.016),Color("925258"),"",head)
+				var ear := _box(Vector3(side*0.18,0.22,0),Vector3(0.13,0.18,0.075),Color("d98f94"),"skin",head)
+				ear.rotation.z = side*0.3
+			for x in [-0.22,0.22]:
+				for z in [-0.27,0.38]: _animal_leg(Vector3(x,0.3,z),0.29,0.16,Color("dc9794"),Color("9a6663"))
+			# A squared curl, clearly visible from behind.
+			for part in [Vector3(0,0.6,0.6),Vector3(0.08,0.6,0.65),Vector3(0.08,0.68,0.65),Vector3(0.015,0.7,0.65)]:
+				_box(part,Vector3(0.08,0.06,0.06),Color("cf868a"),"pig")
+		"chicken":
+			_box(Vector3(0,0.39,0.04),Vector3(0.34,0.32,0.46),Color("eeeadd"),"feather")
+			head = _joint(Vector3(0,0.58,-0.18),"Head")
+			_box(Vector3(0,0.08,0),Vector3(0.24,0.28,0.23),Color("f5f0e5"),"feather",head)
+			_box(Vector3(0,0.28,0.01),Vector3(0.055,0.13,0.18),Color("b93d35"),"skin",head)
+			_box(Vector3(0,0.05,-0.18),Vector3(0.17,0.09,0.15),Color("dfa33d"),"",head)
+			_box(Vector3(0,-0.055,-0.14),Vector3(0.075,0.13,0.07),Color("c83e35"),"skin",head)
+			for side in [-1,1]:
+				_box(Vector3(side*0.124,0.12,-0.06),Vector3(0.016,0.055,0.055),Color("292a27"),"",head)
+				var wing := _joint(Vector3(side*0.19,0.5,0.025),"Wing")
+				_box(Vector3(side*0.025,-0.09,0),Vector3(0.09,0.24,0.34),Color("d9d8c8"),"feather",wing)
+				arms.append(wing)
+				var leg := _joint(Vector3(side*0.09,0.25,0.015),"Hip")
+				_box(Vector3(0,-0.11,0),Vector3(0.045,0.22,0.045),Color("dba143"),"",leg)
+				for toe in [-1,0,1]: _box(Vector3(toe*0.038,-0.23,-0.065),Vector3(0.028,0.035,0.15),Color("dba143"),"",leg)
+				legs.append(leg)
+			for i in 3:
+				var feather := _box(Vector3((i-1)*0.075,0.52,0.32),Vector3(0.08,0.3,0.09),Color("dedccc"),"feather")
+				feather.rotation.x = 0.5
+		"sheep":
+			_box(Vector3(0,0.65,0.05),Vector3(0.57,0.44,0.85),Color("b9a78b"),"fur")
+			wool_parts.append(_box(Vector3(0,0.74,0.07),Vector3(0.76,0.64,1.0),Color("e5dfce"),"wool"))
+			head = _joint(Vector3(0,0.91,-0.51),"Head")
+			_box(Vector3(0,-0.07,-0.11),Vector3(0.35,0.38,0.37),Color("b5a083"),"fur",head)
+			wool_parts.append(_box(Vector3(0,0.14,-0.025),Vector3(0.46,0.19,0.38),Color("ede7d8"),"wool",head))
+			_animal_eyes(head,0.115,0.015,-0.305)
+			_box(Vector3(0,-0.18,-0.32),Vector3(0.21,0.12,0.09),Color("aa8d7b"),"skin",head)
+			_box(Vector3(0,-0.21,-0.37),Vector3(0.09,0.02,0.015),Color("60554a"),"",head)
+			for side in [-1,1]: _box(Vector3(side*0.24,0.0,-0.02),Vector3(0.15,0.08,0.13),Color("b3a18b"),"fur",head)
+			for x in [-0.22,0.22]:
+				for z in [-0.27,0.38]:
+					_animal_leg(Vector3(x,0.45,z),0.44,0.14,Color("aa967b"),Color("5b5144"))
+					wool_parts.append(_box(Vector3(x,0.46,z),Vector3(0.24,0.22,0.25),Color("e5dfce"),"wool"))
+			wool_parts.append(_box(Vector3(0,0.6,0.62),Vector3(0.21,0.28,0.16),Color("e5dfce"),"wool"))
 
 func _joint(pos: Vector3, label: String, parent: Node3D = null) -> Node3D:
 	var joint := Node3D.new()
@@ -212,15 +295,20 @@ func animate(delta: float, chasing: bool = false) -> void:
 	var moving: bool = direction.length() > 0.1
 	gait = move_toward(gait,1.0 if moving else 0.0,delta*5.0)
 	for i in legs.size():
-		var phase: float = i*PI if kind != "spider" else (i/2+i%2)*PI
+		var phase: float = (i/2+i%2)*PI if legs.size() == 4 or kind == "spider" else i*PI
 		var swing: float = sin(life*8+phase)*0.4*gait
 		if kind == "spider":
 			legs[i].rotation.y = float(legs[i].get_meta("rest_y",0.0))+swing*0.5
 			legs[i].rotation.z = sin(life*8+phase+PI/2)*0.1*gait
 		else: legs[i].rotation.x = swing
 	for i in arms.size():
-		var rest: float = -1.35 if kind == "zombie" else (-1.3 if i == 1 else -0.7)
+		if kind == "chicken":
+			arms[i].rotation.z = (-1 if i == 0 else 1)*(0.12+absf(sin(life*14))*(0.8 if not grounded else 0.08))
+			continue
+		var rest: float = 1.35 if kind in ["zombie","piglin"] else (1.3 if i == 1 else 0.7)
 		arms[i].rotation.x = rest+sin(life*4+i)*0.07+sin(life*8+i*PI)*gait*0.1
+	for child in model.get_children():
+		if child.has_meta("tail"): child.rotation.z = sin(life*2.6)*0.2
 	if head != null:
 		head.rotation.x = sin(life*1.8)*0.035
 		if chasing:
@@ -319,10 +407,12 @@ func _physics_process(delta: float) -> void:
 			leap_cooldown = 2.4
 			velocity.y = 6.0
 			knock = toward*4.5
-		if data.get("ranged",false) and distance < 15 and attack_cooldown <= 0 and _sees_player():
+		if data.get("ranged",false) and distance < 15 and attack_cooldown <= 0 and _sees_player() and facing_player():
 			attack_cooldown = 2.2
-			var origin: Vector3 = position+Vector3.UP*1.45
-			var aim: Vector3 = (player_pos+Vector3.UP*1.1-origin).normalized()*15+Vector3.UP*distance*0.22
+			var forward: Vector3 = -model.global_basis.z
+			var origin: Vector3 = bow_hand.global_position+forward*0.15 if bow_hand != null else position+Vector3.UP*1.45+forward*0.4
+			var pitch: float = (player_pos.y+1.1-origin.y)/maxf(1.0,Vector2(player_pos.x-origin.x,player_pos.z-origin.z).length())
+			var aim: Vector3 = (forward+Vector3.UP*pitch).normalized()*15+Vector3.UP*distance*0.22
 			game.spawn_arrow(origin,aim)
 	if data.get("burns",false) and game.daylight > 0.8 and position.y > game.world.generator.terrain_height(int(floor(position.x)),int(floor(position.z))):
 		health -= delta*0.8
@@ -334,6 +424,10 @@ func _physics_process(delta: float) -> void:
 	if ambient <= 0:
 		ambient = randf_range(4.0,10.0) if hostile else randf_range(6.0,16.0)
 		if data.voice != "" and distance < 30: game.sound_at(data.voice,position,data.pitch*randf_range(0.94,1.06))
+
+func facing_player() -> bool:
+	var toward: Vector3 = ((game.player.position-position)*Vector3(1,0,1)).normalized()
+	return (-model.global_basis.z).dot(toward) >= cos(deg_to_rad(5.0))
 
 func _sees_player() -> bool:
 	# Line-of-sight via voxel DDA between the mob's eye and the player's chest;

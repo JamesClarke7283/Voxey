@@ -15,6 +15,18 @@ static func texture(style: String, base: Color) -> Texture2D:
 			var patch: int = (x/2*7+y/2*13+x/4*y/3*3)%17
 			var c: Color = base
 			match style:
+				"cow":
+					c = Color("514034") if (x/3*7+y/3*11+x/5)%13 < 6 else base
+					c *= 0.94+float(patch%4)*0.025
+				"wool":
+					c = base*(0.91+float((x/2+y/2*3)%5)*0.025)
+					if x%4 == 0 and y%4 == 3: c = base.darkened(0.14)
+				"pig":
+					c = base*(0.96+float(patch%3)*0.02)
+					if (x/3+y/4)%9 == 0: c = base.darkened(0.07)
+				"fur","feather":
+					c = base*(0.94+float(patch%4)*0.025)
+					if y%5 == 4 and x%3 != 0: c = base.darkened(0.12)
 				"moss":
 					c = base * [0.65,0.82,1.05,1.2,0.92][patch%5]
 					if (x*3+y*7)%23 == 0: c = Color("c0c982")

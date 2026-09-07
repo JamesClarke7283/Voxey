@@ -10,11 +10,14 @@ var game: Node3D
 var layer: Control
 var hotbar: Array = []
 var screen: String = ""
+var book_index: int = 0
+var enchanting_pos := Vector3i.ZERO
 var toast_text: String = ""
 var toast_time: float = 0.0
 var flash: float = 0.0
 var debug: bool = false
 var cursor: Dictionary = {"id":0,"count":0,"wear":0}
+var inventory_panel: Panel
 var cursor_icon: ItemIcon
 var slots_ui: Array = []
 var station_ui: Array = []
@@ -89,6 +92,7 @@ func _clear() -> void:
 	station_ui.clear()
 	grid_ui.clear()
 	armor_ui.clear()
+	inventory_panel=null
 	armor_label=null
 	output_icon=null; output_button=null; recipe_list=null; recipe_search=null; requirements_label=null; fill_button=null; result_label=null
 	preview = null
@@ -289,7 +293,17 @@ func show_guide() -> void:
 	_label(panel,"THE VOXEY FIELD GUIDE",Vector2(32,25),12,ACCENT)
 	_label(panel,"Make yourself at home.",Vector2(32,47),30)
 	var text_value: String = "01   START SMALL\nHold left click on an oak log. Open your inventory with E, turn logs into planks, then craft a table. Place it and right click to unlock tools.\n\n02   DIG A LITTLE DEEPER\nA wooden pickaxe mines stone and coal. Stone picks unlock iron. Smelt iron ore in a furnace; an iron pickaxe can harvest diamonds below Y 12.\n\n03   BUILD A LIFE\nTill grass with a hoe and plant seeds. Crops ripen in 90 seconds. Sheep drop meat and wool; cook meat and make a bed. Right click a bed to set your spawn and sleep through the night. Saplings grow into trees.\n\n04   STAY ALIVE\nEat with right click. Keep hunger high to regenerate health. Watch your breath underwater and your footing on cliffs. The dark brings zombies, skeletons, spiders, and creepers. Build a shelter, place torches, and keep a sword close.\n\n05   ARMOR & THE WILD\nCraft leather, iron, golden, or diamond armor at a table and right click to wear it; each piece wears down as it protects you. Cows drop leather, chickens and pigs give meat, bones become bone meal for instant crops, string weaves wool, and gunpowder plus sand makes TNT. Sand and gravel fall when unsupported. Two chests placed together join into one large chest."
-	_label(panel,text_value,Vector2(32,100),14,TEXT,720)
+	text_value += "\n\n06   THE NETHER\nWater touching cave lava makes obsidian. Mine it with a diamond pickaxe. Build a 4 × 5 obsidian frame with a 2 × 3 opening, light it with flint and steel, and step inside. Return through a portal. Water evaporates there; beds cannot set spawn.\n\n07   BOOKS & ENCHANTING\nCows always drop leather. Three paper + leather make a book; add a feather + charcoal for a writable book. Hold it and right click to write. A book, two diamonds, and four obsidian make an enchanting table. Mine lapis underground; right click the table to upgrade equipment using lapis and XP levels. Leave a one-block air gap between the table and nearby bookshelves.\n\n08   RECOVER YOUR ARROWS\nArrows stuck in the world last ten active minutes. Walk near them to pick them up. Ground items stay put until the entire pickup fits in your inventory."
+	text_value += "\n\n09   INTO THE DEEP\nThe Overworld now reaches bedrock at Y -128. Find deepslate, larger caverns and deep ores below zero. Carry torches: cave enemies can appear even during the day. Four cobbled deepslate make polished deepslate; four polished blocks make bricks. Lava buckets fuel furnaces and leave an empty bucket.\n\n10   DROP WHAT YOU CARRY\nQ throws one item. In inventory, press an item to carry it, move outside the panel, then press Escape to drop the stack and close. Left-click outside drops a stack; right-click drops one. Thrown items have a short pickup delay. Esc with the pointer inside returns carried items to your bag."
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(32,100); scroll.size = Vector2(726,350)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+	var guide_text := Label.new()
+	guide_text.text = text_value; guide_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	guide_text.custom_minimum_size.x = 700
+	guide_text.add_theme_font_size_override("font_size",14)
+	scroll.add_child(guide_text)
 	_label(panel,"WASD  Move    SPACE  Jump / swim    SHIFT  Sprint    CTRL  Sneak    /  Console\nLMB  Mine / attack    RMB  Place / use / eat / wear    E  Inventory    Q  Drop\n1–9 / WHEEL  Hotbar    F3  Debug    F5  Save    ESC  Pause",Vector2(32,470),13,MUTED)
 	_button(panel,"Back",Rect2(610,530,146,42),show_pause)
 
@@ -303,6 +317,7 @@ func show_inventory(kind: String = "hand", data: Dictionary = {}) -> void:
 	var extra: int = 84 if tall else 0
 	_dim()
 	var panel := _panel(layer,_panel_rect(Vector2(1100,616+extra)))
+	inventory_panel = panel
 	_label(panel,"YOUR SATCHEL",Vector2(28,22),12,ACCENT)
 	_label(panel,{"hand":"A little ingenuity.","table":"The crafting table.","furnace":"Into the fire.","chest":"One large chest." if tall else "Room for everything."}[kind],Vector2(28,44),28)
 	_button(panel,"×",Rect2(1029,22,43,40),game.resume)
@@ -338,6 +353,7 @@ func show_inventory(kind: String = "hand", data: Dictionary = {}) -> void:
 	_label(panel,"ARMOR",Vector2(1030,80),10,MUTED)
 	for i in 4:
 		var button := _button(panel,"",Rect2(Vector2(1030,96+i*49),Vector2(46,46)),_slot_click.bind(i,false,false,false,true))
+		button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
 		button.gui_input.connect(_armor_input.bind(i))
 		var icon := ItemIcon.new()
 		icon.size = Vector2(46,46)
@@ -351,6 +367,7 @@ func show_inventory(kind: String = "hand", data: Dictionary = {}) -> void:
 		var y: int = i/9
 		var pos := Vector2(342+x*73,344+extra+y*57+(10 if y>0 else 0))
 		var button := _button(panel,"",Rect2(pos,Vector2(65,51)),_slot_click.bind(i,false,false))
+		button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
 		button.gui_input.connect(_slot_input.bind(i,false))
 		var icon := ItemIcon.new()
 		icon.size = Vector2(65,51)
@@ -358,7 +375,7 @@ func show_inventory(kind: String = "hand", data: Dictionary = {}) -> void:
 		button.add_child(icon)
 		slots_ui.append(icon)
 	_label(panel,"HOTBAR",Vector2(342,589+extra),10,MUTED)
-	_label(panel,"E / ESC  Close",Vector2(900,589+extra),10,MUTED)
+	_label(panel,"Q  Drop one · Drag outside + Esc  Drop stack",Vector2(682,589+extra),10,MUTED)
 	cursor_icon = ItemIcon.new()
 	cursor_icon.size = Vector2(48,48)
 	cursor_icon.show_slot = false
@@ -427,6 +444,7 @@ func _recipe_preview() -> void:
 			var index: int = x+y*3
 			var pos := Vector2(x*42,35+y*42)
 			var button := _button(preview,"",Rect2(pos,Vector2(38,38)),_slot_click.bind(index,false,false,true))
+			button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
 			button.gui_input.connect(_grid_input.bind(index))
 			var icon := ItemIcon.new()
 			icon.size = Vector2(38,38)
@@ -516,7 +534,7 @@ func _furnace_preview() -> void:
 		_label(preview,labels[i],Vector2(x,31),11,MUTED)
 		_station_slot(i,Vector2(x,55),Vector2(64,64))
 		if i<2: _label(preview,"+" if i==0 else "→",Vector2(x+84,70),27,ACCENT)
-	furnace_label = _label(preview,"Add ore or food, then coal or wood.",Vector2(0,140),14,MUTED)
+	furnace_label = _label(preview,"Add ore or food, then coal, charcoal, wood or a lava bucket.",Vector2(0,140),14,MUTED)
 	_label(preview,"RECIPES\nIron / gold / copper ore → ingots\nSand → glass · Raw meat → cooked meat\nCobblestone → stone · Log → charcoal",Vector2(400,32),13,MUTED)
 
 func _chest_preview() -> void:
@@ -528,6 +546,7 @@ func _chest_preview() -> void:
 
 func _station_slot(index: int, pos: Vector2, size_value: Vector2) -> void:
 	var button := _button(preview,"",Rect2(pos,size_value),_slot_click.bind(index,true,false))
+	button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
 	button.gui_input.connect(_slot_input.bind(index,true))
 	var icon := ItemIcon.new()
 	icon.size = size_value
@@ -549,40 +568,44 @@ func _slot_click(index: int, is_station: bool, right: bool, is_grid: bool = fals
 	if is_armor and cursor.id != 0 and Nodes.armor_piece(cursor.id) != index: return
 	if is_station and station == "furnace" and cursor.id != 0:
 		if index == 2: return
-		if index == 1 and cursor.id not in [Nodes.COAL,Nodes.LOG,Nodes.PLANKS,Nodes.STICK]: return
-		if index == 0 and cursor.id not in [Nodes.IRON_ORE,Nodes.GOLD_ORE,Nodes.COPPER_ORE,Nodes.SAND,Nodes.COBBLE,Nodes.RAW_MEAT,Nodes.LOG,Nodes.CLAY_BALL]: return
+		if index == 1 and Nodes.fuel_time(cursor.id) == 0: return
+		if index == 0 and Nodes.smelt_result(cursor.id) == 0: return
 	if (Input.is_physical_key_pressed(KEY_SHIFT) or shift_mode) and cursor.id == 0 and slot.id != 0:
 		if is_station or is_grid or is_armor:
-			slot.count = game.inventory.add_item(slot.id,slot.count,slot.wear)
-			if slot.count == 0: slot.id = 0; slot.wear = 0
+			slot.count = game.inventory.add_item(slot.id,slot.count,slot.wear,slot.get("data",{}))
+			if slot.count == 0: slot.id = 0; slot.wear = 0; slot.erase("data")
 		elif Nodes.is_armor(slot.id) and game.player.armor_slots[Nodes.armor_piece(slot.id)].id == 0:
 			game.player.equip_armor(slot)
 		elif station == "chest":
 			for destination in station_data.slots:
-				if destination.id == 0 or (destination.id == slot.id and destination.wear == slot.wear):
+				if destination.id == 0 or (destination.id == slot.id and destination.wear == slot.wear and destination.get("data",{}) == slot.get("data",{})):
 					var moved: int = mini(slot.count,Nodes.max_stack(slot.id)-int(destination.count))
+					Inventory.copy_data(destination,slot)
 					destination.id = slot.id; destination.wear = slot.wear; destination.count += moved; slot.count -= moved
-					if slot.count == 0: slot.id=0; slot.wear=0; break
+					if slot.count == 0: slot.id=0; slot.wear=0; slot.erase("data"); break
 		else:
 			var start: int = 9 if index<9 else 0
 			var end: int = 36 if index<9 else 9
 			for j in range(start,end):
 				if game.inventory.slots[j].id == 0:
-					game.inventory.slots[j] = slot.duplicate()
-					slot.id=0; slot.count=0; slot.wear=0
+					game.inventory.slots[j] = slot.duplicate(true)
+					slot.id=0; slot.count=0; slot.wear=0; slot.erase("data")
 					break
 	elif cursor.id == 0:
 		if slot.id == 0: return
 		var taken: int = ceili(slot.count/2.0) if right else int(slot.count)
-		cursor = {"id":slot.id,"count":taken,"wear":slot.wear}
+		cursor = slot.duplicate(true)
+		cursor.count = taken
 		slot.count -= taken
-		if slot.count == 0: slot.id=0; slot.wear=0
-	elif slot.id == 0 or (slot.id == cursor.id and slot.wear == cursor.wear):
+		if slot.count == 0: slot.id=0; slot.wear=0; slot.erase("data")
+	elif slot.id == 0 or (slot.id == cursor.id and slot.wear == cursor.wear and slot.get("data",{}) == cursor.get("data",{})):
 		var moved: int = mini(1 if right else int(cursor.count),Nodes.max_stack(cursor.id)-int(slot.count))
+		Inventory.copy_data(slot,cursor)
 		slot.id=cursor.id; slot.wear=cursor.wear; slot.count += moved; cursor.count -= moved
 		if cursor.count == 0: cursor={"id":0,"count":0,"wear":0}
 	elif not right:
-		var temp: Dictionary = slot.duplicate()
+		var temp: Dictionary = slot.duplicate(true)
+		Inventory.copy_data(slot,cursor)
 		slot.id=cursor.id; slot.count=cursor.count; slot.wear=cursor.wear
 		cursor=temp
 	game.sound("equip" if is_armor else "click")
@@ -590,10 +613,10 @@ func _slot_click(index: int, is_station: bool, right: bool, is_grid: bool = fals
 
 func return_cursor() -> void:
 	for overflow in game.inventory.grid_to_inventory():
-		game.spawn_drop(game.player.position+Vector3.UP,overflow.id,overflow.count,overflow.wear)
+		game.spawn_drop(game.player.position+Vector3.UP,overflow.id,overflow.count,overflow.wear,overflow.get("data",{}))
 	if cursor.id != 0:
-		var rest: int = game.inventory.add_item(cursor.id,cursor.count,cursor.wear)
-		if rest>0: game.spawn_drop(game.player.position+Vector3.UP,cursor.id,rest,cursor.wear)
+		var rest: int = game.inventory.add_item(cursor.id,cursor.count,cursor.wear,cursor.get("data",{}))
+		if rest>0: game.spawn_drop(game.player.position+Vector3.UP,cursor.id,rest,cursor.wear,cursor.get("data",{}))
 	cursor={"id":0,"count":0,"wear":0}
 
 func refresh_slots() -> void:
@@ -608,8 +631,13 @@ func refresh_slots() -> void:
 	if screen=="inventory" and station in ["hand","table"]: _refresh_crafting()
 
 func _update_icon(icon: ItemIcon, slot: Dictionary, selected_value: bool) -> void:
+	icon.enchanted = not slot.get("data",{}).get("enchantments",{}).is_empty() and slot.id != 0
 	icon.item_id=slot.id; icon.count=slot.count; icon.wear=slot.wear; icon.selected=selected_value
-	if icon.get_parent() is Button: icon.get_parent().tooltip_text=Nodes.title(slot.id) if slot.id else "Empty slot"
+	if icon.get_parent() is Button:
+		var description: String = Nodes.title(slot.id) if slot.id else "Empty slot"
+		for enchant in slot.get("data",{}).get("enchantments",{}): description += "\n%s %d" % [enchant,slot.data.enchantments[enchant]]
+		if slot.get("data",{}).has("title"): description += "\n"+str(slot.data.title)
+		icon.get_parent().tooltip_text = description
 
 func show_death() -> void:
 	_clear()
@@ -642,7 +670,7 @@ func _process(delta: float) -> void:
 		elapsed_refresh=0
 		if screen=="inventory":
 			refresh_slots()
-			if is_instance_valid(furnace_label): furnace_label.text="Smelting  %d%%  ·  Fuel remaining: %ds" % [int(station_data.progress/8.0*100),int(station_data.burn)] if station_data.burn>0 else "Add ore or food, then coal or wood."
+			if is_instance_valid(furnace_label): furnace_label.text="Smelting  %d%%  ·  Fuel remaining: %ds" % [int(station_data.progress/8.0*100),int(station_data.burn)] if station_data.burn>0 else "Add ore or food, then coal, charcoal, wood or a lava bucket."
 	queue_redraw()
 
 func _draw() -> void:
@@ -655,9 +683,9 @@ func _draw() -> void:
 		draw_line(center-Vector2(6,0),center+Vector2(6,0),Color(0.94,0.95,0.85,0.85),2)
 		draw_line(center-Vector2(0,6),center+Vector2(0,6),Color(0.94,0.95,0.85,0.85),2)
 		draw_style_box(_style(Color(0.08,0.14,0.10,0.76),Color(0.5,0.6,0.4,0.2),1),Rect2(24,24,253,65))
-		draw_string(font,Vector2(40,48),"V /  "+game.world.generator.biome(int(player.position.x),int(player.position.z)),HORIZONTAL_ALIGNMENT_LEFT,-1,16,TEXT)
+		draw_string(font,Vector2(40,48),"V /  "+("Deepslate caverns" if game.dimension == "overworld" and player.position.y < -32 else ("Deep caves" if game.dimension == "overworld" and player.position.y < 0 else game.world.generator.biome(int(player.position.x),int(player.position.z)))),HORIZONTAL_ALIGNMENT_LEFT,-1,16,TEXT)
 		draw_string(font,Vector2(40,72),"%d   /   %d   /   %d" % [player.position.x,player.position.y,player.position.z],HORIZONTAL_ALIGNMENT_LEFT,-1,12,MUTED)
-		var time_label: String = "DAY %d  ·  %s" % [game.day_number(),game.time_name()]
+		var time_label: String = "THE NETHER" if game.dimension == "nether" else "DAY %d  ·  %s" % [game.day_number(),game.time_name()]
 		draw_style_box(_style(Color(0.08,0.14,0.10,0.76)),Rect2(size.x-217,24,193,45))
 		draw_circle(Vector2(size.x-193,46),7,Color("e8cc80") if game.daylight>0.4 else Color("bdcede"))
 		draw_string(font,Vector2(size.x-175,51),time_label,HORIZONTAL_ALIGNMENT_LEFT,-1,12,TEXT)
@@ -684,7 +712,8 @@ func _draw() -> void:
 			_food(Vector2(center.x+63.0*bar_scale+i*19*bar_scale,row_y),i<float(player.hunger)/2.0)
 		if game.gamemode=="creative": draw_string(font,Vector2(center.x-244.0*bar_scale,bar_y+21.0*bar_scale),"CREATIVE  ·  "+("FLYING  /  ▲ ✈" if player.flying else "TAP ✈ TO FLY")+"  ·  / CONSOLE",HORIZONTAL_ALIGNMENT_LEFT,-1,11,ACCENT)
 		draw_rect(Rect2(center.x-254.0*bar_scale,bar_y+31.0*bar_scale,508.0*bar_scale,3),Color("263c2b"))
-		draw_rect(Rect2(center.x-254.0*bar_scale,bar_y+31.0*bar_scale,508.0*bar_scale*clampf(game.experience/30.0,0,1),3),Color("a6be69"))
+		draw_rect(Rect2(center.x-254.0*bar_scale,bar_y+31.0*bar_scale,508.0*bar_scale*game.xp_progress(),3),Color("a6be69"))
+		draw_string(font,Vector2(center.x-20,bar_y+22*bar_scale),str(game.xp_level()),HORIZONTAL_ALIGNMENT_CENTER,40,16,Color("b9e17c"))
 		var selected_name: String = Nodes.title(game.inventory.held().id) if game.inventory.held().id else "Empty hand"
 		var text_width: float = font.get_string_size(selected_name,HORIZONTAL_ALIGNMENT_LEFT,-1,16).x
 		draw_style_box(_style(Color(0.07,0.13,0.09,0.8)),Rect2(center.x-text_width/2-14,bar_y-32,text_width+28,32))
@@ -735,8 +764,8 @@ func _food(p: Vector2, full: bool) -> void:
 func _creative_take(id: int) -> void:
 	if game.gamemode!="creative": return
 	if cursor.id!=0:
-		var rest: int=game.inventory.add_item(cursor.id,cursor.count,cursor.wear)
-		if rest>0: game.spawn_drop(game.player.position+Vector3.UP,cursor.id,rest,cursor.wear)
+		var rest: int=game.inventory.add_item(cursor.id,cursor.count,cursor.wear,cursor.get("data",{}))
+		if rest>0: game.spawn_drop(game.player.position+Vector3.UP,cursor.id,rest,cursor.wear,cursor.get("data",{}))
 	cursor={"id":id,"count":Nodes.max_stack(id),"wear":0}
 	game.sound("click")
 	refresh_slots()
@@ -859,3 +888,97 @@ func show_console(initial: String = "") -> void:
 	panel.add_child(console_input)
 	console_input.grab_focus()
 	console_input.caret_column=initial.length()
+
+func show_enchanting(p: Vector3i, selected_item: int = -1) -> void:
+	enchanting_pos = p
+	_clear(); screen = "enchanting"; _dim()
+	var panel := _fitted_panel(Vector2(720,540))
+	_label(panel,"ENCHANTING",Vector2(28,22),26,Color("d5b5f0"))
+	_label(panel,"Level %d · %d lapis lazuli · %d / 15 bookshelves" % [game.xp_level(),game.inventory.count_item(Nodes.LAPIS),game.bookshelf_power(p)],Vector2(28,65),16,ACCENT)
+	_label(panel,"Choose equipment from your inventory",Vector2(28,105),15,MUTED)
+	var available: Array = []
+	for i in game.inventory.slots.size():
+		var slot: Dictionary = game.inventory.slots[i]
+		if Nodes.is_tool_id(slot.id) or Nodes.is_armor(slot.id) or slot.id == Nodes.BOW: available.append(i)
+	if not available.has(selected_item): selected_item = available[0] if not available.is_empty() else -1
+	var picker := OptionButton.new()
+	picker.position = Vector2(28,138); picker.size = Vector2(660,42)
+	for i in available.size():
+		picker.add_item(Nodes.title(game.inventory.slots[available[i]].id)+" · slot "+str(available[i]+1),available[i])
+		if available[i] == selected_item: picker.select(i)
+	picker.disabled = available.is_empty()
+	if available.is_empty(): picker.add_item("Bring a tool, sword, bow or piece of armor")
+	panel.add_child(picker)
+	picker.item_selected.connect(func(index: int): show_enchanting(p,picker.get_item_id(index)))
+	for tier in range(1,4):
+		var chosen: int = selected_item
+		var strength: int = tier
+		var label: String = "%s · Requires level %d · Costs %d lapis + %d XP level(s)" % [["I","II","III"][tier-1],[1,10,30][tier-1],tier,tier]
+		var button := _button(panel,label,Rect2(28,204+(tier-1)*60,660,48),func():
+			game.enchant_item(chosen,strength,p)
+			show_enchanting(p,chosen))
+		button.disabled = chosen < 0 or game.bookshelf_power(p) < [0,5,15][tier-1] or (game.gamemode != "creative" and (game.xp_level() < [1,10,30][tier-1] or game.inventory.count_item(Nodes.LAPIS) < tier))
+	_label(panel,"Bookshelves need a one-block air gap. Tiers II / III need 5 / 15 shelves.\nTools gain Efficiency, swords Sharpness, bows Power, armor Protection.\nEvery enchantment also adds Unbreaking.",Vector2(28,390),14,MUTED,660)
+	_button(panel,"Done",Rect2(28,478,660,40),game.resume)
+
+func show_book(index: int) -> void:
+	book_index = index
+	_clear(); screen = "book"; _dim()
+	var panel := _fitted_panel(Vector2(720,570),Color("3c342e"))
+	var slot: Dictionary = game.inventory.slots[index]
+	var writable: bool = slot.id == Nodes.WRITABLE_BOOK
+	var metadata: Dictionary = slot.get("data",{})
+	_label(panel,"BOOK & QUILL" if writable else "WRITTEN BOOK",Vector2(28,20),24,Color("e7cd9c"))
+	var title_field := LineEdit.new()
+	title_field.position = Vector2(28,66); title_field.size = Vector2(664,42)
+	title_field.placeholder_text = "Give your book a title"; title_field.max_length = 64
+	title_field.text = str(metadata.get("title","")); title_field.editable = writable
+	panel.add_child(title_field)
+	var editor := TextEdit.new()
+	editor.position = Vector2(28,124); editor.size = Vector2(664,350)
+	editor.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	editor.text = str(metadata.get("text","")); editor.editable = writable
+	editor.add_theme_color_override("font_color",Color("eee2c6"))
+	editor.add_theme_stylebox_override("normal",_style(Color("292722")))
+	panel.add_child(editor)
+	var count_label := _label(panel,"",Vector2(28,482),12,MUTED)
+	var save_draft: Callable = func():
+		if not writable: return
+		if editor.text.length() > 12000: editor.text = editor.text.left(12000)
+		slot["data"] = {"title":title_field.text,"text":editor.text}
+		count_label.text = "%d / 12000 characters · Draft saved automatically" % editor.text.length()
+	save_draft.call()
+	editor.text_changed.connect(save_draft)
+	title_field.text_changed.connect(func(_text: String): save_draft.call())
+	if writable:
+		_button(panel,"Sign & finish (locks editing)",Rect2(28,518,370,36),func():
+			save_draft.call()
+			slot.id = Nodes.WRITTEN_BOOK
+			game.inventory.changed.emit()
+			game.resume())
+	_button(panel,"Close",Rect2(426,518,266,36),game.resume)
+
+func _fitted_panel(design: Vector2, color: Color = PANEL) -> Panel:
+	var factor: float = minf(1.0,minf((size.x-16)/design.x,(size.y-16)/design.y))
+	var panel := _panel(layer,Rect2((size-design*factor)*0.5,design),color)
+	panel.scale = Vector2.ONE*factor
+	return panel
+
+func pointer_outside_inventory() -> bool:
+	return is_instance_valid(inventory_panel) and not inventory_panel.get_global_rect().has_point(get_global_mouse_position())
+
+func drop_cursor(one: bool = true) -> void:
+	game.drop_stack(cursor,1 if one else int(cursor.count))
+	refresh_slots()
+
+func drop_hovered_one() -> void:
+	if cursor.id != 0: drop_cursor(true); return
+	var pointer: Vector2 = get_global_mouse_position()
+	for collection in [slots_ui,station_ui,armor_ui]:
+		for i in collection.size():
+			if collection[i].get_parent().get_global_rect().has_point(pointer):
+				var source: Array = game.inventory.slots if collection == slots_ui else (station_data.slots if collection == station_ui else game.player.armor_slots)
+				game.drop_stack(source[i],1)
+				return
+	for entry in grid_ui:
+		if entry.icon.get_parent().get_global_rect().has_point(pointer): game.drop_stack(game.inventory.grid[entry.index],1); return
