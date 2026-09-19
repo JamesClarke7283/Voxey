@@ -7,12 +7,13 @@ var effects: Dictionary = {}
 var effect_tick: float = 0.0
 var fishing: float = 0.0
 var fishing_bite: float = 0.0
+var fishing_state: Dictionary = {}
 var bobber: MeshInstance3D
 var mount: RuralAnimal
-var boat: Node3D
-var boat_id: int = 0
-var boat_was_flying: bool = false
-var shield_time: float = 0.0
+# The source holds a shield up while the player keeps it raised, so this is a
+# held state rather than a timed window. `shield_disabled` covers an axe hit.
+var shield_raised: bool = false
+var shield_disabled: float = 0.0
 var open_pouch_index: int = -1
 var open_equipped_pouch: int = -1
 var workstation_pos := Vector3i.ZERO
@@ -22,44 +23,33 @@ func _init(owner_game: Node3D) -> void:
 	game = owner_game
 
 func reset() -> void:
-	if is_instance_valid(bobber): bobber.queue_free()
-	if is_instance_valid(boat): boat.queue_free()
+	Fishing.cancel(self)
 	displays.clear()
-	bobber = null; boat = null; mount = null; fishing = 0; effects.clear(); shield_time = 0
+	bobber = null; mount = null; fishing = 0; effects.clear(); shield_raised = false; shield_disabled = 0.0
 
 func update(delta: float) -> void:
-	shield_time = maxf(0,shield_time-delta)
+	shield_disabled = maxf(0,shield_disabled-delta)
+	# A shield is raised while the player holds it with sneak, which is the
+	# source's own held state.
+	shield_raised = game.inventory.held().id == VillageContent.SHIELD and (Input.is_physical_key_pressed(KEY_CTRL) or (game.touch and is_instance_valid(game.controls) and game.controls.sneak_held))
 	var held_slot: Dictionary = game.inventory.held()
 	if held_slot.get("data",{}).has("charge"): held_slot.data.charge = maxf(0,float(held_slot.data.charge)-delta)
 	Enchantments.frost_step(game,delta)
 	AlchemyWorld.update(game,delta)
-	if is_instance_valid(bobber):
-		fishing += delta
-		bobber.position.y += sin(fishing*8)*delta*0.025
-		if fishing >= fishing_bite and fishing < fishing_bite+2:
-			game.puff(bobber.position,Color("a2d3d9"),1,0.5)
-		if fishing >= fishing_bite+3: fishing = 0; fishing_bite = randf_range(5,14)
-		if bobber.position.distance_to(game.player.position) > 30 or game.inventory.held().id != VillageContent.FISHING_ROD: bobber.queue_free(); bobber = null
+	Fishing.update(self,delta)
 	PotionEffects.update(game.player,delta)
 	for mob in game.creatures.get_children(): PotionEffects.update(mob,delta)
 	effect_tick += delta
 	if effect_tick >= 2.0:
 		effect_tick = 0; refresh_displays(); DeathRecovery.retry(game)
-	if is_instance_valid(boat):
-		var p: Vector3 = game.player.position
-		if Input.is_physical_key_pressed(KEY_CTRL) or (not Fluids.water(game.world.node_at(Vector3i((p-Vector3.UP*0.4).floor()))) and not Fluids.water(game.world.node_at(Vector3i(p.floor())))):
-			game.player.flying = boat_was_flying
-			game.spawn_drop(p+Vector3.UP,boat_id); boat.queue_free(); boat = null; boat_id = 0
-		else:
-			game.player.velocity.y = maxf(game.player.velocity.y,0)
-			var water: Vector3i = Vector3i((p-Vector3.UP*0.4).floor())
-			if Fluids.water(game.world.node_at(water)): game.player.position.y = water.y+1.05
-			boat.position = p; boat.rotation.y = game.player.rotation.y
 
 func use() -> bool:
 	var held: int = game.inventory.held().id
 	var target: Dictionary = game.player.target
 	var mob: Creature = game.target_mob()
+	if NameTags.use(game,mob): return true
+	if Golems.use(game,mob): return true
+	if Farming.use(game,mob): return true
 	if held == Nodes.COMPASS and not target.is_empty() and target.id == Bastions.LODESTONE: return Lodestones.bind(game,target.pos)
 	if mob is NetherResident and held == Nodes.GOLD:
 		if not mob.barter(): game.toast("This piglin will not barter right now.")
@@ -78,13 +68,13 @@ func use() -> bool:
 		if held == VillageContent.LEATHER_HORSE_ARMOR and not mob.horse_armor:
 			mob.equip_horse_armor(); _consume(); return true
 		if mob.saddled:
+			if game.boats.ridden(): game.toast("Leave the boat before mounting a horse."); return true
 			mount = mob; game.toast("Mounted. Move to ride, Space to jump, Ctrl to dismount."); return true
 	if mob is VillageMob:
-		if mob.kind == "villager":
-			if Input.is_physical_key_pressed(KEY_CTRL) and game.villages.feed(mob): return true
+		# A wandering trader opens the same trading panel as a villager.
+		if mob.kind == "villager" or mob.kind == "wandering_trader":
+			if mob.kind == "villager" and Input.is_physical_key_pressed(KEY_CTRL) and game.villages.feed(mob): return true
 			game.villages.open(mob); return true
-		if mob.kind == "iron_golem" and held == Nodes.IRON:
-			mob.health = minf(100,mob.health+25); _consume(); game.puff(mob.center(),Color("7cbd72"),10); return true
 	if held == VillageContent.TRIDENT:
 		var slot: Dictionary = game.inventory.held()
 		var riptide: int = Inventory.enchantment(slot,"Riptide")
@@ -100,9 +90,15 @@ func use() -> bool:
 		spear.position = game.player.camera.global_position-game.player.camera.global_basis.z*0.5; spear.velocity = -game.player.camera.global_basis.z*30+Vector3.UP
 		_consume(); game.entities.add_child(spear); return true
 	if held == VillageContent.FISHING_ROD: fish(target); return true
-	if held == VillageContent.SHIELD: shield_time = 1.0; game.toast("Shield raised."); return true
+	if held == VillageContent.SHIELD:
+		# The source raises the shield while sneak is held; use only tells the
+		# player how, since the state is read from the sneak key each step.
+		game.toast("Hold Ctrl with a shield to block attacks from the front.")
+		return true
 	if held == VillageContent.XP_BOTTLE:
 		_consume(); game.experience += randi_range(3,11); game.puff(game.player.position+Vector3.UP,Color("9ad964"),15); return true
+	if not target.is_empty() and target.id == VillageContent.CAULDRON and not Input.is_physical_key_pressed(KEY_CTRL):
+		return Cauldrons.use(game,target.pos)
 	if PotionCatalog.is_bottle(held):
 		if PotionCatalog.ITEMS[held].form == "drink":
 			PotionEffects.apply_item(game.player,held); _consume()
@@ -122,80 +118,114 @@ func use() -> bool:
 		for entity in game.entities.get_children():
 			if entity is MagicProjectile and entity.kind == "breath" and entity.position.distance_to(game.player.position) < 6:
 				_consume(); give(VillageContent.DRAGON_BREATH,1); entity.queue_free(); game.toast("Collected dragon breath."); return true
-	if held in [VillageContent.EMPTY_MAP,VillageContent.FILLED_MAP]:
-		if held == VillageContent.EMPTY_MAP: _consume(); give(VillageContent.FILLED_MAP,1)
-		show_map(); return true
-	if VillageContent.DATA.get(held,{}).get("family","") == "boat":
-		if not target.is_empty() and Fluids.water(target.id): launch_boat(held,target.pos)
-		else: game.toast("Place your boat on water.")
-		return true
 	if held == VillageContent.CROSSBOW: fire_crossbow(); return true
 	if target.is_empty(): return false
 	var p: Vector3i = target.pos; var id: int = target.id
 	if held == VillageContent.GLASS_BOTTLE and Fluids.water(id):
 		_consume(); give(VillageContent.WATER_BOTTLE,1); return true
 	if held == VillageContent.COD_BUCKET and target.normal == Vector3i.UP:
-		if game.world.set_node(p+Vector3i.UP,Nodes.WATER): _consume(); give(Nodes.BUCKET,1); game.spawn_drop(Vector3(p)+Vector3.UP*1.4,VillageContent.RAW_COD,1)
+		var at: Vector3i = SnowCover.placement(game.world,target).pos
+		if game.world.set_node(at,Nodes.WATER): _consume(); give(Nodes.BUCKET,1); game.spawn_drop(Vector3(at)+Vector3.UP*0.4,VillageContent.RAW_COD,1)
 		return true
-	if held == VillageContent.COCOA_BEANS and id == Nodes.LOG and target.normal != Vector3i.UP and game.world.node_at(p+target.normal) == Nodes.AIR:
+	if held == VillageContent.COCOA_BEANS and WoodTypes.canonical(id) == WoodTypes.log_id(3) and target.normal.y == 0 and game.world.node_at(p+target.normal) == Nodes.AIR:
 		game.world.set_node(p+target.normal,VillageContent.COCOA_POD); _consume(); return true
 	if held == VillageContent.KELP and id == Nodes.WATER and game.world.node_at(p+Vector3i.DOWN) != Nodes.AIR:
 		game.world.set_node(p,VillageContent.KELP_PLANT); _consume(); return true
 	if held == VillageContent.LILY_PAD and id == Nodes.WATER and game.world.node_at(p+Vector3i.UP) == Nodes.AIR:
 		game.world.set_node(p+Vector3i.UP,held); _consume(); return true
-	if VillageContent.CROPS.has(held):
+	if CropFarming.use(game,target): return true
+	if VillageContent.CROPS.has(held) and not CropFarming.is_crop(VillageContent.CROPS[held]):
 		var soil: int = Nodes.SOUL_SAND if held == VillageContent.NETHER_WART_ITEM else (Nodes.GRASS if held == VillageContent.SWEET_BERRY else Nodes.FARMLAND)
-		if target.normal == Vector3i.UP and (id == soil or held == VillageContent.SWEET_BERRY and id == Nodes.DIRT) and game.world.node_at(p+Vector3i.UP) == Nodes.AIR:
-			if game.world.set_node(p+Vector3i.UP,VillageContent.CROPS[held]): _consume(); game.sound("place")
+		var placement: Dictionary = SnowCover.placement(game.world,target)
+		if target.normal == Vector3i.UP and (placement.support_id == soil or held == VillageContent.SWEET_BERRY and placement.support_id == Nodes.DIRT) and SnowCover.replaceable(game.world.node_at(placement.pos)):
+			if game.world.set_node(placement.pos,VillageContent.CROPS[held]): _consume(); game.sound("place")
 		elif Nodes.food(held) > 0 and game.player.hunger < 20: return false
 		else: game.toast("Plant this on "+Nodes.title(soil).to_lower()+".")
 		return true
-	if held == Nodes.BONE_MEAL and VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3:
-		if VillageContent.crop_seed(id) != VillageContent.NETHER_WART_ITEM: game.world.set_node(p,id+3-int(VillageContent.DATA[id].stage)); _consume()
+	# Bone meal advances a crop-like node one stage. The arithmetic is by *id*, so
+	# the node's own stage layout decides the result, and a node whose ids are not
+	# laid out as three consecutive stages must not be advanced this way.
+	#
+	# Cocoa is exactly that case: its pod ids jump to a cobweb, so the old
+	# `id+3-stage` turned a pod into a cobweb. Cocoa has its own ripening path
+	# (the `RIPE_COCOA_POD` id) and is excluded here.
+	if held == Nodes.BONE_MEAL and not CropFarming.is_crop(id) and id != VillageContent.COCOA_POD and VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3:
+		var advanced: int = id+3-int(VillageContent.DATA[id].stage)
+		# Only advance when the destination is really a later stage of the same
+		# crop, so a table that is not three-wide cannot silently produce anything.
+		if VillageContent.DATA.get(advanced,{}).get("crop","") == VillageContent.DATA[id].get("crop","") and VillageContent.crop_seed(id) != VillageContent.NETHER_WART_ITEM:
+			game.world.set_node(p,advanced); _consume()
 		return true
 	if id == VillageContent.ITEM_FRAME:
 		frame_item(p); return true
-	if held == VillageContent.GLOBE_PATTERN and VillageContent.DATA.get(id,{}).get("family","") == "banner":
-		game.world.get_station(p,"banner")["globe"] = true; refresh_displays(); game.toast("Globe pattern applied."); return true
+	# Emblazoning a banner with a dye appends a layer, and a banner used on an
+	# emblazoned banner combines their layers, as the source's rules say.
+	if VillageContent.DATA.get(id,{}).get("family","") == "banner":
+		if Banners.is_banner(held):
+			var other: Dictionary = {"id":held,"count":1,"wear":int(game.inventory.held().get("wear",0)),"data":game.inventory.held().get("data",{}).duplicate(true)}
+			var station: Dictionary = game.world.get_station(p,"banner")
+			var current: Dictionary = {"id":id,"count":1,"data":station.get("layers",[])}
+			if Banners.combine(current,other):
+				station["layers"] = Banners.layers(current)
+				refresh_displays(); if game.gamemode != "creative": _consume()
+				game.toast("Banners combined."); return true
+			game.toast("That banner is already emblazoned the same way."); return true
+		var as_dye: int = Banners.dye_color(held)
+		if as_dye >= 0:
+			var station2: Dictionary = game.world.get_station(p,"banner")
+			var banner_slot: Dictionary = {"id":id,"count":1,"data":station2.get("layers",[])}
+			if Banners.emblazon(banner_slot,Banners.pending_pattern(held),as_dye):
+				station2["layers"] = Banners.layers(banner_slot)
+				refresh_displays(); if game.gamemode != "creative": _consume()
+				game.toast("Pattern applied."); return true
+			game.toast("That banner already carries its maximum of patterns."); return true
 	if not Input.is_physical_key_pressed(KEY_CTRL):
+		if PortableStorage.interact(game,p): return true
 		if id == VillageContent.BELL: game.villages.ring_bell(p); return true
 		if VillageContent.is_bed(id): game.sleep_at(p); return true
 		if id in [VillageContent.WOODEN_DOOR,VillageContent.WOODEN_DOOR_OPEN]: toggle_door(p); return true
 		if id == VillageContent.BREWING_STAND: game.open_inventory("brewing",p); return true
 		if id in [VillageContent.BARREL,VillageContent.RECOVERY_CHEST]: game.open_inventory("chest",p); return true
-		if id in [VillageContent.SMOKER,VillageContent.BLAST_FURNACE,VillageContent.CAMPFIRE]:
+		if TrappedChests.is_trapped(id):
+			# Its signal lasts as long as the screen is open, so the close path must
+			# know which chest it was.
+			TrappedChests.remember(game,p)
+			TrappedChests.open(game,p); return true
+		if id in [VillageContent.SMOKER,VillageContent.BLAST_FURNACE]:
 			var station: Dictionary = game.world.get_station(p,"furnace"); station.device = id
-			if id == VillageContent.CAMPFIRE: station.burn = 1000000.0
 			game.open_inventory("furnace",p); return true
-		if id == VillageContent.COMPOSTER:
-			var station: Dictionary = game.world.get_station(p,"composter")
-			if int(station.get("compost",0)) >= 7: give(Nodes.BONE_MEAL,1); station.compost = 0; game.toast("Collected bone meal.")
-			elif held in [Nodes.SEEDS,Nodes.GRAIN,Nodes.SAPLING,Nodes.LEAVES,Nodes.APPLE,Nodes.BREAD,VillageContent.CARROT,VillageContent.POTATO,VillageContent.BEETROOT,VillageContent.BEETROOT_SEEDS,VillageContent.KELP]:
-				station.compost = int(station.get("compost",0))+1; _consume(); game.toast("Compost %d / 7"%int(station.compost))
-			else: game.toast("Add seven crops, seeds, leaves or saplings, then collect bone meal.")
-			return true
-		if id == VillageContent.CAULDRON:
-			var station: Dictionary = game.world.get_station(p,"cauldron")
-			if held == Nodes.WATER_BUCKET: station.water = 3; _consume(); give(Nodes.BUCKET,1)
-			elif held == VillageContent.GLASS_BOTTLE and int(station.get("water",0)) > 0: station.water -= 1; _consume(); give(VillageContent.WATER_BOTTLE,1)
-			else: game.toast("Fill the cauldron with a water bucket, then bottle up to three portions.")
-			return true
+		if id == VillageContent.COMPOSTER: Composters.interact(game,p); return true
+		if id == Bookshelves.ID:
+			# The source's right-click puts a book into, or takes one out of, the slot
+			# under the pointer, chosen from where on the face the click landed.
+			var hit: Vector3 = target.get("point",Vector3(p)+Vector3.ONE*0.5)-Vector3(p)
+			var index: int = Bookshelves.slot_at(hit,game.world.circuits.facing(p)) if game.world.circuits.has_method("facing") else Bookshelves.slot_at(hit,0)
+			var offered: Dictionary = game.inventory.held()
+			if offered.id != 0 and Bookshelves.is_book(offered.id):
+				if Bookshelves.insert(game.world,p,index,offered): _consume()
+			else:
+				var taken: Dictionary = Bookshelves.take(game.world,p,index)
+				if not taken.is_empty():
+					var rest: int = game.inventory.add_item(taken.id,1,taken.get("wear",0),taken.get("data",{}))
+					if rest > 0: game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,taken.id,rest,taken.get("wear",0),taken.get("data",{}))
+			game.sound("place"); return true
 		if id in [VillageContent.ANVIL,VillageContent.GRINDSTONE,VillageContent.SMITHING_TABLE,VillageContent.BREWING_STAND,VillageContent.LOOM,VillageContent.STONECUTTER,VillageContent.CARTOGRAPHY_TABLE,VillageContent.FLETCHING_TABLE,VillageContent.LECTERN]:
 			show_station(p,id); return true
+	# A glowstone block charges a respawn anchor; using a charged one sets the spawn in
+	# the Nether or explodes outside it, which is the source's own asymmetry.
+	if RespawnAnchors.is_anchor(id):
+		if held == Nodes.GLOWSTONE:
+			if RespawnAnchors.charge_up(game.world,p): _consume()
+			return true
+		return RespawnAnchors.use(game,p)
 	if VillageContent.is_bed(held) and held not in [Nodes.BED_FOOT,Nodes.BED_HEAD]:
-		var place: Vector3i = p+target.normal
+		var place: Vector3i = SnowCover.placement(game.world,target).pos
 		var facing: Vector3i = game.world.circuits.player_facing() if game.world.circuits.has_method("player_facing") else Vector3i.FORWARD
 		var look: Vector3 = -game.player.global_basis.z
 		facing = Vector3i(signi(int(signf(look.x))),0,0) if absf(look.x) > absf(look.z) else Vector3i(0,0,signi(int(signf(look.z))))
-		if game.world.node_at(place) == Nodes.AIR and game.world.node_at(place+facing) == Nodes.AIR:
+		if SnowCover.replaceable(game.world.node_at(place)) and SnowCover.replaceable(game.world.node_at(place+facing)):
 			game.world.set_node(place,VillageContent.bed_foot(held)); game.world.set_node(place+facing,VillageContent.bed_head(held)); _consume()
 		else: game.toast("A bed needs two free blocks.")
-		return true
-	if held == VillageContent.WOODEN_DOOR:
-		var place: Vector3i = p+target.normal
-		if game.world.node_at(place) == Nodes.AIR and game.world.node_at(place+Vector3i.UP) == Nodes.AIR:
-			game.world.set_node(place,held); game.world.set_node(place+Vector3i.UP,held)
-			game.world.block_states[VoxelWorld.station_key(place)] = {"upper":false}; game.world.block_states[VoxelWorld.station_key(place+Vector3i.UP)] = {"upper":true}; _consume()
 		return true
 	return false
 
@@ -227,6 +257,9 @@ func break_special(p: Vector3i, id: int, _tool: int) -> bool:
 	return false
 
 func toggle_door(p: Vector3i) -> void:
+	if Doors.legacy(game.world.node_at(p)): Doors.migrate_at(game.world,p)
+	if Doors.is_door(game.world.node_at(p)):
+		Doors.set_open(game.world,p,not Doors.opened(game.world.node_at(p))); return
 	var id: int = game.world.node_at(p)
 	var upper: bool = game.world.block_states.get(VoxelWorld.station_key(p),{}).get("upper",game.world.node_at(p+Vector3i.DOWN) == id)
 	var other: Vector3i = p+(Vector3i.DOWN if upper else Vector3i.UP)
@@ -238,22 +271,7 @@ func toggle_door(p: Vector3i) -> void:
 	game.sound("place")
 
 func fish(target: Dictionary) -> void:
-	if is_instance_valid(bobber):
-		if fishing >= fishing_bite and fishing <= fishing_bite+2:
-			var roll: int = randi_range(0,99)
-			var caught: int = VillageContent.RAW_COD if roll < 55 else (VillageContent.RAW_SALMON if roll < 80 else (VillageContent.PUFFERFISH if roll < 90 else (VillageContent.TROPICAL_FISH if roll < 95 else VillageContent.INK_SAC)))
-			var luck: int = Inventory.enchantment(game.inventory.held(),"Luck of the Sea")+PotionEffects.level(game.player,"luck")-PotionEffects.level(game.player,"bad_luck")
-			if randf() < clampf(0.02+0.025*luck,0,0.25):
-				var rng := RandomNumberGenerator.new(); rng.randomize(); give(VillageContent.ENCHANTED_BOOK,1,Enchantments.random_book(rng))
-			else: give(caught,1)
-			game.experience += 2; game.toast("Caught "+Nodes.title(caught).to_lower()+"!")
-		else: game.toast("The fish got away. Reel in when bubbles appear.")
-		bobber.queue_free(); bobber = null; game.inventory.damage_tool(); return
-	if target.is_empty() or not Fluids.water(target.id): game.toast("Cast into water. Use again when the bobber bubbles."); return
-	bobber = MeshInstance3D.new(); var mesh := BoxMesh.new(); mesh.size = Vector3(0.15,0.18,0.15); bobber.mesh = mesh
-	var mat := StandardMaterial3D.new(); mat.albedo_color = Color("e87664"); bobber.material_override = mat
-	bobber.position = Vector3(target.pos)+Vector3(0.5,1.02,0.5); game.entities.add_child(bobber)
-	fishing = 0.0; fishing_bite = maxf(1,randf_range(5,14)-Inventory.enchantment(game.inventory.held(),"Lure")*2); game.toast("Line cast. Watch for bubbles, then use the rod again.")
+	Fishing.use(self,target)
 
 func fire_crossbow() -> void:
 	var held: Dictionary = game.inventory.held()
@@ -278,42 +296,16 @@ func fire_crossbow() -> void:
 	if game.gamemode != "creative": game.inventory.damage_tool()
 	game.sound("arrow")
 
-func blocks_damage(source: Vector3) -> bool:
-	if shield_time <= 0 or game.inventory.held().id != VillageContent.SHIELD or is_inf(source.x): return false
-	if (-game.player.global_basis.z).dot((source-game.player.position).normalized()) < 0.1: return false
-	game.inventory.damage_tool(); game.sound("thud"); return true
+func blocks_damage(source: Vector3, kind: String = "generic") -> bool:
+	if not Shields.can_block(game.player,source,kind): return false
+	Shields.add_wear(game.player,3.0)
+	game.sound("thud"); return true
 
 func apply_effect(target: Node3D, effect: String, duration: float = 15.0) -> void:
 	PotionEffects.apply(target,effect,duration)
 
-func launch_boat(id: int, p: Vector3i) -> void:
-	if is_instance_valid(boat): return
-	boat = Node3D.new(); game.entities.add_child(boat); boat_id = id; boat_was_flying = game.player.flying
-	for piece in [ [Vector3(0,-0.1,0),Vector3(1.3,0.2,1.8)], [Vector3(-0.67,0.1,0),Vector3(0.13,0.4,1.8)], [Vector3(0.67,0.1,0),Vector3(0.13,0.4,1.8)], [Vector3(0,0.1,-0.9),Vector3(1.3,0.4,0.13)], [Vector3(0,0.1,0.9),Vector3(1.3,0.4,0.13)]]:
-		var mesh := MeshInstance3D.new(); var box := BoxMesh.new(); box.size = piece[1]; mesh.mesh = box; mesh.position = piece[0]
-		var mat := StandardMaterial3D.new(); mat.albedo_color = Nodes.color(id); mesh.material_override = mat; boat.add_child(mesh)
-	game.player.position = Vector3(p)+Vector3(0.5,1,0.5); _consume(); game.toast("Boat launched. Move to paddle; Ctrl to leave.")
-
 func show_map() -> void:
-	game.state = "map"; game.world.active = false; Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	game.hud._clear(); game.hud.screen = "map"; game.hud._dim()
-	var panel: Panel = game.hud._fitted_panel(Vector2(620,600))
-	game.hud._label(panel,"EXPLORER'S MAP",Vector2(24,18),24,game.hud.ACCENT)
-	var img := Image.create(96,96,false,Image.FORMAT_RGB8)
-	var origin: Vector3 = game.player.position
-	for y in 96:
-		for x in 96:
-			var wx: int = floori(origin.x)+(x-48)*4; var wz: int = floori(origin.z)+(y-48)*4
-			var h: int = game.world.generator.terrain_height(wx,wz)
-			var color: Color = Color("678bab") if h <= TerrainGenerator.SEA else (Color("d3bb85") if "desert" in game.world.generator.biome(wx,wz) else Color("719068"))
-			img.set_pixel(x,y,color.lightened((h-25)*0.009))
-	var village: Dictionary = VillageGenerator.nearest(game.world.generator,origin)
-	var dot := Vector2i(roundi((village.center.x-origin.x)/4)+48,roundi((village.center.z-origin.z)/4)+48)
-	if dot.x in range(2,94) and dot.y in range(2,94): img.fill_rect(Rect2i(dot-Vector2i.ONE,Vector2i(3,3)),Color("d4a25e"))
-	img.fill_rect(Rect2i(47,47,3,3),Color("f4eee0"))
-	var map := TextureRect.new(); map.texture = ImageTexture.create_from_image(img); map.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST; map.position = Vector2(80,64); map.size = Vector2(460,460); panel.add_child(map)
-	game.hud._label(panel,"North ↑  ·  White: you  ·  Gold: village  ·  Scale: 4 blocks / pixel",Vector2(32,533),14,game.hud.MUTED)
-	game.hud._button(panel,"Done",Rect2(24,561,572,30),game.resume)
+	game.maps.show_map()
 
 func exchange(cost: Array, id: int, count: int = 1) -> bool:
 	var trial := Inventory.new(); trial.slots = game.inventory.slots.duplicate(true)
@@ -331,6 +323,7 @@ func show_station(p: Vector3i, id: int) -> void:
 	var scroll := ScrollContainer.new(); scroll.position = Vector2(24,67); scroll.size = Vector2(704,404); panel.add_child(scroll)
 	var list := VBoxContainer.new(); list.size_flags_horizontal = Control.SIZE_EXPAND_FILL; list.add_theme_constant_override("separation",7); scroll.add_child(list)
 	var actions: Array = []
+	if id == VillageContent.ANVIL: NameTags.editor(game,list)
 	if id in [VillageContent.ANVIL,VillageContent.GRINDSTONE,VillageContent.SMITHING_TABLE]:
 		for i in game.inventory.slots.size():
 			var slot: Dictionary = game.inventory.slots[i]
@@ -339,7 +332,7 @@ func show_station(p: Vector3i, id: int) -> void:
 			if id == VillageContent.SMITHING_TABLE and Netherite.upgrade_id(slot.id) != 0:
 				actions.append([Nodes.title(slot.id)+" → Netherite · 1 ingot + 1 template",func():
 					if not Netherite.upgrade(game.inventory,index): game.toast("Bring one netherite ingot and one upgrade template.")
-					else: game.sound("equip")
+					else: game.achievements.award("serious_dedication"); game.sound("equip")
 					show_station(p,id)])
 			var description: String = "Remove enchantments, recover XP" if id == VillageContent.GRINDSTONE else ("Apply first compatible enchanted book · 1 XP level" if id == VillageContent.ANVIL else "Repair 25% · 1 matching material")
 			actions.append([Nodes.title(slot.id)+" — "+description,func(): equipment_work(index,id); show_station(p,id)])
@@ -347,13 +340,22 @@ func show_station(p: Vector3i, id: int) -> void:
 		for pair in [[Nodes.STONE,Nodes.BRICKS],[Nodes.BRICKS,VillageContent.CHISELED_BRICKS],[VillageContent.GRANITE,VillageContent.POLISHED_GRANITE],[VillageContent.DIORITE,VillageContent.POLISHED_DIORITE],[VillageContent.ANDESITE,VillageContent.POLISHED_ANDESITE],[VillageContent.QUARTZ_BLOCK,VillageContent.QUARTZ_PILLAR],[Nodes.DEEPSLATE,Nodes.POLISHED_DEEPSLATE]]:
 			var input: int = pair[0]; var output: int = pair[1]
 			actions.append(["1 "+Nodes.title(input)+" → 1 "+Nodes.title(output),func(): exchange([[input,1]],output)])
-		for base in BuildingShapes.MATERIALS:
+		# The source's own chiseled forms that are not stairs or slabs.
+		for pair in [[PaleOak.RESIN_BRICK_BLOCK,PaleOak.CHISELED_RESIN_BRICK]]:
+			var cin: int = pair[0]; var cout: int = pair[1]
+			actions.append(["1 "+Nodes.title(cin)+" → 1 "+Nodes.title(cout),func(): exchange([[cin,1]],cout)])
+		for base in BuildingShapes.MATERIALS+BuildingShapes.EXTRA_MATERIALS:
 			for source in BuildingShapes.stonecutter_inputs(base):
 				var input: int = source
 				var slab: int = BuildingShapes.slab_for(base); var stair: int = BuildingShapes.stair_for(base)
 				actions.append([BuildingShapes.title(slab)+" × 2 · 1 "+Nodes.title(input),func(): exchange([[input,1]],slab,2)])
 				actions.append([BuildingShapes.title(stair)+" · 1 "+Nodes.title(input),func(): exchange([[input,1]],stair)])
+		for i in Barriers.WALL_MATERIALS.size():
+			for source in Barriers.stonecutter_inputs(Barriers.WALL_MATERIALS[i]):
+				var input: int = source; var output: int = Barriers.WALL_FIRST+i
+				actions.append([Nodes.title(output)+" · 1 "+Nodes.title(input),func(): exchange([[input,1]],output)])
 		var masonry: Dictionary = Masonry.cuts()
+		for magma_id in Magma.BLOCKS: masonry[magma_id] = true
 		for output_id in masonry:
 			for source_id in masonry[output_id]:
 				var input: int = source_id; var output: int = output_id
@@ -370,8 +372,17 @@ func show_station(p: Vector3i, id: int) -> void:
 			actions.append([color_name.replace("_"," ").capitalize()+" banner · 6 wool + stick + dye",func(): exchange([[Nodes.WOOL,6],[Nodes.STICK,1],[dye_id,1]],output)])
 	elif id == VillageContent.CARTOGRAPHY_TABLE:
 		actions.append(["Create map · 8 paper + compass",func(): exchange([[Nodes.PAPER,8],[Nodes.COMPASS,1]],VillageContent.EMPTY_MAP)])
-		actions.append(["Copy a map · map + empty map → 2 maps",func(): exchange([[VillageContent.FILLED_MAP,1],[VillageContent.EMPTY_MAP,1]],VillageContent.FILLED_MAP,2)])
-		actions.append(["View the terrain map",show_map])
+		for i in game.inventory.slots.size():
+			var slot: Dictionary = game.inventory.slots[i]
+			if slot.id != VillageContent.FILLED_MAP: continue
+			var index: int = i
+			var data: Dictionary = slot.get("data",{})
+			var identity: String = str(data.get("map",{}).get("id",""))
+			var title: String = "Map #"+identity if not identity.is_empty() else "Unsaved map · slot "+str(i+1)
+			if not str(data.get("custom_name","")).is_empty(): title += " · "+str(data.custom_name)
+			actions.append(["Copy "+title+" · 1 empty map",func():
+				if game.maps.copy_map(index): show_station(p,id)])
+			actions.append(["View "+title,func(): game.maps.show_map(game.inventory.slots[index])])
 	elif id == VillageContent.FLETCHING_TABLE:
 		actions.append(["4 arrows · flint + stick + feather",func(): exchange([[Nodes.FLINT,1],[Nodes.STICK,1],[Nodes.FEATHER,1]],Nodes.ARROW_ITEM,4)])
 		for arrow_id in VillageContent.DATA:
@@ -396,10 +407,30 @@ func show_station(p: Vector3i, id: int) -> void:
 				game.toast("Write and sign a book first." )])
 	for action in actions:
 		var button := Button.new(); button.text = action[0]; button.custom_minimum_size = Vector2(680,48); button.pressed.connect(action[1]); list.add_child(button)
-	if actions.is_empty(): game.hud._label(panel,"Bring tools, armor or books to use this workstation.",Vector2(28,100),16,game.hud.MUTED)
+	if actions.is_empty() and id != VillageContent.ANVIL: game.hud._label(panel,"Bring tools, armor or books to use this workstation.",Vector2(28,100),16,game.hud.MUTED)
 	game.hud._button(panel,"Done",Rect2(24,496,704,40),game.resume)
 
+# `mcl_anvils.damage_anvil_by_using`: the anvil is damaged by **taking the result**,
+# not by opening the menu, so the roll runs only after a successful operation.
 func equipment_work(index: int, device: int) -> bool:
+	var worked: bool = _equipment_work(index,device)
+	if worked and device == VillageContent.ANVIL: _damage_anvil()
+	return worked
+
+func _damage_anvil() -> void:
+	var level: int = [VillageContent.ANVIL,11446,11447].find(game.world.node_at(workstation_pos))
+	if level < 0: return
+	var next: int = Anvils.use_damage(level)
+	if next < 0: return
+	if next >= Anvils.MAX_DAMAGE:
+		if game.world.set_node(workstation_pos,Nodes.AIR):
+			game.sound("break"); game.toast("The anvil breaks apart.")
+			if game.gamemode != "creative": game.spawn_drop(Vector3(workstation_pos)+Vector3.ONE*0.5,VillageContent.ANVIL,1)
+		game.resume(); return
+	game.world.set_node(workstation_pos,[VillageContent.ANVIL,11446,11447][next])
+	game.sound("dig")
+
+func _equipment_work(index: int, device: int) -> bool:
 	var slot: Dictionary = game.inventory.slots[index]
 	if slot.id == 0: return false
 	if device == VillageContent.GRINDSTONE:
@@ -414,13 +445,43 @@ func equipment_work(index: int, device: int) -> bool:
 		if slot.data.is_empty(): slot.erase("data")
 		game.experience += 3; game.inventory.changed.emit(); return true
 	if device == VillageContent.SMITHING_TABLE:
+		# `mcl_smithing_table`: a template plus a trim material trims a piece of
+		# armor, and re-applying the same overlay and material is refused.
+		if ArmorTrims.trimmable(slot.id):
+			for template_index in game.inventory.slots.size():
+				var template: Dictionary = game.inventory.slots[template_index]
+				if template_index == index or not ArmorTrims.is_template(template.id): continue
+				for material_index in game.inventory.slots.size():
+					var material: Dictionary = game.inventory.slots[material_index]
+					if material_index in [index,template_index] or not ArmorTrims.is_material(material.id): continue
+					if not ArmorTrims.apply(slot,template.id,material.id):
+						game.toast("That armor already carries this trim."); return false
+					# The source consumes all three inputs (`take_item` on the item,
+					# the mineral and the template), so one template trims once.
+					material.count -= 1
+					if material.count <= 0: material.clear(); material.merge({"id":0,"count":0,"wear":0})
+					template.count -= 1
+					if template.count <= 0: template.clear(); template.merge({"id":0,"count":0,"wear":0})
+					game.inventory.changed.emit()
+					game.toast("Trim applied: "+ArmorTrims.title(template.id).replace(" armor trim template","")+".")
+					game.achievements.award("crafting_a_new_look")
+					# `smithing_with_style` counts **distinct** trims, so the overlay key
+					# is what advances the counter rather than the application count.
+					game.achievements.track_distinct("smithing_with_style",ArmorTrims.key(template.id))
+					return true
 		if slot.wear <= 0: game.toast("This item needs no repair."); return false
-		var material: int = Nodes.DIAMOND if Nodes.tool_tier(slot.id) == 3 or Nodes.is_armor(slot.id) and Nodes.armor_material(slot.id) == 3 else (Nodes.LEATHER if Nodes.is_armor(slot.id) and Nodes.armor_material(slot.id) == 0 else Nodes.IRON)
-		if Nodes.tool_tier(slot.id) == 0: material = Nodes.PLANKS
-		if Nodes.tool_tier(slot.id) == 1: material = Nodes.COBBLE
+		var material: int = Anvils.repair_material(slot.id)
 		material = VillageContent.DATA.get(slot.id,{}).get("repair_material",material)
-		if not game.inventory.remove_item(material,1): game.toast("Repair needs "+Nodes.title(material)+"."); return false
-		slot.wear = maxi(0,int(slot.wear)-ceili(Nodes.durability(slot.id)*0.25)); game.inventory.changed.emit(); return true
+		if material == 0 or game.inventory.count_item(material) <= 0:
+			game.toast("Repair needs "+Nodes.title(material)+"."); return false
+		# `mcl_anvils`: up to four materials are consumed for 25/50/75/100%, and
+		# each repair adds one to the prior-work penalty.
+		var plan: Dictionary = Anvils.material_repair(slot,game.inventory.count_item(material),material)
+		if plan.is_empty(): game.toast("That material does not repair this item."); return false
+		game.inventory.remove_item(material,int(plan.materials))
+		slot.wear = int(plan.wear)
+		Anvils.add_pwp(slot)
+		game.inventory.changed.emit(); return true
 	for book_index in game.inventory.slots.size():
 		if book_index == index: continue
 		var book: Dictionary = game.inventory.slots[book_index]
@@ -432,8 +493,14 @@ func equipment_work(index: int, device: int) -> bool:
 		if game.xp_level() < 1 and game.gamemode != "creative": game.toast("Applying a book costs one XP level."); return false
 		if not slot.has("data"): slot.data = {}
 		slot.data.enchantments = combined
+		# `mcl_anvils`: the cost is the enchanting level requirement plus the
+		# prior-work penalty on *both* inputs, and the result takes max(p1,p2)+1.
+		var cost: int = 2+Anvils.pwp_cost(slot)+Anvils.pwp_cost(book)
+		if game.experience < cost and game.gamemode != "creative":
+			game.toast("This needs %d experience points." % cost); return false
+		Anvils.combine_pwp(slot,book)
 		book.clear(); book.merge({"id":0,"count":0,"wear":0})
-		game.experience = maxf(0,game.experience-(7+2*(game.xp_level()-1))); game.inventory.changed.emit(); return true
+		game.experience = maxf(0,game.experience-cost); game.inventory.changed.emit(); return true
 	game.toast("Bring a compatible enchanted book."); return false
 
 func ammunition() -> int:
@@ -461,6 +528,8 @@ func ride_step(delta: float, input: Vector3) -> void:
 func frame_item(p: Vector3i) -> void:
 	var station: Dictionary = game.world.get_station(p,"frame")
 	var stored: Dictionary = station.slots[0]
+	if stored.id == VillageContent.FILLED_MAP: game.maps.ensure(stored)
+	if game.inventory.held().id == VillageContent.FILLED_MAP: game.maps.ensure(game.inventory.held())
 	if stored.id != 0:
 		if game.inventory.capacity(stored.id,stored.wear,stored.get("data",{})) < int(stored.count): game.toast("Make room before taking this item."); return
 		game.inventory.add_item(stored.id,stored.count,stored.wear,stored.get("data",{}))
@@ -473,20 +542,41 @@ func refresh_displays() -> void:
 	for node in displays.values():
 		if is_instance_valid(node): node.queue_free()
 	displays.clear()
+	for key in Paintings.records(game.world):
+		var entry: Dictionary = Paintings.records(game.world)[key]
+		var anchor: Vector3i = Paintings.anchor_of(key)
+		if not game.world.loaded_at(Vector3(anchor)) or Vector3(anchor).distance_to(game.player.position) > 70: continue
+		var model: MeshInstance3D = Paintings.display_model(game,anchor,entry)
+		game.entities.add_child(model); displays["paint:"+key] = model
 	for key in game.world.stations:
 		var station: Dictionary = game.world.stations[key]
-		if station.get("kind","") not in ["frame","banner"]: continue
+		if station.get("kind","") not in ["frame","banner","composter","cauldron","campfire","sign"]: continue
 		var xyz: PackedStringArray = key.split(",")
 		if xyz.size() != 3: continue
 		var p := Vector3i(int(xyz[0]),int(xyz[1]),int(xyz[2]))
 		if not game.world.loaded_at(Vector3(p)) or Vector3(p).distance_to(game.player.position) > 70: continue
+		if station.kind == "sign" and Signs.is_sign(game.world.node_at(p)):
+			var sign_model: Node3D = Signs.display_model(game,p,Signs.station(game.world,p))
+			game.entities.add_child(sign_model); displays[key] = sign_model
+			continue
+		if station.kind == "campfire" and Campfires.is_campfire(game.world.node_at(p)):
+			var campfire: Node3D = Campfires.display_model(game,p,station)
+			game.entities.add_child(campfire); displays[key] = campfire
+			continue
 		var mesh := MeshInstance3D.new()
-		if station.kind == "frame" and station.slots[0].id != 0 and game.world.node_at(p) == VillageContent.ITEM_FRAME:
+		if station.kind == "composter" and game.world.node_at(p) == VillageContent.COMPOSTER:
+			mesh.free(); mesh = Composters.fill_model(station); mesh.position += Vector3(p)
+		elif station.kind == "cauldron" and game.world.node_at(p) == VillageContent.CAULDRON:
+			mesh.free(); mesh = Cauldrons.fill_model(station); mesh.position += Vector3(p)
+		elif station.kind == "frame" and station.slots[0].id != 0 and game.world.node_at(p) == VillageContent.ITEM_FRAME:
 			var id: int = station.slots[0].id
-			mesh.mesh = game.node_mesh(id) if Nodes.placeable(id) else ItemArt.mesh(id)
-			mesh.material_override = game.node_material if Nodes.placeable(id) else ItemArt.material(id)
-			mesh.scale = Vector3.ONE*0.4; mesh.position = Vector3(p)+Vector3(0.5,0.5,-0.02)
-			if Nodes.placeable(id): mesh.position -= Vector3.ONE*0.2
+			if id == VillageContent.FILLED_MAP:
+				mesh.free(); mesh = game.maps.frame_model(station.slots[0]); mesh.position = Vector3(p)+Vector3(0.5,0.5,-0.025)
+			else:
+				mesh.mesh = game.node_mesh(id) if Nodes.placeable(id) else ItemArt.mesh(id)
+				mesh.material_override = game.node_material if Nodes.placeable(id) else ItemArt.material(id)
+				mesh.scale = Vector3.ONE*0.4; mesh.position = Vector3(p)+Vector3(0.5,0.5,-0.02)
+				if Nodes.placeable(id): mesh.position -= Vector3.ONE*0.2
 		elif station.kind == "banner" and station.get("globe",false) and VillageContent.DATA.get(game.world.node_at(p),{}).get("family","") == "banner":
 			var sphere := SphereMesh.new(); sphere.radius = 0.16; sphere.height = 0.32; mesh.mesh = sphere
 			var mat := StandardMaterial3D.new(); mat.albedo_color = Color("d7cf82"); mesh.material_override = mat; mesh.position = Vector3(p)+Vector3(0.5,0.72,0.43)
@@ -496,8 +586,8 @@ func refresh_displays() -> void:
 func animal_snapshot() -> Array:
 	var result: Array = []
 	for animal in game.creatures.get_children():
-		if animal is RuralAnimal and not animal.is_queued_for_deletion() and not game.leads.attached(animal):
-			result.append({"kind":animal.kind,"position":[animal.position.x,animal.position.y,animal.position.z],"health":animal.health,"trust":animal.trust,"saddled":animal.saddled,"horse_armor":animal.horse_armor})
+		if animal is RuralAnimal and animal.kind == "horse" and not animal.is_queued_for_deletion() and not game.leads.attached(animal) and not Boats.is_passenger(animal):
+			result.append({"kind":animal.kind,"position":[animal.position.x,animal.position.y,animal.position.z],"health":animal.health,"custom_name":animal.custom_name,"trust":animal.trust,"saddled":animal.saddled,"horse_armor":animal.horse_armor})
 	return result
 
 func restore_animals(saved: Array) -> void:
@@ -505,6 +595,7 @@ func restore_animals(saved: Array) -> void:
 		if entry.get("kind","") not in ["rabbit","horse"]: continue
 		var animal: Creature = game.spawn_creature(entry.kind,VillageLife.vec(entry.position))
 		animal.health = entry.get("health",animal.health); animal.trust = entry.get("trust",0)
+		animal.custom_name = NameTags.bounded(str(entry.get("custom_name","")),30); NameTags.refresh(animal)
 		if entry.get("saddled",false): animal.equip_saddle()
 		if entry.get("horse_armor",false): animal.equip_horse_armor()
 
@@ -514,12 +605,12 @@ func restore_effects(value: Variant) -> void:
 	for effect in value:
 		var duration: float = float(value[effect].get("duration",0)) if value[effect] is Dictionary else float(value[effect])
 		var potency: int = int(value[effect].get("level",1)) if value[effect] is Dictionary else 1
-		if effect in PotionEffects.NAMES and is_finite(duration) and duration > 0: PotionEffects.apply(game.player,effect,minf(6000,duration),clampi(potency,1,6))
+		if effect in PotionEffects.NAMES and is_finite(duration) and duration > 0:
+			PotionEffects.apply(game.player,effect,minf(6000,duration),clampi(potency,1,6))
+			if effect == "absorption" and value[effect] is Dictionary: PotionEffects.restore_absorption(game.player,value[effect].get("remaining",4.0*potency))
 
 func effect_snapshot() -> Dictionary:
-	var result: Dictionary = {}
-	for effect in effects: result[effect] = {"duration":effects[effect],"level":PotionEffects.level(game.player,effect)}
-	return result
+	return PotionEffects.snapshot(game.player)
 
 func open_pouch(index: int, equipped: bool = false) -> void:
 	var source: Array = game.inventory.pouch_slots if equipped else game.inventory.slots
@@ -535,5 +626,4 @@ func open_pouch(index: int, equipped: bool = false) -> void:
 	game.hud.show_inventory("chest",{"kind":"pouch","label":Nodes.title(pouch.id)+" · %d slots"%Pouches.size_of(pouch.id),"slots":Pouches.contents(pouch),"equipped":index if equipped else -1})
 
 func weather() -> String:
-	if game.dimension != "overworld": return "clear"
-	return game.world.adventure_state.get("weather",["clear","clear","rain","clear","thunder"][game.day_number()%5])
+	return Weather.weather(game.world)

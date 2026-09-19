@@ -2,8 +2,35 @@ class_name VillageItemArt
 extends RefCounted
 
 static func draw(img: Image, id: int, base: Color) -> void:
+	if id == CropFarming.POISONOUS_POTATO: CropFarming.draw(img,id); return
+	if id == Spyglass.ID: Spyglass.draw(img); return
+	if id == Amethyst.SHARD: Amethyst.draw(img,id); return
+	if FlowersExtra.is_flower(id) or FlowersExtra.is_plant(id): FlowersExtra.draw(img,id); return
+	if Sculk.is_echo_shard(id): Sculk.draw(img); return
+	if Totems.is_totem(id): Totems.draw(img); return
+	if Beacons.is_beacon(id): Beacons.draw(img,id); return
+	if Seagrass.is_seagrass(id): Seagrass.draw(img,id); return
+	if SeaPickles.is_pickle(id): SeaPickles.draw(img,id); return
+	if Corals.is_coral(id): Corals.draw(img,id); return
+	if Conduits.is_ocean(id): Conduits.draw(img,id); return
+	if Scaffolding.is_scaffolding(id): Scaffolding.draw(img,id); return
+	if Heads.is_any(id): Heads.draw(img,id); return
+	if Fireworks.is_rocket(id): Fireworks.draw(img,id,Fireworks.ROCKETS.find(id)); return
+	if Rails.DATA.has(id): Rails.draw(img,id); return
+	if Archaeology.DATA.has(id): Archaeology.draw(img,id); return
+	if Decor.is_pot(id) or Decor.is_stand(id): Decor.draw(img,id); return
+	if Sponges.is_sponge(id): Sponges.draw(img,id); return
+	if Copper.DATA.has(id): Copper.draw(img,id); return
+	if id in [Beehives.COMB,Beehives.BOTTLE]: Beehives.draw(img,id); return
+	if FruitCrops.is_seed(id): FruitCrops.draw(img,id); return
+	if Jukeboxes.is_disc(id): Jukeboxes.draw(img,id); return
+	if FoodFeatures.flower(id): FoodFeatures.draw_flower(img,id); return
+	if FoodFeatures.is_tall_grass(id): FoodFeatures.draw_tall_grass(img); return
+	if Boats.is_boat(id): BoatArt.draw(img,id,base); return
+	if RedstoneSensors.is_device(id): RedstoneSensors.draw(img,id); return
 	var d: Dictionary = VillageContent.DATA.get(id,{})
 	var family: String = d.get("family","")
+	if id in [1200,1201]: Fishing.draw(img,id,base); return
 	if family == "disc":
 		for y in 16:
 			for x in 16:

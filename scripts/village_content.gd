@@ -21,6 +21,24 @@ const GRINDSTONE = 527
 const BELL = 528
 const PATH = 529
 const LANTERN = 530
+# Mineclonia `mcl_lanterns:soul_lantern`: dimmer than an iron lantern, and lit by
+# a soul torch. Voxey had the iron lantern but no soul variant.
+const SOUL_LANTERN = 1168
+# Mineclonia `mcl_bamboo`: a stalk that grows in segments and the item it drops.
+const BAMBOO_ITEM = 1174
+# Mineclonia `mcl_powder_snow`: a non-solid snow that freezes whoever is inside it,
+# plus the bucket that carries it.
+const POWDER_SNOW = 1175
+const POWDER_SNOW_BUCKET = 1176
+# Mineclonia `mcl_lush_caves`: the lit cave biome's vines and ground cover. The ids
+# are written literally because `LushCaves` names `Nodes`, so referencing the module
+# from this const block would close a cycle.
+const GLOW_BERRY = 1179
+const MOSS = 1204
+const CAVE_VINES = 1177
+const CAVE_VINES_LIT = 1178
+# Mineclonia `mcl_lanterns:chain`: a thin metal column that blocks hang from.
+const CHAIN = 1169
 const CAMPFIRE = 531
 const ANVIL = 532
 const GRANITE = 533
@@ -36,6 +54,17 @@ const QUARTZ_PILLAR = 542
 const GLASS_PANE = 543
 const DRIED_KELP_BLOCK = 544
 const ITEM_FRAME = 545
+# Firework rockets, an elytra booster in the reference (mcl_fireworks).
+const ROCKET_1 = 1244
+const ROCKET_2 = 1245
+const ROCKET_3 = 1246
+# Heads (mcl_heads): the same item placed on the floor, a wall or a ceiling.
+const HEAD_FLOOR = 1276
+const HEAD_WALL = 1283
+const HEAD_CEILING = 1290
+# Scaffolding (mcl_bamboo): a climbable frame and its horizontal arm.
+const SCAFFOLDING = 1300
+const SCAFFOLDING_HORIZONTAL = 1301
 const PAINTING = 546
 const RED_CANDLE = 547
 const YELLOW_CANDLE = 548
@@ -86,6 +115,42 @@ const FISHING_ROD = 789
 const CROSSBOW = 790
 const ENCHANTED_BOOK = 791
 const INK_SAC = 792
+# Source `mcl_mobitems:glow_ink_sac`: a glow squid's drop. Voxey had no item for
+# it, so the glow squid could not have existed.
+const GLOW_INK_SAC = 861
+# Mineclonia `mcl_nether:magma`, which burns whoever stands on it.
+const MAGMA = 1158
+# Ocean items: the nautilus shell is the fishing drop, the heart is new.
+const NAUTILUS_SHELL = 1201
+const HEART_OF_THE_SEA = 1310
+# Conduit and its prismarine frame (mcl_conduits, mcl_ocean).
+const CONDUIT = 1311
+const PRISMARINE = 1312
+const PRISMARINE_BRICK = 1313
+const PRISMARINE_DARK = 1314
+const SEA_LANTERN = 1315
+const PRISMARINE_SHARD = 1316
+const PRISMARINE_CRYSTALS = 1317
+# Coral (mcl_ocean/corals.lua): five species, six forms each, grouped in fives.
+const CORAL_FIRST = 1330
+# Sea pickles (mcl_ocean/sea_pickle.lua): four sizes, lit then unlit.
+const PICKLE_FIRST = 1360
+# Seagrass (mcl_ocean/seagrass.lua): one item and one node per supported surface.
+const SEAGRASS = 1368
+const SEAGRASS_FIRST = 1369
+# Banner pattern items (mcl_banners/items.lua): the ten special patterns.
+const PATTERN_FIRST = 1380
+# Beacon (mcl_beacons): the block, its beam, and the nether star it needs.
+const BEACON = 1390
+const BEACON_BEAM = 1391
+const NETHER_STAR = 1392
+# Totem of Undying (mcl_totems): a one-use lethal-damage save.
+const TOTEM = 1395
+# The pyramid accepts these, which the source marks with `beacon_block`.
+const NETHERITE_BLOCK = 694
+const PATTERN_KEYS = ["thing","skull","creeper","flower","bricks","curly_border","globe","piglin","guster","flow"]
+# Six forms per species: block, dead block, plant, dead plant, fan, dead fan.
+const CORAL_STRIDE = 6
 const RAW_BEEF = 793
 const COOKED_BEEF = 794
 const RAW_PORKCHOP = 795
@@ -178,6 +243,9 @@ const GLAZED_GREEN = 631
 const GLAZED_PINK = 632
 const GLAZED_LIGHT_BLUE = 633
 const GLAZED_BROWN = 634
+const BANNER_FIRST = 635
+# The sixteen banners run in this order, matching the source's colour order.
+const BANNER_IDS = [635,636,637,638,639,640,641,642,643,644,645,646,647,648,649,650]
 const BANNER_WHITE = 635
 const BANNER_GREY = 636
 const BANNER_SILVER = 637
@@ -288,8 +356,263 @@ const SLIME_BLOCK = 689
 const COBWEB = 690
 const FROSTED_ICE = 691
 const RECOVERY_CHEST = 692
-const BLOCKS = [512, 513, 514, 515, 516, 517, 518, 519, 520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535, 536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 550, 551, 552, 553, 554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 567, 568, 569, 570, 571, 572, 573, 574, 575, 576, 577, 578, 579, 580, 581, 582, 583, 584, 585, 586, 587, 588, 589, 590, 591, 592, 593, 594, 595, 596, 597, 598, 599, 600, 601, 602, 603, 604, 605, 606, 607, 608, 609, 610, 611, 612, 613, 614, 615, 616, 617, 618, 619, 620, 621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 632, 633, 634, 635, 636, 637, 638, 639, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649, 650, 651, 652, 653, 654, 655, 656, 657, 658, 659, 660, 661, 662, 663, 664, 665, 666, 667, 668, 669, 670, 671, 672, 673, 674, 675, 676, 677, 678, 679, 680, 681, 682, 683, 684, 685, 686, 687, 688, 689, 690, 691, 692, 693, 694, 695, 696, 697, 1100, 1101, 1102, 1103, 1104, 1105, 1117, 1118, 1150, 1151, 1152, 1153, 1154, 1155, 1156, 1157]
+const BLOCKS = [
+	512,513,514,515,516,517,518,519,520,521,522,523,524,525,526,527,528,529,530,531,532,533,534,535,536,537,538,539,540,541,542,543,544,545,546,547,548,549,550,551,552,553,554,555,556,557,558,559,560,561,562,563,564,565,566,567,568,569,570,571,572,573,574,575,576,577,578,579,580,581,582,583,584,585,586,587,588,589,590,591,592,593,594,595,596,597,598,599,600,601,602,603,604,605,606,607,608,609,610,611,612,613,614,615,616,617,618,619,620,621,622,623,624,625,626,627,628,629,630,631,632,633,634,635,636,637,638,639,640,641,642,643,644,645,646,647,648,649,650,651,652,653,654,655,656,657,658,659,660,661,662,663,664,665,666,667,668,669,670,671,672,673,674,675,676,677,678,679,680,681,682,683,684,685,686,687,688,689,690,691,692,693,694,695,696,697,1241,1242,1243,5610,5611,5612,6700,6800,7400,7401,7402,7403,7404,7405,7300,45,7510,7511,7512,7513,7514,7515,7516,7517,7518,7519,7520,7521,7530,7531,7532,7533,7534,7535,7536,7537,7538,7539,7540,7541,7551,7552,7553,7560,7561,7562,7563,7700,7701,7702,7703,7704,7708,7716,7724,7732,7600,7601,7602,7603,7604,7605,7606,7607,7608,7609,7610,7611,7612,7613,7614,7615,7616,7617,7618,7619,7620,7621,7622,7623,7624,7625,7626,7627,7628,7629,7630,7631,7632,7633,7634,7635,7636,7637,7638,7639,7640,7641,7642,7643,7644,7645,7646,7647,7652,7653,7660,7661,7662,7663,7664,7665,7666,7667,7668,9500,9501,9502,9510,9511,9512,9513,9520,9521,9522,9523,9530,9531,9532,9533,9540,9541,9542,9543,9544,9545,9546,9547,9550,9551,9552,9553,9554,9555,9556,9557,9400,9401,9402,9901,9902,9903,10800,10801,9300,9320,9321,9322,9323,9324,9325,1300,1301,1311,1312,1313,1314,1315,1390,1391,1276,1277,1278,1279,1280,1281,1282,1283,1284,1285,1286,1287,1288,1289,1290,1291,1292,1293,1294,1295,1296,8000,22,8010,8011,8012,8013,8014,8015,29,8020,8021,8022,8023,8030,8031,8032,8033,1330,1331,1332,1333,1334,1335,1336,1337,1338,1339,1340,1341,1342,1343,1344,1345,1346,1347,1348,1349,1350,1351,1352,1353,1354,1355,1356,1357,1358,1359,1360,1361,1362,1363,1364,1365,1366,1367,1369,1370,1371,1372,1373,1374,1168,1169,1100,1101,1102,1103,1104,1105,1117,1118,1150,1151,1152,1153,1154,1155,1156,1157,1158,1159,1160,1161,1162,1163,1164,1165,1166,1167,1247,1170,1171,1172,1173,1174,1207,1208,1209,1210,1211,1212,1175,1177,1178,1180,1181,1182,1183,1184,1185,1186,1187,1188,1189,1190,1191,1192,1193,1194,1195,1196,1204,1205,1206,1220,1221,1222,1223,1240,5613,1213,1214,1215,1216,1217,11072,11073,11074,11075,11076,11077,11078,11079,11080,11081,11082,11083,11084,11085,11086,11087,11088,11089,11090,11091,11092,11093,11094,11095,11096,11097,11098,11099,11100,11101,11102,11103,11104,11105,11106,11107,11108,11109,11110,11111,11112,11113,11114,11115,11116,11117,11118,11119,11120,11121,11122,11123,11124,11125,11126,11127,11128,11129,11130,11131,11132,11133,11134,11135,11136,11137,11138,11139,11140,11141,11142,11143,11144,11145,11146,11147,11148,11149,11150,11151,11152,11153,11154,11155,11156,11157,11158,11159,11160,11161,11162,11163,11164,11165,11166,11167,11168,11169,11170,11171,11172,11173,11174,11175,11176,11177,11178,11179,11180,11181,11182,11183,11184,11185,11186,11187,11188,11189,11190,11191,11192,11193,11194,11195,11196,11197,11198,11199,11280,11281,11200,11201,11202,11203,11204,11205,11206,11207,11208,11209,11210,11211,11212,11213,11214,11215,11216,11217,11218,11219,11220,11221,11222,11223,11224,11225,11226,11227,11228,11229,11230,11231,11232,11233,11234,11235,11236,11237,11238,11239,11240,11241,11440,11441,11442,11444,11445,
+	11446,11447,
+	11511,11512,11513,11514,11515,11516,11517,11518,
+	11521,11522,11523,11524,11525,11526,11527,11528,11529,
+	11530,11531,11532,11533,11534,11535,11536,11537,11538,11539,11540,11541,11542,11543,11544,11545,
+	11546,
+	11470,11471,11472,11473,11474,11475,11476,11477,11478,11479,11480,11481,11400,11401,11402,11403,11404,11405,11406,11407,11408,11409,11410,11411,11412,11413,11414,11415,11416,11417,11303,11304,11305,11507,11508,11509,11040,11041,11042,11043,11044,11045,11046,11047,11048,11049,11050,11051,11052,11053,11054,11055,11056,11057,11058,11059,11060,11061,11062,11063,11064,11065,11066,11067,11068,11069,11070,11071,
+]
 const DATA = {
+	9300:Rails.DATA[9300],
+	9320:Rails.DATA[9320],
+	9321:Rails.DATA[9321],
+	9322:Rails.DATA[9322],
+	9323:Rails.DATA[9323],
+	9324:Rails.DATA[9324],
+	9325:Rails.DATA[9325],
+	861:{"name":"Glow ink sac","color":"5ce8de","glint":true},
+	Magma.ID:Magma.DATA[Magma.ID],
+	1177:{"name":"Cave vines","block":true,"shape":"vine","color":"5d8b3c","hardness":0.0,"tool":2,"plant":true},
+	1178:{"name":"Lit cave vines","block":true,"shape":"vine","color":"7fae4a","hardness":0.0,"tool":2,"plant":true,"light":14,"emits":14},
+	1179:{"name":"Glow berry","color":"e8b34a","food":2},
+	1204:{"name":"Moss block","block":true,"color":"5a7a3c","hardness":0.5,"tool":2},
+	1205:{"name":"Moss carpet","block":true,"shape":"carpet","color":"5a7a3c","hardness":0.1,"tool":2},
+	1206:{"name":"Hanging roots","block":true,"shape":"plant","color":"6b5636","hardness":0.0,"tool":2,"plant":true},
+	1207:HugeMushrooms.BLOCK_DATA[1207],
+	1208:HugeMushrooms.BLOCK_DATA[1208],
+	1209:HugeMushrooms.BLOCK_DATA[1209],
+	1210:HugeMushrooms.BLOCK_DATA[1210],
+	1211:HugeMushrooms.BLOCK_DATA[1211],
+	1212:HugeMushrooms.BLOCK_DATA[1212],
+	1213:RespawnAnchors.BLOCK_DATA[1213],
+	1214:RespawnAnchors.BLOCK_DATA[1214],
+	1215:RespawnAnchors.BLOCK_DATA[1215],
+	1216:RespawnAnchors.BLOCK_DATA[1216],
+	1217:RespawnAnchors.BLOCK_DATA[1217],
+	1175:{"name":"Powder snow","block":true,"shape":"cube","color":"f7fbfc","hardness":0.25,"tool":2},
+	1176:{"name":"Bucket of powder snow","color":"c9ced6","stack":1},
+	1170:{"name":"Bamboo shoot","block":true,"shape":"bamboo","color":"7ea33c","hardness":1.0,"tool":0,"plant":true},
+	1171:{"name":"Bamboo","block":true,"shape":"bamboo","color":"8fb04a","hardness":1.0,"tool":0,"plant":true},
+	1172:{"name":"Bamboo","block":true,"shape":"bamboo","color":"8fb04a","hardness":1.0,"tool":0,"plant":true,"hidden":true},
+	1173:{"name":"Bamboo","block":true,"shape":"bamboo","color":"9abd52","hardness":1.0,"tool":0,"plant":true,"hidden":true},
+	1174:{"name":"Bamboo","color":"8fb04a","stack":64},
+	1168:{"name":"Soul lantern","block":true,"shape":"lantern","color":"4d7a72","hardness":3.5,"light":10,"emits":10},
+	1169:{"name":"Chain","block":true,"shape":"chain","color":"8a8a92","hardness":5.0,"tool":0},
+	1162:MonsterEggs.DATA[1162],
+	1163:MonsterEggs.DATA[1163],
+	1164:MonsterEggs.DATA[1164],
+	1165:MonsterEggs.DATA[1165],
+	1166:MonsterEggs.DATA[1166],
+	1167:MonsterEggs.DATA[1167],
+	1247:{"name":"Trapped chest","block":true,"color":"a2622f","hardness":2.5,"tool":0,"chest":true},
+	9900:Archaeology.DATA[9900],
+	9901:Archaeology.DATA[9901],
+	9902:Archaeology.DATA[9902],
+	9903:Archaeology.DATA[9903],
+	9910:Archaeology.DATA[9910],
+	9911:Archaeology.DATA[9911],
+	9912:Archaeology.DATA[9912],
+	9913:Archaeology.DATA[9913],
+	10800:{"name":"Flower pot","block":true,"shape":"pot","color":"a5673f","hardness":0.6},
+	10801:{"name":"Armor stand","block":true,"shape":"stand","color":"b28c52","hardness":0.6},
+	9400:Sponges.DATA[9400],
+	9401:Sponges.DATA[9401],
+	9402:Sponges.DATA[9402],
+	8000:Farmland.DATA[8000],
+	8070:CropFarming.DATA[8070],
+	8033:CropFarming.DATA[8033],
+	8032:CropFarming.DATA[8032],
+	8031:CropFarming.DATA[8031],
+	8030:CropFarming.DATA[8030],
+	8023:CropFarming.DATA[8023],
+	8022:CropFarming.DATA[8022],
+	8021:CropFarming.DATA[8021],
+	8020:CropFarming.DATA[8020],
+	29:CropFarming.DATA[29],
+	8015:CropFarming.DATA[8015],
+	8014:CropFarming.DATA[8014],
+	8013:CropFarming.DATA[8013],
+	8012:CropFarming.DATA[8012],
+	8011:CropFarming.DATA[8011],
+	8010:CropFarming.DATA[8010],
+	22:CropFarming.DATA[22],
+	7600:Beehives.DATA[7600],
+	7601:Beehives.DATA[7601],
+	7602:Beehives.DATA[7602],
+	7603:Beehives.DATA[7603],
+	7604:Beehives.DATA[7604],
+	7605:Beehives.DATA[7605],
+	7606:Beehives.DATA[7606],
+	7607:Beehives.DATA[7607],
+	7608:Beehives.DATA[7608],
+	7609:Beehives.DATA[7609],
+	7610:Beehives.DATA[7610],
+	7611:Beehives.DATA[7611],
+	7612:Beehives.DATA[7612],
+	7613:Beehives.DATA[7613],
+	7614:Beehives.DATA[7614],
+	7615:Beehives.DATA[7615],
+	7616:Beehives.DATA[7616],
+	7617:Beehives.DATA[7617],
+	7618:Beehives.DATA[7618],
+	7619:Beehives.DATA[7619],
+	7620:Beehives.DATA[7620],
+	7621:Beehives.DATA[7621],
+	7622:Beehives.DATA[7622],
+	7623:Beehives.DATA[7623],
+	7624:Beehives.DATA[7624],
+	7625:Beehives.DATA[7625],
+	7626:Beehives.DATA[7626],
+	7627:Beehives.DATA[7627],
+	7628:Beehives.DATA[7628],
+	7629:Beehives.DATA[7629],
+	7630:Beehives.DATA[7630],
+	7631:Beehives.DATA[7631],
+	7632:Beehives.DATA[7632],
+	7633:Beehives.DATA[7633],
+	7634:Beehives.DATA[7634],
+	7635:Beehives.DATA[7635],
+	7636:Beehives.DATA[7636],
+	7637:Beehives.DATA[7637],
+	7638:Beehives.DATA[7638],
+	7639:Beehives.DATA[7639],
+	7640:Beehives.DATA[7640],
+	7641:Beehives.DATA[7641],
+	7642:Beehives.DATA[7642],
+	7643:Beehives.DATA[7643],
+	7644:Beehives.DATA[7644],
+	7645:Beehives.DATA[7645],
+	7646:Beehives.DATA[7646],
+	7647:Beehives.DATA[7647],
+	7650:Beehives.DATA[7650],
+	7651:Beehives.DATA[7651],
+	7652:Beehives.DATA[7652],
+	7653:Beehives.DATA[7653],
+	7660:Beehives.DATA[7660],
+	7661:Beehives.DATA[7661],
+	7662:Beehives.DATA[7662],
+	7663:Beehives.DATA[7663],
+	7664:Beehives.DATA[7664],
+	7665:Beehives.DATA[7665],
+	7666:Beehives.DATA[7666],
+	7667:Beehives.DATA[7667],
+	7668:Beehives.DATA[7668],
+	7700:Amethyst.DATA[7700],
+	7701:Amethyst.DATA[7701],
+	7702:Amethyst.DATA[7702],
+	7703:Amethyst.DATA[7703],
+	7704:Amethyst.DATA[7704],
+	7705:Amethyst.DATA[7705],
+	7708:Amethyst.DATA[7708],
+	7709:Amethyst.DATA[7709],
+	7710:Amethyst.DATA[7710],
+	7711:Amethyst.DATA[7711],
+	7712:Amethyst.DATA[7712],
+	7713:Amethyst.DATA[7713],
+	7716:Amethyst.DATA[7716],
+	7717:Amethyst.DATA[7717],
+	7718:Amethyst.DATA[7718],
+	7719:Amethyst.DATA[7719],
+	7720:Amethyst.DATA[7720],
+	7721:Amethyst.DATA[7721],
+	7724:Amethyst.DATA[7724],
+	7725:Amethyst.DATA[7725],
+	7726:Amethyst.DATA[7726],
+	7727:Amethyst.DATA[7727],
+	7728:Amethyst.DATA[7728],
+	7729:Amethyst.DATA[7729],
+	7732:Amethyst.DATA[7732],
+	7733:Amethyst.DATA[7733],
+	7734:Amethyst.DATA[7734],
+	7735:Amethyst.DATA[7735],
+	7736:Amethyst.DATA[7736],
+	7737:Amethyst.DATA[7737],
+	7500:FruitCrops.DATA[7500],
+	7501:FruitCrops.DATA[7501],
+	45:FruitCrops.DATA[45],
+	7510:FruitCrops.DATA[7510],
+	7511:FruitCrops.DATA[7511],
+	7512:FruitCrops.DATA[7512],
+	7513:FruitCrops.DATA[7513],
+	7514:FruitCrops.DATA[7514],
+	7515:FruitCrops.DATA[7515],
+	7516:FruitCrops.DATA[7516],
+	7517:FruitCrops.DATA[7517],
+	7518:FruitCrops.DATA[7518],
+	7519:FruitCrops.DATA[7519],
+	7520:FruitCrops.DATA[7520],
+	7521:FruitCrops.DATA[7521],
+	7530:FruitCrops.DATA[7530],
+	7531:FruitCrops.DATA[7531],
+	7532:FruitCrops.DATA[7532],
+	7533:FruitCrops.DATA[7533],
+	7534:FruitCrops.DATA[7534],
+	7535:FruitCrops.DATA[7535],
+	7536:FruitCrops.DATA[7536],
+	7537:FruitCrops.DATA[7537],
+	7538:FruitCrops.DATA[7538],
+	7539:FruitCrops.DATA[7539],
+	7540:FruitCrops.DATA[7540],
+	7541:FruitCrops.DATA[7541],
+	7551:FruitCrops.DATA[7551],
+	7552:FruitCrops.DATA[7552],
+	7553:FruitCrops.DATA[7553],
+	7560:FruitCrops.DATA[7560],
+	7561:FruitCrops.DATA[7561],
+	7562:FruitCrops.DATA[7562],
+	7563:FruitCrops.DATA[7563],
+	7300:Dungeons.DATA[7300],
+	7890:Spyglass.DATA[7890],
+	7400:DenseMaterials.DATA[7400],
+	7401:DenseMaterials.DATA[7401],
+	7402:DenseMaterials.DATA[7402],
+	7403:DenseMaterials.DATA[7403],
+	7404:DenseMaterials.DATA[7404],
+	7405:DenseMaterials.DATA[7405],
+	6800:Jukeboxes.DATA[6800],
+	6810:Jukeboxes.DATA[6810],
+	6811:Jukeboxes.DATA[6811],
+	6812:Jukeboxes.DATA[6812],
+	6813:Jukeboxes.DATA[6813],
+	6814:Jukeboxes.DATA[6814],
+	6815:Jukeboxes.DATA[6815],
+	6816:Jukeboxes.DATA[6816],
+	6700:NoteBlocks.DATA[6700],
+	5610:{"name":"Poppy","block":true,"shape":"plant","color":"d84b4b","hardness":0.0,"flammable":true,"compostability":65},
+	5611:{"name":"Dandelion","block":true,"shape":"plant","color":"efc642","hardness":0.0,"flammable":true,"compostability":65},
+	5612:{"name":"Oxeye daisy","block":true,"shape":"plant","color":"eee5d2","hardness":0.0,"flammable":true,"compostability":65},
+	5613:{"name":"Tall grass","block":true,"shape":"plant","color":"6fa03c","hardness":0.0,"flammable":true,"compostability":30},
+	1250:Boats.DATA[1250],
+	1260:Boats.DATA[1260],
+	1261:Boats.DATA[1261],
+	1251:Boats.DATA[1251],
+	1252:Boats.DATA[1252],
+	1253:Boats.DATA[1253],
+	1254:Boats.DATA[1254],
+	1240:{"name":"Daylight detector","color":"d9c598","block":true,"hardness":0.2,"tool":1,"drop":1240},
+	1241:{"name":"Inverted daylight detector","color":"6b819d","block":true,"hardness":0.2,"tool":1,"drop":1240,"hidden":true},
+	1242:{"name":"Target","color":"cebc87","block":true,"hardness":0.5,"tool":4,"drop":1242},
+	1243:{"name":"Target (powered)","color":"d2b88a","block":true,"hardness":0.5,"tool":4,"drop":1242,"hidden":true},
+	1180:{"name":"Ender chest","color":"243d39","block":true,"hardness":22.5,"blast_resistance":3000,"tool":0,"family":"ender_chest"},
+	1181:{"name":"White shulker box","color":"e4e4d7","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1182:{"name":"Grey shulker box","color":"626c70","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1183:{"name":"Light grey shulker box","color":"b0b4ac","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1184:{"name":"Black shulker box","color":"333740","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1185:{"name":"Yellow shulker box","color":"edc647","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1186:{"name":"Orange shulker box","color":"e4943e","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1187:{"name":"Red shulker box","color":"b83d41","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1188:{"name":"Magenta shulker box","color":"b94baf","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1189:{"name":"Purple shulker box","color":"824aaa","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1190:{"name":"Blue shulker box","color":"4966ad","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1191:{"name":"Cyan shulker box","color":"378a99","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1192:{"name":"Lime shulker box","color":"8bbe45","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1193:{"name":"Green shulker box","color":"51763e","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1194:{"name":"Pink shulker box","color":"dd8eac","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1195:{"name":"Light blue shulker box","color":"79b4d2","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
+	1196:{"name":"Brown shulker box","color":"79563e","block":true,"hardness":2,"blast_resistance":6,"tool":0,"stack":1,"family":"shulker"},
 	1150:{"name":"Deepslate tiles","color":"45464c","block":true,"hardness":3.5,"blast_resistance":6,"smelt":1152},
 	1151:{"name":"Cracked deepslate bricks","color":"484950","block":true,"hardness":3.5,"blast_resistance":6},
 	1152:{"name":"Cracked deepslate tiles","color":"43444a","block":true,"hardness":3.5,"blast_resistance":6},
@@ -298,6 +621,12 @@ const DATA = {
 	1155:{"name":"Tuff bricks","color":"74796c","block":true,"hardness":1.5,"blast_resistance":6},
 	1156:{"name":"Chiseled tuff","color":"777c6f","block":true,"hardness":1.5,"blast_resistance":6},
 	1157:{"name":"Chiseled tuff bricks","color":"71786a","block":true,"hardness":1.5,"blast_resistance":6},
+	# Mineclonia `mcl_core:stonebrickcarved`, `stonebrickcracked` and
+	# `stonebrickmossy`. The plain bricks are id 20; cracked bricks come out of a
+	# furnace, which is the source's `_mcl_cooking_output`.
+	1159:{"name":"Chiseled stone bricks","color":"7a7a76","block":true,"hardness":1.5,"blast_resistance":6},
+	1160:{"name":"Cracked stone bricks","color":"787874","block":true,"hardness":1.5,"blast_resistance":6},
+	1161:{"name":"Mossy stone bricks","color":"6d7a63","block":true,"hardness":1.5,"blast_resistance":6},
 	1119:{"name":"Wall torch","color":"c69349","block":true,"shape":"wall_torch","hidden":true,"hardness":0.22},
 	1120:{"name":"Wall torch","color":"c69349","block":true,"shape":"wall_torch","hidden":true,"hardness":0.22},
 	1121:{"name":"Wall torch","color":"c69349","block":true,"shape":"wall_torch","hidden":true,"hardness":0.22},
@@ -305,6 +634,99 @@ const DATA = {
 	1117:{"name":"Fire","color":"ec8e33","block":true,"shape":"plant","hardness":0},
 	1118:{"name":"Eternal fire","color":"ec8e33","block":true,"shape":"plant","hardness":0},
 	1116:{"name":"Fire charge","color":"ec8137","family":"fire_charge"},
+	1244:{"name":"Firework rocket","color":"f2f2f2","stack":64,"fuel":0},
+	1245:{"name":"Firework rocket","color":"f2f2f2","stack":64,"fuel":0},
+	1246:{"name":"Firework rocket","color":"f2f2f2","stack":64,"fuel":0},
+	1276:{"name":"Head","block":true,"shape":"head","color":"4f7a3f","hardness":1.0,"stack":64},
+	1277:{"name":"Head","block":true,"shape":"head","color":"4fae4f","hardness":1.0,"stack":64},
+	1278:{"name":"Head","block":true,"shape":"head","color":"b58a62","hardness":1.0,"stack":64},
+	1279:{"name":"Head","block":true,"shape":"head","color":"c9c9c9","hardness":1.0,"stack":64},
+	1280:{"name":"Head","block":true,"shape":"head","color":"3b3b3b","hardness":1.0,"stack":64},
+	1281:{"name":"Head","block":true,"shape":"head","color":"e2a0a0","hardness":1.0,"stack":64},
+	1282:{"name":"Head","block":true,"shape":"head","color":"5b6f57","hardness":1.0,"stack":64},
+	1283:{"name":"Head","block":true,"shape":"head","color":"4f7a3f","hardness":1.0,"stack":64,"hidden":true,"drop":1276},
+	1284:{"name":"Head","block":true,"shape":"head","color":"4fae4f","hardness":1.0,"stack":64,"hidden":true,"drop":1277},
+	1285:{"name":"Head","block":true,"shape":"head","color":"b58a62","hardness":1.0,"stack":64,"hidden":true,"drop":1278},
+	1286:{"name":"Head","block":true,"shape":"head","color":"c9c9c9","hardness":1.0,"stack":64,"hidden":true,"drop":1279},
+	1287:{"name":"Head","block":true,"shape":"head","color":"3b3b3b","hardness":1.0,"stack":64,"hidden":true,"drop":1280},
+	1288:{"name":"Head","block":true,"shape":"head","color":"e2a0a0","hardness":1.0,"stack":64,"hidden":true,"drop":1281},
+	1289:{"name":"Head","block":true,"shape":"head","color":"5b6f57","hardness":1.0,"stack":64,"hidden":true,"drop":1282},
+	1290:{"name":"Head","block":true,"shape":"head","color":"4f7a3f","hardness":1.0,"stack":64,"hidden":true,"drop":1276},
+	1300:{"name":"Scaffolding","block":true,"shape":"scaffolding","color":"c8b06a","hardness":0.0,"stack":64,"flammable":true},
+	1301:{"name":"Scaffolding","block":true,"shape":"scaffolding","color":"c8b06a","hardness":0.0,"stack":64,"hidden":true,"drop":1300},
+	1310:{"name":"Heart of the sea","color":"4fd0c0","stack":64},
+	1311:{"name":"Conduit","block":true,"color":"2f6f66","hardness":3.0,"tool":0,"light":15},
+	1312:{"name":"Prismarine","block":true,"color":"63a89c","hardness":1.5,"tool":0,"blast_resistance":6},
+	1313:{"name":"Prismarine bricks","block":true,"color":"4f8f88","hardness":1.5,"tool":0,"blast_resistance":6},
+	1314:{"name":"Dark prismarine","block":true,"color":"1f4f47","hardness":1.5,"tool":0,"blast_resistance":6},
+	1315:{"name":"Sea lantern","block":true,"color":"b8e6dc","hardness":0.3,"tool":0,"light":15},
+	1316:{"name":"Prismarine shard","color":"4f8f88","stack":64},
+	1317:{"name":"Prismarine crystals","color":"7fd8c8","stack":64},
+	1330:{"name":"Tube Coral Block","block":true,"color":"5c7fb8","hardness":1.5,"tool":0,"drop":1331},
+	1331:{"name":"Dead Tube Coral Block","block":true,"color":"9a9288","hardness":1.5,"tool":0,"hidden":true},
+	1332:{"name":"Tube Coral","block":true,"shape":"plant","color":"5c7fb8","hardness":0.0,"drop":1333},
+	1333:{"name":"Dead Tube Coral","block":true,"shape":"plant","color":"9a9288","hardness":0.0,"hidden":true},
+	1334:{"name":"Tube Coral Fan","block":true,"shape":"plant","color":"5c7fb8","hardness":0.0,"drop":1335},
+	1335:{"name":"Dead Tube Coral Fan","block":true,"shape":"plant","color":"9a9288","hardness":0.0,"hidden":true},
+	1336:{"name":"Brain Coral Block","block":true,"color":"c86bb0","hardness":1.5,"tool":0,"drop":1337},
+	1337:{"name":"Dead Brain Coral Block","block":true,"color":"9a9288","hardness":1.5,"tool":0,"hidden":true},
+	1338:{"name":"Brain Coral","block":true,"shape":"plant","color":"c86bb0","hardness":0.0,"drop":1339},
+	1339:{"name":"Dead Brain Coral","block":true,"shape":"plant","color":"9a9288","hardness":0.0,"hidden":true},
+	1340:{"name":"Brain Coral Fan","block":true,"shape":"plant","color":"c86bb0","hardness":0.0,"drop":1341},
+	1341:{"name":"Dead Brain Coral Fan","block":true,"shape":"plant","color":"9a9288","hardness":0.0,"hidden":true},
+	1342:{"name":"Bubble Coral Block","block":true,"color":"9d5ad0","hardness":1.5,"tool":0,"drop":1343},
+	1343:{"name":"Dead Bubble Coral Block","block":true,"color":"9a9288","hardness":1.5,"tool":0,"hidden":true},
+	1344:{"name":"Bubble Coral","block":true,"shape":"plant","color":"9d5ad0","hardness":0.0,"drop":1345},
+	1345:{"name":"Dead Bubble Coral","block":true,"shape":"plant","color":"9a9288","hardness":0.0,"hidden":true},
+	1346:{"name":"Bubble Coral Fan","block":true,"shape":"plant","color":"9d5ad0","hardness":0.0,"drop":1347},
+	1347:{"name":"Dead Bubble Coral Fan","block":true,"shape":"plant","color":"9a9288","hardness":0.0,"hidden":true},
+	1348:{"name":"Fire Coral Block","block":true,"color":"d4674f","hardness":1.5,"tool":0,"drop":1349},
+	1349:{"name":"Dead Fire Coral Block","block":true,"color":"9a9288","hardness":1.5,"tool":0,"hidden":true},
+	1350:{"name":"Fire Coral","block":true,"shape":"plant","color":"d4674f","hardness":0.0,"drop":1351},
+	1351:{"name":"Dead Fire Coral","block":true,"shape":"plant","color":"9a9288","hardness":0.0,"hidden":true},
+	1352:{"name":"Fire Coral Fan","block":true,"shape":"plant","color":"d4674f","hardness":0.0,"drop":1353},
+	1353:{"name":"Dead Fire Coral Fan","block":true,"shape":"plant","color":"9a9288","hardness":0.0,"hidden":true},
+	1354:{"name":"Horn Coral Block","block":true,"color":"c9a24f","hardness":1.5,"tool":0,"drop":1355},
+	1355:{"name":"Dead Horn Coral Block","block":true,"color":"9a9288","hardness":1.5,"tool":0,"hidden":true},
+	1356:{"name":"Horn Coral","block":true,"shape":"plant","color":"c9a24f","hardness":0.0,"drop":1357},
+	1357:{"name":"Dead Horn Coral","block":true,"shape":"plant","color":"9a9288","hardness":0.0,"hidden":true},
+	1358:{"name":"Horn Coral Fan","block":true,"shape":"plant","color":"c9a24f","hardness":0.0,"drop":1359},
+	1359:{"name":"Dead Horn Coral Fan","block":true,"shape":"plant","color":"9a9288","hardness":0.0,"hidden":true},
+	1360:{"name":"Sea pickle","block":true,"shape":"plant","color":"7fd06a","hardness":0.0,"light":6,"stack":64},
+	1361:{"name":"Sea pickle","block":true,"shape":"plant","color":"7fd06a","hardness":0.0,"light":9,"stack":64},
+	1362:{"name":"Sea pickle","block":true,"shape":"plant","color":"7fd06a","hardness":0.0,"light":12,"stack":64},
+	1363:{"name":"Sea pickle","block":true,"shape":"plant","color":"7fd06a","hardness":0.0,"light":15,"stack":64},
+	1364:{"name":"Sea pickle","block":true,"shape":"plant","color":"4f7a44","hardness":0.0,"hidden":true,"stack":64},
+	1365:{"name":"Sea pickle","block":true,"shape":"plant","color":"4f7a44","hardness":0.0,"hidden":true,"stack":64},
+	1366:{"name":"Sea pickle","block":true,"shape":"plant","color":"4f7a44","hardness":0.0,"hidden":true,"stack":64},
+	1367:{"name":"Sea pickle","block":true,"shape":"plant","color":"4f7a44","hardness":0.0,"hidden":true,"stack":64},
+	1368:{"name":"Seagrass","color":"4f8f5a","stack":64},
+	1390:{"name":"Beacon","block":true,"color":"6fd8d8","hardness":3.0,"light":15},
+	1391:{"name":"Beacon beam","block":true,"shape":"plant","color":"ffffff","hardness":0.0,"hidden":true,"light":15},
+	1392:{"name":"Nether star","color":"f6f0b8","stack":64},
+	1395:{"name":"Totem of Undying","color":"e8c44a","stack":1},
+	1380:{"name":"Thing Banner Pattern","color":"e8e0cc","stack":64},
+	1381:{"name":"Skull Banner Pattern","color":"e8e0cc","stack":64},
+	1382:{"name":"Creeper Banner Pattern","color":"e8e0cc","stack":64},
+	1383:{"name":"Flower Banner Pattern","color":"e8e0cc","stack":64},
+	1384:{"name":"Bricks Banner Pattern","color":"e8e0cc","stack":64},
+	1385:{"name":"Curly border Banner Pattern","color":"e8e0cc","stack":64},
+	1386:{"name":"Globe Banner Pattern","color":"e8e0cc","stack":64},
+	1387:{"name":"Piglin Banner Pattern","color":"e8e0cc","stack":64},
+	1388:{"name":"Guster Banner Pattern","color":"e8e0cc","stack":64},
+	1389:{"name":"Flow Banner Pattern","color":"e8e0cc","stack":64},
+	1369:{"name":"Seagrass","block":true,"shape":"plant","color":"4f8f5a","hardness":0.0,"hidden":true,"drop":1368},
+	1370:{"name":"Seagrass","block":true,"shape":"plant","color":"4f8f5a","hardness":0.0,"hidden":true,"drop":1368},
+	1371:{"name":"Seagrass","block":true,"shape":"plant","color":"4f8f5a","hardness":0.0,"hidden":true,"drop":1368},
+	1372:{"name":"Seagrass","block":true,"shape":"plant","color":"4f8f5a","hardness":0.0,"hidden":true,"drop":1368},
+	1373:{"name":"Seagrass","block":true,"shape":"plant","color":"4f8f5a","hardness":0.0,"hidden":true,"drop":1368},
+	1374:{"name":"Seagrass","block":true,"shape":"plant","color":"4f8f5a","hardness":0.0,"hidden":true,"drop":1368},
+	1291:{"name":"Head","block":true,"shape":"head","color":"4fae4f","hardness":1.0,"stack":64,"hidden":true,"drop":1277},
+	1292:{"name":"Head","block":true,"shape":"head","color":"b58a62","hardness":1.0,"stack":64,"hidden":true,"drop":1278},
+	1293:{"name":"Head","block":true,"shape":"head","color":"c9c9c9","hardness":1.0,"stack":64,"hidden":true,"drop":1279},
+	1294:{"name":"Head","block":true,"shape":"head","color":"3b3b3b","hardness":1.0,"stack":64,"hidden":true,"drop":1280},
+	1295:{"name":"Head","block":true,"shape":"head","color":"e2a0a0","hardness":1.0,"stack":64,"hidden":true,"drop":1281},
+	1296:{"name":"Head","block":true,"shape":"head","color":"5b6f57","hardness":1.0,"stack":64,"hidden":true,"drop":1282},
 	1100:{"name":"Polished blackstone","color":"49434b","block":true,"tool":0,"hardness":2},
 	1101:{"name":"Polished blackstone bricks","color":"39333d","block":true,"tool":0,"hardness":1.5},
 	1102:{"name":"Chiseled polished blackstone","color":"49414b","block":true,"tool":0,"hardness":1.5},
@@ -352,7 +774,7 @@ const DATA = {
 	516:{"name":"Smoker","color":"705945","block":true},
 	517:{"name":"Cartography table","color":"b29460","block":true,"tool":1},
 	518:{"name":"Brewing stand","color":"b3954d","block":true,"shape":"brewing"},
-	519:{"name":"Composter","color":"937043","block":true,"tool":1},
+	519:{"name":"Composter","color":"937043","block":true,"tool":1,"shape":"composter","hardness":0.6},
 	520:{"name":"Barrel","color":"9d774f","block":true,"tool":1},
 	521:{"name":"Fletching table","color":"c4a97a","block":true,"tool":1},
 	522:{"name":"Cauldron","color":"535b62","block":true,"shape":"cauldron"},
@@ -364,7 +786,13 @@ const DATA = {
 	528:{"name":"Bell","color":"e1b84d","block":true,"shape":"bell"},
 	529:{"name":"Dirt path","color":"ad9569","block":true},
 	530:{"name":"Lantern","color":"efb461","block":true,"shape":"lantern"},
-	531:{"name":"Campfire","color":"b57843","block":true,"shape":"campfire"},
+	531:{"name":"Campfire","color":"b57843","block":true,"shape":"campfire","tool":1,"hardness":2.0},
+	1200:{"name":"Name tag","color":"d2bb83","family":"name_tag"},
+	1201:{"name":"Nautilus shell","color":"dba673","family":"nautilus_shell"},
+	1220:{"name":"Unlit campfire","color":"695242","block":true,"shape":"campfire","tool":1,"hardness":2.0,"hidden":true},
+	1221:{"name":"Soul campfire","color":"4cbec6","block":true,"shape":"campfire","tool":1,"hardness":2.0},
+	1222:{"name":"Unlit soul campfire","color":"675c51","block":true,"shape":"campfire","tool":1,"hardness":2.0,"hidden":true},
+	1223:{"name":"Soul soil","color":"554039","block":true,"tool":2,"hardness":0.5},
 	532:{"name":"Anvil","color":"505659","block":true,"shape":"anvil"},
 	533:{"name":"Granite","color":"a67769","block":true},
 	534:{"name":"Diorite","color":"c4c1b8","block":true},
@@ -384,18 +812,18 @@ const DATA = {
 	548:{"name":"Yellow candle","color":"edc657","block":true,"shape":"candle"},
 	549:{"name":"Wooden door","color":"a57948","block":true,"shape":"door","tool":1},
 	550:{"name":"Open wooden door","color":"a57948","block":true,"shape":"door_open","tool":1},
-	551:{"name":"Carrots (growing)","color":"ed9449","block":true,"shape":"crop","crop":"carrots","stage":0,"tool":-1},
-	552:{"name":"Carrots (growing)","color":"ed9449","block":true,"shape":"crop","crop":"carrots","stage":1,"tool":-1},
-	553:{"name":"Carrots (growing)","color":"ed9449","block":true,"shape":"crop","crop":"carrots","stage":2,"tool":-1},
-	554:{"name":"Carrots (ripe)","color":"ed9449","block":true,"shape":"crop","crop":"carrots","stage":3,"tool":-1},
-	555:{"name":"Potatoes (growing)","color":"b99860","block":true,"shape":"crop","crop":"potatoes","stage":0,"tool":-1},
-	556:{"name":"Potatoes (growing)","color":"b99860","block":true,"shape":"crop","crop":"potatoes","stage":1,"tool":-1},
-	557:{"name":"Potatoes (growing)","color":"b99860","block":true,"shape":"crop","crop":"potatoes","stage":2,"tool":-1},
-	558:{"name":"Potatoes (ripe)","color":"b99860","block":true,"shape":"crop","crop":"potatoes","stage":3,"tool":-1},
-	559:{"name":"Beetroots (growing)","color":"a5445a","block":true,"shape":"crop","crop":"beetroots","stage":0,"tool":-1},
-	560:{"name":"Beetroots (growing)","color":"a5445a","block":true,"shape":"crop","crop":"beetroots","stage":1,"tool":-1},
-	561:{"name":"Beetroots (growing)","color":"a5445a","block":true,"shape":"crop","crop":"beetroots","stage":2,"tool":-1},
-	562:{"name":"Beetroots (ripe)","color":"a5445a","block":true,"shape":"crop","crop":"beetroots","stage":3,"tool":-1},
+	551:CropFarming.DATA[551],
+	552:CropFarming.DATA[552],
+	553:CropFarming.DATA[553],
+	554:CropFarming.DATA[554],
+	555:CropFarming.DATA[555],
+	556:CropFarming.DATA[556],
+	557:CropFarming.DATA[557],
+	558:CropFarming.DATA[558],
+	559:CropFarming.DATA[559],
+	560:CropFarming.DATA[560],
+	561:CropFarming.DATA[561],
+	562:CropFarming.DATA[562],
 	563:{"name":"Nether wart (growing)","color":"a34140","block":true,"shape":"crop","crop":"nether_wart","stage":0,"tool":-1},
 	564:{"name":"Nether wart (growing)","color":"a34140","block":true,"shape":"crop","crop":"nether_wart","stage":1,"tool":-1},
 	565:{"name":"Nether wart (growing)","color":"a34140","block":true,"shape":"crop","crop":"nether_wart","stage":2,"tool":-1},
@@ -415,7 +843,7 @@ const DATA = {
 	776:{"name":"Golden carrot","color":"efc950","food":6},
 	777:{"name":"Glistering melon slice","color":"ddaa42"},
 	778:{"name":"Cookie","color":"b37e42","food":2},
-	779:{"name":"Cake","color":"efdbc1","food":14},
+	779:{"name":"Cake","color":"f0d4a5","block":true,"shape":"cake","stack":1},
 	780:{"name":"Suspicious stew","color":"a89556","food":6,"stack":1},
 	781:{"name":"Beetroot soup","color":"a44b4a","food":6,"stack":1},
 	782:{"name":"Raw cod","color":"a3bba0","food":2,"smelt":783},
@@ -505,6 +933,319 @@ const DATA = {
 	616:{"name":"Pink terracotta","color":"dd8eac","block":true,"shape":"cube","family":"terracotta","dye":"pink","smelt":632},
 	617:{"name":"Light blue terracotta","color":"79b4d2","block":true,"shape":"cube","family":"terracotta","dye":"light_blue","smelt":633},
 	618:{"name":"Brown terracotta","color":"79563e","block":true,"shape":"cube","family":"terracotta","dye":"brown","smelt":634},
+	# Concrete (mcl_colorblocks). Powder falls and hardens in water; the concrete it
+	# becomes is the plain building block. The behaviour lives in `Concrete`.
+	11040:{"name":"White concrete powder","color":"d8d2c6","block":true,"shape":"cube","family":"concrete_powder","dye":"white","hardness":0.5,"tool":2},
+	11041:{"name":"Grey concrete powder","color":"9a9a92","block":true,"shape":"cube","family":"concrete_powder","dye":"grey","hardness":0.5,"tool":2},
+	11042:{"name":"Light grey concrete powder","color":"b6b4ac","block":true,"shape":"cube","family":"concrete_powder","dye":"silver","hardness":0.5,"tool":2},
+	11043:{"name":"Black concrete powder","color":"6b6b66","block":true,"shape":"cube","family":"concrete_powder","dye":"black","hardness":0.5,"tool":2},
+	11044:{"name":"Yellow concrete powder","color":"dcbf85","block":true,"shape":"cube","family":"concrete_powder","dye":"yellow","hardness":0.5,"tool":2},
+	11045:{"name":"Orange concrete powder","color":"dcae83","block":true,"shape":"cube","family":"concrete_powder","dye":"orange","hardness":0.5,"tool":2},
+	11046:{"name":"Red concrete powder","color":"c08884","block":true,"shape":"cube","family":"concrete_powder","dye":"red","hardness":0.5,"tool":2},
+	11047:{"name":"Magenta concrete powder","color":"bf93b7","block":true,"shape":"cube","family":"concrete_powder","dye":"magenta","hardness":0.5,"tool":2},
+	11048:{"name":"Purple concrete powder","color":"9f8dba","block":true,"shape":"cube","family":"concrete_powder","dye":"purple","hardness":0.5,"tool":2},
+	11049:{"name":"Blue concrete powder","color":"8493be","block":true,"shape":"cube","family":"concrete_powder","dye":"blue","hardness":0.5,"tool":2},
+	11050:{"name":"Cyan concrete powder","color":"7ea4ac","block":true,"shape":"cube","family":"concrete_powder","dye":"cyan","hardness":0.5,"tool":2},
+	11051:{"name":"Lime concrete powder","color":"b2c184","block":true,"shape":"cube","family":"concrete_powder","dye":"lime","hardness":0.5,"tool":2},
+	11052:{"name":"Green concrete powder","color":"89987f","block":true,"shape":"cube","family":"concrete_powder","dye":"green","hardness":0.5,"tool":2},
+	11053:{"name":"Pink concrete powder","color":"d8acbe","block":true,"shape":"cube","family":"concrete_powder","dye":"pink","hardness":0.5,"tool":2},
+	11054:{"name":"Light blue concrete powder","color":"a3becd","block":true,"shape":"cube","family":"concrete_powder","dye":"light_blue","hardness":0.5,"tool":2},
+	11055:{"name":"Brown concrete powder","color":"9d8471","block":true,"shape":"cube","family":"concrete_powder","dye":"brown","hardness":0.5,"tool":2},
+	11056:{"name":"White concrete","color":"e8e8e0","block":true,"shape":"cube","family":"concrete","dye":"white","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11057:{"name":"Grey concrete","color":"74746f","block":true,"shape":"cube","family":"concrete","dye":"grey","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11058:{"name":"Light grey concrete","color":"a9a9a2","block":true,"shape":"cube","family":"concrete","dye":"silver","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11059:{"name":"Black concrete","color":"3d3d40","block":true,"shape":"cube","family":"concrete","dye":"black","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11060:{"name":"Yellow concrete","color":"e6c33c","block":true,"shape":"cube","family":"concrete","dye":"yellow","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11061:{"name":"Orange concrete","color":"e08a35","block":true,"shape":"cube","family":"concrete","dye":"orange","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11062:{"name":"Red concrete","color":"a8353a","block":true,"shape":"cube","family":"concrete","dye":"red","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11063:{"name":"Magenta concrete","color":"b044a6","block":true,"shape":"cube","family":"concrete","dye":"magenta","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11064:{"name":"Purple concrete","color":"7440a2","block":true,"shape":"cube","family":"concrete","dye":"purple","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11065:{"name":"Blue concrete","color":"3c53a5","block":true,"shape":"cube","family":"concrete","dye":"blue","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11066:{"name":"Cyan concrete","color":"2c7a8c","block":true,"shape":"cube","family":"concrete","dye":"cyan","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11067:{"name":"Lime concrete","color":"7db83b","block":true,"shape":"cube","family":"concrete","dye":"lime","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11068:{"name":"Green concrete","color":"3f6b30","block":true,"shape":"cube","family":"concrete","dye":"green","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11069:{"name":"Pink concrete","color":"d5698f","block":true,"shape":"cube","family":"concrete","dye":"pink","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11070:{"name":"Light blue concrete","color":"60a3cf","block":true,"shape":"cube","family":"concrete","dye":"light_blue","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	11071:{"name":"Brown concrete","color":"6d4a30","block":true,"shape":"cube","family":"concrete","dye":"brown","hardness":1.8,"tool":0,"blast_resistance":6.0},
+	# Candles (mcl_candles): per colour four unlit counts then four lit counts.
+	# The count is the source's own scheme; the lit run uses `light_source = 3 * n`.
+	11072:{"name":"White candle","color":"e4e4d7","block":true,"shape":"candle","family":"candle","dye":"white","hardness":0.1,"tool":-1,"stack":64},
+	11073:{"name":"White candle","color":"e4e4d7","block":true,"shape":"candle","family":"candle","dye":"white","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11074:{"name":"White candle","color":"e4e4d7","block":true,"shape":"candle","family":"candle","dye":"white","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11075:{"name":"White candle","color":"e4e4d7","block":true,"shape":"candle","family":"candle","dye":"white","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11080:{"name":"Grey candle","color":"626c70","block":true,"shape":"candle","family":"candle","dye":"grey","hardness":0.1,"tool":-1,"stack":64},
+	11081:{"name":"Grey candle","color":"626c70","block":true,"shape":"candle","family":"candle","dye":"grey","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11082:{"name":"Grey candle","color":"626c70","block":true,"shape":"candle","family":"candle","dye":"grey","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11083:{"name":"Grey candle","color":"626c70","block":true,"shape":"candle","family":"candle","dye":"grey","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11088:{"name":"Silver candle","color":"b0b4ac","block":true,"shape":"candle","family":"candle","dye":"silver","hardness":0.1,"tool":-1,"stack":64},
+	11089:{"name":"Silver candle","color":"b0b4ac","block":true,"shape":"candle","family":"candle","dye":"silver","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11090:{"name":"Silver candle","color":"b0b4ac","block":true,"shape":"candle","family":"candle","dye":"silver","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11091:{"name":"Silver candle","color":"b0b4ac","block":true,"shape":"candle","family":"candle","dye":"silver","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11096:{"name":"Black candle","color":"333740","block":true,"shape":"candle","family":"candle","dye":"black","hardness":0.1,"tool":-1,"stack":64},
+	11097:{"name":"Black candle","color":"333740","block":true,"shape":"candle","family":"candle","dye":"black","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11098:{"name":"Black candle","color":"333740","block":true,"shape":"candle","family":"candle","dye":"black","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11099:{"name":"Black candle","color":"333740","block":true,"shape":"candle","family":"candle","dye":"black","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11104:{"name":"Yellow candle","color":"edc647","block":true,"shape":"candle","family":"candle","dye":"yellow","hardness":0.1,"tool":-1,"stack":64},
+	11105:{"name":"Yellow candle","color":"edc647","block":true,"shape":"candle","family":"candle","dye":"yellow","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11106:{"name":"Yellow candle","color":"edc647","block":true,"shape":"candle","family":"candle","dye":"yellow","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11107:{"name":"Yellow candle","color":"edc647","block":true,"shape":"candle","family":"candle","dye":"yellow","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11112:{"name":"Orange candle","color":"e4943e","block":true,"shape":"candle","family":"candle","dye":"orange","hardness":0.1,"tool":-1,"stack":64},
+	11113:{"name":"Orange candle","color":"e4943e","block":true,"shape":"candle","family":"candle","dye":"orange","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11114:{"name":"Orange candle","color":"e4943e","block":true,"shape":"candle","family":"candle","dye":"orange","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11115:{"name":"Orange candle","color":"e4943e","block":true,"shape":"candle","family":"candle","dye":"orange","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11120:{"name":"Red candle","color":"b83d41","block":true,"shape":"candle","family":"candle","dye":"red","hardness":0.1,"tool":-1,"stack":64},
+	11121:{"name":"Red candle","color":"b83d41","block":true,"shape":"candle","family":"candle","dye":"red","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11122:{"name":"Red candle","color":"b83d41","block":true,"shape":"candle","family":"candle","dye":"red","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11123:{"name":"Red candle","color":"b83d41","block":true,"shape":"candle","family":"candle","dye":"red","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11128:{"name":"Magenta candle","color":"b94baf","block":true,"shape":"candle","family":"candle","dye":"magenta","hardness":0.1,"tool":-1,"stack":64},
+	11129:{"name":"Magenta candle","color":"b94baf","block":true,"shape":"candle","family":"candle","dye":"magenta","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11130:{"name":"Magenta candle","color":"b94baf","block":true,"shape":"candle","family":"candle","dye":"magenta","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11131:{"name":"Magenta candle","color":"b94baf","block":true,"shape":"candle","family":"candle","dye":"magenta","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11136:{"name":"Purple candle","color":"824aaa","block":true,"shape":"candle","family":"candle","dye":"purple","hardness":0.1,"tool":-1,"stack":64},
+	11137:{"name":"Purple candle","color":"824aaa","block":true,"shape":"candle","family":"candle","dye":"purple","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11138:{"name":"Purple candle","color":"824aaa","block":true,"shape":"candle","family":"candle","dye":"purple","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11139:{"name":"Purple candle","color":"824aaa","block":true,"shape":"candle","family":"candle","dye":"purple","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11144:{"name":"Blue candle","color":"4966ad","block":true,"shape":"candle","family":"candle","dye":"blue","hardness":0.1,"tool":-1,"stack":64},
+	11145:{"name":"Blue candle","color":"4966ad","block":true,"shape":"candle","family":"candle","dye":"blue","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11146:{"name":"Blue candle","color":"4966ad","block":true,"shape":"candle","family":"candle","dye":"blue","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11147:{"name":"Blue candle","color":"4966ad","block":true,"shape":"candle","family":"candle","dye":"blue","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11152:{"name":"Cyan candle","color":"378a99","block":true,"shape":"candle","family":"candle","dye":"cyan","hardness":0.1,"tool":-1,"stack":64},
+	11153:{"name":"Cyan candle","color":"378a99","block":true,"shape":"candle","family":"candle","dye":"cyan","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11154:{"name":"Cyan candle","color":"378a99","block":true,"shape":"candle","family":"candle","dye":"cyan","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11155:{"name":"Cyan candle","color":"378a99","block":true,"shape":"candle","family":"candle","dye":"cyan","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11160:{"name":"Lime candle","color":"8bbe45","block":true,"shape":"candle","family":"candle","dye":"lime","hardness":0.1,"tool":-1,"stack":64},
+	11161:{"name":"Lime candle","color":"8bbe45","block":true,"shape":"candle","family":"candle","dye":"lime","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11162:{"name":"Lime candle","color":"8bbe45","block":true,"shape":"candle","family":"candle","dye":"lime","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11163:{"name":"Lime candle","color":"8bbe45","block":true,"shape":"candle","family":"candle","dye":"lime","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11168:{"name":"Green candle","color":"51763e","block":true,"shape":"candle","family":"candle","dye":"green","hardness":0.1,"tool":-1,"stack":64},
+	11169:{"name":"Green candle","color":"51763e","block":true,"shape":"candle","family":"candle","dye":"green","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11170:{"name":"Green candle","color":"51763e","block":true,"shape":"candle","family":"candle","dye":"green","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11171:{"name":"Green candle","color":"51763e","block":true,"shape":"candle","family":"candle","dye":"green","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11176:{"name":"Pink candle","color":"dd8eac","block":true,"shape":"candle","family":"candle","dye":"pink","hardness":0.1,"tool":-1,"stack":64},
+	11177:{"name":"Pink candle","color":"dd8eac","block":true,"shape":"candle","family":"candle","dye":"pink","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11178:{"name":"Pink candle","color":"dd8eac","block":true,"shape":"candle","family":"candle","dye":"pink","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11179:{"name":"Pink candle","color":"dd8eac","block":true,"shape":"candle","family":"candle","dye":"pink","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11184:{"name":"Light blue candle","color":"79b4d2","block":true,"shape":"candle","family":"candle","dye":"light_blue","hardness":0.1,"tool":-1,"stack":64},
+	11185:{"name":"Light blue candle","color":"79b4d2","block":true,"shape":"candle","family":"candle","dye":"light_blue","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11186:{"name":"Light blue candle","color":"79b4d2","block":true,"shape":"candle","family":"candle","dye":"light_blue","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11187:{"name":"Light blue candle","color":"79b4d2","block":true,"shape":"candle","family":"candle","dye":"light_blue","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11192:{"name":"Brown candle","color":"79563e","block":true,"shape":"candle","family":"candle","dye":"brown","hardness":0.1,"tool":-1,"stack":64},
+	11193:{"name":"Brown candle","color":"79563e","block":true,"shape":"candle","family":"candle","dye":"brown","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11194:{"name":"Brown candle","color":"79563e","block":true,"shape":"candle","family":"candle","dye":"brown","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11195:{"name":"Brown candle","color":"79563e","block":true,"shape":"candle","family":"candle","dye":"brown","hardness":0.1,"tool":-1,"stack":64,"hidden":true},
+	11076:{"name":"White candle","color":"e4e4d7","block":true,"shape":"candle","family":"candle","dye":"white","hardness":0.1,"tool":-1,"hidden":true},
+	11077:{"name":"White candle","color":"e4e4d7","block":true,"shape":"candle","family":"candle","dye":"white","hardness":0.1,"tool":-1,"hidden":true},
+	11078:{"name":"White candle","color":"e4e4d7","block":true,"shape":"candle","family":"candle","dye":"white","hardness":0.1,"tool":-1,"hidden":true},
+	11079:{"name":"White candle","color":"e4e4d7","block":true,"shape":"candle","family":"candle","dye":"white","hardness":0.1,"tool":-1,"hidden":true},
+	11084:{"name":"Grey candle","color":"626c70","block":true,"shape":"candle","family":"candle","dye":"grey","hardness":0.1,"tool":-1,"hidden":true},
+	11085:{"name":"Grey candle","color":"626c70","block":true,"shape":"candle","family":"candle","dye":"grey","hardness":0.1,"tool":-1,"hidden":true},
+	11086:{"name":"Grey candle","color":"626c70","block":true,"shape":"candle","family":"candle","dye":"grey","hardness":0.1,"tool":-1,"hidden":true},
+	11087:{"name":"Grey candle","color":"626c70","block":true,"shape":"candle","family":"candle","dye":"grey","hardness":0.1,"tool":-1,"hidden":true},
+	11092:{"name":"Silver candle","color":"b0b4ac","block":true,"shape":"candle","family":"candle","dye":"silver","hardness":0.1,"tool":-1,"hidden":true},
+	11093:{"name":"Silver candle","color":"b0b4ac","block":true,"shape":"candle","family":"candle","dye":"silver","hardness":0.1,"tool":-1,"hidden":true},
+	11094:{"name":"Silver candle","color":"b0b4ac","block":true,"shape":"candle","family":"candle","dye":"silver","hardness":0.1,"tool":-1,"hidden":true},
+	11095:{"name":"Silver candle","color":"b0b4ac","block":true,"shape":"candle","family":"candle","dye":"silver","hardness":0.1,"tool":-1,"hidden":true},
+	11100:{"name":"Black candle","color":"333740","block":true,"shape":"candle","family":"candle","dye":"black","hardness":0.1,"tool":-1,"hidden":true},
+	11101:{"name":"Black candle","color":"333740","block":true,"shape":"candle","family":"candle","dye":"black","hardness":0.1,"tool":-1,"hidden":true},
+	11102:{"name":"Black candle","color":"333740","block":true,"shape":"candle","family":"candle","dye":"black","hardness":0.1,"tool":-1,"hidden":true},
+	11103:{"name":"Black candle","color":"333740","block":true,"shape":"candle","family":"candle","dye":"black","hardness":0.1,"tool":-1,"hidden":true},
+	11108:{"name":"Yellow candle","color":"edc647","block":true,"shape":"candle","family":"candle","dye":"yellow","hardness":0.1,"tool":-1,"hidden":true},
+	11109:{"name":"Yellow candle","color":"edc647","block":true,"shape":"candle","family":"candle","dye":"yellow","hardness":0.1,"tool":-1,"hidden":true},
+	11110:{"name":"Yellow candle","color":"edc647","block":true,"shape":"candle","family":"candle","dye":"yellow","hardness":0.1,"tool":-1,"hidden":true},
+	11111:{"name":"Yellow candle","color":"edc647","block":true,"shape":"candle","family":"candle","dye":"yellow","hardness":0.1,"tool":-1,"hidden":true},
+	11116:{"name":"Orange candle","color":"e4943e","block":true,"shape":"candle","family":"candle","dye":"orange","hardness":0.1,"tool":-1,"hidden":true},
+	11117:{"name":"Orange candle","color":"e4943e","block":true,"shape":"candle","family":"candle","dye":"orange","hardness":0.1,"tool":-1,"hidden":true},
+	11118:{"name":"Orange candle","color":"e4943e","block":true,"shape":"candle","family":"candle","dye":"orange","hardness":0.1,"tool":-1,"hidden":true},
+	11119:{"name":"Orange candle","color":"e4943e","block":true,"shape":"candle","family":"candle","dye":"orange","hardness":0.1,"tool":-1,"hidden":true},
+	11124:{"name":"Red candle","color":"b83d41","block":true,"shape":"candle","family":"candle","dye":"red","hardness":0.1,"tool":-1,"hidden":true},
+	11125:{"name":"Red candle","color":"b83d41","block":true,"shape":"candle","family":"candle","dye":"red","hardness":0.1,"tool":-1,"hidden":true},
+	11126:{"name":"Red candle","color":"b83d41","block":true,"shape":"candle","family":"candle","dye":"red","hardness":0.1,"tool":-1,"hidden":true},
+	11127:{"name":"Red candle","color":"b83d41","block":true,"shape":"candle","family":"candle","dye":"red","hardness":0.1,"tool":-1,"hidden":true},
+	11132:{"name":"Magenta candle","color":"b94baf","block":true,"shape":"candle","family":"candle","dye":"magenta","hardness":0.1,"tool":-1,"hidden":true},
+	11133:{"name":"Magenta candle","color":"b94baf","block":true,"shape":"candle","family":"candle","dye":"magenta","hardness":0.1,"tool":-1,"hidden":true},
+	11134:{"name":"Magenta candle","color":"b94baf","block":true,"shape":"candle","family":"candle","dye":"magenta","hardness":0.1,"tool":-1,"hidden":true},
+	11135:{"name":"Magenta candle","color":"b94baf","block":true,"shape":"candle","family":"candle","dye":"magenta","hardness":0.1,"tool":-1,"hidden":true},
+	11140:{"name":"Purple candle","color":"824aaa","block":true,"shape":"candle","family":"candle","dye":"purple","hardness":0.1,"tool":-1,"hidden":true},
+	11141:{"name":"Purple candle","color":"824aaa","block":true,"shape":"candle","family":"candle","dye":"purple","hardness":0.1,"tool":-1,"hidden":true},
+	11142:{"name":"Purple candle","color":"824aaa","block":true,"shape":"candle","family":"candle","dye":"purple","hardness":0.1,"tool":-1,"hidden":true},
+	11143:{"name":"Purple candle","color":"824aaa","block":true,"shape":"candle","family":"candle","dye":"purple","hardness":0.1,"tool":-1,"hidden":true},
+	11148:{"name":"Blue candle","color":"4966ad","block":true,"shape":"candle","family":"candle","dye":"blue","hardness":0.1,"tool":-1,"hidden":true},
+	11149:{"name":"Blue candle","color":"4966ad","block":true,"shape":"candle","family":"candle","dye":"blue","hardness":0.1,"tool":-1,"hidden":true},
+	11150:{"name":"Blue candle","color":"4966ad","block":true,"shape":"candle","family":"candle","dye":"blue","hardness":0.1,"tool":-1,"hidden":true},
+	11151:{"name":"Blue candle","color":"4966ad","block":true,"shape":"candle","family":"candle","dye":"blue","hardness":0.1,"tool":-1,"hidden":true},
+	11156:{"name":"Cyan candle","color":"378a99","block":true,"shape":"candle","family":"candle","dye":"cyan","hardness":0.1,"tool":-1,"hidden":true},
+	11157:{"name":"Cyan candle","color":"378a99","block":true,"shape":"candle","family":"candle","dye":"cyan","hardness":0.1,"tool":-1,"hidden":true},
+	11158:{"name":"Cyan candle","color":"378a99","block":true,"shape":"candle","family":"candle","dye":"cyan","hardness":0.1,"tool":-1,"hidden":true},
+	11159:{"name":"Cyan candle","color":"378a99","block":true,"shape":"candle","family":"candle","dye":"cyan","hardness":0.1,"tool":-1,"hidden":true},
+	11164:{"name":"Lime candle","color":"8bbe45","block":true,"shape":"candle","family":"candle","dye":"lime","hardness":0.1,"tool":-1,"hidden":true},
+	11165:{"name":"Lime candle","color":"8bbe45","block":true,"shape":"candle","family":"candle","dye":"lime","hardness":0.1,"tool":-1,"hidden":true},
+	11166:{"name":"Lime candle","color":"8bbe45","block":true,"shape":"candle","family":"candle","dye":"lime","hardness":0.1,"tool":-1,"hidden":true},
+	11167:{"name":"Lime candle","color":"8bbe45","block":true,"shape":"candle","family":"candle","dye":"lime","hardness":0.1,"tool":-1,"hidden":true},
+	11172:{"name":"Green candle","color":"51763e","block":true,"shape":"candle","family":"candle","dye":"green","hardness":0.1,"tool":-1,"hidden":true},
+	11173:{"name":"Green candle","color":"51763e","block":true,"shape":"candle","family":"candle","dye":"green","hardness":0.1,"tool":-1,"hidden":true},
+	11174:{"name":"Green candle","color":"51763e","block":true,"shape":"candle","family":"candle","dye":"green","hardness":0.1,"tool":-1,"hidden":true},
+	11175:{"name":"Green candle","color":"51763e","block":true,"shape":"candle","family":"candle","dye":"green","hardness":0.1,"tool":-1,"hidden":true},
+	11180:{"name":"Pink candle","color":"dd8eac","block":true,"shape":"candle","family":"candle","dye":"pink","hardness":0.1,"tool":-1,"hidden":true},
+	11181:{"name":"Pink candle","color":"dd8eac","block":true,"shape":"candle","family":"candle","dye":"pink","hardness":0.1,"tool":-1,"hidden":true},
+	11182:{"name":"Pink candle","color":"dd8eac","block":true,"shape":"candle","family":"candle","dye":"pink","hardness":0.1,"tool":-1,"hidden":true},
+	11183:{"name":"Pink candle","color":"dd8eac","block":true,"shape":"candle","family":"candle","dye":"pink","hardness":0.1,"tool":-1,"hidden":true},
+	11188:{"name":"Light blue candle","color":"79b4d2","block":true,"shape":"candle","family":"candle","dye":"light_blue","hardness":0.1,"tool":-1,"hidden":true},
+	11189:{"name":"Light blue candle","color":"79b4d2","block":true,"shape":"candle","family":"candle","dye":"light_blue","hardness":0.1,"tool":-1,"hidden":true},
+	11190:{"name":"Light blue candle","color":"79b4d2","block":true,"shape":"candle","family":"candle","dye":"light_blue","hardness":0.1,"tool":-1,"hidden":true},
+	11191:{"name":"Light blue candle","color":"79b4d2","block":true,"shape":"candle","family":"candle","dye":"light_blue","hardness":0.1,"tool":-1,"hidden":true},
+	11196:{"name":"Brown candle","color":"79563e","block":true,"shape":"candle","family":"candle","dye":"brown","hardness":0.1,"tool":-1,"hidden":true},
+	11197:{"name":"Brown candle","color":"79563e","block":true,"shape":"candle","family":"candle","dye":"brown","hardness":0.1,"tool":-1,"hidden":true},
+	11198:{"name":"Brown candle","color":"79563e","block":true,"shape":"candle","family":"candle","dye":"brown","hardness":0.1,"tool":-1,"hidden":true},
+	11199:{"name":"Brown candle","color":"79563e","block":true,"shape":"candle","family":"candle","dye":"brown","hardness":0.1,"tool":-1,"hidden":true},
+	11280:{"name":"Cake","color":"f0d4a5","block":true,"shape":"cake_candles","family":"candle_cake","hardness":0.5,"tool":-1,"hidden":true},
+	11281:{"name":"Cake","color":"f0d4a5","block":true,"shape":"cake_candles","family":"candle_cake","hidden":true},
+	11200:NetherBlocks.DATA[11200],
+	11201:NetherBlocks.DATA[11201],
+	11202:NetherBlocks.DATA[11202],
+	11203:NetherBlocks.DATA[11203],
+	11204:NetherBlocks.DATA[11204],
+	11205:NetherBlocks.DATA[11205],
+	11206:NetherBlocks.DATA[11206],
+	11207:NetherBlocks.DATA[11207],
+	11208:NetherBlocks.DATA[11208],
+	11209:NetherBlocks.DATA[11209],
+	11210:GlassColors.DATA[11210],
+	11211:GlassColors.DATA[11211],
+	11212:GlassColors.DATA[11212],
+	11213:GlassColors.DATA[11213],
+	11214:GlassColors.DATA[11214],
+	11215:GlassColors.DATA[11215],
+	11216:GlassColors.DATA[11216],
+	11217:GlassColors.DATA[11217],
+	11218:GlassColors.DATA[11218],
+	11219:GlassColors.DATA[11219],
+	11220:GlassColors.DATA[11220],
+	11221:GlassColors.DATA[11221],
+	11222:GlassColors.DATA[11222],
+	11223:GlassColors.DATA[11223],
+	11224:GlassColors.DATA[11224],
+	11225:GlassColors.DATA[11225],
+	11226:GlassColors.DATA[11226],
+	11227:GlassColors.DATA[11227],
+	11228:GlassColors.DATA[11228],
+	11229:GlassColors.DATA[11229],
+	11230:GlassColors.DATA[11230],
+	11231:GlassColors.DATA[11231],
+	11232:GlassColors.DATA[11232],
+	11233:GlassColors.DATA[11233],
+	11234:GlassColors.DATA[11234],
+	11235:GlassColors.DATA[11235],
+	11236:GlassColors.DATA[11236],
+	11237:GlassColors.DATA[11237],
+	11238:GlassColors.DATA[11238],
+	11239:GlassColors.DATA[11239],
+	11240:GlassColors.DATA[11240],
+	11241:GlassColors.DATA[11241],
+	11490:{"name":"Sentry armor trim template","color":"928780","family":"template","stack":64},
+	11491:{"name":"Dune armor trim template","color":"928780","family":"template","stack":64},
+	11492:{"name":"Coast armor trim template","color":"928780","family":"template","stack":64},
+	11493:{"name":"Wild armor trim template","color":"928780","family":"template","stack":64},
+	11494:{"name":"Tide armor trim template","color":"928780","family":"template","stack":64},
+	11495:{"name":"Ward armor trim template","color":"928780","family":"template","stack":64},
+	11496:{"name":"Vex armor trim template","color":"928780","family":"template","stack":64},
+	11497:{"name":"Rib armor trim template","color":"928780","family":"template","stack":64},
+	11498:{"name":"Snout armor trim template","color":"928780","family":"template","stack":64},
+	11499:{"name":"Eye armor trim template","color":"928780","family":"template","stack":64},
+	11500:{"name":"Spire armor trim template","color":"928780","family":"template","stack":64},
+	11501:{"name":"Silence armor trim template","color":"928780","family":"template","stack":64},
+	11502:{"name":"Wayfinder armor trim template","color":"928780","family":"template","stack":64},
+	11503:{"name":"Bolt armor trim template","color":"928780","family":"template","stack":64},
+	11504:{"name":"Flow armor trim template","color":"928780","family":"template","stack":64},
+	11505:{"name":"Host armor trim template","color":"928780","family":"template","stack":64},
+	11506:{"name":"Raiser armor trim template","color":"928780","family":"template","stack":64},
+	11440:EndMud.DATA[11440],
+	11441:EndMud.DATA[11441],
+	11442:EndMud.DATA[11442],
+	11443:EndMud.DATA[11443],
+	11444:EndMud.DATA[11444],
+	11445:EndMud.DATA[11445],
+	11400:FlowersExtra.DATA[11400],
+	11401:FlowersExtra.DATA[11401],
+	11402:FlowersExtra.DATA[11402],
+	11403:FlowersExtra.DATA[11403],
+	11404:FlowersExtra.DATA[11404],
+	11405:FlowersExtra.DATA[11405],
+	11406:FlowersExtra.DATA[11406],
+	11407:FlowersExtra.DATA[11407],
+	11408:FlowersExtra.DATA[11408],
+	11409:FlowersExtra.DATA[11409],
+	11410:FlowersExtra.DATA[11410],
+	11411:FlowersExtra.DATA[11411],
+	11412:FlowersExtra.DATA[11412],
+	11413:FlowersExtra.DATA[11413],
+	11414:FlowersExtra.DATA[11414],
+	11415:FlowersExtra.DATA[11415],
+	11416:FlowersExtra.DATA[11416],
+	11417:FlowersExtra.DATA[11417],
+	11507:Sculk.DATA[11507],
+	11508:Sculk.DATA[11508],
+	11509:Sculk.DATA[11509],
+	11510:Sculk.DATA[11510],
+	11300:RawOres.DATA[11300],
+	11301:RawOres.DATA[11301],
+	11302:RawOres.DATA[11302],
+	11303:RawOres.DATA[11303],
+	11304:RawOres.DATA[11304],
+	11305:RawOres.DATA[11305],
+	11306:RawOres.DATA[11306],
+	11470:LushCaveExtra.DATA[11470],
+	11471:LushCaveExtra.DATA[11471],
+	11472:LushCaveExtra.DATA[11472],
+	11473:LushCaveExtra.DATA[11473],
+	11474:LushCaveExtra.DATA[11474],
+	11475:LushCaveExtra.DATA[11475],
+	11476:LushCaveExtra.DATA[11476],
+	11477:LushCaveExtra.DATA[11477],
+	11478:LushCaveExtra.DATA[11478],
+	11479:LushCaveExtra.DATA[11479],
+	11480:LushCaveExtra.DATA[11480],
+	11481:LushCaveExtra.DATA[11481],
+	# `mcl_anvils`: the two damaged anvil states, which the source registers as
+	# `anvil_damage_1` and `anvil_damage_2`. Both drop a plain anvil and never appear
+	# in the catalog.
+	11446:{"name":"Anvil","color":"4a4a4f","block":true,"hardness":1.5,"tool":0,"blast_resistance":1200,"family":"anvil","drop":532,"hidden":true},
+	11447:{"name":"Anvil","color":"434348","block":true,"hardness":1.5,"tool":0,"blast_resistance":1200,"family":"anvil","drop":532,"hidden":true},
+	11519:PaleOak.DATA[11519],
+	11520:PaleOak.DATA[11520],
+	11521:PaleOak.DATA[11521],
+	11522:PaleOak.DATA[11522],
+	11523:PaleOak.DATA[11523],
+	11524:PaleOak.DATA[11524],
+	11525:PaleOak.DATA[11525],
+	11526:PaleOak.DATA[11526],
+	11527:PaleOak.DATA[11527],
+	11528:PaleOak.DATA[11528],
+	11529:PaleOak.DATA[11529],
+	11546:Bookshelves.DATA[11546],
+	11530:CopperDecor.DATA[11530],
+	11531:CopperDecor.DATA[11531],
+	11532:CopperDecor.DATA[11532],
+	11533:CopperDecor.DATA[11533],
+	11534:CopperDecor.DATA[11534],
+	11535:CopperDecor.DATA[11535],
+	11536:CopperDecor.DATA[11536],
+	11537:CopperDecor.DATA[11537],
+	11538:CopperDecor.DATA[11538],
+	11539:CopperDecor.DATA[11539],
+	11540:CopperDecor.DATA[11540],
+	11541:CopperDecor.DATA[11541],
+	11542:CopperDecor.DATA[11542],
+	11543:CopperDecor.DATA[11543],
+	11544:CopperDecor.DATA[11544],
+	11545:CopperDecor.DATA[11545],
+	11511:CrimsonPlants.DATA[11511],
+	11512:CrimsonPlants.DATA[11512],
+	11513:CrimsonPlants.DATA[11513],
+	11514:CrimsonPlants.DATA[11514],
+	11515:CrimsonPlants.DATA[11515],
+	11516:CrimsonPlants.DATA[11516],
+	11517:CrimsonPlants.DATA[11517],
+	11518:CrimsonPlants.DATA[11518],
 	619:{"name":"White glazed terracotta","color":"e4e4d7","block":true,"shape":"cube","family":"glazed","dye":"white"},
 	620:{"name":"Grey glazed terracotta","color":"626c70","block":true,"shape":"cube","family":"glazed","dye":"grey"},
 	621:{"name":"Light grey glazed terracotta","color":"b0b4ac","block":true,"shape":"cube","family":"glazed","dye":"silver"},
@@ -939,11 +1680,13 @@ static func bed_head(id: int) -> int:
 	return Nodes.BED_HEAD if id in [Nodes.BED_FOOT,Nodes.BED_HEAD] else bed_foot(id)+16
 
 static func crop_seed(id: int) -> int:
+	if CropFarming.is_crop(id): return CropFarming.seed_item(id)
 	for seed_id in CROPS:
 		if id >= CROPS[seed_id] and id <= CROPS[seed_id]+3: return seed_id
 	return 0
 
 static func crop_drops(id: int) -> Array:
+	if CropFarming.is_crop(id): return CropFarming.harvest(id)
 	var seed_id: int = crop_seed(id)
 	if id == COCOA_POD: return [[COCOA_BEANS,1]]
 	if id == RIPE_COCOA_POD: return [[COCOA_BEANS,3]]
@@ -953,15 +1696,19 @@ static func crop_drops(id: int) -> Array:
 	return [[BEETROOT,1],[BEETROOT_SEEDS,2]] if seed_id == BEETROOT_SEEDS else [[seed_id,3]]
 
 static func special(id: int) -> bool:
-	return DATA.has(id) and DATA[id].get("block",false) and shape(id) not in ["cube","crop","plant"]
+	return DATA.has(id) and DATA[id].get("block",false) and shape(id) not in ["cube","crop","plant","vine"]
 
 static func recipes(inv: Inventory) -> void:
 	inv._recipe("Leads",LEAD,2,[Nodes.STRING,Nodes.STRING,0,Nodes.STRING,Nodes.SLIME_BALL,0,0,0,Nodes.STRING],3,"table")
+	# Clock and compass, from mcl_clock and mcl_compass: four gold plus redstone,
+	# and four iron plus redstone.
+	inv._recipe("Clock",Nodes.CLOCK,1,[0,Nodes.GOLD,0,Nodes.GOLD,Nodes.REDSTONE_WIRE,Nodes.GOLD,0,Nodes.GOLD,0],3,"table")
+	inv._recipe("Compass",Nodes.COMPASS,1,[0,Nodes.IRON,0,Nodes.IRON,Nodes.REDSTONE_WIRE,Nodes.IRON,0,Nodes.IRON,0],3,"table")
 	var p: int = Nodes.PLANKS; var iron: int = Nodes.IRON
 	var defs: Dictionary = {
 		BLAST_FURNACE:[iron,iron,iron,iron,Nodes.FURNACE,iron,Nodes.STONE,Nodes.STONE,Nodes.STONE],
 		SMOKER:[0,Nodes.LOG,0,Nodes.LOG,Nodes.FURNACE,Nodes.LOG,0,Nodes.LOG,0],
-		BARREL:[p,0,p,p,0,p,p,p,p], COMPOSTER:[p,0,p,p,0,p,p,p,p],
+		BARREL:[p,0,p,p,0,p,p,p,p],
 		CARTOGRAPHY_TABLE:[Nodes.PAPER,Nodes.PAPER,0,p,p,0,p,p,0],
 		FLETCHING_TABLE:[Nodes.FLINT,Nodes.FLINT,0,p,p,0,p,p,0],
 		SMITHING_TABLE:[iron,iron,0,p,p,0,p,p,0],
@@ -973,8 +1720,11 @@ static func recipes(inv: Inventory) -> void:
 		GRINDSTONE:[Nodes.STICK,Nodes.STONE,Nodes.STICK,p,0,p,0,0,0],
 		ANVIL:[Nodes.IRON_BLOCK,Nodes.IRON_BLOCK,Nodes.IRON_BLOCK,0,iron,0,iron,iron,iron],
 		BELL:[0,Nodes.GOLD_BLOCK,0,Nodes.COBBLE,Nodes.GOLD,Nodes.COBBLE,0,0,0],
-		CAMPFIRE:[0,Nodes.STICK,0,Nodes.STICK,Nodes.COAL,Nodes.STICK,Nodes.LOG,Nodes.LOG,Nodes.LOG],
 		LANTERN:[Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.TORCH,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET],
+		# `mcl_lanterns`: the same ring around a soul torch, and a chain of
+		# nugget-ingot-nugget.
+		SOUL_LANTERN:[Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.SOUL_TORCH,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET],
+		CHAIN:[Nodes.IRON_NUGGET,Nodes.IRON,Nodes.IRON_NUGGET],
 		FISHING_ROD:[0,0,Nodes.STICK,0,Nodes.STICK,Nodes.STRING,Nodes.STICK,0,Nodes.STRING],
 		CROSSBOW:[Nodes.STICK,iron,Nodes.STICK,Nodes.STRING,Nodes.BOW,Nodes.STRING,0,Nodes.STICK,0],
 		SHIELD:[p,iron,p,p,p,p,0,p,0],
@@ -987,10 +1737,7 @@ static func recipes(inv: Inventory) -> void:
 		PAINTING:[Nodes.STICK,Nodes.STICK,Nodes.STICK,Nodes.STICK,Nodes.WOOL,Nodes.STICK,Nodes.STICK,Nodes.STICK,Nodes.STICK],
 	}
 	for id in defs: inv._recipe(Nodes.title(id),id,1,defs[id],3,"table")
-	# Distinct shapes keep barrels and composters craftable without recipe ambiguity.
-	for recipe in inv.recipes:
-		if recipe.id == COMPOSTER:
-			recipe.pattern = [p,0,p,p,0,p,p,Nodes.DIRT,p]; recipe.ingredients = {p:6,Nodes.DIRT:1}
+	Composters.recipes(inv)
 	inv._recipe("Leather from rabbit hides",Nodes.LEATHER,1,[RABBIT_HIDE,RABBIT_HIDE,RABBIT_HIDE,RABBIT_HIDE],2)
 	inv._recipe("Leather horse armor",LEATHER_HORSE_ARMOR,1,[Nodes.LEATHER,0,Nodes.LEATHER,Nodes.LEATHER,Nodes.LEATHER,Nodes.LEATHER,Nodes.LEATHER,0,Nodes.LEATHER],3,"table")
 	inv._recipe("Emeralds",EMERALD,9,[EMERALD_BLOCK],1)
@@ -998,19 +1745,31 @@ static func recipes(inv: Inventory) -> void:
 	inv._recipe("Glass panes",GLASS_PANE,16,[Nodes.GLASS,Nodes.GLASS,Nodes.GLASS,Nodes.GLASS,Nodes.GLASS,Nodes.GLASS],3,"table")
 	inv._recipe("Wooden doors",WOODEN_DOOR,3,[p,p,p,p,p,p],2,"table")
 	inv._recipe("Cookies",COOKIE,8,[Nodes.GRAIN,COCOA_BEANS,Nodes.GRAIN],3,"table")
-	inv._shapeless("Beetroot soup",BEETROOT_SOUP,1,[Nodes.BOWL,BEETROOT,BEETROOT,BEETROOT,BEETROOT,BEETROOT,BEETROOT])
 	inv._shapeless("Rabbit stew",RABBIT_STEW,1,[Nodes.BOWL,COOKED_RABBIT,CARROT,BAKED_POTATO,Nodes.BROWN_MUSHROOM])
 	inv._recipe("Dried kelp block",DRIED_KELP_BLOCK,1,[DRIED_KELP,DRIED_KELP,DRIED_KELP,DRIED_KELP,DRIED_KELP,DRIED_KELP,DRIED_KELP,DRIED_KELP,DRIED_KELP],3,"table")
 	inv._recipe("Dried kelp",DRIED_KELP,9,[DRIED_KELP_BLOCK],1)
 	inv._recipe("Quartz block",QUARTZ_BLOCK,1,[Nodes.QUARTZ,Nodes.QUARTZ,Nodes.QUARTZ,Nodes.QUARTZ],2)
 	for pair in [[GRANITE,POLISHED_GRANITE],[ANDESITE,POLISHED_ANDESITE],[DIORITE,POLISHED_DIORITE]]: inv._recipe(Nodes.title(pair[1]),pair[1],4,[pair[0],pair[0],pair[0],pair[0]],2)
-	for pair in [[Nodes.FLOWER,DYE_RED],[Nodes.BONE_MEAL,DYE_WHITE],[INK_SAC,DYE_BLACK],[Nodes.LAPIS,DYE_BLUE],[COCOA_BEANS,DYE_BROWN],[Nodes.CACTUS,DYE_GREEN],[Nodes.PUMPKIN,DYE_YELLOW]]: inv._recipe(Nodes.title(pair[1]),pair[1],1,[pair[0]],1)
+	Magma.recipes(inv)
+	LushCaves.recipes(inv)
+	Concrete.recipes(inv)
+	Candles.recipes(inv)
+	NetherBlocks.recipes(inv)
+	ArmorTrims.recipes(inv)
+	EndMud.recipes(inv)
+	FlowersExtra.recipes(inv)
+	Sculk.recipes(inv)
+	PaleOak.recipes(inv)
+	CopperDecor.recipes(inv)
+	Bookshelves.recipes(inv)
+	NetherBlocks.recipes(inv)
+	RawOres.recipes(inv)
+	GlassColors.recipes(inv)
+	TrappedChests.recipes(inv)
+	for pair in [[Nodes.FLOWER,DYE_RED],[Nodes.BONE_MEAL,DYE_WHITE],[INK_SAC,DYE_BLACK],[Nodes.LAPIS,DYE_BLUE],[COCOA_BEANS,DYE_BROWN],[Nodes.CACTUS,DYE_GREEN]]: inv._recipe(Nodes.title(pair[1]),pair[1],1,[pair[0]],1)
 	for mix in [[DYE_RED,DYE_YELLOW,DYE_ORANGE],[DYE_RED,DYE_WHITE,DYE_PINK],[DYE_BLUE,DYE_WHITE,DYE_LIGHT_BLUE],[DYE_BLUE,DYE_RED,DYE_PURPLE],[DYE_GREEN,DYE_WHITE,DYE_LIME],[DYE_BLUE,DYE_GREEN,DYE_CYAN],[DYE_BLACK,DYE_WHITE,DYE_GREY],[DYE_GREY,DYE_WHITE,DYE_SILVER],[DYE_PURPLE,DYE_PINK,DYE_MAGENTA]]: inv._shapeless(Nodes.title(mix[2]),mix[2],2,[mix[0],mix[1]])
 	for id in DATA:
 		var d: Dictionary = DATA[id]; var family: String = d.get("family","")
-		if family == "boat":
-			if id == BOAT_OAK: inv._recipe(Nodes.title(id),id,1,[p,0,p,p,p,p],3,"table")
-			else: inv._shapeless(Nodes.title(id),id,1,[BOAT_OAK,{BOAT_ACACIA:DYE_ORANGE,BOAT_SPRUCE:DYE_BROWN,BOAT_DARK_OAK:DYE_BLACK,BOAT_BIRCH:DYE_WHITE}[id]])
 		if family not in ["wool","carpet","bed","banner","terracotta"]: continue
 		var color_index: int = id-(WOOL_WHITE if family == "wool" else (CARPET_WHITE if family == "carpet" else (BED_WHITE if family == "bed" else (BANNER_WHITE if family == "banner" else TERRACOTTA_WHITE))))
 		var dye: int = DYE_WHITE+color_index; var wool: int = WOOL_WHITE+color_index

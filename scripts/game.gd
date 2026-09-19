@@ -31,6 +31,7 @@ var cave_sample_world: int = 0
 var cave_shelter: float = 0
 var identity: PlayerIdentity
 var player_homes: Dictionary = {}
+var ender_storage: Dictionary = PortableStorage.new_ender_station()
 var player_id: String:
 	get: return identity.session_id if identity != null else PlayerIdentity.OFFLINE
 var spawn_point := Vector3(8,35,8)
@@ -40,6 +41,9 @@ var experience: float = 0.0:
 		experience = value
 var dimension: String = "overworld"
 var leads: LeadManager
+var maps: ExplorationMaps
+var boats: Boats
+var rails: Minecarts
 var villages: VillageLife
 var survival: VillageSurvival
 var adventure: Adventure
@@ -63,6 +67,8 @@ var saves
 var active_world_id: String = ""
 var world_name: String = "New world"
 var gamemode: String = "survival"
+# Difficulty 0..2, which the source scales boss health and damage by.
+var difficulty: int = 1
 var game_rules: Dictionary = GameRules.DEFAULTS.duplicate()
 var console_messages: Array[String] = ["Voxey console. Type /help for commands."]
 var last_space_press: int = 0
@@ -75,6 +81,9 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	adventure = Adventure.new(self)
 	leads = LeadManager.new(self)
+	boats = Boats.new(self)
+	rails = Minecarts.new(self)
+	maps = ExplorationMaps.new(self)
 	villages = VillageLife.new(self)
 	survival = VillageSurvival.new(self)
 	api = VoxeyAPI.new("engine",self)
@@ -209,9 +218,15 @@ func playing() -> bool:
 
 func _process(delta: float) -> void:
 	if world == null: return
+	Jukeboxes.update(world,delta)
+	maps.update()
 	if state == "loading" and world.area_ready(world.target): _finish_loading()
 	if state != "title" and state != "loading": world.target = player.position
 	if playing():
+		Dungeons.update(world,delta)
+		boats.update(delta)
+		Farming.update_world(self,delta)
+		Golems.update(self,delta)
 		adventure.update(delta)
 		villages.update(delta)
 		survival.update(delta)
@@ -230,8 +245,16 @@ func _process(delta: float) -> void:
 				return
 		else: portal_time = 0.0
 		day_time += delta/1200.0
+		# Clock and compass dials advance their spin tick, exactly as the
+		# source's globalstep does.
+		Dials.tick(delta)
+		ItemArt.dial_game = self
 		autosave += delta
 		spawn_timer += delta
+		# The wandering trader's own globalstep. Its twenty-minute cadence lives in the
+		# module's 60-second counter, so this is per frame, unlike the six-second
+		# natural-spawn cadence above.
+		WanderingTraders.update(self,delta)
 		if autosave >= 45: autosave=0; save_game(); toast("World saved")
 		if spawn_timer > 6:
 			spawn_timer = 0
@@ -347,20 +370,23 @@ func start_new(seed_text: String, display_name: String = "New world", mode: Stri
 	world_name = display_name.strip_edges().left(64) if not display_name.strip_edges().is_empty() else "New world"
 	active_world_id = existing_id if not existing_id.is_empty() else saves.create_world(world_name,seed_number,mode)
 	if active_world_id.is_empty(): toast("Couldn't create the world. Check your saves folder."); return
+	maps.reset()
 	gamemode = mode if mode in ["survival","creative"] else "survival"
 	pending_save = {}
 	dimension = "overworld"
 	dimension_states.clear()
 	player_homes.clear()
+	ender_storage = PortableStorage.new_ender_station()
 	game_rules = GameRules.DEFAULTS.duplicate()
 	portal_cooldown = 0
 	inventory = _reset_inventory()
 	day_time = 0.30
 	experience = 0
 	journal_step = 0
-	player.health=20; player.hunger=20; player.breath=10
+	player.health=20; Hunger.reset(player); player.breath=10
 	PotionEffects.clear(player)
 	if player.has_meta("potion_death_done"): player.remove_meta("potion_death_done")
+	player.offhand_slot={"id":0,"count":0,"wear":0}
 	for slot in player.armor_slots: slot.id=0; slot.count=0; slot.wear=0; slot.erase("data")
 	player.velocity=Vector3.ZERO
 	_clear_entities()
@@ -402,7 +428,7 @@ func _finish_loading() -> void:
 		player.rotation.y=float(pending_save.get("yaw",0))
 		player.camera.rotation.x=float(pending_save.get("pitch",0))
 		if player.health<=0:
-			player.health=20; player.hunger=20
+			player.health=20; Hunger.reset(player)
 			if dimension != "overworld":
 				# Restore persisted drops before taking the player home.
 				pending_save["respawn_overworld"] = true
@@ -419,7 +445,11 @@ func _finish_loading() -> void:
 			var rot: Array = entry.get("rotation",[0,0,0])
 			shot.rotation = Vector3(rot[0],rot[1],rot[2])
 		AlchemyWorld.restore(self)
+		NetherResident.restore_named(self)
 		if pending_save.has("animals"): survival.restore_animals(pending_save.animals)
+		Farming.update_world(self)
+		Golems.restore(self)
+		WanderingTraders.restore(self)
 		if pending_save.has("leads"): leads.restore(pending_save.leads)
 		if pending_save.get("respawn_overworld",false):
 			travel_dimension("overworld",true)
@@ -442,6 +472,8 @@ func _finish_loading() -> void:
 		if Torches.is_torch(world.edits[p]) or world.edits[p] in [Nodes.GLOWSTONE,Nodes.SHROOMLIGHT]: add_torch(p)
 	player.velocity=Vector3.ZERO
 	player.flying=false
+	boats.restore()
+	Minecarts.restore(self,world.adventure_state.get("carts",{}))
 	player.camera.make_current()
 	resume()
 	toast("Welcome to Voxey. Tap the bag button to craft, or pause for the field guide." if touch else "Welcome to Voxey. Press E to craft, or Esc for the field guide.")
@@ -466,13 +498,14 @@ func _safe_spawn(near: Vector3) -> Vector3:
 			for y in range(mini(floori(near.y)+16,world.generator.terrain_ceiling()-1),world.generator.min_y(),-1):
 				var id: int = world.node_at(Vector3i(x,y,z))
 				if Fluids.liquid(id): break
-				if Nodes.solid(id) and id!=Nodes.LEAVES and id!=Nodes.LOG:
+				if Nodes.solid(id) and not WoodTypes.is_leaves(id) and not WoodTypes.is_log(id):
 					var pos := Vector3(x+0.5,y+1.01,z+0.5)
 					if not world.intersects(pos): return pos
 					if dimension != "nether": break
 	return Vector3(8.5,world.generator.terrain_height(8,8)+8,8.5)
 
 func resume() -> void:
+	if state == "sign" and has_meta("sign_editor"): remove_meta("sign_editor")
 	hud.return_cursor()
 	state="playing"
 	world.active=true
@@ -512,7 +545,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode==KEY_F11: toggle_fullscreen(); return
 		if state in ["title","loading"]: return
-		if state in ["book","enchanting","trading","workstation","map"]:
+		if state in ["book","enchanting","trading","workstation","map","sign"]:
 			if event.physical_keycode == KEY_ESCAPE: resume()
 			return
 		if state == "console":
@@ -551,12 +584,36 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not touch and event is InputEventMouseMotion and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED: player.look(event.screen_relative)
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index==MOUSE_BUTTON_MIDDLE and gamemode=="creative" and not player.target.is_empty():
-			inventory.slots[inventory.selected]={"id":player.target.id,"count":64,"wear":0}
+			var picked: int = Nodes.pick_item(player.target.id)
+			inventory.slots[inventory.selected]={"id":picked,"count":Nodes.max_stack(picked),"wear":0}
 			hud.refresh_slots()
 		if event.button_index==MOUSE_BUTTON_WHEEL_UP: inventory.selected=posmod(inventory.selected-1,9); hud.refresh_slots()
 		if event.button_index==MOUSE_BUTTON_WHEEL_DOWN: inventory.selected=posmod(inventory.selected+1,9); hud.refresh_slots()
 
 func break_node(p: Vector3i, id: int, tool: int) -> void:
+	# Seagrass is a rooted node: digging it restores its surface block, and only
+	# shears yield the item, as the source's `_mcl_shears_drop` requires.
+	if Kelp.break_node(self,p,id,tool): return
+	if Seagrass.break_node(self,p,id,tool): return
+	if DenseMaterials.break_ice(self,p,id,tool): return
+	if Beehives.break_node(self,p,id,tool): return
+	if Doors.break_node(self,p,id,tool): return
+	if Decor.break_node(self,p,id,tool): return
+	if Archaeology.break_node(self,p,id,tool): return
+	# An infested block releases a silverfish unless Silk Touch was used.
+	if MonsterEggs.break_node(self,p,id): return
+	if Sponges.break_node(self,p,id,tool): return
+	if Campfires.break_node(self,p,id,tool): return
+	if id == Bookshelves.ID:
+		# The source's own `after_dig_node` drops the shelf's contents.
+		if not world.set_node(p,Nodes.AIR): return
+		if gamemode != "creative":
+			for entry in Bookshelves.contents(world,p): spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry.id,entry.count,entry.get("wear",0),entry.get("data",{}))
+			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Bookshelves.ID)
+		_break_particles(p,id); sound("break"); progress("gather"); api.emit_node_broken(p,id)
+		return
+	if Candles.break_node(self,p,id,tool): return
+	if PortableStorage.break_node(self,p,id,tool): return
 	if survival.break_special(p,id,tool): return
 	var partner: Vector3i = world.chest_partner(p) if id == Nodes.CHEST else p
 	if id in [Nodes.IRON_DOOR,Nodes.IRON_DOOR_OPEN]:
@@ -578,27 +635,60 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 		if world.node_at(p+Vector3i.DOWN) == Nodes.SUGAR_CANE: world.growth[p+Vector3i.DOWN] = 0.0
 	if gamemode!="creative" and Nodes.harvestable(id,tool):
 		var enchanted_drops: Array = Enchantments.harvest(id,inventory.held())
-		if not enchanted_drops.is_empty():
+		# A sculk break is its own contract: nothing by hand, the vein to shears,
+		# sculk and the catalyst to Silk Touch, and stored experience on the break.
+		if Sculk.is_sculk(id):
+			for entry in Sculk.harvest(id,inventory.held()): spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
+			experience += Sculk.harvest_xp(world,p,id,inventory.held())
+		elif CropFarming.is_crop(id) or FruitCrops.harvestable(id) or Amethyst.is_amethyst(id):
 			for entry in enchanted_drops: spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
-		elif id==Nodes.LEAVES:
-			if randf()<0.12: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.APPLE)
-			if randf()<0.18: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.SAPLING)
+		elif WoodTypes.is_leaves(id):
+			# An empty source leaf result means no drop, never the generic fallback.
+			for entry in WoodTypes.harvest(id,inventory.held()): spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
+		elif not enchanted_drops.is_empty():
+			for entry in enchanted_drops: spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
 		elif VillageContent.shape(id) == "crop":
 			for crop_drop in VillageContent.crop_drops(id): spawn_drop(Vector3(p)+Vector3.ONE*0.5,crop_drop[0],crop_drop[1])
-		elif id==Nodes.RIPE_WHEAT:
-			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.GRAIN,1)
-			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.SEEDS,1+randi()%2)
 		elif id==Nodes.GRAVEL and randf()<0.25:
 			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.FLINT)
+		elif HugeMushrooms.is_huge(id):
+			# The source's mushroom-block drop is the *small* mushroom, one or two of
+			# them, and Silk Touch is what preserves the block itself. So breaking a
+			# huge mushroom yields mushrooms to eat or plant, not building material.
+			var silk: bool = Inventory.enchantment(inventory.held(),"Silk Touch") > 0
+			if silk: spawn_drop(Vector3(p)+Vector3.ONE*0.5,id,1)
+			# Source rarity 9 twice, i.e. one or two mushrooms.
+			else: spawn_drop(Vector3(p)+Vector3.ONE*0.5,HugeMushrooms.species_of(id),1 if randf() < 0.5 else 2)
+		elif FoodFeatures.is_tall_grass(id):
+			# The source's seed drop is one in eight, not a certainty, so breaking
+			# a tuft usually yields nothing.
+			if randf() < 1.0/8.0: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.SEEDS)
 		elif id in [Nodes.LAPIS_ORE,Nodes.DEEP_LAPIS_ORE]: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.LAPIS,randi_range(4,9))
 		elif id in [Nodes.REDSTONE_ORE,Nodes.DEEP_REDSTONE_ORE]:
 			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.REDSTONE_WIRE,randi_range(4,5)); experience += 2
 		elif id == Nodes.CLAY: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.CLAY_BALL,4)
-		elif id!=Nodes.GLASS: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.drop(id))
+		elif id == Nodes.SNOW_BLOCK: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.SNOW_BALL_ALIAS,4)
+		elif SeaPickles.is_pickle(id):
+			# A pickle drops one item per size, as the source's count says.
+			spawn_drop(Vector3(p)+Vector3.ONE*0.5,id,SeaPickles.size(id))
+		elif Corals.is_coral(id):
+			# Silk Touch preserves living coral; otherwise the dead form drops,
+			# which `Nodes.drop` already returns.
+			var silk: bool = Inventory.enchantment(inventory.held(),"Silk Touch") > 0
+			spawn_drop(Vector3(p)+Vector3.ONE*0.5,id if silk else Corals.dead_form(id),1)
+		elif RawOres.harvest(id,inventory.held()).size() > 0:
+			# Copper ore rolls its source count (two to five, widened by Fortune)
+			# rather than dropping a single raw item.
+			for entry in RawOres.harvest(id,inventory.held()): spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
+		elif id!=Nodes.GLASS: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.drop(id),1,0,Copper.drop_metadata(world,p))
 		if Inventory.enchantment(inventory.held(),"Silk Touch") == 0 and (Nodes.DEEP_ORES.has(id) or id in [Nodes.COAL_ORE,Nodes.IRON_ORE,Nodes.DIAMOND_ORE,Nodes.LAPIS_ORE,Nodes.NETHER_QUARTZ_ORE]): experience += 1
-		if id==Nodes.LOG: achievements.award("first_log")
+		if WoodTypes.is_log(id): achievements.award("first_log")
+		if id in [Netherite.ANCIENT_DEBRIS]: achievements.award("hidden_in_the_depths")
+		if id == Nodes.OBSIDIAN: achievements.award("obsidian_challenge")
+		if id == Bastions.CRYING_OBSIDIAN: achievements.award("who_is_cutting_onions")
 		if id==Nodes.STONE: achievements.award("mine_stone")
 		if id in [Nodes.DIAMOND_ORE,Nodes.DEEP_DIAMOND_ORE]: achievements.award("diamonds")
+		if id == Nodes.DRAGON_EGG: achievements.award("the_next_generation")
 	for slot in world.detach_station(p,partner): spawn_drop(Vector3(p)+Vector3.ONE*0.5,slot.id,slot.count,slot.wear,slot.get("data",{}))
 	remove_torch(p)
 	var above: Vector3i=p+Vector3i.UP
@@ -635,7 +725,7 @@ func settle(p: Vector3i) -> void:
 
 func spawn_arrow(origin: Vector3, velocity: Vector3) -> Arrow:
 	var arrow := Arrow.new()
-	arrow.game = self; arrow.position = origin; arrow.velocity = velocity
+	arrow.game = self; arrow.position = origin; arrow.velocity = velocity; arrow.launch_point = origin
 	entities.add_child(arrow)
 	sound_at("arrow",origin)
 	return arrow
@@ -648,8 +738,12 @@ func ignite_tnt(p: Vector3i, fuse: float = 3.0) -> void:
 
 # Creeper and TNT blasts carve a rough sphere, drop a share of the nodes, light
 # other TNT, and hurt anything nearby in proportion to its distance.
-func explode(center: Vector3, radius: float, source: Node = null) -> void:
+func explode(center: Vector3, radius: float, source: Node = null, fire: bool = false) -> void:
 	var removed: Array = []
+	# The source's `info.fire`: when set, one destroyed node in three becomes fire
+	# rather than air, which is what makes a Nether bed or a respawn anchor scorch the
+	# ground around it. It is off by default, so an ordinary blast leaves no flames.
+	var ignited: Array = []
 	var reach: int = ceili(radius)
 	for x in range(-reach,reach+1):
 		for y in range(-reach,reach+1):
@@ -660,6 +754,10 @@ func explode(center: Vector3, radius: float, source: Node = null) -> void:
 				var id: int = world.node_at(p)
 				if Fluids.liquid(id) or id in [Nodes.AIR,Nodes.BEDROCK,Nodes.OBSIDIAN,Nodes.WATER,Nodes.LAVA,Nodes.END_FRAME,Nodes.END_FRAME_EYE,Nodes.END_PORTAL,Nodes.END_GATEWAY,Nodes.NETHER_PORTAL]: continue
 				if VillageContent.DATA.get(id,{}).get("blast_resistance",0) >= 1200: continue
+				if PortableStorage.break_node(self,p,id,0,true): continue
+				if Beehives.break_node(self,p,id,0,true): continue
+				if Campfires.break_node(self,p,id,0,true): continue
+				if Doors.break_node(self,p,id,0,true): continue
 				if id == Nodes.TNT: ignite_tnt(p,randf_range(0.3,0.9)); continue
 				if id in [Nodes.BED_FOOT,Nodes.BED_HEAD]:
 					# Remove the whole bed, drop one item, count one node.
@@ -669,8 +767,16 @@ func explode(center: Vector3, radius: float, source: Node = null) -> void:
 				if not world.set_node(p,Nodes.AIR): continue
 				for slot in world.detach_station(p,partner): spawn_drop(Vector3(p)+Vector3.ONE*0.5,slot.id,slot.count,slot.wear,slot.get("data",{}))
 				remove_torch(p)
-				if randf() < 0.3: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.drop(id))
+				if randf() < 0.3:
+					if Amethyst.is_crystal(id):
+						for entry in Amethyst.environment_drops(id): spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
+					else: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.drop(id),SnowCover.layers(id)+1 if SnowCover.is_snow(id) else (4 if id == Nodes.SNOW_BLOCK else 1))
 				removed.append(p)
+				if fire and id != Nodes.AIR: ignited.append(p)
+	for p in ignited:
+		# One in three, and only where the cell is now empty, so a flame never
+		# replaces a block that survived.
+		if randf() < 1.0/3.0 and world.node_at(p) == Nodes.AIR: Fire.ignite(world,p)
 	for p in removed: settle(p+Vector3i.UP)
 	var blast: float = radius*2.0
 	var player_distance: float = center.distance_to(player.position+Vector3.UP*0.9)
@@ -678,27 +784,42 @@ func explode(center: Vector3, radius: float, source: Node = null) -> void:
 	for mob in creatures.get_children():
 		if mob == source or mob.is_queued_for_deletion(): continue
 		var d: float = center.distance_to(mob.center())
-		if d < blast: mob.hit(lerpf(20.0,1.0,d/blast),center)
+		if d < blast:
+			# A charged creeper's blast is the only explosion that yields heads.
+			mob.hit(lerpf(20.0,1.0,d/blast),center,"charged_explosion" if source is Creature and source.charged else "")
+	boats.explode(center,radius)
 	puff(center,Color("d8c9a6"),50,radius*2.2)
 	puff(center,Color("ff9b3a"),20,radius*1.4)
 	hud.flash = maxf(hud.flash,0.3 if player_distance < blast else 0.0)
 	sound_at("explode",center,randf_range(0.9,1.1))
 
-func spawn_creature(kind: String, pos: Vector3) -> Creature:
-	if kind in ["silverfish","turtle","phantom","breeze","pillager"]:
+func spawn_creature(kind: String, pos: Vector3, farm_key: String = "") -> Creature:
+	if kind == "snow_golem": return Golems.spawn(self,kind,pos)
+	if kind in Creature.ALCHEMY_KINDS:
 		var mob := AlchemyCreature.new(); mob.game = self; mob.kind = kind; mob.position = pos; creatures.add_child(mob); return mob
 	if kind in ["rabbit","horse"]:
-		var animal := RuralAnimal.new(); animal.game = self; animal.kind = kind; animal.position = pos; creatures.add_child(animal); return animal
+		var animal := RuralAnimal.new(); animal.game = self; animal.kind = kind; animal.position = pos; animal.farm_id = farm_key; creatures.add_child(animal); return animal
+	if kind == "wandering_trader":
+		# The trader brings its own llama escort, so the escort is never spawned
+		# standalone; `spawn` builds the pair.
+		return WanderingTraders.spawn(self,pos)
+	if kind == "trader_llama":
+		var llama: Creature = WanderingTraders.LlamaMob.new()
+		llama.game = self; llama.kind = kind; llama.position = pos
+		creatures.add_child(llama)
+		return llama
 	if kind in ["villager","iron_golem"]:
 		var settler := VillageMob.new(); settler.game = self; settler.kind = kind; settler.position = pos
 		creatures.add_child(settler); villages.manual(settler); return settler
 	if not Creature.KINDS.has(kind): return null
 	var mob: Creature = ExpeditionCreature.new() if kind in ["ghast","blaze","slime","enderman","end_crystal","ender_dragon","shulker"] else (NetherResident.new() if kind in ["piglin","piglin_brute"] else Creature.new())
-	mob.game=self; mob.position=pos; mob.kind=kind
+	mob.game=self; mob.position=pos; mob.kind=kind; mob.farm_id=farm_key
 	creatures.add_child(mob)
 	return mob
 
 func _clear_entities() -> void:
+	if rails != null: rails.reset()
+	if boats != null: boats.reset()
 	if survival != null: survival.reset()
 	if leads != null: leads.clear()
 	for child in creatures.get_children(): child.queue_free()
@@ -727,9 +848,15 @@ func target_mob() -> Creature:
 	return nearest
 
 func _spawn_creature() -> void:
+	# The cap counts mobs that are *near the player*, not every mob alive. A distant
+	# mob neither loads nor simulates, so counting it would let a few stray
+	# non-despawnable piglins — which `can_despawn = false` keeps forever — block all
+	# natural spawning permanently.
 	var normal_count: int = 0
 	for mob in creatures.get_children():
-		if mob.kind not in ["end_crystal","ender_dragon","villager","iron_golem"]: normal_count += 1
+		if mob.kind in ["end_crystal","ender_dragon","villager","iron_golem"]: continue
+		if mob.position.distance_to(player.position) > 128: continue
+		normal_count += 1
 	if normal_count >= 12: return
 	if dimension == "nether" and randf() < 0.3:
 		var pos: Vector3 = player.position+Vector3(randf_range(-28,28),randf_range(8,16),randf_range(-28,28))
@@ -749,11 +876,23 @@ func _spawn_creature() -> void:
 		if not underground and daylight < 0.3 and day_number() >= 3 and randf() < 0.12: spawn_creature("phantom",pos+Vector3.UP*10); return
 		if underground and randf() < 0.12: spawn_creature("breeze" if pos.y < -40 else "silverfish",pos); return
 		if not underground and pos.y <= TerrainGenerator.SEA+3 and randf() < 0.2: spawn_creature("turtle",pos); return
+		# Guardians live in open ocean: a submerged spawn cell away from shore.
+		if not underground and randf() < 0.10:
+			var depth: int = TerrainGenerator.SEA-pos.y
+			if depth >= 6 and Fluids.water(world.node_at(Vector3i(pos.floor()))):
+				spawn_creature("guardian_elder" if randf() < 0.08 else "guardian",pos)
+				return
+		# Fish and squid live in shallow and deep water alike, so any submerged
+		# cell will do. The source's own `spawn_in_water` rule is the check here.
+		if not underground and randf() < 0.14:
+			if Fluids.water(world.node_at(Vector3i(pos.floor()))) and Fluids.water(world.node_at(Vector3i(pos.floor())+Vector3i.UP)):
+				spawn_creature(AquaticMobs.pick(randi()),pos)
+				return
 	if hostile:
 		for p in torch_lights:
 			if Vector3(p).distance_to(pos)<10: return
 	elif normal_count>=7: return
-	var pool: Array = ["enderman"] if dimension == "end" else (["piglin","magma_cube","enderman"] if dimension == "nether" else (Creature.HOSTILE if hostile else Creature.PASSIVE))
+	var pool: Array = ["enderman"] if dimension == "end" else (["piglin","magma_cube","enderman","wither_skeleton","blaze"] if dimension == "nether" else (Creature.HOSTILE if hostile else Creature.PASSIVE))
 	var biome: String = world.generator.biome(int(pos.x),int(pos.z))
 	if not hostile and "desert" in biome and randf() < 0.6: return
 	spawn_creature(pool[randi()%pool.size()],pos)
@@ -773,9 +912,22 @@ func add_torch(p: Vector3i) -> void:
 
 func sleep_at(p: Vector3i) -> void:
 	if dimension != "overworld":
+		# The source's own rule: a bed in the Nether or the End **explodes**, taking
+		# both halves with it and setting fires. Voxey used to refuse with a message,
+		# which is the safe outcome but not the source's — and it removed the reason
+		# the rule exists, since the explosion is what punishes trying it.
+		var id: int = world.node_at(p)
+		if VillageContent.is_bed(id):
+			var other: Vector3i = _bed_partner(p,id)
+			if other != p and VillageContent.is_bed(world.node_at(other)): world.set_node(other,Nodes.AIR)
+			world.set_node(p,Nodes.AIR)
+			explode(Vector3(p)+Vector3.ONE*0.5,5.0,null,true)
+			toast("The bed explodes violently.")
+			return
 		toast("Beds only set your spawn in the Overworld.")
 		return
 	spawn_point=_safe_spawn(Vector3(p)+Vector3(1,0,0))
+	if gamemode != "creative": achievements.award("sweet_dreams")
 	if daylight>0.4: toast("Spawn set. Come back at night to sleep."); return
 	for mob in creatures.get_children():
 		if mob.hostile and mob.position.distance_to(player.position)<12: toast("There are wanderers nearby. Find safety first."); return
@@ -786,6 +938,11 @@ func sleep_at(p: Vector3i) -> void:
 
 func die() -> void:
 	if state == "dead": return
+	# `mcl_sculk` spreads from a catalyst near where the player died, and stores
+	# experience in the new blocks. It is the module's only driver.
+	Sculk.handle_death(world,Vector3i(player.position.floor()),Sculk.death_rng(world))
+	boats.dismount(false)
+	Fishing.cancel(survival)
 	PotionEffects.died(player)
 	api.emit_player_died()
 	if not game_rules.keepInventory: DeathRecovery.leave(self)
@@ -799,7 +956,7 @@ func die() -> void:
 func respawn() -> void:
 	PotionEffects.clear(player)
 	if player.has_meta("potion_death_done"): player.remove_meta("potion_death_done")
-	player.health=20; player.hunger=20; player.breath=10; player.velocity=Vector3.ZERO
+	player.health=20; Hunger.reset(player); player.breath=10; player.velocity=Vector3.ZERO
 	if dimension != "overworld":
 		travel_dimension("overworld",true)
 		return
@@ -809,12 +966,20 @@ func respawn() -> void:
 	else: state="loading"
 
 func progress(action: String) -> void:
-	if journal_step==0 and action=="gather" and inventory.count_item(Nodes.LOG)>0: journal_step=1
-	elif journal_step==1 and action=="craft" and (inventory.count_item(Nodes.PLANKS)>0 or hud.cursor.id==Nodes.PLANKS): journal_step=2
+	var has_log: bool = inventory.slots.any(func(slot): return slot.count > 0 and WoodTypes.is_log(slot.id))
+	var has_planks: bool = inventory.slots.any(func(slot): return slot.count > 0 and WoodTypes.is_planks(slot.id)) or (hud.cursor.count > 0 and WoodTypes.is_planks(hud.cursor.id))
+	if journal_step==0 and action=="gather" and has_log: journal_step=1
+	elif journal_step==1 and action=="craft" and has_planks: journal_step=2
 	elif journal_step==2 and action=="build" and world.edits.values().has(Nodes.WORKBENCH): journal_step=3
 	# Craft-based achievements key off what the player now holds.
 	if action=="craft":
-		if inventory.count_item(Nodes.PLANKS)>0: achievements.award("craft_planks")
+		if has_planks: achievements.award("craft_planks")
+		if inventory.count_item(Nodes.FURNACE)>0: achievements.award("hot_topic")
+		if inventory.count_item(VillageContent.CAKE)>0: achievements.award("the_lie")
+		if inventory.count_item(Nodes.BOOKSHELF)>0: achievements.award("librarian")
+		if _holds_tool_kind(3): achievements.award("time_to_strike")
+		if _holds_tool_kind(4): achievements.award("time_to_farm")
+		if inventory.count_item(Nodes.TOOLS+5)>0: achievements.award("getting_an_upgrade")
 		if inventory.count_item(Nodes.BREAD)>0: achievements.award("baker")
 		if inventory.count_item(Nodes.TOOLS)>0 or inventory.count_item(Nodes.TOOLS+4)>0 or _holds_tool_kind(0): achievements.award("first_pickaxe")
 		_holds_smelted_iron()
@@ -833,7 +998,8 @@ func _holds_tool_kind(kind: int) -> bool:
 	return false
 
 func _holds_smelted_iron() -> void:
-	if inventory.count_item(Nodes.IRON)>0: achievements.award("iron_age")
+	if inventory.count_item(Nodes.IRON)>0:
+		achievements.award("iron_age"); achievements.award("acquire_hardware")
 
 func toast(message: String) -> void:
 	if is_instance_valid(hud): hud.toast(message)
@@ -858,6 +1024,7 @@ func _resize_ui() -> void:
 		"loading": hud.show_loading()
 		"workstation": survival.show_station(survival.workstation_pos,survival.workstation_id)
 		"map": survival.show_map()
+		"sign": Signs.reflow(self)
 		"book": hud.show_book(hud.book_index)
 		"enchanting": hud.show_enchanting(hud.enchanting_pos)
 		"trading": hud.show_trading(villages.trading_key)
@@ -874,7 +1041,8 @@ func save_game(path: String = "") -> bool:
 	inventory.sync_pouches()
 	var snapshot: Dictionary = dimension_snapshot()
 	dimension_states[dimension] = snapshot
-	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":snapshot.edits,"growth":snapshot.growth,"stations":snapshot.stations,"block_states":snapshot.block_states,"adventure":snapshot.adventure,"inventory":inventory.slots.slice(0,Inventory.BASE_SLOTS),"pouches":inventory.pouch_slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"homes":player_homes.duplicate(true),"gamerules":game_rules.duplicate(),"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"effects":survival.effect_snapshot(),"armor":player.armor_slots,"time":day_time,"experience":experience,"journal":journal_step,"drops":snapshot.drops,"arrows":snapshot.arrows,"leads":snapshot.leads,"animals":snapshot.animals,"dimension":dimension,"dimensions":dimension_states,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
+	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":snapshot.edits,"growth":snapshot.growth,"stations":snapshot.stations,"block_states":snapshot.block_states,"adventure":snapshot.adventure,"inventory":inventory.slots.slice(0,Inventory.BASE_SLOTS),"pouches":inventory.pouch_slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"homes":player_homes.duplicate(true),"gamerules":game_rules.duplicate(),"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"nutrition":Hunger.snapshot(player),"ender_storage":ender_storage.duplicate(true),"effects":survival.effect_snapshot(),"armor":player.armor_slots,"offhand":player.offhand_slot,"time":day_time,"experience":experience,"journal":journal_step,"drops":snapshot.drops,"arrows":snapshot.arrows,"leads":snapshot.leads,"animals":snapshot.animals,"dimension":dimension,"dimensions":dimension_states,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
+	data["maps"] = maps.snapshot()
 	var file := FileAccess.open(path+".tmp",FileAccess.WRITE)
 	if file==null: toast("Couldn't save the world: storage is unavailable."); return false
 	file.store_string(JSON.stringify(data))
@@ -929,6 +1097,13 @@ func enter_world(id: String, mode: String) -> void:
 	load_world_data(data)
 	hud.show_loading()
 
+func _clean_station_storage() -> void:
+	for station_state in world.stations.values():
+		if station_state.get("kind","") == "shulker":
+			station_state.slots = PortableStorage.clean_contents(station_state.get("slots",[]))
+		else:
+			for i in station_state.get("slots",[]).size(): station_state.slots[i] = Inventory.clean_slot(station_state.slots[i])
+
 func load_world_data(data: Dictionary) -> void:
 	identity.migrate_save(data)
 	if int(data.get("version",2)) < 3:
@@ -961,8 +1136,8 @@ func load_world_data(data: Dictionary) -> void:
 	world.stations=data.get("stations",{}).duplicate(true)
 	world.block_states=data.get("block_states",dimension_states.get(dimension,{}).get("block_states",{})).duplicate(true)
 	world.adventure_state=data.get("adventure",dimension_states.get(dimension,{}).get("adventure",{})).duplicate(true)
-	for station_state in world.stations.values():
-		for i in station_state.slots.size(): station_state.slots[i]=Inventory.clean_slot(station_state.slots[i])
+	maps.restore(data.get("maps",{}))
+	_clean_station_storage()
 	inventory.restore(data.inventory,data.get("pouches",[]))
 	for i in 9:
 		inventory.grid[i]=Inventory.clean_slot(data.get("grid",[])[i] if i<data.get("grid",[]).size() else {})
@@ -970,8 +1145,13 @@ func load_world_data(data: Dictionary) -> void:
 	hud.cursor = Inventory.clean_slot(data.get("cursor",{}))
 	player.health=clampf(float(data.get("health",20)),0,20)
 	player.hunger=clampf(float(data.get("hunger",20)),0,20)
+	Hunger.restore(player,data.get("nutrition",{}))
+	ender_storage = PortableStorage.new_ender_station(data.get("ender_storage",{}))
 	survival.restore_effects(data.get("effects",{}))
 	var saved_armor = data.get("armor",[])
+	player.offhand_slot={"id":0,"count":0,"wear":0}
+	var saved_offhand = data.get("offhand",null)
+	if saved_offhand is Dictionary: player.offhand_slot = saved_offhand
 	for i in 4: player.armor_slots[i]={"id":0,"count":0,"wear":0}
 	if saved_armor is Array:
 		for i in mini(4,saved_armor.size()):
@@ -1017,7 +1197,14 @@ func _setup_sounds() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed=71
 	var lengths: Dictionary = {"step":0.07,"dig":0.07,"break":0.16,"place":0.07,"pickup":0.07,"craft":0.16,"hurt":0.16,"eat":0.07,"click":0.07,"equip":0.16,
-		"zombie":1.1,"cow":0.85,"sheep":0.65,"pig":0.28,"chicken":0.42,"skeleton":0.5,"spider":0.55,"creeper":1.5,"explode":1.3,"mob_hurt":0.22,"arrow":0.2,"thud":0.18}
+		"zombie":1.1,"cow":0.85,"sheep":0.65,"pig":0.28,"chicken":0.42,"skeleton":0.5,"spider":0.55,"creeper":1.5,"explode":1.3,"mob_hurt":0.22,"arrow":0.2,"thud":0.18,
+		# These were referenced by match branches below but had no entry here, so
+		# their synthesized samples were never built and every play of them was a
+		# silent no-op. A duration is what actually creates the sample.
+		"totem":0.5,"wither":1.0,"wither_shoot":0.4,"crit":0.14,"piston_extend":0.35,"piston_retract":0.35,
+		# These call sites existed without a length entry, so their samples were
+		# never built and every play was a silent no-op.
+		"drip":0.25,"fuse":1.6,"rocket":1.2,"splash":0.3,"portal":0.6,"guardian":0.5}
 	for kind in lengths:
 		var duration: float = lengths[kind]
 		var sample := AudioStreamWAV.new()
@@ -1084,7 +1271,22 @@ func _setup_sounds() -> void:
 					if t<0.04: value=noise*0.9
 					envelope=pow(1.0-progress,1.4)
 				"mob_hurt": value=sin(t*TAU*(230.0-t*500.0))*0.4+filtered*0.4
+				"totem": value=sin(t*TAU*520.0)*0.35+sin(t*TAU*780.0)*0.2; envelope=minf(t*40.0,1.0)*pow(1.0-progress,1.5)
+				"wither": value=sin(t*TAU*(80.0-t*40.0))*0.5+rumble*2.0; envelope=minf(t*8.0,1.0)*pow(1.0-progress,1.2)
+				"wither_shoot": value=sin(t*TAU*300.0)*0.3+rumble*1.5; envelope=minf(t*30.0,1.0)*pow(1.0-progress,2.0)
 				"arrow": value=bright*0.7; envelope=minf(t*60.0,1.0)*pow(1.0-progress,2.5)
+				# `mcl_criticals_hit`: a short bright crack for a falling critical.
+				"crit": value=bright*0.9+sin(t*TAU*1400.0)*0.25; envelope=minf(t*90.0,1.0)*pow(1.0-progress,2.0)
+				# Piston extend and retract: a mechanical thunk with a small pitch
+				# difference so the two directions are distinguishable.
+				"piston_extend": value=sin(t*TAU*(150.0-t*60.0))*0.4+rumble*1.6; envelope=minf(t*40.0,1.0)*pow(1.0-progress,1.6)
+				"piston_retract": value=sin(t*TAU*(190.0-t*80.0))*0.38+rumble*1.3; envelope=minf(t*40.0,1.0)*pow(1.0-progress,1.6)
+				"drip": value=sin(t*TAU*(1200.0-t*900.0))*0.4; envelope=minf(t*80.0,1.0)*pow(1.0-progress,2.4)
+				"fuse": value=filtered*0.5+sin(t*TAU*180.0)*0.15; envelope=minf(t*10.0,1.0)
+				"rocket": value=filtered*0.6+sin(t*TAU*(420.0+t*260.0))*0.25; envelope=minf(t*8.0,1.0)*pow(1.0-progress,1.2)
+				"splash": value=bright*0.8+sin(t*TAU*300.0)*0.2; envelope=minf(t*50.0,1.0)*pow(1.0-progress,1.6)
+				"portal": value=sin(t*TAU*(200.0+t*120.0))*0.35+rumble*1.2; envelope=minf(t*6.0,1.0)*pow(1.0-progress,1.1)
+				"guardian": value=sin(t*TAU*(90.0-t*30.0))*0.45+filtered*0.3; envelope=minf(t*14.0,1.0)*pow(1.0-progress,1.3)
 				"thud": value=sin(t*TAU*70.0)*0.6+filtered*0.3; envelope=pow(1.0-progress,2.5)
 			data.encode_s16(i*2,int(clampf(value*envelope,-1.0,1.0)*26000))
 		sample.data=data
@@ -1188,7 +1390,7 @@ func set_gamemode(mode: String) -> bool:
 	player.flying=false
 	player.velocity=Vector3.ZERO
 	player.mining=0
-	if mode=="creative": player.health=20; player.hunger=20; player.breath=10
+	if mode=="creative": player.health=20; Hunger.reset(player); player.breath=10
 	toast("Game mode set to "+mode.capitalize()+".")
 	return true
 
@@ -1212,7 +1414,9 @@ func execute_command(command: String) -> String:
 		"save": response="World saved to "+saves.save_path(active_world_id) if save_game() else "The world could not be saved."
 		"weather":
 			if parts.size() != 2 or parts[1] not in ["clear","rain","thunder"]: response = "Usage: /weather clear | rain | thunder"
-			else: world.adventure_state["weather"] = parts[1]; response = "Weather set to "+parts[1]+"."
+			else:
+				Weather.change(world,parts[1])
+				response = "Weather set to "+parts[1]+"."
 		"time":
 			if parts.size()!=2 or parts[1] not in ["day","night"]: response="Usage: /time day | night"
 			else:
@@ -1268,10 +1472,10 @@ func execute_command(command: String) -> String:
 			else:
 				teleport(Vector3(float(parts[1]),float(parts[2]),float(parts[3])))
 				response="Teleported to %s %s %s." % [parts[1],parts[2],parts[3]]
-		"heal": player.health=20; player.hunger=20; player.breath=10; response="Health and hunger restored."
+		"heal": player.health=20; Hunger.reset(player); player.breath=10; response="Health and hunger restored."
 		"killmobs":
 			var removed: int=creatures.get_child_count()
-			for mob in creatures.get_children(): mob.queue_free()
+			for mob in creatures.get_children(): Farming.forget(mob); mob.queue_free()
 			response="Removed %d creatures." % removed
 		_: response="Unknown command. Type /help for available commands."
 	console_messages.append("> "+command)
@@ -1280,6 +1484,7 @@ func execute_command(command: String) -> String:
 	return response
 
 func teleport(destination: Vector3) -> void:
+	boats.dismount(false)
 	player.velocity=Vector3.ZERO
 	if world.loaded_at(destination):
 		player.position=_safe_spawn(destination) if world.intersects(destination) else destination
@@ -1292,10 +1497,14 @@ func teleport(destination: Vector3) -> void:
 	hud.show_loading()
 
 func dimension_snapshot() -> Dictionary:
+	boats.snapshot()
+	rails.snapshot()
+	Farming.snapshot(self)
 	for mob in creatures.get_children():
 		if mob is NetherResident and not mob.is_queued_for_deletion(): mob.store_record()
 	villages.snapshot()
 	AlchemyWorld.snapshot(self)
+	Golems.snapshot(self)
 	for mob in creatures.get_children():
 		if mob.kind == "ender_dragon" and not mob.is_queued_for_deletion():
 			world.adventure_state["dragon_health"] = mob.health
@@ -1305,7 +1514,6 @@ func dimension_snapshot() -> Dictionary:
 	var growing: Array = []
 	for p in world.growth: growing.append([p.x,p.y,p.z,world.growth[p]])
 	var dropped: Array = []
-	if is_instance_valid(survival.boat): dropped.append({"position":[player.position.x,player.position.y,player.position.z],"id":survival.boat_id,"count":1,"wear":0,"age":0})
 	for drop in drops.get_children():
 		if not drop.is_queued_for_deletion(): dropped.append({"position":[drop.position.x,drop.position.y,drop.position.z],"id":drop.item_id,"count":drop.amount,"wear":drop.wear,"data":drop.data.duplicate(true),"age":drop.age,"pickup_delay":drop.pickup_delay})
 	var arrows: Array = []
@@ -1318,6 +1526,7 @@ func dimension_snapshot() -> Dictionary:
 func travel_dimension(destination: String, respawning: bool = false) -> void:
 	var retained_effects: Dictionary = survival.effect_snapshot()
 	if destination == dimension or destination not in ["overworld","nether","end"]: return
+	boats.dismount(false)
 	hud.return_cursor()
 	dimension_states[dimension] = dimension_snapshot()
 	var arrival: Vector3 = player.position*Vector3(0.125,1,0.125) if destination == "nether" else player.position*Vector3(8,1,8)
@@ -1328,6 +1537,11 @@ func travel_dimension(destination: String, respawning: bool = false) -> void:
 	var seed_number: int = world.seed_value
 	var render_radius: int = world.radius
 	dimension = destination
+	# The source awards entering each realm, and its "The End?" is the end portal
+	# specifically rather than an end gateway.
+	if not respawning and gamemode != "creative":
+		if destination == "nether": achievements.award("the_nether"); achievements.award("we_need_to_go_deeper")
+		elif destination == "end": achievements.award("the_end")
 	_clear_entities()
 	_replace_world(seed_number)
 	world.radius = render_radius
@@ -1335,6 +1549,7 @@ func travel_dimension(destination: String, respawning: bool = false) -> void:
 	for entry in saved.get("edits",[]): world.edits[Vector3i(entry[0],entry[1],entry[2])] = int(entry[3])
 	for entry in saved.get("growth",[]): world.growth[Vector3i(entry[0],entry[1],entry[2])] = float(entry[3])
 	world.stations = saved.get("stations",{}).duplicate(true)
+	_clean_station_storage()
 	world.block_states = saved.get("block_states",{}).duplicate(true)
 	world.adventure_state = saved.get("adventure",{}).duplicate(true)
 	arrival.y = world.generator.terrain_height(int(arrival.x),int(arrival.z))+1.01 if not respawning and not end_travel else arrival.y
@@ -1350,7 +1565,8 @@ func travel_dimension(destination: String, respawning: bool = false) -> void:
 
 func _arrival_set_node(p: Vector3i, id: int) -> void:
 	# Returning to a dimension must not erase recovery chests or stored items.
-	if world.node_at(p) not in RedstoneCircuit.CONTAINERS: world.set_node(p,id)
+	var existing: int = world.node_at(p)
+	if existing not in RedstoneCircuit.CONTAINERS and not PortableStorage.is_storage(existing) and not Campfires.is_campfire(existing) and existing not in [VillageContent.COMPOSTER,VillageContent.CAULDRON]: world.set_node(p,id)
 
 func _arrival_portal() -> void:
 	# Reuse a nearby portal so returning travel does not carve up existing builds.
@@ -1434,6 +1650,7 @@ func enchant_item(index: int, tier: int, p: Vector3i, selected_enchantment: Stri
 	slot.data.enchantments = enchantments
 	inventory.changed.emit()
 	sound("craft")
+	achievements.award("enchanter")
 	toast("%s %d · Unbreaking %d" % [kind,tier,tier])
 	return true
 
@@ -1468,10 +1685,13 @@ func drop_stack(slot: Dictionary, amount: int = 1) -> bool:
 	return true
 
 func close_inventory() -> void:
+	TrappedChests.closed(self)
 	if hud.cursor.id != 0 and hud.pointer_outside_inventory(): hud.drop_cursor(false)
 	resume()
 
 func _input(event: InputEvent) -> void:
+	if state == "sign" and event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
+		Signs.cancel(self); get_viewport().set_input_as_handled(); return
 	if state == "title" and hud.screen == "delete_world" and event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
 		hud.show_worlds(); get_viewport().set_input_as_handled(); return
 	if state != "inventory": return

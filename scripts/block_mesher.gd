@@ -10,7 +10,8 @@ static func build(data: Variant, external_circuits: bool = false) -> Array:
 	for index in data.size():
 		var id: int = data[index]
 		if not types.has(id):
-			var cube: bool = id != 0 and not Fluids.flowing(id) and (not BuildingShapes.is_shape(id) or BuildingShapes.variant(id) == 2) and not VillageContent.special(id) and id not in Nodes.CIRCUIT_NODES and not Nodes.plant(id) and id not in [Nodes.TORCH,Nodes.LADDER,Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.NETHER_PORTAL,Nodes.END_PORTAL,Nodes.ENCHANTING_TABLE]
+			var cube: bool = id != 0 and not FoodFeatures.is_cake(id) and not Doors.is_door(id) and not SnowCover.is_snow(id) and not Trapdoors.is_trapdoor(id) and not Barriers.is_barrier(id) and not Fluids.flowing(id) and (not BuildingShapes.is_shape(id) or BuildingShapes.variant(id) == 2) and not VillageContent.special(id) and id not in Nodes.CIRCUIT_NODES and not Nodes.plant(id) and id not in [Nodes.TORCH,Nodes.LADDER,Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.NETHER_PORTAL,Nodes.END_PORTAL,Nodes.ENCHANTING_TABLE]
+			cube = cube and not Farmland.is_soil(id) and not Signs.is_sign(id) and not RedstoneInputs.is_device(id) and not Copper.is_rod(id) and not Sponges.is_sponge(id) and not Archaeology.DATA.has(id) and not Decor.is_pot(id) and not Decor.is_stand(id) and not Rails.is_rail(id) and not Heads.is_any(id) and not Scaffolding.is_scaffolding(id) and not Conduits.is_conduit(id) and not Corals.is_coral(id) and not SeaPickles.is_pickle(id) and not Seagrass.is_seagrass(id) and not Beacons.is_beacon(id) and not Beacons.is_beam(id)
 			var occludes: bool = not Nodes.transparent(id) and id not in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.ENCHANTING_TABLE]
 			types[id] = (1 if cube else 0) | (2 if occludes else 0) | (4 if Fluids.source(id) else 0) | (8 if Fluids.flowing(id) else 0) | (16 if Fluids.water(id) else 0)
 		flags[index] = types[id]
@@ -31,12 +32,34 @@ static func build(data: Variant, external_circuits: bool = false) -> Array:
 						if flags[center+offset]&8 and Fluids.base(data[center+offset]) == id:
 							Fluids.mesh(outputs[1 if id == Nodes.WATER else 0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
 							break
-				if id in Nodes.CIRCUIT_NODES and not external_circuits: _art_box(outputs[0],Vector3(x,y,z)+Vector3(0.5,0.2,0.5),Vector3(0.85,0.4,0.85),Nodes.tile(id,0),Nodes.tile(id,2))
+				if Farmland.is_soil(id): Farmland.mesh(outputs[0],Vector3(x,y,z),id)
+				elif CropFarming.is_crop(id): CropFarming.mesh(outputs[0],Vector3(x,y,z),id)
+				elif FruitCrops.is_stem(id): FruitCrops.mesh(outputs[0],Vector3(x,y,z),id)
+				elif RedstoneInputs.is_device(id) and not external_circuits: RedstoneInputs.mesh(outputs[0],Vector3(x,y,z),id)
+				elif RedstoneSensors.is_device(id) and not external_circuits: RedstoneSensors.mesh(outputs[0],Vector3(x,y,z),id)
+				elif id in Nodes.CIRCUIT_NODES and not external_circuits: _art_box(outputs[0],Vector3(x,y,z)+Vector3(0.5,0.2,0.5),Vector3(0.85,0.4,0.85),Nodes.tile(id,0),Nodes.tile(id,2))
+				elif SnowCover.is_snow(id): SnowCover.mesh(outputs[0],Vector3(x,y,z),id)
+				elif Signs.is_sign(id): Signs.mesh(outputs[0],Vector3(x,y,z),id)
+				elif FoodFeatures.is_cake(id): FoodFeatures.mesh(outputs[0],Vector3(x,y,z),id)
+				elif Doors.is_door(id): Doors.mesh(outputs[0],Vector3(x,y,z),id)
+				elif Trapdoors.is_trapdoor(id): Trapdoors.mesh(outputs[0],Vector3(x,y,z),id)
+				elif Barriers.is_barrier(id): Barriers.mesh(outputs[0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
 				elif BuildingShapes.is_shape(id) and BuildingShapes.variant(id) != 2: BuildingShapes.mesh(outputs[0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
 				elif Torches.is_torch(id): _torch(outputs[0],Vector3(x,y,z),id)
+				elif Heads.is_any(id): Heads.mesh(outputs[0],Vector3(x,y,z),id)
+				elif Beacons.is_beacon(id) or Beacons.is_beam(id): Beacons.mesh(outputs[0],Vector3(x,y,z),id)
+				elif Seagrass.is_seagrass(id): Seagrass.mesh(outputs[0],Vector3(x,y,z),id)
+				elif SeaPickles.is_pickle(id): SeaPickles.mesh(outputs[0],Vector3(x,y,z),id)
+				elif Corals.is_coral(id): Corals.mesh(outputs[0],Vector3(x,y,z),id)
+				elif Conduits.is_conduit(id): Conduits.mesh(outputs[0],Vector3(x,y,z),id)
+				elif Scaffolding.is_scaffolding(id): Scaffolding.mesh(outputs[0],Vector3(x,y,z),id)
 				elif VillageContent.special(id): VillageArt.mesh(outputs[0],Vector3(x,y,z),id)
+				elif Sponges.is_sponge(id): Sponges.mesh(outputs[0],Vector3(x,y,z),id)
+				elif Archaeology.DATA.has(id): Archaeology.mesh(outputs[0],Vector3(x,y,z),id)
+				elif Copper.is_rod(id): Copper.mesh(outputs[0],Vector3(x,y,z),id)
 				elif id == Nodes.NETHER_PORTAL: _portal(outputs[0],Vector3(x,y,z),data,Vector3i(x,y,z))
 				elif id == Nodes.END_PORTAL: _end_portal(outputs[0],Vector3(x,y,z))
+				elif Rails.is_rail(id): Rails.mesh_in(outputs[0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
 				elif id == Nodes.ENCHANTING_TABLE: _enchanting_table(outputs[0],Vector3(x,y,z))
 				elif Nodes.plant(id): _plant(outputs[0], Vector3(x,y,z), id)
 				elif id == Nodes.LADDER: _ladder(outputs[0], Vector3(x,y,z), data, Vector3i(x,y,z))
@@ -91,7 +114,7 @@ static func build(data: Variant, external_circuits: bool = false) -> Array:
 						var uv: Array = [Vector2(0,h),Vector2(w,h),Vector2(w,0),Vector2(0,0)]
 						if axis == 0: uv = [Vector2(0,w),Vector2(0,0),Vector2(h,0),Vector2(h,w)]
 						var brightness: float = [0.82,0.73,1.0,0.53,0.87,0.77][face]
-						_quad(outputs[1 if id == Nodes.WATER else 0], [p,p+du,p+du+dv,p+dv], uv, normal, Nodes.tile(id,face), Color(brightness,brightness,brightness), sign_dir == 1)
+						_quad(outputs[1 if id in [Nodes.WATER,Amethyst.TINTED_GLASS,Beehives.HONEY_BLOCK] else 0], [p,p+du,p+du+dv,p+dv], uv, normal, Nodes.tile(id,face), Color(brightness,brightness,brightness), sign_dir == 1)
 						for yy in h:
 							for xx in w: mask[i+xx+(j+yy)*16] = 0
 						i += w

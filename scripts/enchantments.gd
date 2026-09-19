@@ -86,13 +86,13 @@ static func choices(id: int, table: bool = false) -> Array:
 static func clean(id: int, raw: Dictionary) -> Dictionary:
 	var result: Dictionary = {}
 	for name in raw:
-		if accepts(id,name) and compatible(result,name) and int(raw[name]) > 0: result[name] = clampi(int(raw[name]),1,DATA[name].max)
+		if accepts(id,name) and (id in [Nodes.BOOK,VillageContent.ENCHANTED_BOOK] or compatible(result,name)) and int(raw[name]) > 0: result[name] = clampi(int(raw[name]),1,DATA[name].max)
 	return result
 
 static func combine(id: int, current: Dictionary, addition: Dictionary) -> Dictionary:
 	var result: Dictionary = current.duplicate()
 	for name in addition:
-		if not accepts(id,name) or not compatible(result,name): continue
+		if not accepts(id,name) or (id not in [Nodes.BOOK,VillageContent.ENCHANTED_BOOK] and not compatible(result,name)): continue
 		var old: int = int(result.get(name,0)); var incoming: int = clampi(int(addition[name]),1,DATA[name].max)
 		result[name] = mini(DATA[name].max,old+1) if old == incoming else maxi(old,incoming)
 	return result
@@ -129,12 +129,17 @@ static func melee(player: VoxeyPlayer, mob: Creature) -> float:
 			player.damage_cooldown = maxf(player.damage_cooldown,0.4)
 		# Armored shulkers and golems lose part of their protection to Breach.
 		if mob.kind in ["shulker","iron_golem"]: damage *= 1+Inventory.enchantment(slot,"Breach")*0.15
-	damage += Inventory.enchantment(slot,"Sharpness")*1.5
-	if mob.kind in PotionEffects.UNDEAD: damage += Inventory.enchantment(slot,"Smite")*2.5
-	if mob.kind in ["spider","silverfish","endermite"]:
-		var bane: int = Inventory.enchantment(slot,"Bane of Arthropods")
-		damage += bane*2.5
-		if bane: PotionEffects.apply(mob,"slowness",randf_range(1,1+0.5*bane),4)
+	# Each enchantment's bonus belongs to a *damage group*, which the target's armor table
+	# scales — the source's `increase_damage(group, factor)`. So a Sharpness bonus is
+	# `fleshy`, a Smite bonus `undead` and a Bane bonus `arthropod`.
+	var sharp: int = Inventory.enchantment(slot,"Sharpness")
+	var smite: int = Inventory.enchantment(slot,"Smite")
+	var bane: int = Inventory.enchantment(slot,"Bane of Arthropods")
+	if sharp > 0: damage += mob.add_bonus("fleshy",sharp*1.5)
+	if smite > 0 and mob.kind in PotionEffects.UNDEAD: damage += mob.add_bonus("undead",smite*2.5)
+	if bane > 0 and mob.kind in ["spider","silverfish","endermite"]:
+		damage += mob.add_bonus("arthropod",bane*2.5)
+		PotionEffects.apply(mob,"slowness",randf_range(1,1+0.5*bane),4)
 	if Inventory.enchantment(slot,"Fire Aspect"): PotionEffects.apply(mob,"burning",4*Inventory.enchantment(slot,"Fire Aspect"))
 	mob.set_meta("looting",Inventory.enchantment(slot,"Looting"))
 	var knockback: int = Inventory.enchantment(slot,"Knockback")
@@ -155,10 +160,16 @@ static func mend(game: Node3D, amount: float) -> float:
 	return remaining
 
 static func harvest(id: int, slot: Dictionary) -> Array:
+	if Amethyst.is_amethyst(id): return Amethyst.harvest(id,slot)
+	if CropFarming.is_crop(id): return CropFarming.harvest(id,slot)
+	if FruitCrops.harvestable(id): return FruitCrops.harvest(id,slot)
+	if DenseMaterials.is_material(id) or id == Nodes.ICE: return DenseMaterials.harvest(id,slot)
+	if SnowCover.is_snow(id): return SnowCover.harvest(id,slot)
 	if BuildingShapes.is_shape(id): return [[BuildingShapes.item(id),BuildingShapes.count(id)]]
 	var silk: int = Inventory.enchantment(slot,"Silk Touch")
 	var ores: Array = [MinecloniaOres.NETHER_GOLD,Nodes.COAL_ORE,Nodes.DIAMOND_ORE,Nodes.LAPIS_ORE,Nodes.REDSTONE_ORE,Nodes.NETHER_QUARTZ_ORE,VillageContent.EMERALD_ORE,VillageContent.DEEP_EMERALD_ORE]+Nodes.DEEP_ORES.keys()
-	if silk and (ores.has(id) or id in [Nodes.STONE,Nodes.DEEPSLATE,Nodes.GRASS,Nodes.GLASS,Nodes.ICE,Nodes.LEAVES,Nodes.BOOKSHELF,VillageContent.COBWEB]): return [[id,1]]
+	if silk and GlassColors.is_stained(id): return [[id,1]]
+	if silk and (ores.has(id) or id in [Nodes.STONE,Nodes.DEEPSLATE,Nodes.GRASS,Nodes.GLASS,Nodes.ICE,Nodes.SNOW_BLOCK,Nodes.LEAVES,Nodes.BOOKSHELF,VillageContent.COBWEB]): return [[id,1]]
 	var fortune: int = Inventory.enchantment(slot,"Fortune")
 	if id == Bastions.GILDED:
 		if silk: return [[id,1]]

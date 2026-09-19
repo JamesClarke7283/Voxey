@@ -5,6 +5,8 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var new_items: Array = [Nodes.CHARCOAL,Nodes.BOWL,Nodes.MUSHROOM_STEW,Nodes.GOLD_NUGGET,Nodes.IRON_NUGGET,Nodes.EGG]
 	var atlas: Image = Art.make_atlas().get_image()
 	_bed_render_checks(suite,atlas)
+	_bed_blast_checks(suite,game)
+	_anchor_checks(suite,game)
 	var atlas_ok: bool = true
 	# Regressions: expansion tiles used to be blank or alias unrelated faces.
 	for id in new_nodes+[Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.GLOWSTONE,Nodes.IRON_BLOCK,Nodes.GOLD_BLOCK,Nodes.DIAMOND_BLOCK,Nodes.SANDSTONE,Nodes.SANDSTONE_BRICK,Nodes.ICE,Nodes.SNOW_BLOCK]:
@@ -24,11 +26,16 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var found: Dictionary = {}
 	for z in range(-4,5):
 		for x in range(-4,5):
-			if found.size() == 4: break
+			if found.has(Nodes.SUGAR_CANE) and found.has(Nodes.RED_MUSHROOM) and found.has(Nodes.BROWN_MUSHROOM): break
 			var column: Dictionary = gen.generate_column(Vector2i(x,z),{})
 			for block in column.blocks:
 				for id in [Nodes.SUGAR_CANE,Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM,Nodes.VINE]:
 					if block.data.has(id): found[id] = true
+	# Source oak layouts do not grow jungle vines. Sample the deterministic
+	# warm swamp jungle as well as the spawn region for the acquisition check.
+	var jungle: Dictionary = gen.generate_column(Vector2i(24,-38),{},true)
+	for block in jungle.blocks:
+		if block.data.has(Nodes.VINE): found[Nodes.VINE] = true
 	for id in [Nodes.SUGAR_CANE,Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM,Nodes.VINE]:
 		suite.check(found.has(id),Nodes.title(id)+" can be gathered in generated terrain")
 	var expected_new: Array = new_nodes+new_items
@@ -131,6 +138,119 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 		if drop.item_id == Nodes.EGG: egg_found = true
 	suite.check(egg_found and chicken.egg_timer >= 90,"chickens lay collectible eggs and reset their timer")
 	chicken.free()
+
+# A bed in the Nether or the End explodes, which is the source's own rule and the
+# reason the rule exists: the blast is what punishes trying it. `explode` gained an
+# opt-in `fire` flag for this, because the source's `info.fire` makes one destroyed
+# node in three burn rather than simply vanish.
+static func _bed_blast_checks(suite: SceneTree, game: Node3D) -> void:
+	game.pause(); game.world.set_process(false); game.world.active = false
+	var was_dimension: String = game.world.dimension
+	var was_mode: String = game.gamemode
+	game.gamemode = "survival"
+	var floor := Vector3i(8,200,8)
+	for x in range(4,13):
+		for y in range(197,204):
+			for z in range(4,13): game.world.set_node(Vector3i(x,y,z),Nodes.NETHERRACK)
+	for x in range(6,11):
+		for z in range(6,11): game.world.set_node(Vector3i(x,200,z),Nodes.AIR)
+	# An ordinary blast leaves no fire.
+	for i in 6: game.explode(Vector3(8.5,200.5,8.5),2.5,null,false)
+	var plain_fires: int = 0
+	for x in range(4,13):
+		for y in range(197,204):
+			for z in range(4,13):
+				if Fire.is_fire(game.world.node_at(Vector3i(x,y,z))): plain_fires += 1
+	suite.check(plain_fires == 0,"an ordinary blast sets no fires, which is the source's default")
+	# A blast asked to burn does set them.
+	for x in range(4,13):
+		for y in range(197,204):
+			for z in range(4,13): game.world.set_node(Vector3i(x,y,z),Nodes.NETHERRACK)
+	for x in range(6,11):
+		for z in range(6,11): game.world.set_node(Vector3i(x,200,z),Nodes.AIR)
+	# The one-in-three roll is per destroyed node, so a single blast may leave no
+	# fire at all. Rebuild and blast until it lands rather than asserting on one roll
+	# — a check that depends on a dice roll is a flaky check, not a check.
+	var burning: int = 0
+	for attempt in 12:
+		if burning > 0: break
+		for x in range(4,13):
+			for y in range(197,204):
+				for z in range(4,13): game.world.set_node(Vector3i(x,y,z),Nodes.STONE)
+		for x in range(6,11):
+			for z in range(6,11): game.world.set_node(Vector3i(x,200,z),Nodes.AIR)
+		game.explode(Vector3(8.5,200.5,8.5),2.5,null,true)
+		for x in range(4,13):
+			for y in range(197,204):
+				for z in range(4,13):
+					if Fire.is_fire(game.world.node_at(Vector3i(x,y,z))): burning += 1
+	suite.check(burning > 0,"a blast asked to burn leaves fire, as the source's `info.fire` does")
+	# And the real rule: a bed in the Nether is destroyed and blasts, where Voxey used
+	# to only refuse it with a message.
+	game.dimension = "nether"; game.world.dimension = "nether"
+	for x in range(4,13):
+		for y in range(197,204):
+			for z in range(4,13): game.world.set_node(Vector3i(x,y,z),Nodes.NETHERRACK)
+	for x in range(6,11):
+		for z in range(6,11): game.world.set_node(Vector3i(x,200,z),Nodes.AIR)
+	game.world.set_node(floor,Nodes.BED_FOOT)
+	game.world.set_node(floor+Vector3i.RIGHT,Nodes.BED_HEAD)
+	suite.check(VillageContent.is_bed(game.world.node_at(floor)),"a bed can be placed for the blast check")
+	game.sleep_at(floor)
+	suite.check(game.world.node_at(floor) == Nodes.AIR and game.world.node_at(floor+Vector3i.RIGHT) == Nodes.AIR,"a bed in the Nether is destroyed outright, taking both halves")
+	var blast_fires: int = 0
+	for x in range(4,13):
+		for y in range(197,204):
+			for z in range(4,13):
+				if Fire.is_fire(game.world.node_at(Vector3i(x,y,z))): blast_fires += 1
+	suite.check(blast_fires > 0,"a Nether bed's blast sets fires, as the source's strength-five blast does")
+	game.dimension = was_dimension; game.world.dimension = was_dimension
+	game.gamemode = was_mode
+	game.world.active = true
+
+# The respawn anchor: the Nether's answer to a bed. It charges with glowstone up to
+# four, and a **charged** one used outside the Nether explodes with fire — the source's
+# other `info.fire` blast. An uncharged one is harmless, which is what makes the block
+# safe to carry and dangerous to arm.
+static func _anchor_checks(suite: SceneTree, game: Node3D) -> void:
+	for id in RespawnAnchors.BLOCKS:
+		suite.check(VillageContent.DATA.has(id),"the respawn anchor block %d is registered" % id)
+	suite.check(RespawnAnchors.charge(RespawnAnchors.BASE) == 0 and RespawnAnchors.charge(RespawnAnchors.CHARGED_4) == 4,"the anchor's charge levels are zero through four")
+	suite.check(RespawnAnchors.light_level(RespawnAnchors.CHARGED_1) == 3 and RespawnAnchors.light_level(RespawnAnchors.CHARGED_4) == 15,"the source's light levels of three through fifteen are used")
+	suite.check(RespawnAnchors.comparator_signal(RespawnAnchors.CHARGED_2) == 7,"the source's comparator signal of four per charge less one")
+	suite.check(is_equal_approx(RespawnAnchors.HARDNESS,50.0) and RespawnAnchors.BLAST_RESISTANCE == 1200,"the anchor is the source's hard, blast-resistant block")
+	var anchor_at := Vector3i(8,1800,8)
+	for x in range(6,11):
+		for y in range(1797,1804):
+			for z in range(6,11): game.world.set_node(Vector3i(x,y,z),Nodes.AIR)
+	for x in range(6,11):
+		for z in range(6,11): game.world.set_node(Vector3i(x,1799,z),Nodes.STONE)
+	# Charging takes a glowstone and stops at four.
+	game.world.set_node(anchor_at,RespawnAnchors.BASE)
+	for i in 4:
+		suite.check(RespawnAnchors.charge_up(game.world,anchor_at),"charge %d is accepted" % (i+1))
+	suite.check(RespawnAnchors.charge(game.world.node_at(anchor_at)) == 4,"the anchor charges to four")
+	suite.check(not RespawnAnchors.charge_up(game.world,anchor_at),"a full anchor refuses another glowstone")
+	# The asymmetry: harmless uncharged, explosive charged, and both safe in the Nether.
+	var was_dimension: String = game.world.dimension
+	game.dimension = "overworld"; game.world.dimension = "overworld"
+	game.world.set_node(anchor_at,RespawnAnchors.BASE)
+	suite.check(not RespawnAnchors.use(game,anchor_at) and game.world.node_at(anchor_at) == RespawnAnchors.BASE,"an uncharged anchor is inert outside the Nether")
+	game.world.set_node(anchor_at,RespawnAnchors.CHARGED_2)
+	suite.check(RespawnAnchors.use(game,anchor_at) and game.world.node_at(anchor_at) == Nodes.AIR,"a charged anchor explodes outside the Nether")
+	game.dimension = "nether"; game.world.dimension = "nether"
+	game.world.set_node(anchor_at,RespawnAnchors.CHARGED_3)
+	var spawn_before: Vector3 = game.spawn_point
+	suite.check(RespawnAnchors.use(game,anchor_at) and game.world.node_at(anchor_at) == RespawnAnchors.CHARGED_3,"a charged anchor survives in the Nether and sets the spawn")
+	suite.check(game.spawn_point != spawn_before,"using it in the Nether moves the player's spawn")
+	game.dimension = was_dimension; game.world.dimension = was_dimension
+	game.world.set_node(anchor_at,Nodes.AIR)
+	# The recipe is the source's own shape.
+	var recipe: int = game.inventory.recipe_index(RespawnAnchors.BASE)
+	suite.check(recipe >= 0,"the respawn anchor has a recipe")
+	if recipe >= 0:
+		suite.check(int(game.inventory.recipes[recipe].ingredients.get(Bastions.CRYING_OBSIDIAN,0)) == 6,"and it takes six crying obsidian")
+		suite.check(int(game.inventory.recipes[recipe].ingredients.get(Nodes.GLOWSTONE,0)) == 3,"plus three glowstone")
 
 static func _bed_render_checks(suite: SceneTree, atlas: Image) -> void:
 	for id in [Nodes.BED_FOOT,Nodes.BED_HEAD]:

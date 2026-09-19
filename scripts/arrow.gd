@@ -13,7 +13,11 @@ var piercing: int = 0
 var hit_mobs: Array = []
 var stuck: bool = false
 var from_player: bool = false
+# Where the arrow was loosed, so `sniper_duel` can measure the shot's own range.
+var launch_point: Vector3 = Vector3.INF
 var hits_player: bool = false
+var shooter_kind: String = ""
+var shooter_id: int = 0
 
 func _ready() -> void:
 	var shaft := MeshInstance3D.new()
@@ -62,6 +66,11 @@ func _physics_process(delta: float) -> void:
 	for step in steps:
 		var next: Vector3 = position+motion/steps
 		if game.world.intersects(next,0.03,0.06):
+			RedstoneSensors.projectile_hit(game.world,position,motion,true,game.player if from_player and not hits_player else null)
+			RedstoneInputs.projectile_hit(game.world,position,motion)
+			if flame:
+				var hit: Dictionary = game.world.raycast(position,motion.normalized(),motion.length()+0.1)
+				if not hit.is_empty(): Campfires.ignite(game.world,hit.pos)
 			stuck = true
 			life = 0.0
 			game.sound_at("thud",position,1.4)
@@ -72,13 +81,21 @@ func _physics_process(delta: float) -> void:
 				if entity is MagicProjectile and position.distance_to(entity.position) < 0.5:
 					if entity.kind == "ghast": entity.deflect(velocity); queue_free(); return
 					if entity.kind == "shulker": entity.queue_free(); queue_free(); return
-		if from_player:
+		if from_player or not shooter_kind.is_empty():
 			for mob in game.creatures.get_children():
-				if not hit_mobs.has(mob.get_instance_id()) and not mob.is_queued_for_deletion() and position.distance_to(mob.center()) < maxf(0.55,mob.width+0.2):
+				if mob.get_instance_id() != shooter_id and not hit_mobs.has(mob.get_instance_id()) and not mob.is_queued_for_deletion() and position.distance_to(mob.center()) < maxf(0.55,mob.width+0.2):
 					hit_mobs.append(mob.get_instance_id())
 					PotionEffects.apply_item(mob,item_id)
 					if flame: PotionEffects.apply(mob,"burning",5)
+					var was_alive: bool = mob.health > 0
+					if from_player and not hits_player: Golems.attacked(mob,game.player)
+					elif shooter_id != 0 and is_instance_id_valid(shooter_id): Golems.attacked(mob,instance_from_id(shooter_id))
 					mob.hit(damage,position-velocity)
+					Jukeboxes.arrow_killed(mob,shooter_kind,was_alive)
+					# `sniper_duel`: a player's arrow killing a skeleton from at least
+					# fifty blocks away.
+					if from_player and mob.kind == "skeleton" and was_alive and not is_inf(launch_point.x) and launch_point.distance_to(position) >= 50.0:
+						game.achievements.award("sniper_duel")
 					mob.knock *= 1+punch*0.6
 					if hit_mobs.size() > piercing: queue_free(); return
 		if (not from_player or hits_player) and position.distance_to(game.player.position+Vector3.UP*0.9) < 0.65:

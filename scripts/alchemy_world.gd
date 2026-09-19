@@ -4,20 +4,24 @@ extends RefCounted
 static func snapshot(game: Node3D) -> void:
 	var saved: Array = []
 	for mob in game.creatures.get_children():
-		if not mob is AlchemyCreature or mob.is_queued_for_deletion() or game.leads.attached(mob): continue
+		if not mob is AlchemyCreature or mob.is_queued_for_deletion() or game.leads.attached(mob) or Boats.is_passenger(mob): continue
 		var effects: Dictionary = {}
 		for name in PotionEffects.NAMES:
 			if mob.has_meta("effect_"+name): effects[name] = {"duration":mob.get_meta("effect_"+name),"level":PotionEffects.level(mob,name)}
-		saved.append({"kind":mob.kind,"position":[mob.position.x,mob.position.y,mob.position.z],"health":mob.health,"effects":effects,"raid":mob.get_meta("raid",false)})
+		saved.append({"kind":mob.kind,"position":[mob.position.x,mob.position.y,mob.position.z],"health":mob.health,"effects":effects,"raid":mob.get_meta("raid",false),"custom_name":mob.custom_name})
 	game.world.adventure_state["alchemy_creatures"] = saved
 
 static func restore(game: Node3D) -> void:
 	if game.world.has_meta("alchemy_restored"): return
 	game.world.set_meta("alchemy_restored",true)
 	for record in game.world.adventure_state.get("alchemy_creatures",[]):
-		if not record is Dictionary or record.get("kind","") not in ["silverfish","turtle","phantom","breeze","pillager"]: continue
+		# The snapshot stores every AlchemyCreature, so restore accepts every kind
+		# that is spawned as one. A name list here silently discarded any kind it
+		# did not mention, so a saved creature was written and never read back.
+		if not record is Dictionary or not Creature.ALCHEMY_KINDS.has(str(record.get("kind",""))): continue
 		var mob: Creature = game.spawn_creature(record.kind,VillageLife.vec(record.position))
 		mob.health = clampf(record.get("health",mob.health),0,mob.info().health)
+		mob.custom_name = NameTags.bounded(str(record.get("custom_name","")),30); NameTags.refresh(mob)
 		if record.get("raid",false): mob.set_meta("raid",true)
 		for effect in record.get("effects",{}):
 			var data: Dictionary = record.effects[effect]
@@ -40,7 +44,8 @@ static func update(game: Node3D, delta: float) -> void:
 	if alive == 0:
 		raid.timer -= delta
 		if raid.timer <= 0:
-			if raid.wave >= 3:
+			if raid.wave >= RaidMobs.ordinary_waves(int(raid.level)):
+				game.achievements.award("hero_of_the_village")
 				PotionEffects.apply(game.player,"hero_of_village",600)
 				game.survival.give(VillageContent.EMERALD,10); game.experience += 30
 				game.toast("Village defended! Hero of the Village grants trade discounts for ten minutes.")
@@ -48,10 +53,25 @@ static func update(game: Node3D, delta: float) -> void:
 			var center: Vector3 = VillageLife.vec(raid.center)
 			if not game.world.loaded_at(center): return
 			raid.wave += 1; raid.timer = 8
-			var count: int = 3+int(raid.wave)+mini(4,int(raid.level)-1)
-			for i in count:
-				var angle: float = i*TAU/count
+			# `mcl_raids`' `mobs_and_spawn_count_by_wave`: each wave has its own
+			# composition, so a late wave brings vindicators, evokers and eventually a
+			# ravager rather than ever more pillagers.
+			var wave: int = int(raid.wave)
+			var group: Array = []
+			for role in RaidMobs.WAVE_TABLE:
+				for i in RaidMobs.count_for(role,wave): group.append(role)
+			if group.is_empty(): group.append("pillager")
+			var index: int = 0
+			var spawn_count: int = 0
+			for role in group:
+				var angle: float = index*TAU/group.size()
+				index += 1
 				var pos: Vector3 = game._safe_spawn(center+Vector3(cos(angle),0,sin(angle))*26)
-				var mob: Creature = game.spawn_creature("pillager",pos); mob.set_meta("raid",true)
+				if not pos.is_finite(): continue
+				var mob: Creature = game.spawn_creature(String(role),pos)
+				if mob == null: continue
+				mob.set_meta("raid",true)
+				spawn_count += 1
+			raid["size"] = spawn_count
 			game.toast("Raid wave %d / 3"%int(raid.wave))
 	game.world.adventure_state["raid"] = raid

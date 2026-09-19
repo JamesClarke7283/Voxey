@@ -154,7 +154,11 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	PotionEffects.apply_item(zombie,VillageContent.HEALING_POTION)
 	suite.check(zombie.health == 16,"healing potion damages undead by the source amount")
 	game.inventory.slots[0] = {"id":sword,"count":1,"wear":0,"data":{"enchantments":{"Smite":5}}}
-	suite.check(Enchantments.melee(game.player,zombie) >= 22,"Smite V increases melee damage against undead")
+	# Smite V adds twelve and a half damage as an `undead`-grouped bonus, which the
+	# zombie's own `undead = 90` cuts to eleven and a quarter — so the total is the
+	# sword's ten plus that, not the flat twenty-two an unscaled bonus would give.
+	var smite_total: float = Enchantments.melee(game.player,zombie)
+	suite.check(is_equal_approx(smite_total,21.25),"Smite V adds its undead-grouped bonus, scaled by the zombie's own armor")
 	zombie.free()
 	var spider: Creature = game.spawn_creature("spider",origin); spider.set_physics_process(false)
 	game.inventory.slots[0].data.enchantments = {"Bane of Arthropods":3}
@@ -227,3 +231,302 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	inv.grid[0] = {"id":Nodes.WOOL,"count":1,"wear":0}; inv.grid[1] = {"id":Nodes.WOOL,"count":1,"wear":0}
 	var white_recipe: int = inv.matching_recipe("hand")
 	suite.check(white_recipe >= 0 and inv.recipes[white_recipe].id == VillageContent.CARPET_WHITE,"white wool from sheep crafts the new white carpet")
+
+	# --- water hurts a water-sensitive mob, and fire resistance --------------
+	# The source marks four mobs `_water_sensitive`, and Voxey has two of them: a
+	# blaze and an enderman. Each takes one damage every half second in water or out
+	# in the rain, which is what makes water their counter.
+	suite.check(not Creature.KINDS.get("zombie",{}).get("water_sensitive",false),"an ordinary mob is not water-sensitive")
+	for kind in ["blaze","enderman"]:
+		suite.check(bool(Creature.KINDS.get(kind,{}).get("water_sensitive",false)),kind+" is water-sensitive, as the source marks it")
+	var pool := Vector3i(8,240,8)
+	for y in range(238,244): game.world.set_node(Vector3i(8,y,8),Nodes.AIR)
+	game.world.set_node(Vector3i(8,239,8),Nodes.STONE)
+	game.world.set_node(pool,Nodes.WATER)
+	var wet_blaze: Creature = game.spawn_creature("blaze",Vector3(pool)+Vector3(0.5,0.1,0.5))
+	if wet_blaze != null:
+		wet_blaze.set_physics_process(false)
+		var before: float = wet_blaze.health
+		wet_blaze.weather_step(0.5)
+		suite.check(wet_blaze.health < before,"a blaze in water takes the source's half-second damage")
+		# Out of the water it recovers nothing and loses nothing.
+		game.world.set_node(pool,Nodes.AIR)
+		var dry_before: float = wet_blaze.health
+		wet_blaze.weather_step(1.0)
+		suite.check(is_equal_approx(wet_blaze.health,dry_before),"a blaze out of water takes no damage")
+		wet_blaze.queue_free()
+	game.world.set_node(pool,Nodes.AIR)
+	# A fire-resistant mob is not a *weather* rule but a burning one, and the two are
+	# separate: a blaze is both fire-resistant and water-sensitive.
+	suite.check(Fire.resistant("blaze") and Creature.KINDS["blaze"].get("water_sensitive",false),"a blaze is fire-resistant and water-sensitive at once, which are different rules")
+	suite.check(Fire.resistant("magma_cube") and not Creature.KINDS.get("magma_cube",{}).get("water_sensitive",false),"a magma cube is fire-resistant without being water-sensitive")
+
+	# --- powder snow freezes a mob ------------------------------------------
+	# The source's `can_freeze`: a mob in powder snow slows to a standstill over seven
+	# seconds and only then takes one damage every two. A mob passing through is
+	# slowed but never hurt, which is the part worth pinning.
+	var drift := Vector3i(10,240,10)
+	for y in range(238,246): game.world.set_node(Vector3i(10,y,10),Nodes.AIR)
+	game.world.set_node(Vector3i(10,239,10),Nodes.STONE)
+	var old_daylight: float = game.daylight
+	game.daylight = 0.0
+	var frosty: Creature = game.spawn_creature("zombie",Vector3(drift)+Vector3(0.5,0.1,0.5))
+	if frosty != null:
+		frosty.set_physics_process(false)
+		frosty.weather_step(1.0)
+		suite.check(not frosty.in_powder_snow(),"a mob in open air is not frozen")
+		game.world.set_node(drift,PowderSnow.ID)
+		suite.check(frosty.in_powder_snow(),"a mob standing in powder snow is in it")
+		var passing: float = frosty.health
+		frosty.weather_step(3.0)
+		suite.check(is_equal_approx(frosty.frozen_for,3.0) and is_equal_approx(frosty.health,passing),"a mob passing through powder snow is slowed but not hurt")
+		frosty.weather_step(4.0)
+		suite.check(is_equal_approx(frosty.frozen_for,7.0),"seven seconds in powder snow freezes a mob completely")
+		var frozen_health: float = frosty.health
+		frosty.weather_step(2.0)
+		suite.check(frosty.health < frozen_health,"a fully frozen mob takes the source's damage every two seconds")
+		# Leaving the snow thaws it.
+		game.world.set_node(drift,Nodes.AIR)
+		frosty.weather_step(4.0)
+		suite.check(is_equal_approx(frosty.frozen_for,3.0),"leaving powder snow thaws a mob")
+		frosty.queue_free()
+	game.world.set_node(drift,Nodes.AIR)
+	game.daylight = old_daylight
+	# A mob that flies its own path must still run the shared weather rules, because
+	# it never reaches the step at the bottom of `Creature._physics_process`. Checked
+	# through the public path rather than by reading the source: a phantom put in
+	# powder snow must freeze when its own `_physics_process` runs.
+	var fly_drift := Vector3i(14,242,14)
+	for y in range(240,248): game.world.set_node(Vector3i(14,y,14),Nodes.AIR)
+	game.world.set_node(Vector3i(14,241,14),Nodes.STONE)
+	game.world.set_node(fly_drift,PowderSnow.ID)
+	game.daylight = 0.0
+	# The suite runs paused, and every physics path returns early unless the game is
+	# playing, so resume for this one step and pause again after.
+	game.resume()
+	var flier: Creature = game.spawn_creature("phantom",Vector3(fly_drift)+Vector3(0.5,0.1,0.5))
+	if flier != null:
+		flier.set_physics_process(false)
+		# The phantom flies toward the player, so hold it in place for the check.
+		flier.position = Vector3(fly_drift)+Vector3(0.5,0.1,0.5)
+		flier._physics_process(1.0)
+		suite.check(flier.frozen_for > 0.0,"a flying mob runs the winter rules through its own physics path")
+		flier.queue_free()
+	game.pause()
+	game.world.set_node(fly_drift,Nodes.AIR)
+	game.daylight = old_daylight
+
+	# --- a land mob floats in deep water ------------------------------------
+	# The source's default is `floats = 1`, so almost every mob bobs up instead of
+	# sinking; only six kinds opt out with `floats = 0`. Voxey had no float rule at
+	# all, so every land mob sank to the bottom of any deep water.
+	for kind in ["chicken","cow","sheep","pig"]:
+		suite.check(Creature.KINDS.get(kind,{}).get("floats",true),"a farm animal floats, which is the source's default")
+	for kind in ["zombie","skeleton","piglin"]:
+		suite.check(Creature.KINDS.get(kind,{}).get("floats",true) == false,kind+" does not float, as the source sets it")
+	# Behaviourally: each mob gets its **own** column, so one mob's ascent cannot
+	# empty the water the next one is measured in.
+	# The pools are carved well below the surface and capped with air, so a sinking
+	# mob reaches the pool floor instead of standing on nearby terrain above it.
+	# Each pool is a sealed shaft: solid walls on all four sides, a floor, and water
+	# filling it. A sinking mob therefore cannot walk out onto neighbouring terrain —
+	# a leak the earlier version had, which made the check depend on what the
+	# surrounding cells happened to be.
+	var deep_base := Vector3i(game.player.position.floor())+Vector3i(3,0,0)
+	var columns: Array = []
+	for i in 2:
+		var at := Vector3i(deep_base.x+i*3,deep_base.y-14,deep_base.z)
+		columns.append(at)
+		for y in range(at.y-12,at.y+5):
+			for dx in range(-1,2):
+				for dz in range(-1,2):
+					var cell := Vector3i(at.x+dx,y,at.z+dz)
+					var solid: bool = y < at.y or absi(dx)+absi(dz) != 0
+					game.world.set_node(cell,Nodes.STONE if solid else Nodes.WATER)
+		game.world.set_node(Vector3i(at.x,at.y-1,at.z),Nodes.STONE)
+	game.resume()
+	# Each mob starts at the top of its own shaft and is left to settle. The comparison
+	# is *relative* — the floating mob ends higher than the sinking one — because an
+	# absolute threshold depends on the shaft's exact depth, which is a property of the
+	# fixture rather than of the rule.
+	var settled: Dictionary = {}
+	for i in 2:
+		var kind: String = ["chicken","zombie"][i]
+		var at: Vector3i = columns[i]
+		var swimmer: Creature = game.spawn_creature(kind,Vector3(at)+Vector3(0.5,0.5,0.5))
+		if swimmer == null: continue
+		swimmer.set_physics_process(false)
+		for step in 50:
+			if swimmer.is_queued_for_deletion(): break
+			swimmer._physics_process(0.1)
+		if swimmer.is_queued_for_deletion(): continue
+		settled[kind] = swimmer.position.y
+		swimmer.queue_free()
+	game.pause()
+	suite.check(settled.has("chicken") and settled.has("zombie"),"both float probes survived to settle")
+	if settled.has("chicken") and settled.has("zombie"):
+		suite.check(float(settled.chicken) > float(settled.zombie) + 2.0,"a chicken floats well above a zombie in the same water, as the source's `floats` splits them")
+
+	# --- some mobs never despawn --------------------------------------------
+	# The source's `can_despawn` defaults to **false** and only twelve mobs opt in, so
+	# a piglin, a shulker, a villager, an evoker or the wither is never removed for
+	# distance. Voxey despawned every mob past ninety blocks, which silently deleted a
+	# boss or a trader the player had walked away from.
+	suite.check(Creature.KINDS.get("piglin",{}).get("can_despawn",false) == false,"a piglin does not despawn, which is the source's default")
+	suite.check(Creature.KINDS.get("wither",{}).get("can_despawn",false) == false,"the wither does not despawn")
+	suite.check(bool(Creature.KINDS.get("witch",{}).get("can_despawn",false)),"a witch may despawn, as the source opts it in")
+	suite.check(bool(Creature.KINDS.get("squid",{}).get("can_despawn",false)),"a squid may despawn")
+	# Behaviourally: a mob of each kind left far from the player, stepped once.
+	game.resume()
+	var far_away: Vector3 = game.player.position+Vector3(200,0,0)
+	for entry in [["piglin",false],["witch",true]]:
+		var kind: String = entry[0]
+		var should_go: bool = entry[1]
+		var wanderer: Creature = game.spawn_creature(kind,far_away)
+		if wanderer == null: continue
+		wanderer.set_physics_process(false)
+		wanderer._physics_process(0.1)
+		suite.check(wanderer.is_queued_for_deletion() == should_go,kind+(" is removed when far away" if should_go else " is kept when far away"))
+		if not wanderer.is_queued_for_deletion(): wanderer.queue_free()
+	game.pause()
+
+	# --- a distant mob does not starve natural spawning ----------------------
+	# The spawn cap counts mobs *near the player*, not every mob alive. A distant mob
+	# neither loads nor simulates, and the mobs that never despawn persist forever, so
+	# counting them let a handful of stray piglins block all spawning permanently.
+	#
+	# The check is on the decision rather than on a spawn attempt: whether a natural
+	# spawn would proceed depends on terrain, weather and load state, none of which are
+	# the cap's business. What the cap owns is which mobs it counts.
+	# Clear whatever earlier checks left standing near the player, so the count below is
+	# this check's own doing rather than a leftover.
+	for mob in game.creatures.get_children():
+		if mob.kind not in ["end_crystal","ender_dragon"] and mob.position.distance_to(game.player.position) <= 128: mob.queue_free()
+	await suite.process_frame
+	var distant_spot: Vector3 = game.player.position+Vector3(200,0,0)
+	for i in 8: game.spawn_creature("piglin",distant_spot)
+	await suite.process_frame
+	var counted_near: int = 0
+	for mob in game.creatures.get_children():
+		if mob.kind in ["end_crystal","ender_dragon","villager","iron_golem"]: continue
+		if mob.position.distance_to(game.player.position) <= 128: counted_near += 1
+	suite.check(counted_near == 0,"mobs two hundred blocks away are not counted against the spawn cap")
+	# And a mob placed near the player *is* counted, which is the other half of the rule.
+	var close_by: Creature = game.spawn_creature("piglin",game.player.position+Vector3(6,0,0))
+	await suite.process_frame
+	if close_by != null:
+		var counted_with_one: int = 0
+		for mob in game.creatures.get_children():
+			if mob.kind in ["end_crystal","ender_dragon","villager","iron_golem"]: continue
+			if mob.position.distance_to(game.player.position) <= 128: counted_with_one += 1
+		suite.check(counted_with_one == 1,"a mob beside the player is counted against the spawn cap")
+		close_by.queue_free()
+	for mob in game.creatures.get_children():
+		if mob.kind == "piglin": mob.queue_free()
+	await suite.process_frame
+
+	# --- a kill pays the mob's own experience --------------------------------
+	# The source gives each mob an `xp_min`/`xp_max`; Voxey paid a flat two for any
+	# hostile mob, which made a wither and a zombie worth the same.
+	for entry in [["wither",50],["blaze",10],["skeleton",6],["zombie",5],["slime",4],["cow",1],["pig",1]]:
+		var kind: String = entry[0]
+		var want: int = entry[1]
+		suite.check(int(Creature.KINDS.get(kind,{}).get("xp",0)) == want,kind+" is worth the source's %d experience" % want)
+	# And the award reaches the player when the mob dies.
+	var xp_arena := Vector3i(game.player.position.floor())+Vector3i(0,0,6)
+	for y in range(xp_arena.y-4,xp_arena.y+6):
+		for dx in range(-2,3):
+			for dz in range(-2,3): game.world.set_node(Vector3i(xp_arena.x+dx,y,xp_arena.z+dz),Nodes.AIR)
+	for dx in range(-2,3):
+		for dz in range(-2,3): game.world.set_node(Vector3i(xp_arena.x+dx,xp_arena.y-5,xp_arena.z+dz),Nodes.STONE)
+	game.resume()
+	var doomed: Creature = game.spawn_creature("wither",Vector3(xp_arena)+Vector3(0.5,0.5,0.5))
+	if doomed != null:
+		doomed.set_physics_process(false)
+		var xp_before: float = game.experience
+		doomed.health = 0.5
+		doomed.hit(100.0)
+		suite.check(is_equal_approx(game.experience-xp_before,50.0),"killing a wither awards its fifty experience")
+	# A slime is the one mob whose reward is not a fixed number: the source registers
+	# three sizes worth four, two and one, and a big slime splits on death. Its award
+	# therefore comes from its size rather than the `xp` field.
+	for size in [4,2,1]:
+		var blob: Creature = game.spawn_creature("slime",Vector3(xp_arena)+Vector3(0.5,0.5,0.5))
+		if blob == null: continue
+		blob.set_slime_size(size)
+		blob.set_physics_process(false)
+		var slime_before: float = game.experience
+		blob.health = 0.5
+		blob.hit(100.0)
+		suite.check(is_equal_approx(game.experience-slime_before,float(size)),"a size-%d slime pays %d experience" % [size,size])
+		await suite.process_frame
+	# A kill pays once. The achievement a kill unlocked used to add its own default of
+	# two on top, so a zombie — whose achievement is the only one a kill fires — paid
+	# seven instead of five.
+	for i in 3: await suite.process_frame
+	var single_before: float = game.experience
+	var one_zombie: Creature = game.spawn_creature("zombie",Vector3(xp_arena)+Vector3(0.5,0.5,0.5))
+	if one_zombie != null:
+		one_zombie.set_physics_process(false)
+		one_zombie.health = 0.5
+		one_zombie.hit(100.0)
+		for i in 3: await suite.process_frame
+		suite.check(is_equal_approx(game.experience-single_before,5.0),"a zombie pays its five experience exactly once, not again through its achievement")
+	# --- the source's per-group armor ---------------------------------------
+	# `armor` is the percentage of a group's damage a mob *takes*, not a resistance, and
+	# a group the table omits deals nothing. So a zombie takes ninety percent of an
+	# ordinary blow while a skeleton takes all of it, and only a blaze accepts a
+	# snowball.
+	for entry in [["zombie",0.9],["skeleton",1.0],["spider",1.0],["cow",1.0]]:
+		var kind: String = entry[0]
+		var want: float = entry[1]
+		var probe: Creature = game.spawn_creature(kind,Vector3(xp_arena)+Vector3(0.5,0.5,0.5))
+		await suite.process_frame
+		if probe == null or probe.is_queued_for_deletion(): continue
+		probe.set_physics_process(false)
+		suite.check(is_equal_approx(probe.armor_factor(""),want),kind+" takes the source's share of an ordinary blow")
+		# A mob with no `fleshy` at all would take nothing from a sword, which is why the
+		# plain-number form means `{fleshy = <number>}`.
+		suite.check(probe.armor_factor("") > 0.0 or kind == "none","a sword always hurts "+kind)
+		probe.queue_free()
+		await suite.process_frame
+	var blaze_probe: Creature = game.spawn_creature("blaze",Vector3(xp_arena)+Vector3(0.5,0.5,0.5))
+	if blaze_probe != null:
+		blaze_probe.set_physics_process(false)
+		suite.check(blaze_probe.armor_factor("snowball") > 0.0,"a blaze accepts a snowball, as the source's `snowball_vulnerable` says")
+		suite.check(is_equal_approx(blaze_probe.armor_factor(""),1.0),"and a blaze takes an ordinary blow in full")
+		blaze_probe.queue_free()
+		await suite.process_frame
+	# Behaviourally: the same blow lands for less on a zombie than on a spider.
+	for kind in ["zombie","spider"]:
+		var armor_victim: Creature = game.spawn_creature(kind,Vector3(xp_arena)+Vector3(0.5,0.5,0.5))
+		await suite.process_frame
+		if armor_victim == null or armor_victim.is_queued_for_deletion(): continue
+		armor_victim.set_physics_process(false)
+		armor_victim.health = 20.0
+		armor_victim.hit(10.0)
+		if kind == "zombie": suite.check(is_equal_approx(armor_victim.health,11.0),"a ten-damage blow costs a zombie only the source's nine")
+		else: suite.check(is_equal_approx(armor_victim.health,10.0),"the same blow costs a spider the full ten")
+		armor_victim.queue_free()
+		await suite.process_frame
+	# A grouped bonus is scaled by its *own* group, which is what makes Smite and Bane
+	# interact with armor rather than bypassing it.
+	suite.check(Creature.group_for("") == "fleshy" and Creature.group_for("snowball") == "snowball_vulnerable","a damage reason maps to the source's group")
+	var wither_target: Creature = game.spawn_creature("wither",Vector3(xp_arena)+Vector3(0.5,0.5,0.5))
+	if wither_target != null:
+		wither_target.set_physics_process(false)
+		# The wither takes all of a fleshy blow but only four fifths of an undead one.
+		suite.check(is_equal_approx(wither_target.armor_factor(""),1.0),"a wither takes a fleshy blow in full")
+		suite.check(is_equal_approx(wither_target.armor_factor("undead"),0.8),"and only four fifths of an undead one")
+		wither_target.health = 600.0
+		wither_target.add_bonus("undead",10.0)
+		wither_target.hit(10.0)
+		suite.check(is_equal_approx(600.0-wither_target.health,18.0),"a ten point undead bonus adds eight to a wither, not ten")
+		wither_target.queue_free()
+		await suite.process_frame
+	game.pause()
+	for y in range(xp_arena.y-5,xp_arena.y+6):
+		for dx in range(-2,3):
+			for dz in range(-2,3): game.world.set_node(Vector3i(xp_arena.x+dx,y,xp_arena.z+dz),Nodes.AIR)
+	for at in columns:
+		for y in range(at.y-11,at.y+4): game.world.set_node(Vector3i(at.x,y,at.z),Nodes.AIR)

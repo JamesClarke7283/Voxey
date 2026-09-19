@@ -25,7 +25,7 @@ The new content is available in the Creative catalog and through `/give`, as wel
 | Mushroom stew | Bowl + one mushroom of each color, in any arrangement. Restores six hunger and returns the bowl. Does not stack. |
 | Gold nugget | One gold ingot gives nine nuggets; nine nuggets at a table return one ingot. |
 | Iron nugget | One iron ingot gives nine nuggets; nine nuggets at a table return one ingot. |
-| Egg | Chickens lay a collectible egg every 90–150 active seconds. Pumpkin + sugar + egg makes pumpkin pie in any arrangement. Stacks to 16. |
+| Egg | Adult chickens lay a collectible egg every 300–600 active seconds; baby egg timers remain frozen. Pumpkin + sugar + egg makes pumpkin pie in any arrangement. Stacks to 16. |
 
 World generation places wild cane, mushrooms, and vines wherever terrain is regenerated, preserving saved node edits. Growth timers for planted cane are saved through the existing crop timer system. Creatures themselves still respawn between sessions.
 
@@ -37,6 +37,14 @@ These are adaptations to Voxey's existing systems. Eggs currently serve as cooki
 
 The atlas now has room for dedicated sandstone, ice, snow, vegetation, and building faces while preserving mod tiles 58–63. Bed tops and storage blocks are drawn correctly. Both terrain and water shaders address tiles using the actual atlas dimensions.
 
+A block missing from the atlas list resolves to tile **136**, which is the end-portal texture — so it renders dark purple rather than failing. Twenty-nine blocks were in that state, including powder snow, every shulker box, moss, tall grass, the cave vines, soul soil and the campfires. The check now walks every registered block and asserts none resolves to the fallback. See [the atlas and the fallback tile](texture-atlas.md).
+
 ## Content references
 
-Names and recipe behavior were checked against Mineclonia's own [craft items](https://codeberg.org/mineclonia/mineclonia/src/branch/main/mods/ITEMS/mcl_core/craftitems.lua), [core recipes](https://codeberg.org/mineclonia/mineclonia/src/branch/main/mods/ITEMS/mcl_core/crafting.lua), [mushrooms and stew](https://codeberg.org/mineclonia/mineclonia/src/branch/main/mods/ITEMS/mcl_mushrooms/small.lua), and [pumpkin pie](https://codeberg.org/mineclonia/mineclonia/src/branch/main/mods/ITEMS/mcl_farming/pumpkin.lua). No Mineclonia code, models, or textures are bundled.
+Names and recipe behavior were checked against Mineclonia's own [craft items](https://codeberg.org/mineclonia/mineclonia/src/branch/main/mods/ITEMS/mcl_core/craftitems.lua), [core recipes](https://codeberg.org/mineclonia/mineclonia/src/branch/main/mods/ITEMS/mcl_core/crafting.lua), [mushrooms and stew](https://codeberg.org/mineclonia/mineclonia/src/branch/main/mods/ITEMS/mcl_mushrooms/small.lua), and [pumpkin pie](https://codeberg.org/mineclonia/mineclonia/src/branch/main/mods/ITEMS/mcl_farming/pumpkin.lua). Block models and textures are original Voxey art. Later source-derived rules, tree data and recordings retain their attribution and license references in the [parity ledger's feature notes](mineclonia-parity.md).
+
+## Classic trees and home features
+
+Six [classic wood families](wood-source.md) provide renewable matching building parts, axe stripping, bark wood, source sapling layouts and leaf decay. Generic plank, tree and wood-slab recipes accept the eligible species, including mixed wood in the smoker, campfire, daylight detector and composter. Material-specific doors, trapdoors, boats, fences, stairs and slabs retain their exact species.
+
+[Paired doors](doors-source.md), [oak signs](signs-source.md) and [cake, chorus fruit and flower stew](food-features-source.md) describe their placement, interaction, persistence and source limitations. The home visual tour covers each wood’s products, six grown tree species, all cake sizes, proper flowers, sign text/editor and inventory icons.

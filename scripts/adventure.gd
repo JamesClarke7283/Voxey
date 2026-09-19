@@ -118,6 +118,8 @@ func dragon_defeated() -> void:
 	game.world.adventure_state["won_before"] = true
 	game.world.adventure_state["dragon_health"] = 0
 	game.experience += 500 if first else 100
+	# `free_the_end` on the first kill and `the_end_again` on a respawn.
+	game.achievements.award("free_the_end" if first else "the_end_again")
 	open_exit(); open_gateways()
 	if first: game.world.set_node(Vector3i(0,49,0),Nodes.DRAGON_EGG)
 	game.puff(Vector3(0,50,0),Color("e1c3f3"),80,10)
@@ -202,6 +204,12 @@ func city_guards() -> void:
 	var iz: int = floori((near.z+48)/96.0)*96
 	if posmod(ix/96+iz/96,3) != 0: return
 	var existing: Array = game.world.adventure_state.get("city_guards",[]).duplicate()
+	existing.append_array(game.boats.passenger_keys().keys())
+	for entry in Farming.records(game).values():
+		if entry is Dictionary and entry.get("kind","") == "shulker" and not str(entry.get("crystal_key","")).is_empty(): existing.append(entry.crystal_key)
+	for link in game.leads.leads:
+		var sleeper: Dictionary = link.get("sleeping",{})
+		if sleeper.get("kind","") == "shulker" and not str(sleeper.get("crystal_key","")).is_empty(): existing.append(sleeper.crystal_key)
 	for mob in game.creatures.get_children():
 		if mob.kind == "shulker" and not mob.is_queued_for_deletion(): existing.append(mob.crystal_key)
 	for offset in [Vector3i(3,43,0),Vector3i(-3,58,2)]:

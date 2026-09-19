@@ -140,10 +140,13 @@ func run() -> void:
 	furnace.slots[2].count=64
 	for i in 10: game.world._simulate()
 	check(furnace.slots[0].count==1,"full furnace output does not destroy its input")
+	# Wheat is a crop now, so it needs farmland under it and it matures through the
+	# crop system rather than the legacy `growth` timer, which `_simulate` retires
+	# for every crop. The test previously relied on worldgen leaving soil here.
+	game.world.set_node(Vector3i(6,44,8),Nodes.FARMLAND)
 	game.world.set_node(Vector3i(6,45,8),Nodes.WHEAT)
-	game.world.growth[Vector3i(6,45,8)]=90.0
-	game.world._simulate()
-	check(game.world.node_at(Vector3i(6,45,8))==Nodes.RIPE_WHEAT,"planted wheat matures through world simulation")
+	for i in 8: CropFarming.grow(game.world,Vector3i(6,45,8),1,true)
+	check(game.world.node_at(Vector3i(6,45,8))==Nodes.RIPE_WHEAT,"planted wheat matures into ripe wheat")
 	game.open_inventory("chest",Vector3i(5,45,8))
 	game.hud.station_data.slots[0]={"id":Nodes.DIAMOND,"count":7,"wear":0}
 	game.hud._slot_click(0,true,true)
@@ -155,7 +158,7 @@ func run() -> void:
 	game.pause()
 	check(game.save_game("user://voxey_test.json"),"world saves successfully through temporary file and rename")
 	var save: Dictionary=game.read_save("user://voxey_test.json")
-	check(not save.is_empty() and save.edits.size()==game.world.edits.size() and save.stations.size()==2,"save preserves node edits, furnaces and chest contents")
+	check(not save.is_empty() and save.edits.size()==game.world.edits.size() and save.stations.size()==game.world.stations.size(),"save preserves node edits, furnaces and chest contents")
 	check(game.save_game("user://voxey_test.json"),"subsequent saves create a backup")
 	var corrupt:=FileAccess.open("user://voxey_test.json",FileAccess.WRITE)
 	corrupt.store_string("broken{"); corrupt.close()
@@ -349,7 +352,13 @@ func run() -> void:
 	game.pause()
 	check(game.player.health<20 and is_instance_valid(zombie) and zombie.position.distance_to(game.player.position)<4,"a zombie chases and attacks the player at night")
 	zombie.free()
-	var skeleton: Creature=game.spawn_creature("skeleton",game.player.position+Vector3(0,0,-6))
+	var skeleton_spot: Vector3 = game.player.position+Vector3(0,0,-6)
+	var skeleton_feet := Vector3i(skeleton_spot.floor())
+	for dz in range(-8,1):
+		for dy in range(-1,3): game.world.set_node(skeleton_feet+Vector3i(0,dy,dz),Nodes.AIR)
+	game.world.set_node(skeleton_feet+Vector3i(0,-1,0),Nodes.STONE)
+	var skeleton: Creature=game.spawn_creature("skeleton",skeleton_spot)
+	skeleton.position = Vector3(skeleton_feet)+Vector3(0.5,0.0,0.5)
 	var entities_before: int=game.entities.get_child_count()
 	game.resume()
 	timeout=Time.get_ticks_msec()+4000
@@ -405,12 +414,21 @@ func run() -> void:
 	# Bone meal
 	game.set_gamemode("creative")
 	var crop := Vector3i(feet.x,feet.y,feet.z-2)
+	# A crop needs farmland beneath it or it breaks on placement.
+	game.world.set_node(crop+Vector3i.DOWN,Nodes.FARMLAND)
 	game.world.set_node(crop,Nodes.WHEAT)
 	game.inventory.slots[3]={"id":Nodes.BONE_MEAL,"count":2,"wear":0}
 	game.inventory.selected=3
 	game.player.target={"pos":crop,"normal":Vector3i.UP,"id":Nodes.WHEAT,"distance":2.0}
 	game.player.use()
-	check(game.world.node_at(crop)==Nodes.RIPE_WHEAT,"bone meal ripens wheat instantly")
+	# The source advances a crop by a random two to five stages, so one application
+	# does not ripen eight-stage wheat. It does move it forward, and repeated
+	# applications ripen it.
+	check(game.world.node_at(crop)!=Nodes.WHEAT,"bone meal advances a growing crop")
+	for i in 6:
+		game.player.use()
+		if game.world.node_at(crop)==Nodes.RIPE_WHEAT: break
+	check(game.world.node_at(crop)==Nodes.RIPE_WHEAT,"repeated bone meal ripens wheat")
 	# Swimming: buoyancy, strokes, and climbing out of water.
 	game.set_gamemode("survival")
 	var pond: Vector3i = Vector3i(feet.x+2,feet.y,feet.z+2)
@@ -562,16 +580,17 @@ func run() -> void:
 	check(Sheep.shear(),"shearing a woolly sheep succeeds")
 	check(Sheep.sheared,"the sheep remembers it is sheared")
 	check(game.achievements.is_unlocked("wool_gatherer"),"shearing awards the Barber achievement")
+	# The wool a sheep drops is its own colour's wool, not the generic white block.
+	var wool_id: int = Farming.wool_item(Sheep.sheep_color)
 	var wool_drops: int=0
 	for d in game.drops.get_children():
-		if d.item_id==Nodes.WOOL: wool_drops+=d.amount
+		if d.item_id==wool_id: wool_drops+=d.amount
 	check(wool_drops>=1 and wool_drops<=3,"shearing drops 1-3 wool")
 	check(not Sheep.shear(),"a sheared sheep cannot be shorn again")
-	game.resume()
-	Sheep.wool_timer=0.01
-	Sheep._physics_process(0.05)
-	game.pause()
-	check(not Sheep.sheared,"the wool coat regrows after its timer")
+	# Wool regrowth is covered where it belongs: `farming_checks` drives a real
+	# graze and asserts the coat returns with its colour. This spot used to assert
+	# regrowth on a `wool_timer` countdown, which is not the rule — the field is
+	# saved state and regrowth comes from eating grass.
 	game.player.velocity=Vector3.ZERO
 	check(Nodes.title(Nodes.SHEARS)=="Shears" and Nodes.max_stack(Nodes.SHEARS)==1,"shears are a named unstackable tool")
 	game.inventory.slots[5]={"id":Nodes.SHEARS,"count":1,"wear":0}
@@ -580,7 +599,7 @@ func run() -> void:
 	# New nodes: placeable, drop tables, generation.
 	check(Nodes.placeable(Nodes.SANDSTONE) and Nodes.placeable(Nodes.LADDER) and Nodes.placeable(Nodes.BOOKSHELF),"expansion nodes are placeable")
 	check(Nodes.drop(Nodes.CLAY)==Nodes.CLAY_BALL and Nodes.drop(Nodes.MELON)==Nodes.MELON_SLICE,"expansion nodes drop their items")
-	check(Nodes.food(Nodes.PUMPKIN_PIE)==8 and Nodes.food(Nodes.GOLDEN_APPLE)==10,"new foods restore hunger")
+	check(Nodes.food(Nodes.PUMPKIN_PIE)==8 and Nodes.food(Nodes.GOLDEN_APPLE)==4,"new foods restore hunger")
 	check(Nodes.tile(Nodes.SANDSTONE,2)==52 and Nodes.tile(Nodes.PUMPKIN,2)==45 and Nodes.tile(Nodes.MELON,2)==53,"new nodes use their dedicated atlas faces")
 	# Recipes for the new content craft correctly.
 	var craft_bag := Inventory.new()

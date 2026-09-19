@@ -4,17 +4,36 @@ extends RefCounted
 # Stable 16-ID families: lower slab, upper slab, double slab, then four upright
 # and four inverted stair facings. Reserve the final five states for additions.
 const FIRST = 4000
-const MATERIALS = [Nodes.PLANKS,Nodes.STONE,Nodes.COBBLE,Nodes.MOSSY_COBBLE,Nodes.BRICKS,Nodes.MOSSY_BRICKS,Nodes.RED_BRICKS,Nodes.SANDSTONE,Nodes.SANDSTONE_BRICK,Nodes.TERRACOTTA,Nodes.COBBLED_DEEPSLATE,Nodes.POLISHED_DEEPSLATE,Nodes.DEEPSLATE_BRICKS,Nodes.NETHER_BRICKS,Nodes.END_STONE,Nodes.END_BRICKS,Nodes.PURPUR,VillageContent.QUARTZ_BLOCK,VillageContent.GRANITE,VillageContent.DIORITE,VillageContent.ANDESITE,VillageContent.POLISHED_GRANITE,VillageContent.POLISHED_DIORITE,VillageContent.POLISHED_ANDESITE,MinecloniaOres.BLACKSTONE,Bastions.POLISHED,Bastions.BRICKS,Nodes.IRON_BLOCK,Nodes.GOLD_BLOCK,603,604,605,606,607,608,609,610,611,612,613,614,615,616,617,618,Masonry.DEEP_TILES,Masonry.CRACKED_DEEP_BRICKS,Masonry.CRACKED_DEEP_TILES,MinecloniaOres.TUFF,Masonry.POLISHED_TUFF,Masonry.TUFF_BRICKS]
+const MATERIALS = [Nodes.PLANKS,Nodes.STONE,Nodes.COBBLE,Nodes.MOSSY_COBBLE,Nodes.BRICKS,Nodes.MOSSY_BRICKS,Nodes.RED_BRICKS,Nodes.SANDSTONE,Nodes.SANDSTONE_BRICK,Nodes.TERRACOTTA,Nodes.COBBLED_DEEPSLATE,Nodes.POLISHED_DEEPSLATE,Nodes.DEEPSLATE_BRICKS,Nodes.NETHER_BRICKS,Nodes.END_STONE,Nodes.END_BRICKS,Nodes.PURPUR,VillageContent.QUARTZ_BLOCK,VillageContent.GRANITE,VillageContent.DIORITE,VillageContent.ANDESITE,VillageContent.POLISHED_GRANITE,VillageContent.POLISHED_DIORITE,VillageContent.POLISHED_ANDESITE,MinecloniaOres.BLACKSTONE,Bastions.POLISHED,Bastions.BRICKS,Nodes.IRON_BLOCK,Nodes.GOLD_BLOCK,603,604,605,606,607,608,609,610,611,612,613,614,615,616,617,618,Masonry.DEEP_TILES,Masonry.CRACKED_DEEP_BRICKS,Masonry.CRACKED_DEEP_TILES,MinecloniaOres.TUFF,Masonry.POLISHED_TUFF,Masonry.TUFF_BRICKS,6035,6067,6099,6131,6163,9510,9511,9512,9513]
+# Materials added after the original list, kept in their own id band. The original
+# list's computed range is `FIRST + count * 16`, and appending to it would both
+# shift nothing (ids are index-derived, so the *values* stay put) and, once the
+# count grew, run the range into the barrier families at 5000 — which is what
+# actually happened: the wood species' slabs landed inside the appended band.
+# A separate, verified-free band keeps both families independent.
+const EXTRA_FIRST = 3401
+const EXTRA_MATERIALS = [NetherBlocks.RED_NETHER_BRICKS,NetherBlocks.NETHER_WART_BLOCK,NetherBlocks.CHISELED_QUARTZ,NetherBlocks.SMOOTH_QUARTZ,NetherBlocks.QUARTZ_BRICK,NetherBlocks.POLISHED_BASALT,NetherBlocks.CRACKED_BLACKSTONE_BRICKS,PaleOak.RESIN_BRICK_BLOCK]
 const DIRECTIONS = [Vector3i.BACK,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.LEFT]
 const SIDES = [Vector3i.RIGHT,Vector3i.LEFT,Vector3i.UP,Vector3i.DOWN,Vector3i.BACK,Vector3i.FORWARD]
 static var icon_cache: Dictionary = {}
 
-static func is_shape(id: int) -> bool: return id >= FIRST and id < FIRST+MATERIALS.size()*16 and (id-FIRST)%16 <= 10
-static func variant(id: int) -> int: return (id-FIRST)%16
-static func material(id: int) -> int: return MATERIALS[(id-FIRST)/16]
-static func family(id: int) -> int: return FIRST+(id-FIRST)/16*16
-static func slab_for(base: int) -> int: return FIRST+MATERIALS.find(base)*16 if base in MATERIALS else 0
-static func stair_for(base: int) -> int: return slab_for(base)+3 if base in MATERIALS else 0
+static func is_shape(id: int) -> bool:
+	if id >= EXTRA_FIRST and id < EXTRA_FIRST+EXTRA_MATERIALS.size()*16: return (id-EXTRA_FIRST)%16 <= 10
+	return id >= FIRST and id < FIRST+MATERIALS.size()*16 and (id-FIRST)%16 <= 10
+static func variant(id: int) -> int:
+	return (id-EXTRA_FIRST)%16 if id >= EXTRA_FIRST and id < EXTRA_FIRST+EXTRA_MATERIALS.size()*16 else (id-FIRST)%16
+static func material(id: int) -> int:
+	if id >= EXTRA_FIRST and id < EXTRA_FIRST+EXTRA_MATERIALS.size()*16: return EXTRA_MATERIALS[(id-EXTRA_FIRST)/16]
+	return MATERIALS[(id-FIRST)/16]
+static func family(id: int) -> int:
+	if id >= EXTRA_FIRST and id < EXTRA_FIRST+EXTRA_MATERIALS.size()*16: return EXTRA_FIRST+(id-EXTRA_FIRST)/16*16
+	return FIRST+(id-FIRST)/16*16
+static func slab_for(base: int) -> int:
+	if base in EXTRA_MATERIALS: return EXTRA_FIRST+EXTRA_MATERIALS.find(base)*16
+	return FIRST+MATERIALS.find(base)*16 if base in MATERIALS else 0
+static func stair_for(base: int) -> int:
+	var slab: int = slab_for(base)
+	return slab+3 if slab != 0 else 0
 static func stair(id: int) -> bool: return is_shape(id) and variant(id) >= 3
 static func half_slab(id: int) -> bool: return is_shape(id) and variant(id) < 2
 static func upper(id: int) -> bool: return variant(id) == 1 or variant(id) >= 7
@@ -22,11 +41,12 @@ static func facing(id: int) -> int: return (variant(id)-3)%4
 static func item(id: int) -> int: return family(id)+(3 if stair(id) else 0)
 static func count(id: int) -> int: return 2 if variant(id) == 2 else 1
 static func title(id: int) -> String:
-	var name: String = "Oak" if material(id) == Nodes.PLANKS else Nodes.title(material(id))
+	var name: String = WoodTypes.NAMES[WoodTypes.species(material(id))] if WoodTypes.is_planks(material(id)) else Nodes.title(material(id))
 	return name+ (" stairs" if stair(id) else " slab")
 static func items() -> Array:
 	var ids: Array = []
 	for base in MATERIALS: ids.append(slab_for(base)); ids.append(stair_for(base))
+	for base in EXTRA_MATERIALS: ids.append(slab_for(base)); ids.append(stair_for(base))
 	return ids
 
 # Matches mcl_stairs/cornerstair.lua's lead/trail rules. Stored facings are the
@@ -122,11 +142,12 @@ static func mesh(out: Array, p: Vector3, id: int, data: Variant, padded_cell: Ve
 					BlockMesher._quad(out,points,uv,normal,Nodes.tile(material(id),face),Color(shade,shade,shade),true)
 
 static func recipes(inv: Inventory) -> void:
-	for base in MATERIALS:
+	for base in MATERIALS+EXTRA_MATERIALS:
 		inv._recipe(title(slab_for(base)),slab_for(base),6,[base,base,base],3,"table")
 		inv._recipe(title(stair_for(base)),stair_for(base),4,[base,0,0,base,base,0,base,base,base],3,"table")
 
 static func stonecutter_inputs(base: int) -> Array:
+	if WoodTypes.is_planks(base): return []
 	# Source _mcl_stonecutter_recipes includes earlier stages of these materials.
 	# Decorative metal stairs have crafting recipes but no stonecutter recipes.
 	match base:
@@ -153,7 +174,7 @@ static func try_place(game: Node, target: Dictionary) -> bool:
 	if not is_shape(held) or target.is_empty(): return false
 	if held != item(held): return true
 	var normal: Vector3i = target.normal
-	var at: Vector3i = target.pos+normal
+	var at: Vector3i = target.get("replace",target.pos+normal)
 	var id: int = item(held)
 	var hit: Vector3 = target.get("point",game.player.camera.global_position-game.player.camera.global_basis.z*float(target.get("distance",0)))
 	var inverted: bool = normal.y < 0 or normal.y == 0 and hit.y-floorf(hit.y) > 0.55
@@ -167,13 +188,15 @@ static func try_place(game: Node, target: Dictionary) -> bool:
 		var facing_value: int = (1 if look.x > 0 else 3) if absf(look.x) > absf(look.z) else (0 if look.z > 0 else 2)
 		id += facing_value+(4 if inverted else 0)
 	var previous: int = game.world.node_at(at)
-	if Nodes.solid(previous) and not (half_slab(previous) and family(previous) == family(id) and variant(id) == 2): return true
+	if Barriers.is_barrier(previous): return true
+	if Nodes.solid(previous) and not SnowCover.is_snow(previous) and not (half_slab(previous) and family(previous) == family(id) and variant(id) == 2): return true
 	var neighbors: Array = []
 	for side in DIRECTIONS: neighbors.append(game.world.node_at(at+side))
 	var body := AABB(game.player.position-Vector3(0.29,0,0.29),Vector3(0.58,1.8,0.58))
 	for box in boxes(mask(id,neighbors)):
 		if AABB(Vector3(at)+box.position,box.size).intersects(body): return true
 	if game.world.set_node(at,id):
+		Copper.placed_wax(game,at,game.inventory.held())
 		if game.gamemode != "creative": game.inventory.consume_selected()
 		game.sound("place"); game.player.swing = 1; game.api.emit_node_placed(at,id)
 	return true

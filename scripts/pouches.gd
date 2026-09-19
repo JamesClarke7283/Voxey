@@ -28,6 +28,8 @@ static func output_data(id: int, ingredients: Array) -> Dictionary:
 	var result: Array = []
 	for input in ingredients:
 		if not is_pouch(input.id): continue
+		for cargo in contents(input):
+			if PortableStorage.contains_kind(cargo,false): return {"error":"Pouches cannot contain other pouches, including inside boxes."}
 		if result.is_empty():
 			result = contents(input).duplicate(true)
 			while result.size() < size_of(id): result.append({"id":0,"count":0,"wear":0})
@@ -77,10 +79,13 @@ static func special_recipe(cells: Array) -> Dictionary:
 
 static func recipes(inv: Inventory) -> void:
 	var thread: int = Nodes.STRING
+	# Intentional Voxey recipes requested by the user: unpack any wool into
+	# four string, then hand-craft the first pouch from those four string alone.
+	inv._recipe("White pouch",SINGLE,1,[thread,thread,thread,thread],2)
 	for color in 16:
 		var wool: int = Nodes.WOOL if color == 0 else VillageContent.WOOL_WHITE+color
-		inv._recipe(Nodes.title(SINGLE+color),SINGLE+color,1,[thread,wool,thread,0,Nodes.CHEST,0,thread,0,thread],3,"table")
+		inv._recipe("String from "+Nodes.title(wool).to_lower(),thread,4,[wool],1)
+		if color != 0: inv._shapeless(Nodes.title(SINGLE+color),SINGLE+color,1,[SINGLE,VillageContent.DYE_WHITE+color])
 		for level in range(1,MAX_LEVEL):
 			var source: int = SINGLE+(level-1)*16+color
 			inv._shapeless(Nodes.title(source+16),source+16,1,[source,source])
-	inv._recipe("White pouch (undyed)",SINGLE,1,[thread,0,thread,0,Nodes.CHEST,0,thread,0,thread],3,"table")

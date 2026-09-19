@@ -121,6 +121,7 @@ func emit_node_broken(pos: Vector3i, id: int) -> void:
 
 ## Fire the "on_node_placed" hook after a node appears.
 func emit_node_placed(pos: Vector3i, id: int) -> void:
+	Farmland.placed(game.world,pos)
 	Mods.fire("on_node_placed",[pos,id])
 
 ## Fire the "on_player_died" hook.

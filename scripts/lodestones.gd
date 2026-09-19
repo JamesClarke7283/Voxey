@@ -13,6 +13,7 @@ static func bind(game: Node3D, pos: Vector3i) -> bool:
 		game.inventory.consume_selected()
 		if game.inventory.add_item(bound.id,1,0,bound.data) > 0: game.spawn_drop(game.player.position+Vector3.UP,bound.id,1,0,bound.data)
 	game.toast("Compass bound to this lodestone.")
+	game.achievements.award("country_lode")
 	return true
 
 static func describe(game: Node3D, slot: Dictionary) -> String:

@@ -1,0 +1,38 @@
+# Daylight detectors and targets
+
+`scripts/redstone_sensors.gd` adapts the user-provided Mineclonia checkout at `/home/impulse/.minetest/games/mineclonia`, inspected on 2026-09-16. Attribution: Mineclonia and MineClone contributors; adapted behavior is covered by [GPL-3.0-or-later](licenses/Mineclonia-GPL-3.0.txt). All pixel textures and meshes in this batch are original Voxey artwork.
+
+| Source file | SHA-256 |
+| --- | --- |
+| `mods/ITEMS/REDSTONE/mcl_daylight_detector/init.lua` | `b8fcfd01e525cfed6d0386836d7d9166071e5354ea2c8203100624bd0a5e05ba` |
+| `mods/ITEMS/REDSTONE/mcl_target/init.lua` | `ffddc6fc015fd5c4261d04e8ed4eed83e8ed1c92fc75f300856440a73623da89` |
+
+## Daylight detectors
+
+IDs 1240 and 1241 are the normal and inverted states of one inventory item. Their selection and collision height is 6/16 blocks, hardness is 0.2, and axes are preferred. They cannot move by piston. Breaking either state yields the normal detector. The normal item is furnace fuel for 15 seconds. The recipe is three glass, three quartz and three wooden slabs in horizontal rows. Lower/upper half-slabs of all six classic wood species, including mixed species, are accepted; double slabs, stairs and stone slabs are rejected. The generic guide recipe accepts every eligible wood species.
+
+The source samples `core.get_natural_light(pos)` on construction and once per second. It scales the unobstructed range 2–14 to 0–15 by rounding `(light - 2) * 15 / 12`, clamps it, and emits that value in every direction. Inverted mode emits `15 - value`. These are weak redstone outputs: they power adjacent dust or components without strongly powering an intervening solid block. A changed sampled output notifies observers. Right-click toggles inversion without taking the held item; the early interaction hook prevents accidentally eating food while operating the detector. Sneaking bypasses this action.
+
+Voxey has no Luanti natural-light map, so this port supplies an explicit engine adapter. It maps Voxey's world daylight range 0.05–1 to source natural light 2–14. Transparent vertical columns admit that light; water and leaves attenuate it, and indirect paths around obstructions lose one level per block. The bounded search cannot travel farther than the available 14 light levels. Fully enclosed rooms and dimensions without skylight yield zero. Torches, camera exposure, cave ambient light, night-vision effects and the renderer's cosmetic rain dimming are excluded. This preserves functional time-of-day and obstruction behavior, but does not claim bit-for-bit parity with Luanti's light propagation or sun-angle curve.
+
+Natural-light results are cached by world instance, dimension, block/streaming revision and quantized daylight. A shared geometry cache indexes allocated 16-node mapblocks from highest to lowest and stops each column at its first opaque cell. It never walks the thousands of implicit-air cells between ground level and a distant floating building. A distance/height/filter lower bound rejects broad roofs that cannot admit light within fourteen steps before attempting a volume search. Block changes—including stone-to-glass replacement—and column load/unload invalidate geometry; time changes retain the geometry index. A detector's unchanged surroundings therefore do not repeat the flood search every second. `natural_light()` is also available to other source-backed systems that need ambient skylight.
+
+## Target blocks
+
+IDs 1242 and 1243 are inactive and powered target states. They use full-block geometry, hardness 0.5 and the source's preferred hoe tool. The recipe is one hay bale surrounded on four sides by redstone dust. Both states drop the inactive item, and pistons can move them with their pulse metadata.
+
+An arrow or trident hit selects the face using the source's dominant-axis rule, measures radial distance from that face's center, then floors and clamps `30 * (0.5 - distance + 0.08)` to 1–15. The 0.08 margin creates the full-power bullseye. Ties between face axes follow the source's final branch rather than an invented nearest-face rule. Every accepted hit produces a one-second weak-power pulse. The source's powered node has no hit callback: further hits while powered do not overwrite or prolong the pulse.
+
+Real `Arrow` and `TridentProjectile` block collisions use their raycast impact point. Tridents retain their normal Loyalty return/drop behavior. Potion impacts, ender pearls and blaze projectiles activate full strength, matching the source's calls without an arrow object (`mcl_potions/functions.lua`, `splash.lua`, `lingering.lua`; `mcl_throwing/register.lua`; `mobs_mc/blaze.lua`). Entity collisions do not activate a nearby target. Dispenser arrows can activate a target but are not credited to the player for achievements. A player arrow/trident bullseye from at least 30 horizontal blocks awards Bullseye without an extra XP bonus, using the source's horizontal distance check.
+
+Snowballs and eggs also activate targets in Mineclonia, but Voxey does not currently expose their thrown-projectile system. That missing throwing system is a separate gap; this batch does not silently add a throwing action or claim coverage for it. Ghast explosions retain their existing behavior rather than receiving an unsupported direct target-hit hook.
+
+## Simulation, saves and integration
+
+Device state lives in the existing saved `world.block_states` dictionary. Normal/inverted and inactive/active state changes preserve this dictionary. JSON-loaded power fields are normalized to integers and timers to floats. Loading a detector resamples current light; loading an active target preserves only its remaining pulse. Unloaded columns and paused games do not advance the simulation. Removal clears device state; replacing a target cannot leave a phantom powered source. A moved target retains its pending pulse through the existing piston metadata transfer.
+
+`RedstoneCircuit.circuit_node()` includes both sensors and fence gates. The circuit simulation handles sensor sampling, target expiry, weak outputs and observer notification. Gates preserve metadata across open/closed changes and respond to power edges, leaving manual operation alone until power changes. Visual circuit instances use `RedstoneSensors.build`; standalone/dropped models use `mesh`; atlas and inventory artwork use `pixel` and `draw`. `RedstoneSensors.use` runs before food use, while the existing circuit interaction path also supports detector toggles. Device collision and selection call `boxes` for the detector's shallow shape.
+
+`tests/sensors_checks.gd` runs in a real gameplay fixture through `tests/lifecycle_runner.gd -- sensors`. It checks the complete signal conversion, dust attenuation and lamp behavior, darkness/inversion, actual player use, touch sneak, observers, indirect sky/roof/glass/leaf/torch behavior, collision/raycast geometry, pulse timing and repeated hits, weak versus strong power, actual arrow/trident/potion/blaze collisions, Bullseye, world-save serialization, unloading/reloading, piston metadata movement, actual crafting and model/art availability. It also reports cold/cached timings beneath a wide roof and a roof at Y30,926, verifies loaded blocks even without edit records, and checks high-altitude glass/leaf changes without machine-dependent timing assertions.
+
+The focused fixture passed all 42 checks without script errors. On the development host, the 31×31-roof cold query took 2.83 ms, 1,000 cached queries took 2.40 ms total, and the Y30,926-roof query took 0.322 ms. These are observed local measurements, not platform-independent performance guarantees.

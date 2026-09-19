@@ -6,6 +6,19 @@ extends RefCounted
 static var textures: Dictionary = {}
 static var meshes: Dictionary = {}
 
+static func farm_age(mob: Creature, child: bool) -> void:
+	mob.model.scale = Vector3.ONE*(0.5 if child else 1.0)
+	if is_instance_valid(mob.head): mob.head.scale = Vector3.ONE*(1.3 if child else 1.0)
+
+static func sheep_coat(mob: Creature) -> void:
+	var item: int = Farming.wool_item(mob.sheep_color)
+	var color: Color = Color(VillageContent.DATA[VillageContent.WOOL_WHITE if item == Nodes.WOOL else item].color)
+	for part in mob.wool_parts:
+		part.material_override.albedo_texture = texture("wool",color)
+		part.visible = not mob.sheared
+	for part in mob.parts:
+		if part.has_meta("sheep_skin"): part.material_override.albedo_texture = texture("fur",Color("b9a78b").lerp(color,0.3))
+
 static func texture(style: String, base: Color) -> Texture2D:
 	var key: String = style+base.to_html()
 	if textures.has(key): return textures[key]

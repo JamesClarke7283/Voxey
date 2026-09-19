@@ -50,15 +50,16 @@ Tridents can be thrown and recovered. Loyalty returns them, Impaling improves da
 
 ![Five pouch levels and three equipment slots](pouches-update.png)
 
-All sixteen wool and dye colors are available: white, grey, light grey, black, yellow, orange, red, magenta, purple, blue, cyan, lime, green, pink, light blue and brown. Craft any wool with a dye to recolor it.
+All sixteen wool and dye colors are available: white, grey, light grey, black, yellow, orange, red, magenta, purple, blue, cyan, lime, green, pink, light blue and brown. Craft any wool with a dye to recolor it. One wool of any color can also be hand-crafted into **four string**.
 
-Craft a **level 1 pouch** at a table with a chest and four string. Add dyed wool in the top middle to choose its color, or leave that space empty for white:
+Craft a white **level 1 pouch** with exactly **four string** in your inventory's 2×2 grid:
 
 ```text
-String  Wool / empty  String
-—       Chest         —
-String  —             String
+String  String
+String  String
 ```
+
+This recipe needs no wool, chest or crafting table. Dye the completed pouch to choose another color. Wool-to-string and the four-string pouch are intentional Voxey recipe choices requested by the user; four string no longer crafts wool, so the 2×2 recipe always produces a pouch.
 
 Combine **two pouches of the same level** in any two crafting slots to make the next level, up to level 5. Different colors can be combined; the first pouch in reading order supplies the result's color. Both pouches' contents are retained, merging compatible stacks. If their contents cannot fit, the recipe refuses to consume either pouch: empty some cargo first.
 

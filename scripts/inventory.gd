@@ -33,7 +33,6 @@ func _init() -> void:
 	_recipe("Stone bricks", Nodes.BRICKS, 4, [3,3,3,3], 2)
 	_recipe("Bread", Nodes.BREAD, 1, [71,71,71,0,0,0,0,0,0], 3, "table")
 	_recipe("Bed", Nodes.BED_FOOT, 1, [75,75,75,8,8,8,0,0,0], 3, "table")
-	_recipe("Wool", Nodes.WOOL, 1, [Nodes.STRING,Nodes.STRING,Nodes.STRING,Nodes.STRING], 2)
 	_recipe("Bone meal", Nodes.BONE_MEAL, 3, [Nodes.BONE], 1)
 	_recipe("TNT", Nodes.TNT, 1, [117,4,117,4,117,4,117,4,117], 3, "table")
 	for pair in [[Nodes.GOLD,Nodes.GOLD_NODE],[Nodes.COPPER,Nodes.COPPER_NODE],[Nodes.IRON,Nodes.IRON_NODE],[Nodes.DIAMOND,Nodes.DIAMOND_NODE]]:
@@ -75,8 +74,6 @@ func _init() -> void:
 	_recipe("Sugar", Nodes.SUGAR, 1, [Nodes.SUGAR_CANE], 1)
 	_recipe("Bowls", Nodes.BOWL, 4, [Nodes.PLANKS,0,Nodes.PLANKS,0,Nodes.PLANKS,0], 3, "table")
 	_shapeless("Mushroom stew", Nodes.MUSHROOM_STEW, 1, [Nodes.BOWL,Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM])
-	_shapeless("Mossy cobblestone", Nodes.MOSSY_COBBLE, 1, [Nodes.COBBLE,Nodes.VINE])
-	_shapeless("Mossy stone bricks", Nodes.MOSSY_BRICKS, 1, [Nodes.BRICKS,Nodes.VINE])
 	_recipe("Red bricks", Nodes.RED_BRICKS, 1, [Nodes.BRICK_ITEM,Nodes.BRICK_ITEM,Nodes.BRICK_ITEM,Nodes.BRICK_ITEM], 2)
 	_recipe("Clay", Nodes.CLAY, 1, [Nodes.CLAY_BALL,Nodes.CLAY_BALL,Nodes.CLAY_BALL,Nodes.CLAY_BALL], 2)
 	for pair in [[Nodes.GRAIN,Nodes.HAY_BALE],[Nodes.COAL,Nodes.COAL_BLOCK],[Nodes.GOLD_NUGGET,Nodes.GOLD],[Nodes.IRON_NUGGET,Nodes.IRON]]:
@@ -87,8 +84,7 @@ func _init() -> void:
 	# Redstone components and the Nether-to-End survival chain.
 	_recipe("Redstone torch",Nodes.REDSTONE_TORCH,1,[Nodes.REDSTONE_WIRE,Nodes.STICK],1)
 	_recipe("Lever",Nodes.LEVER,1,[Nodes.STICK,Nodes.COBBLE],1)
-	_recipe("Stone button",Nodes.BUTTON,1,[Nodes.STONE],1)
-	_recipe("Pressure plate",Nodes.PRESSURE_PLATE,1,[Nodes.STONE,Nodes.STONE],2)
+	RedstoneInputs.recipes(self)
 	_recipe("Repeater",Nodes.REPEATER,1,[Nodes.REDSTONE_TORCH,Nodes.REDSTONE_WIRE,Nodes.REDSTONE_TORCH,Nodes.STONE,Nodes.STONE,Nodes.STONE],3,"table")
 	_recipe("Comparator",Nodes.COMPARATOR,1,[0,Nodes.REDSTONE_TORCH,0,Nodes.REDSTONE_TORCH,Nodes.QUARTZ,Nodes.REDSTONE_TORCH,Nodes.STONE,Nodes.STONE,Nodes.STONE],3,"table")
 	_recipe("Piston",Nodes.PISTON,1,[Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS,Nodes.COBBLE,Nodes.IRON,Nodes.COBBLE,Nodes.COBBLE,Nodes.REDSTONE_WIRE,Nodes.COBBLE],3,"table")
@@ -117,7 +113,40 @@ func _init() -> void:
 	Netherite.recipes(self)
 	Bastions.recipes(self)
 	BuildingShapes.recipes(self)
+	Barriers.recipes(self)
+	Trapdoors.recipes(self)
+	Signs.recipes(self)
+	NoteBlocks.recipes(self)
+	Jukeboxes.recipes(self)
+	DenseMaterials.recipes(self)
+	Spyglass.recipes(self)
+	CropFarming.recipes(self)
+	FruitCrops.recipes(self)
+	Amethyst.recipes(self)
+	Copper.recipes(self)
+	Archaeology.recipes(self)
+	Decor.recipes(self)
+	Rails.recipes(self)
+	Fireworks.recipes(self)
+	Scaffolding.recipes(self)
+	Bamboo.recipes(self)
+	RespawnAnchors.recipes(self)
+	Conduits.recipes(self)
+	Corals.recipes(self)
+	Banners.recipes(self)
+	Beacons.recipes(self)
+	Beehives.recipes(self)
+	WoodTypes.recipes(self)
+	Doors.recipes(self)
+	FoodFeatures.recipes(self)
+	SnowCover.recipes(self)
+	Boats.recipes(self)
+	_shapeless("Copy map",VillageContent.FILLED_MAP,2,[VillageContent.FILLED_MAP,VillageContent.EMPTY_MAP])
+	RedstoneSensors.recipes(self)
 	Masonry.recipes(self)
+	PortableStorage.recipes(self)
+	Campfires.recipes(self)
+	Fishing.recipes(self)
 
 func _shapeless(label: String, id: int, count: int, ingredients: Array) -> void:
 	_recipe(label,id,count,ingredients,2)
@@ -129,7 +158,10 @@ func _recipe(label: String, id: int, count: int, pattern: Array, width: int, sta
 	var ingredients: Dictionary = {}
 	for item in pattern:
 		if item: ingredients[item] = ingredients.get(item, 0) + 1
-	recipes.append({"name":label, "id":id, "count":count, "pattern":pattern, "width":width, "ingredients":ingredients, "station":station})
+	# Generic group:wood recipes accept mixed species; named wood products keep
+	# their exact material, including the original oak recipes.
+	var wood_product: bool = RedstoneInputs.is_device(id) or Doors.is_item(id) or Trapdoors.is_trapdoor(id) or Barriers.is_barrier(id) or BuildingShapes.is_shape(id) or Boats.is_boat(id) or Signs.is_sign(id)
+	recipes.append({"name":label, "id":id, "count":count, "pattern":pattern, "width":width, "ingredients":ingredients, "station":station,"wood_group":ingredients.has(Nodes.PLANKS) and not wood_product,"log_group":ingredients.has(Nodes.LOG) and (id == VillageContent.SMOKER or Campfires.is_campfire(id)),"wood_slab_group":ingredients.has(BuildingShapes.slab_for(Nodes.PLANKS)) and id in [RedstoneSensors.DAYLIGHT,VillageContent.COMPOSTER]})
 
 func recipe_index(id: int) -> int:
 	for i in recipes.size():
@@ -190,11 +222,12 @@ func count_item(id: int) -> int:
 func capacity(id: int, wear: int = 0, data: Dictionary = {}) -> int:
 	id = Nodes.migrate(id)
 	var available: int = 0
+	var blocked_in_pouches: bool = PortableStorage.contains_kind({"id":id,"data":data},false)
 	for i in slots.size():
-		if i >= BASE_SLOTS and Pouches.is_pouch(id): continue
+		if i >= BASE_SLOTS and blocked_in_pouches: continue
 		var slot: Dictionary = slots[i]
 		if slot.id == 0: available += Nodes.max_stack(id)
-		elif Nodes.migrate(slot.id) == id and slot.wear == wear and slot.get("data",{}) == data: available += Nodes.max_stack(id)-int(slot.count)
+		elif Nodes.migrate(slot.id) == id and slot.wear == wear and slot.get("data",{}) == data: available += maxi(0,Nodes.max_stack(id)-int(slot.count))
 	return available
 
 static func copy_data(to: Dictionary, source: Dictionary) -> void:
@@ -207,9 +240,10 @@ static func enchantment(slot: Dictionary, kind: String) -> int:
 func add_item(id: int, amount: int = 1, wear: int = 0, data: Dictionary = {}, exclude_start: int = -1, exclude_end: int = -1) -> int:
 	id = Nodes.migrate(id)
 	if id == 0 or amount <= 0: return 0
+	var blocked_in_pouches: bool = PortableStorage.contains_kind({"id":id,"data":data},false)
 	for pass_index in 2:
 		for i in slots.size():
-			if (i >= BASE_SLOTS and Pouches.is_pouch(id)) or (i >= exclude_start and i < exclude_end): continue
+			if (i >= BASE_SLOTS and blocked_in_pouches) or (i >= exclude_start and i < exclude_end): continue
 			var slot: Dictionary = slots[i]
 			if (pass_index == 0 and Nodes.migrate(slot.id) == id and slot.wear == wear and slot.get("data",{}) == data) or (pass_index == 1 and slot.id == 0):
 				var moved: int = mini(amount, Nodes.max_stack(id) - int(slot.count))
@@ -273,57 +307,101 @@ func damage_tool() -> bool:
 func can_craft(recipe: Dictionary, station: String) -> bool:
 	if recipe.station == "table" and station != "table": return false
 	for id in recipe.ingredients:
-		if count_item(id) < recipe.ingredients[id]: return false
-	return not Pouches.output_data(recipe.id,recipe_inputs(recipe)).has("error")
+		if count_ingredient(recipe,id) < recipe.ingredients[id]: return false
+	return not craft_output_data(recipe.id,recipe_inputs(recipe)).has("error")
 
 func recipe_inputs(recipe: Dictionary) -> Array:
 	var needed: Dictionary = recipe.ingredients.duplicate()
 	var inputs: Array = []
 	for slot in slots:
-		var amount: int = mini(slot.count,needed.get(slot.id,0))
+		var key: int = ingredient_key(recipe,slot.id)
+		var amount: int = mini(slot.count,needed.get(key,0))
 		if amount <= 0: continue
 		var ingredient: Dictionary = slot.duplicate(true)
 		ingredient.count = amount
 		inputs.append(ingredient)
-		needed[slot.id] -= amount
+		needed[key] -= amount
 	return inputs
+
+static func ingredient_key(recipe: Dictionary, id: int) -> int:
+	if recipe.get("wood_group",false) and WoodTypes.is_planks(id): return Nodes.PLANKS
+	if recipe.get("log_group",false) and (WoodTypes.is_log(id) or id in [Nodes.CRIMSON_STEM,Nodes.WARPED_STEM]): return Nodes.LOG
+	if recipe.get("wood_slab_group",false) and BuildingShapes.half_slab(id) and WoodTypes.is_planks(BuildingShapes.material(id)): return BuildingShapes.slab_for(Nodes.PLANKS)
+	return id
+
+static func ingredient_title(recipe: Dictionary, id: int) -> String:
+	if id == Nodes.PLANKS and recipe.get("wood_group",false): return "Any wood planks"
+	if id == Nodes.LOG and recipe.get("log_group",false): return "Any logs or stems"
+	if id == BuildingShapes.slab_for(Nodes.PLANKS) and recipe.get("wood_slab_group",false): return "Any wooden slab"
+	return Nodes.title(id)
+
+func count_ingredient(recipe: Dictionary, id: int) -> int:
+	var count: int = 0
+	for slot in slots:
+		if ingredient_key(recipe,slot.id) == id: count += slot.count
+	return count
 
 func craft(index: int, station: String) -> bool:
 	var recipe: Dictionary = recipes[index]
 	if not can_craft(recipe, station): return false
 	var before: Array = slots.duplicate(true)
-	var output_data: Dictionary = Pouches.output_data(recipe.id,recipe_inputs(recipe))
-	for id in recipe.ingredients: remove_item(id, recipe.ingredients[id])
+	var inputs: Array = recipe_inputs(recipe)
+	var output_data: Dictionary = craft_output_data(recipe.id,inputs)
+	for ingredient in inputs: remove_item(ingredient.id,ingredient.count)
 	var leftovers: int = add_item(recipe.id, recipe.count,0,output_data)
-	if recipe.ingredients.has(Nodes.MILK_BUCKET): leftovers += add_item(Nodes.BUCKET,recipe.ingredients[Nodes.MILK_BUCKET])
+	for ingredient in inputs:
+		var container: int = craft_replacement(ingredient.id)
+		if container: leftovers += add_item(container,ingredient.count)
 	if leftovers > 0:
 		slots = before
 		changed.emit()
 		return false
 	return true
 
-static func clean_slot(slot, allow_pouches: bool = true) -> Dictionary:
+static func craft_output_data(id: int, ingredients: Array) -> Dictionary:
+	if id == VillageContent.SUSPICIOUS_STEW: return FoodFeatures.craft_data(ingredients)
+	if id == VillageContent.FILLED_MAP: return ExplorationMaps.craft_output_data(ingredients)
+	return PortableStorage.output_data(id,ingredients) if PortableStorage.is_shulker(id) else Pouches.output_data(id,ingredients)
+
+static func craft_replacement(id: int) -> int:
+	return Nodes.BUCKET if id == Nodes.MILK_BUCKET else Beehives.replacement(id)
+
+static func clean_slot(slot, allow_pouches: bool = true, allow_shulkers: bool = true) -> Dictionary:
 	if not slot is Dictionary: return {"id":0,"count":0,"wear":0}
 	var id: int = Nodes.migrate(int(slot.get("id", 0)))
-	if not Nodes.exists(id) or id == Nodes.AIR or (not allow_pouches and Pouches.is_pouch(id)): return {"id":0,"count":0,"wear":0}
-	var result: Dictionary = {"id":id, "count":clampi(int(slot.get("count",0)), 0, Nodes.max_stack(id)), "wear":maxi(0,int(slot.get("wear",0)))}
+	if not Nodes.exists(id) or id == Nodes.AIR or (not allow_pouches and Pouches.is_pouch(id)) or (not allow_shulkers and PortableStorage.is_shulker(id)): return {"id":0,"count":0,"wear":0}
+	var result: Dictionary = {"id":id, "count":clampi(int(slot.get("count",0)), 0, 64 if id == VillageContent.CAKE else Nodes.max_stack(id)), "wear":maxi(0,int(slot.get("wear",0)))}
 	if slot.get("data") is Dictionary and result.count > 0:
 		var raw: Dictionary = slot.data
 		var metadata: Dictionary = {}
-		if raw.get("custom_name") is String and not raw.custom_name.is_empty(): metadata["custom_name"] = str(raw.custom_name).left(64)
+		if id == VillageContent.SUSPICIOUS_STEW: metadata.merge(FoodFeatures.clean_stew_data(raw))
+		if raw.get("custom_name") is String and not raw.custom_name.is_empty(): metadata["custom_name"] = NameTags.bounded(str(raw.custom_name),50)
+		if id == VillageContent.FILLED_MAP:
+			var map_data: Dictionary = ExplorationMaps.clean_data(raw.get("map",{}))
+			if not map_data.is_empty(): metadata["map"] = map_data
 		if id == Nodes.COMPASS and raw.get("lodestone") is Dictionary:
 			var point: Dictionary = WorldBounds.clean_location(raw.lodestone)
 			if not point.is_empty(): metadata["lodestone"] = {"dimension":point.dimension,"position":point.position}
 		if raw.has("anvil_uses"): metadata["anvil_uses"] = clampi(int(raw.anvil_uses),0,30)
+		# `mcl_enchanting:pwp`: the anvil's prior-work penalty. Without it the cost
+		# resets to zero the first time an item is reloaded.
+		if raw.has("pwp"): metadata["pwp"] = maxi(0,int(raw.pwp))
+		# An armor trim is two metadata keys; without this they are dropped the
+		# first time the piece moves between slots.
+		if raw.get("trim_overlay") is String and not str(raw.trim_overlay).is_empty():
+			metadata["trim_overlay"] = str(raw.trim_overlay).left(32)
+			metadata["trim_material"] = int(raw.get("trim_material",0))
+		if (id == Nodes.COPPER_NODE or Copper.stage(id) >= 0) and bool(raw.get("copper_waxed",false)): metadata["copper_waxed"] = true
 		if Pouches.is_pouch(id) and raw.get("contents") is Array:
 			var clean: Array = []
-			for i in mini(Pouches.size_of(id),raw.contents.size()): clean.append(clean_slot(raw.contents[i],false))
+			for i in mini(Pouches.size_of(id),raw.contents.size()): clean.append(clean_slot(raw.contents[i],false,allow_shulkers))
 			metadata["contents"] = clean
+		if PortableStorage.is_shulker(id): metadata["contents"] = PortableStorage.clean_contents(raw.get("contents",[]),allow_pouches)
 		if id in [Nodes.WRITABLE_BOOK,Nodes.WRITTEN_BOOK]:
 			metadata["title"] = str(raw.get("title","Untitled")).left(64)
 			metadata["text"] = str(raw.get("text","")).left(12000)
-		if result.id == VillageContent.CROSSBOW and Nodes.exists(int(raw.get("loaded_arrow",0))):
-			var arrow: int = int(raw.loaded_arrow)
+		if result.id == VillageContent.CROSSBOW:
+			var arrow: int = int(raw.get("loaded_arrow",Nodes.AIR))
 			if arrow == Nodes.ARROW_ITEM or VillageContent.DATA.get(arrow,{}).get("family","") == "arrow":
 				metadata["loaded_arrow"] = arrow
 				metadata["charge"] = clampf(float(raw.get("charge",0)),0,1.25)
@@ -369,8 +447,12 @@ func matching_recipe(station: String) -> int:
 		if station != "table" and (i%3>1 or i/3>1) and grid[i].id != 0: return -1
 		cells.append(Nodes.migrate(int(grid[i].id)))
 	var special: Dictionary = Pouches.special_recipe(grid)
+	if special.is_empty(): special = PortableStorage.special_recipe(grid)
+	if special.is_empty(): special = Campfires.special_recipe(grid)
+	if special.is_empty(): special = RedstoneSensors.special_recipe(grid)
+	if special.is_empty(): special = ExplorationMaps.special_recipe(grid)
 	if not special.is_empty():
-		if Pouches.output_data(special.id,grid).has("error"): return -1
+		if craft_output_data(special.id,grid).has("error"): return -1
 		if dynamic_recipe < 0: dynamic_recipe = recipes.size(); recipes.append(special)
 		else: recipes[dynamic_recipe] = special
 		return dynamic_recipe
@@ -380,34 +462,44 @@ func matching_recipe(station: String) -> int:
 		var recipe: Dictionary = recipes[i]
 		if recipe.get("dynamic",false): continue
 		if recipe.station == "table" and station != "table": continue
+		var matching_cells: Array = cells.map(func(id): return ingredient_key(recipe,id))
 		if recipe.get("shapeless",false):
 			var present: Dictionary = {}
-			for cell in cells:
+			for cell in matching_cells:
 				if cell: present[cell] = present.get(cell,0)+1
 			if present == recipe.ingredients: return i
 			continue
 		var pattern: Dictionary = _normalized_pattern(recipe.pattern,recipe.width)
+		var matching: Dictionary = _normalized_pattern(matching_cells,3)
 		if pattern.width != normalized.width or pattern.height != normalized.height: continue
-		if pattern.cells == normalized.cells: return i
+		if pattern.cells == matching.cells: return i
 		var mirrored: Array = []
 		for y in pattern.height:
 			for x in range(pattern.width-1,-1,-1): mirrored.append(pattern.cells[x+y*pattern.width])
-		if mirrored == normalized.cells: return i
+		if mirrored == matching.cells: return i
 	return -1
 
 func take_grid_result(station: String) -> Dictionary:
 	var index: int = matching_recipe(station)
 	if index < 0: return {}
 	var result: Dictionary = {"id":recipes[index].id,"count":recipes[index].count,"wear":0}
-	var metadata: Dictionary = Pouches.output_data(result.id,grid)
+	var metadata: Dictionary = craft_output_data(result.id,grid)
 	if metadata.has("error"): return {}
 	if not metadata.is_empty(): result["data"] = metadata
+	var before_slots: Array = slots.duplicate(true)
+	var before_grid: Array = grid.duplicate(true)
+	var returns: Dictionary = {}
 	for slot in grid:
 		if slot.id == 0: continue
+		var container: int = craft_replacement(slot.id)
 		slot.count -= 1
 		if slot.count == 0:
-			if slot.id == Nodes.MILK_BUCKET: slot.id = Nodes.BUCKET; slot.count = 1
+			if container: slot.id = container; slot.count = 1; slot.wear = 0; slot.erase("data")
 			else: slot.id = 0; slot.wear = 0; slot.erase("data")
+		elif container: returns[container] = int(returns.get(container,0))+1
+	for container in returns:
+		if add_item(container,returns[container]) > 0:
+			slots = before_slots; grid = before_grid; changed.emit(); return {}
 	changed.emit()
 	return result
 
@@ -429,20 +521,47 @@ func fill_grid(index: int, station: String, all_available: bool = false) -> bool
 		slots = before_slots; grid = before_grid; changed.emit(); return false
 	var recipe: Dictionary = recipes[index]
 	var amount: int = 64 if all_available else 1
-	for id in recipe.ingredients: amount = mini(amount,mini(Nodes.max_stack(id),count_item(id)/int(recipe.ingredients[id])))
+	for id in recipe.ingredients: amount = mini(amount,mini(Nodes.max_stack(id),count_ingredient(recipe,id)/int(recipe.ingredients[id])))
+	var plan: Array = []
+	# A grid cell holds one species/metadata stack. Find the largest feasible
+	# batch without homogenizing mixed planks or losing ingredient metadata.
+	while amount > 0:
+		plan = grid_plan(recipe,amount)
+		if not plan.is_empty(): break
+		amount -= 1
+	if plan.is_empty(): slots = before_slots; grid = before_grid; changed.emit(); return false
+	for entry in plan:
+		var ingredient: Dictionary = entry.slot
+		var remaining: int = amount
+		for slot in slots:
+			if slot.id != ingredient.id or slot.wear != ingredient.wear or slot.get("data",{}) != ingredient.get("data",{}): continue
+			var taken: int = mini(remaining,slot.count)
+			slot.count -= taken; remaining -= taken
+			if slot.count == 0: slot.id = 0; slot.wear = 0; slot.erase("data")
+			if remaining == 0: break
+		grid[entry.cell] = ingredient
+	changed.emit()
+	return true
+
+func grid_plan(recipe: Dictionary, amount: int) -> Array:
+	var pools: Array = []
+	for slot in slots:
+		if slot.id == 0: continue
+		var found: bool = false
+		for pool in pools:
+			if pool.id == slot.id and pool.wear == slot.wear and pool.get("data",{}) == slot.get("data",{}): pool.count += slot.count; found = true; break
+		if not found: pools.append(slot.duplicate(true))
+	var plan: Array = []
 	for i in recipe.pattern.size():
 		var id: int = recipe.pattern[i]
 		if id == 0: continue
-		var destination: int = i%int(recipe.width)+(i/int(recipe.width))*3
 		var ingredient: Dictionary = {}
-		for slot in slots:
-			if slot.id == id and slot.count >= amount: ingredient = slot.duplicate(true); break
-		if ingredient.is_empty(): ingredient = {"id":id,"count":amount,"wear":0}
-		remove_item(id,amount)
-		ingredient.count = amount
-		grid[destination] = ingredient
-	changed.emit()
-	return true
+		for pool in pools:
+			if ingredient_key(recipe,pool.id) != id or pool.count < amount: continue
+			ingredient = pool.duplicate(true); ingredient.count = amount; pool.count -= amount; break
+		if ingredient.is_empty(): return []
+		plan.append({"cell":i%int(recipe.width)+(i/int(recipe.width))*3,"slot":ingredient})
+	return plan
 
 func craft_grid_to_inventory(station: String) -> bool:
 	var before_slots: Array = slots.duplicate(true)

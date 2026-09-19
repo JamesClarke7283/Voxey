@@ -8,11 +8,12 @@ Mine redstone ore below Y −16 with an iron or diamond pickaxe. Recipes are in 
 
 | Component | Behavior |
 | --- | --- |
+| Chest | A trapped chest sends full strength to every block beside it while it is open, so a wire and a lamp make an alarm. |
 | Dust | Carries strength 15 down to 1 over fifteen blocks; connects across chunk boundaries and one-block steps. |
 | Lever | Right-click to toggle persistent power. |
 | Button | Right-click for a one-second pulse. |
 | Pressure plate | Players, creatures, and dropped items activate it. |
-| Redstone torch | Inverts the power of its supporting block. |
+| Redstone torch | Inverts the power of its supporting block. A torch switched off **eight times within thirty seconds** burns out and stays dark until its count expires, which is the reference's fast-clock limiter. |
 | Repeater | Restores strength to 15 in its forward direction. Right-click cycles 1–4 redstone ticks (0.1–0.4 seconds). Short pulses stretch to its delay; a powered repeater/comparator pointing into a side locks its output. |
 | Comparator | Reads rear signal or container fullness. Right-click toggles compare/subtract; side inputs determine the result. |
 | Observer | Watches the block opposite its red output dot; changes produce a two-tick pulse. |
@@ -25,6 +26,12 @@ Mine redstone ore below Y −16 with an iron or diamond pickaxe. Recipes are in 
 | Hopper | Collects items from above and sends one item every 0.4 seconds toward its outlet. Power locks it. It respects full containers and preserves item metadata. Furnace input is above, fuel enters from a side, and a hopper underneath takes output. |
 
 Circuit directions, outputs, repeater delays and pending pulses, comparator mode, piston extension, and machine contents save independently in each dimension. Simulation pauses with gameplay and when its chunks unload. This is Voxey's deterministic circuit model; Java/Bedrock update-order quirks and quasi-connectivity are not reproduced.
+
+## Redstone torch burnout
+
+A redstone torch is not a free oscillator. Every time it is switched off — its supporting block gains power — its burnout count rises by one, and each count is removed **thirty seconds** later. Once **eight** counts are pending the torch refuses to relight, so a torch wired into a tight loop stops oscillating instead of running forever.
+
+The count lives in the block's saved state, so a burnt-out torch is still burnt out after leaving and returning. This is the reference's `burnout_tab`: `inc_burnout` on the on-to-off edge, `mcl_redstone.after(30, ...)` to decrement one count, and `check_burnout` gating the off-to-on edge at eight.
 
 ## Nether to stronghold
 

@@ -60,6 +60,29 @@ func run() -> void:
 		game.day_time = time; game._update_day()
 		values.append([game.sunlight.light_energy,game.environment.environment.ambient_light_energy,game.environment.environment.ambient_light_color,game.environment.environment.fog_light_color])
 	check(game.cave_shelter == 1 and values[0] == values[1] and values[1] == values[2],"deep sheltered caves keep constant lighting through dusk and night")
+	# --- the void hurts by the source's rate ---------------------------------
+	# The source damages four health every half second below the world
+	# (`VOID_DAMAGE`/`VOID_DAMAGE_FREQ`), which gives a player who falls in time to
+	# climb back out. The check also pins that the branch is reachable at all: it
+	# sits below the loaded world, so a guard over unloaded terrain would skip it.
+	game.state = "playing"
+	game.gamemode = "survival"
+	game.player.health = 20.0; game.player.damage_cooldown = 0.0; game.player.void_clock = 0.0
+	var void_y: float = float(game.world.generator.min_y())-10.0
+	game.player.position = Vector3(8.5,void_y,8.5)
+	game.player._physics_process(0.6)
+	check(is_equal_approx(game.player.health,20.0-game.player.VOID_DAMAGE),"falling into the void costs the source's four health on its first tick")
+	game.player.damage_cooldown = 0.0
+	game.player._physics_process(0.6)
+	check(is_equal_approx(game.player.health,20.0-2.0*game.player.VOID_DAMAGE),"and again on the next tick, so the void is a rate rather than one killing blow")
+	# Climbing out stops it and clears the timer. Health is left to regenerate, so
+	# the check is that the *void's* tick did not run rather than an exact value.
+	game.player.position = Vector3(8.5,64.0,8.5); game.player.damage_cooldown = 0.0
+	var outside_health: float = game.player.health
+	game.player._physics_process(0.6)
+	check(game.player.health >= outside_health and game.player.void_clock == 0.0,"leaving the void stops the damage and clears its timer")
+	game.player.health = 20.0
+
 	load("res://tests/fluid_checks.gd").run(self,game)
 	print("ENVIRONMENT TESTS: %d passed, %d failed"%[passed,failed])
 	game.queue_free()

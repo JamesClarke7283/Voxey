@@ -16,6 +16,7 @@ static func flame_position(p: Vector3i, id: int) -> Vector3:
 	return Vector3(p)+Vector3(0.5,0.82,0.5)+(Vector3(support(id))*0.1 if id in WALLS else Vector3.ZERO)
 
 static func support_changed(world: VoxelWorld, p: Vector3i) -> void:
+	if PistonPush.defer_support(world,p): return
 	var current: int = world.node_at(p)
 	if not BuildingShapes.is_shape(current) and Nodes.solid(current): return
 	for side in VoxelWorld.SIDES:

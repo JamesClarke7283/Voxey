@@ -7,6 +7,19 @@ const OVERWORLD_MIN = -128
 const NETHER_HEIGHT = 129
 const SEA = 21
 var ore_cache: Dictionary = {}
+var dungeon_cache: Dictionary = {}
+var corridor_cache: Dictionary = {}
+var treasure_cache: Dictionary = {}
+var ruin_cache: Dictionary = {}
+var wreck_cache: Dictionary = {}
+var temple_cache: Dictionary = {}
+var ruin_portal_cache: Dictionary = {}
+var jungle_cache: Dictionary = {}
+var outpost_cache: Dictionary = {}
+var igloo_cache: Dictionary = {}
+var witch_cache: Dictionary = {}
+var ocean_temple_cache: Dictionary = {}
+var cabin_cache: Dictionary = {}
 var dimension: String = "overworld"
 var world_seed: int
 var hills := FastNoiseLite.new()
@@ -70,7 +83,47 @@ func hash_at(x: int, y: int, z: int) -> int:
 	h = ((h ^ (h >> 13)) * 1274126177) & 0x7fffffff
 	return h ^ (h >> 16)
 
-func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
+# A bamboo grove at one column, which is the source's levelgen feature. It raises a
+# short run of stalks rather than one, each `5 + rng:next_within(12)` tall, with the
+# top three cells carrying the small and large leaf forms. The source's own soil rule
+# and its warm-dry placement are both applied; the swamp regions here are below sea
+# level, so the surface node is checked rather than assumed.
+func bamboo_grove(data: PackedInt32Array, base_x: int, base_z: int, wx: int, wz: int, h: int, decoration: int, desert: bool, snowy: bool) -> bool:
+	if decoration >= 5 or desert or snowy: return false
+	if climate.get_noise_2d(wx,wz) <= 0.05: return false
+	# Any warm region, which is where the source's biome modifier places bamboo. The
+	# swamp regions here sit below sea level, and this call happens only above the
+	# sea, so a warm meadow or shore is where a grove can actually stand.
+	if biome(wx,wz) not in ["Swamp","Willow shores","Oakwood meadow"]: return false
+	if data[(wx-base_x)+(wz-base_z)*18+h*324] not in [Nodes.GRASS,Nodes.DIRT]: return false
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash_at(wx,120,wz)
+	var run: int = 2+rng.randi_range(0,2)
+	var placed: bool = false
+	for step in run:
+		var sx: int = wx+step
+		var lx: int = sx-base_x
+		var lz: int = wz-base_z
+		if lx < 0 or lx >= 18 or lz < 0 or lz >= 18: continue
+		# Only where the ground is level with this column, so a grove stays on one
+		# terrace rather than hanging over a slope.
+		if terrain_height(sx,wz) != h: continue
+		if data[lx+lz*18+(h+1)*324] != Nodes.AIR: continue
+		if not Bamboo.grove_soil(data[lx+lz*18+h*324]): continue
+		# The source's height is `5 + rng:next_within(12)`, so five to sixteen, and
+		# the stalk stops early only when something blocks it.
+		var wanted: int = 5+rng.randi_range(0,11)
+		var room: int = 0
+		while room < wanted and h+1+room < terrain_ceiling() and data[lx+lz*18+(h+1+room)*324] == Nodes.AIR: room += 1
+		if room <= 3: continue
+		for i in room-3: data[lx+lz*18+(h+1+i)*324] = Bamboo.STALK
+		data[lx+lz*18+(h+room-2)*324] = Bamboo.SMALL
+		data[lx+lz*18+(h+room-1)*324] = Bamboo.BIG
+		data[lx+lz*18+(h+room)*324] = Bamboo.BIG
+		placed = true
+	return placed
+
+func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false) -> Dictionary:
 	# An 18-node halo gives the mesher complete boundary information. Trees are
 	# seeded in world coordinates, including roots outside the requested column.
 	var data := PackedInt32Array()
@@ -133,6 +186,7 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 						if stone_variant in range(110,140): id = [VillageContent.GRANITE,VillageContent.DIORITE,VillageContent.ANDESITE][stone_variant%3]
 						elif stone_variant > 981: id = Nodes.GRAVEL
 				data[x + z * 18 + y * 324] = id
+			if snowy and h > SEA+1: data[x+z*18+(h+1)*324] = SnowCover.BASE
 			if biome(wx,wz) == "Swamp":
 				if h > SEA: data[x+z*18+h*324] = VillageContent.MUD if hash_at(wx/3,93,wz/3)%5 == 0 else VillageContent.SWAMP_GRASS
 				if h < SEA and hash_at(wx,94,wz)%21 == 0: data[x+z*18+(SEA+1)*324] = VillageContent.LILY_PAD
@@ -152,10 +206,15 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 					for dy in range(1,3+hash_at(wx,62,wz)%2): data[x+z*18+(h+dy)*324] = Nodes.SUGAR_CANE
 			if h > SEA + 1:
 				var decoration: int = hash_at(wx, 100, wz) % 100
-				if desert and decoration < 2:
+				# Bamboo is tested *first*, because its window overlaps the ordinary
+				# decoration ids and the chain below claims those.
+				if bamboo_grove(data,base_x,base_z,wx,wz,h,decoration,desert,snowy):
+					pass
+				elif desert and decoration < 2:
 					for y in range(h + 1, h + 4): data[x + z * 18 + y * 324] = Nodes.CACTUS
 				elif not desert and not snowy and decoration < 5:
-					data[x + z * 18 + (h + 1) * 324] = Nodes.FLOWER if decoration == 0 else Nodes.WHEAT
+					if decoration != 0: data[x + z * 18 + (h + 1) * 324] = Nodes.WHEAT
+					elif data[x+z*18+h*324] == Nodes.GRASS: data[x+z*18+(h+1)*324] = FoodFeatures.natural_flower(hash_at(wx,101,wz))
 				elif decoration == 6 and not snowy:
 					data[x + z * 18 + (h + 1) * 324] = Nodes.PUMPKIN
 				elif decoration == 7 and snowy:
@@ -166,34 +225,24 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 					data[x+z*18+(h+1)*324] = VillageContent.SWEET_BERRIES_3
 				elif decoration in [9,10] and not desert and not snowy:
 					data[x + z * 18 + (h + 1) * 324] = Nodes.RED_MUSHROOM if decoration == 9 else Nodes.BROWN_MUSHROOM
-	for wz in (range(base_z - 2, base_z + 20) if dimension == "overworld" else []):
-		for wx in range(base_x - 2, base_x + 20):
-			if posmod(hash_at(wx, 77, wz), 105) != 0: continue
-			var h: int = terrain_height(wx, wz)
-			var c: float = climate.get_noise_2d(wx, wz)
-			if h <= SEA + 2 or c > 0.28: continue
-			var trunk: int = 4 + hash_at(wx, 9, wz) % 3
-			for dy in range(trunk - 2, trunk + 2):
-				var radius: int = 1 if dy == trunk + 1 else 2
-				for dz in range(-radius, radius + 1):
-					for dx in range(-radius, radius + 1):
-						if absi(dx) == 2 and absi(dz) == 2: continue
-						var lx: int = wx + dx - base_x
-						var lz: int = wz + dz - base_z
-						if lx < 0 or lx >= 18 or lz < 0 or lz >= 18: continue
-						var index: int = lx + lz * 18 + (h + dy + 1) * 324
-						if data[index] == 0 or Nodes.plant(data[index]): data[index] = Nodes.LEAVES
-			for dy in range(1, trunk + 1):
-				var lx: int = wx - base_x
-				var lz: int = wz - base_z
-				if lx >= 0 and lx < 18 and lz >= 0 and lz < 18: data[lx + lz * 18 + (h + dy) * 324] = Nodes.LOG
-			if c > -0.2 and hash_at(wx,63,wz)%3 == 0:
-				var lx: int = wx+1-base_x
-				var lz: int = wz-base_z
-				if lx >= 0 and lx < 18 and lz >= 0 and lz < 18:
-					for dy in range(1,trunk-1):
-						var index: int = lx+lz*18+(h+dy)*324
-						if data[index] == Nodes.AIR: data[index] = Nodes.VINE
+				# Tall grass is the source's most common surface plant; it covers
+				# grassland far more densely than the flowers above. It needs grass
+				# beneath it, so a bare or snowy column stays bare.
+				elif decoration in [12,13,14,15,16,17,18] and not desert and not snowy and data[x+z*18+h*324] == Nodes.GRASS:
+					data[x + z * 18 + (h + 1) * 324] = FoodFeatures.TALL_GRASS
+	# The source giant jungle canopy reaches seven cells from its root. Include
+	# every root capable of contributing to this column's one-cell mesh halo.
+	for wz in (range(base_z-7,base_z+25) if dimension == "overworld" else []):
+		for wx in range(base_x-7,base_x+25):
+			var tree: Dictionary = WoodTypes.natural_tree(self,wx,wz)
+			if tree.is_empty(): continue
+			for offset in tree.blocks:
+				var point: Vector3i = tree.origin+offset
+				var lx: int = point.x-base_x; var lz: int = point.z-base_z
+				if lx < 0 or lx >= 18 or lz < 0 or lz >= 18 or point.y >= terrain_ceiling(): continue
+				var index: int = lx+lz*18+point.y*324
+				var previous: int = data[index]
+				if previous == Nodes.AIR or Nodes.plant(previous) or WoodTypes.is_leaves(previous) or SnowCover.is_snow(previous): data[index] = tree.blocks[offset]
 	if dimension == "overworld": VillageGenerator.overlay(self,coord,data)
 	for placement in MinecloniaBlobs.placements(self,coord)+MinecloniaOres.placements(self,coord):
 		var p: Vector3i = placement.pos
@@ -201,7 +250,40 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 		if p.y < 0:
 			if placement.hosts.has(deep[index]): deep[index] = placement.id
 		elif placement.hosts.has(data[index]): data[index] = placement.id
+	# Dripstone grows in the caves the terrain has already carved, so it runs after
+	# the terrain and ores are final and only ever replaces air.
+	if dimension == "overworld":
+		# The frozen plains grow spike fields, which is what makes them a landmark.
+		IceSpikes.decorate(self,coord,data,deep,biome(coord.x*16+8,coord.y*16+8))
+		Dripstones.decorate(self,coord,data,deep)
 	if dimension == "nether": Bastions.overlay(self,coord,data)
+	var dungeons: Dictionary = Dungeons.overlay(self,coord,data,deep)
+	# Corridors carve last and report separately, so a chest or spawner that both
+	# systems want keeps its dungeon identity rather than being overwritten.
+	var corridors: Dictionary = Corridors.overlay(self,coord,data,deep)
+	# Buried treasure is placed after the ground is final, and reports its own chests.
+	var treasure: Dictionary = BuriedTreasure.overlay(self,coord,data,deep)
+	# Ocean ruins place coral, sea pickles and the suspicious nodes archaeology needs.
+	var ruins: Dictionary = OceanRuins.overlay(self,coord,data,deep)
+	# Shipwrecks bury a treasure chest, which is a second heart-of-the-sea route.
+	var wrecks: Dictionary = Shipwrecks.overlay(self,coord,data,deep)
+	# Desert temples carry their own archaeology table, which holds a sherd.
+	var temples: Dictionary = DesertTemples.overlay(self,coord,data,deep)
+	# Ruined portals are the surface source of crying obsidian and loose obsidian.
+	var portals: Dictionary = RuinedPortals.overlay(self,coord,data,deep)
+	# Jungle temples hold the trapped chest whose opening fires their dispensers.
+	var jungles: Dictionary = JungleTemples.overlay(self,coord,data,deep)
+	# A pillager outpost spawns a raiding party of pillagers, parrots and a golem.
+	var outposts: Dictionary = PillagerOutposts.overlay(self,coord,data,deep)
+	# An igloo hides a basement that is a self-contained cure puzzle.
+	var igloos: Dictionary = Igloos.overlay(self,coord,data,deep)
+	# A witch hut spawns its witch and an all-black cat on its own stilts.
+	var witches: Dictionary = WitchHuts.overlay(self,coord,data,deep)
+	# The ocean monument is where the guardians live, and the elder's sponges come from.
+	var monuments: Dictionary = OceanTemples.overlay(self,coord,data,deep)
+	# A woodland cabin garrisons illagers, and its evoker drops the totem of undying.
+	var cabins: Dictionary = WoodlandCabins.overlay(self,coord,data,deep)
+	Amethyst.overlay(self,coord,data,deep)
 	for p in edits:
 		var lx: int = p.x - base_x
 		var lz: int = p.z - base_z
@@ -212,6 +294,9 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 	var special: Dictionary = {}
 	var reactive: Dictionary = {}
 	var flowing: Dictionary = {}
+	var pasture: Dictionary = {}
+	var pasture_cache: Dictionary = {}
+	var cover_cache: Dictionary = {}
 	var fuel_cache: Dictionary = {}
 	var fluid_cache: Dictionary = {}
 	var replaceable_cache: Dictionary = {}
@@ -238,6 +323,11 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 					padded[x + z * 18 + y * 324] = id
 					if x > 0 and x < 17 and y > 0 and y < 17 and z > 0 and z < 17:
 						compact[(x-1) + (z-1)*16 + (y-1)*256] = id
+		# Surveys need the identical generated voxels, but no render meshes or
+		# active simulation indexes. Keep normal world generation unchanged.
+		if map_only:
+			blocks.append({"y":by,"data":compact})
+			continue
 		# Index gameplay nodes on the worker, using its complete halo. Ordinary
 		# terrain and inert lava never need a main-thread scan on arrival.
 		for y in 16:
@@ -245,7 +335,12 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 				for x in 16:
 					var index: int = x+z*16+y*256
 					var id: int = compact[index]
-					if id in Nodes.CIRCUIT_NODES or id == Nodes.CHEST or Fire.is_fire(id):
+					if not pasture_cache.has(id): pasture_cache[id] = Pasture.TRACKED.has(id) or Fluids.lava(id) or FruitCrops.lit(id) or Amethyst.is_crystal(id)
+					if pasture_cache[id]:
+						var above: int = padded[x+1+(z+1)*18+(y+2)*324]
+						if not cover_cache.has(above): cover_cache[above] = Fluids.liquid(above) or Pasture.opaque(above)
+						if id != Nodes.DIRT or not cover_cache[above]: pasture[Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)] = id
+					if RedstoneCircuit.circuit_node(id) or Archaeology.is_suspicious(id) or id in [Nodes.CHEST,VillageContent.CAULDRON,Dungeons.SPAWNER] or Campfires.is_campfire(id) or SnowCover.is_snow(id) or Fire.is_fire(id) or WoodTypes.is_leaves(id) or WoodTypes.is_sapling(id) or FoodFeatures.is_cake(id) or FoodFeatures.flower(id) or FoodFeatures.is_tall_grass(id) or Signs.is_sign(id) or CropFarming.is_crop(id) or Farmland.is_soil(id) or FruitCrops.is_stem(id) or FruitCrops.is_pumpkin_head(id) or Amethyst.tracked(id) or Beehives.is_hive(id):
 						special[Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)] = id
 					if not fluid_cache.has(id): fluid_cache[id] = Fluids.base(id)
 					if fluid_cache[id] == 0: continue
@@ -261,7 +356,7 @@ func generate_column(coord: Vector2i, edits: Dictionary) -> Dictionary:
 						if fluid_cache[id] == Nodes.LAVA and (fluid_cache[neighbor] == Nodes.WATER or fuel_cache[neighbor]) or fluid_cache[id] == Nodes.WATER and fluid_cache[neighbor] == Nodes.LAVA:
 							reactive[Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)] = id
 		blocks.append({"y":by,"data":compact, "surfaces":BlockMesher.build(padded,true)})
-	return {"coord":coord, "blocks":blocks,"special":special,"reactive":reactive,"flowing":flowing}
+	return {"coord":coord, "blocks":blocks,"special":special,"reactive":reactive,"flowing":flowing,"pasture":pasture,"dungeons":dungeons,"corridors":corridors,"treasure":treasure,"ruins":ruins,"wrecks":wrecks,"temples":temples,"portals":portals,"jungles":jungles,"outposts":outposts,"igloos":igloos,"witches":witches,"monuments":monuments,"cabins":cabins}
 
 # World-coordinate evaluation keeps terrain and vegetation identical in halos.
 func nether_node(x: int, y: int, z: int, ores: bool = true, metrics: Dictionary = {}) -> int:

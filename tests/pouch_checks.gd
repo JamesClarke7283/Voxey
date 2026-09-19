@@ -24,10 +24,45 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 		previous_pixels = pixels
 	suite.check(growing_art,"each successive pouch texture has a larger visible silhouette")
 	var basic: int = -1
+	var base_recipe_count: int = 0; var costly_recipe: bool = false
 	for i in inv.recipes.size():
-		if inv.recipes[i].id == Pouches.SINGLE and inv.recipes[i].ingredients == {Nodes.STRING:4,Nodes.CHEST:1}: basic = i
-	inv.add_item(Nodes.STRING,4); inv.add_item(Nodes.CHEST)
-	suite.check(basic >= 0 and inv.craft(basic,"table"),"a chest and four string craft an undyed pouch without leather or wool")
+		var recipe: Dictionary = inv.recipes[i]
+		if recipe.id == Pouches.SINGLE and recipe.ingredients == {Nodes.STRING:4}: basic = i
+		if Pouches.level_of(recipe.id) == 1:
+			var uses_pouch: bool = false
+			for ingredient in recipe.ingredients:
+				if Pouches.is_pouch(ingredient): uses_pouch = true
+				if ingredient == Nodes.CHEST or ingredient == Nodes.WOOL or ingredient in range(VillageContent.WOOL_WHITE,VillageContent.WOOL_BROWN+1): costly_recipe = true
+			if not uses_pouch: base_recipe_count += 1
+	inv.add_item(Nodes.STRING,4)
+	suite.check(basic >= 0 and inv.craft(basic,"hand") and inv.count_item(Pouches.SINGLE) == 1 and inv.count_item(Nodes.STRING) == 0,"four string alone hand-craft a level-one white pouch")
+	suite.check(base_recipe_count == 1 and not costly_recipe,"only one base pouch recipe remains and no level-one guide recipe charges wool or a chest")
+	inv = Inventory.new()
+	for index in [0,1,3,4]: inv.grid[index] = item(Nodes.STRING)
+	var handmade: Dictionary = inv.take_grid_result("hand")
+	suite.check(handmade.get("id",0) == Pouches.SINGLE and handmade.count == 1 and inv.grid[0].id == 0 and inv.grid[4].id == 0,"the actual two-by-two string grid produces a pouch instead of the former wool recipe")
+	inv = Inventory.new(); inv.add_item(Nodes.STRING,8)
+	suite.check(inv.fill_grid(inv.recipe_index(Pouches.SINGLE),"hand",true) and inv.grid[0].count == 2 and inv.grid[4].count == 2 and inv.craft_grid_to_inventory("hand") and inv.craft_grid_to_inventory("hand") and inv.count_item(Pouches.SINGLE) == 2 and inv.count_item(Nodes.STRING) == 0,"recipe-guide batch filling spends exactly eight string for two pouches")
+	for color in 16:
+		var wool: int = Nodes.WOOL if color == 0 else VillageContent.WOOL_WHITE+color
+		inv = Inventory.new(); inv.grid[4] = item(wool,2)
+		var strings: Dictionary = inv.take_grid_result("hand")
+		suite.check(strings.get("id",0) == Nodes.STRING and strings.count == 4 and inv.grid[4].count == 1,"hand crafting one %s produces four string and retains the second wool"%Nodes.title(wool).to_lower())
+		var wool_recipe: int = -1
+		for i in inv.recipes.size():
+			if inv.recipes[i].id == Nodes.STRING and inv.recipes[i].ingredients == {wool:1}: wool_recipe = i
+		inv = Inventory.new(); inv.add_item(wool)
+		suite.check(wool_recipe >= 0 and inv.fill_grid(wool_recipe,"hand") and inv.craft_grid_to_inventory("hand") and inv.count_item(Nodes.STRING) == 4 and inv.count_item(wool) == 0,"recipe-guide filling also unpacks %s into four string"%Nodes.title(wool).to_lower())
+	inv = Inventory.new(); inv.grid[0] = item(VillageContent.WOOL_WHITE)
+	suite.check(inv.take_grid_result("hand").get("count",0) == 4,"the legacy white-wool identifier uses the same four-string conversion")
+	# Exercise the real guide controls, not only the recipe registration helper.
+	game.hud.return_cursor(); game.inventory = Inventory.new(); game.inventory.changed.connect(game.hud.refresh_slots)
+	game.inventory.add_item(Nodes.STRING,4); game.open_inventory("hand")
+	game.hud._select_recipe(game.inventory.recipe_index(Pouches.SINGLE)); game.hud._fill_grid()
+	suite.check(game.hud.output_icon.item_id == Pouches.SINGLE and game.inventory.grid[0].id == Nodes.STRING and game.inventory.grid[4].id == Nodes.STRING,"the hand-crafting guide displays and fills the requested two-by-two pouch recipe")
+	game.hud._take_output()
+	suite.check(game.hud.cursor.id == Pouches.SINGLE and game.inventory.count_item(Nodes.STRING) == 0,"taking the guide output yields exactly one pouch on the cursor")
+	game.hud.return_cursor(); game.pause()
 	var cargo_book: Dictionary = item(Nodes.WRITTEN_BOOK,1,{"title":"Travels","text":"Across every dimension"})
 	var cargo_bow: Dictionary = item(Nodes.BOW,1,{"enchantments":{"Power":5}}); cargo_bow.wear = 13
 	for level in range(1,5):
@@ -172,6 +207,8 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 		game.inventory.exchange_pouch(i,pouch)
 	for i in 4: game.player.armor_slots[i] = item(Nodes.armor_id(3,i))
 	for i in 9: game.inventory.grid[i] = item(Nodes.DIAMOND,64)
+	# The second hand is part of the carried loadout, so it must also be recovered.
+	game.player.offhand_slot = item(VillageContent.SHIELD,1)
 	game.hud.cursor = item(Nodes.GOLD,64)
 	game.state = "paused"; game.die()
 	point = game.world.adventure_state.last_recovery.position
@@ -181,7 +218,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	for slot in full_chest.slots:
 		if slot.id != 0: occupied += 1
 	suite.check(full_chest_pos != chest_pos and game.world.get_station(chest_pos,"chest") == original_chest,"another death nearby cannot overwrite a previous recovery chest")
-	suite.check(occupied == 53 and full_chest.slots[52].id == Nodes.GOLD and full_chest.slots[51].count == 64,"a completely full backpack, pouch equipment, armor, grid and cursor all fit in one recovery chest")
+	suite.check(occupied == 54 and full_chest.slots[53].id == Nodes.GOLD and full_chest.slots[43].id == VillageContent.SHIELD,"a completely full backpack, pouch equipment, armor, second hand, grid and cursor all fit in one recovery chest")
 	suite.check(full_chest.slots[0].data.contents[26] == cargo_book,"a pouch carried in the main backpack also keeps its contents inside the recovery chest")
 	suite.check(full_chest.slots[36].data.contents[134] == cargo_bow and full_chest.slots[38].data.contents[134] == cargo_bow,"all three full-sized pouches retain their last pages in the recovery chest")
 	suite.check(game.hud.cursor.id == 0 and game.inventory.grid[0].id == 0 and game.player.armor_slots[0].id == 0 and game.inventory.pouch_slots[0].id == 0,"death clears every carried and equipped source after saving it in the chest")

@@ -73,7 +73,7 @@ static func structure_node(p: Vector3i, village: Dictionary) -> int:
 		if q.y == 0 and absi(q.x) <= 3 and absi(q.z) <= 3: return roof
 		if q.y in range(1,5) and absi(q.x) <= 3 and absi(q.z) <= 3:
 			if absi(q.x) == 3 or absi(q.z) == 3:
-				if q.x == 0 and q.z == -3 and q.y < 3: return VillageContent.WOODEN_DOOR
+				if q.x == 0 and q.z == -3 and q.y < 3: return Doors.state_id(VillageContent.WOODEN_DOOR,0,false,false,q.y == 2)
 				if q.y in [2,3] and (q.x == 0 or q.z == 0): return Nodes.GLASS
 				return Nodes.LOG if absi(q.x) == 3 and absi(q.z) == 3 and not desert else wall
 			if q == Vector3i(-2,1,1): return VillageContent.JOBS[i]

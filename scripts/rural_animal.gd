@@ -33,7 +33,8 @@ func _build_model() -> void:
 		_box(Vector3(0,0.83,0.82),Vector3(0.16,0.83,0.15),Color("493d32"),"fur")
 
 func _physics_process(delta: float) -> void:
-	if trust > 0 and position.distance_to(game.player.position) > 85: return
+	if game.playing() and game.leads.sleep_if_unloaded(self): return
+	if kind == "horse" and (trust > 0 or not custom_name.is_empty()) and position.distance_to(game.player.position) > 85: return
 	if game.survival.mount == self: animate(delta,true); return
 	if kind == "rabbit" and grounded and leap_cooldown <= 0:
 		velocity.y = 4.2; leap_cooldown = 1.1
@@ -48,8 +49,8 @@ func equip_horse_armor() -> void:
 	horse_armor = true
 	_box(Vector3(0,1.1,0.02),Vector3(0.69,0.53,1.02),Color("76563e"),"cloth")
 
-func hit(damage: float, from: Vector3 = Vector3.INF) -> void:
-	super.hit(damage*0.7 if horse_armor else damage,from)
+func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> void:
+	super.hit(damage*0.7 if horse_armor else damage,from,reason)
 
 func die() -> void:
 	if saddled: game.spawn_drop(center(),Nodes.SADDLE)

@@ -4,14 +4,16 @@ extends RefCounted
 static var atlas_texture: Texture2D
 
 static func make_atlas() -> ImageTexture:
-	var img := Image.create(128, 1024, false, Image.FORMAT_RGBA8)
+	var tile_count: int = 137+VillageContent.BLOCKS.size()+WoodTypes.TEXTURES.size()
+	var img := Image.create(128,maxi(1024,ceili(tile_count/8.0)*16),false,Image.FORMAT_RGBA8)
 	img.fill(Color.TRANSPARENT)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7164
-	for tile in 137+VillageContent.BLOCKS.size():
+	for tile in 137+VillageContent.BLOCKS.size()+WoodTypes.TEXTURES.size():
 		if tile in range(58,64): continue # Reserved for existing mod nodes.
 		var base: Color = Nodes.color(tile)
-		if tile >= 137: base = Nodes.color(VillageContent.BLOCKS[tile-137])
+		if tile >= 137+VillageContent.BLOCKS.size(): base = WoodTypes.color(WoodTypes.TEXTURES[tile-137-VillageContent.BLOCKS.size()])
+		elif tile >= 137: base = Nodes.color(VillageContent.BLOCKS[tile-137])
 		if tile >= 104 and tile < 137: base = Nodes.color(Nodes.EXPANSION_NODES[tile-104])
 		if tile >= 94 and tile < 104: base = Nodes.color(Nodes.DEEP_NODES[tile-94])
 		if tile >= 79 and tile < 94: base = Nodes.color(Nodes.LAVA+mini(tile-79,13))
@@ -30,7 +32,8 @@ static func make_atlas() -> ImageTexture:
 			for x in 16:
 				var c: Color = base * rng.randf_range(0.86,1.1)
 				c.a = 1.0
-				if tile >= 137: c = VillageArt.pixel(VillageContent.BLOCKS[tile-137],x,y,c)
+				if tile >= 137+VillageContent.BLOCKS.size(): c = WoodTypes.pixel(WoodTypes.TEXTURES[tile-137-VillageContent.BLOCKS.size()],x,y,c)
+				elif tile >= 137: c = VillageArt.pixel(VillageContent.BLOCKS[tile-137],x,y,c)
 				match tile:
 					104,105:
 						c = Color("55535c" if tile == 105 else "828589")*rng.randf_range(0.85,1.1)
@@ -172,11 +175,10 @@ static func make_atlas() -> ImageTexture:
 						# Clay: grey-blue with darker speckles.
 						if (x/2*5+y/2*11)%13 < 3: c *= 0.82
 					45:
-						# Carved pumpkin face.
+						# The pumpkin top is a stalk with ribs; carved faces are oriented geometry.
 						c = Color("cf8a2a")*rng.randf_range(0.9,1.1)
-						if y in [4,5] and x in [3,4,11,12]: c = Color("3a2410")
-						if y in [9,10,11] and x in [4,5,10,11]: c = Color("3a2410")
-						if y == 11 and x in [6,7,8,9]: c = Color("3a2410")
+						if posmod(x-y,5) == 0: c = c.darkened(0.12)
+						if x in range(6,10) and y in range(6,10): c = Color("6d7635")
 						if x in [0,15] or y in [0,15]: c *= 0.72
 					46:
 						# Pumpkin side: ribs.
@@ -359,9 +361,16 @@ static func crack_mesh() -> ArrayMesh:
 static func build_node_mesh(id: int) -> ArrayMesh:
 	var padded := PackedInt32Array()
 	padded.resize(5832)
-	padded[1+18+324] = id
+	if Doors.is_item(id):
+		padded[1+18+324] = Doors.state_id(id,0)
+		padded[1+18+648] = Doors.state_id(id,0,false,false,true)
+	else: padded[1+18+324] = id
 	var surfaces: Array = BlockMesher.build(padded)
 	var mesh := ArrayMesh.new()
-	var arrays: Array = surfaces[1] if id == Nodes.WATER else surfaces[0]
+	var arrays: Array = surfaces[1] if id in [Nodes.WATER,Amethyst.TINTED_GLASS,Beehives.HONEY_BLOCK] else surfaces[0]
+	if Doors.is_item(id) and not arrays.is_empty():
+		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		for i in vertices.size(): vertices[i] = vertices[i]*0.5+Vector3(0.25,0,0.45)
+		arrays[Mesh.ARRAY_VERTEX] = vertices
 	if not arrays.is_empty(): mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
 	return mesh

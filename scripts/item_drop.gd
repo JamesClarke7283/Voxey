@@ -17,7 +17,7 @@ func _ready() -> void:
 	if Nodes.placeable(item_id):
 		# Dropped nodes are miniature copies of the real node, atlas textures included.
 		mesh_instance.mesh = game.node_mesh(item_id)
-		mesh_instance.material_override = game.node_material
+		mesh_instance.material_override = game.world.water_material if item_id in [Amethyst.TINTED_GLASS,Beehives.HONEY_BLOCK] else game.node_material
 		mesh_instance.scale = Vector3.ONE*0.25
 		mesh_instance.position = Vector3(-0.125,0,-0.125)
 	else:

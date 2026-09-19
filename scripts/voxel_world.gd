@@ -35,8 +35,34 @@ var active: bool = true
 var last_mesh_ms: float = 0.0
 
 func configure(seed_number: int, atlas: Texture2D, dimension_name: String = "overworld") -> void:
+	Jukeboxes.reset(self)
+	Dungeons.reset(self)
+	Copper.reset(self)
+	Copper.register_families()
+	Weather.reset(self)
+	Conduits.reset(self)
+	Corals.reset(self)
+	SeaPickles.reset(self)
+	Kelp.reset(self)
+	Beacons.reset(self)
+	Sponges.reset(self)
+	Concrete.reset(self)
+	EndMud.reset(self)
+	LushCaveExtra.reset(self)
+	PaleOak.reset(self)
+	ZombieSiege.reset(self)
+	Archaeology.reset(self)
+	if has_meta("piston_support"): remove_meta("piston_support")
+	Farmland.reset(self)
+	CropFarming.reset(self)
+	FruitCrops.reset(self)
+	Amethyst.reset(self)
+	Beehives.reset(self)
 	dimension = dimension_name
 	seed_value = seed_number
+	Pasture.reset(self)
+	SnowCover.reset(self)
+	if has_meta("wood_runtime"): remove_meta("wood_runtime")
 	generator = TerrainGenerator.new(seed_value,dimension)
 	circuits = RedstoneCircuit.new(self)
 	fluids = Fluids.new(self)
@@ -46,6 +72,9 @@ func configure(seed_number: int, atlas: Texture2D, dimension_name: String = "ove
 	water_material = ShaderMaterial.new()
 	water_material.shader = preload("res://shaders/water.gdshader")
 	water_material.set_shader_parameter("atlas",atlas)
+	for entry in [["honey_tile",Beehives.HONEY_BLOCK],["tinted_glass_tile",Amethyst.TINTED_GLASS]]:
+		var tile: int = Nodes.tile(entry[1],0)
+		water_material.set_shader_parameter(entry[0],Vector2(tile%8,tile/8))
 
 func _process(delta: float) -> void:
 	if generator == null: return
@@ -94,6 +123,38 @@ func _process(delta: float) -> void:
 		if not columns.has(nearest) and not pending.has(nearest): _queue_column(nearest)
 	if active:
 		fluids.update(delta)
+		Campfires.update(self,delta)
+		Cauldrons.update(self,delta)
+		Pasture.update(self,delta)
+		SnowCover.update(self,delta)
+		WoodTypes.update(self,delta)
+		Farmland.update(self,delta)
+		CropFarming.update(self,delta)
+		FruitCrops.update(self,delta)
+		Amethyst.update(self,delta)
+		Beehives.update(self,delta)
+		Copper.update(self,delta)
+		Weather.update(self,delta)
+		Sponges.update(self,delta)
+		Dripping.update(self,delta)
+		Archaeology.update(self,delta)
+		if get_parent() != null and get_parent().rails != null: get_parent().rails.update(delta)
+		Conduits.update(self,delta)
+		Corals.update(self,delta)
+		SeaPickles.update(self,delta)
+		Concrete.update(self,delta)
+		EndMud.update(self,delta)
+		LushCaveExtra.update(self,delta)
+		var siege_owner: Node = get_parent()
+		if siege_owner != null and siege_owner.has_method("toast"): ZombieSiege.update(siege_owner,delta)
+		if siege_owner != null and siege_owner.has_method("toast"): PaleOak.update(siege_owner,delta)
+		Kelp.update(self,delta)
+		Beacons.update(self,delta)
+		for key in stations:
+			var station: Dictionary = stations[key]
+			if station.get("kind","") != "composter": continue
+			var xyz: PackedStringArray = key.split(",")
+			if xyz.size() == 3 and loaded_at(Vector3(float(xyz[0]),float(xyz[1]),float(xyz[2]))): Composters.step(station,delta)
 		if get_parent() != null and get_parent().has_method("playing") and get_parent().playing(): circuits.update(delta)
 		tick += delta
 		if tick >= 1.0:
@@ -111,8 +172,15 @@ func _queue_column(coord: Vector2i) -> void:
 	pending[coord] = true
 
 func _apply_column(result: Dictionary) -> void:
+	WoodTypes.restore_legacy(self)
 	sky_revision += 1
 	var c: Vector2i = result.coord
+	var snow_updates: Dictionary = {}
+	var food_updates: Dictionary = {}
+	var legacy_doors: Dictionary = {}
+	var input_updates: Dictionary = {}
+	var sign_updates: Dictionary = {}
+	var fruit_updates: Dictionary = {}
 	columns[c] = true
 	for entry in result.blocks:
 		var coord := Vector3i(c.x,int(entry.y),c.y)
@@ -132,9 +200,107 @@ func _apply_column(result: Dictionary) -> void:
 				_mark_dirty(p)
 	for p in result.get("special",{}):
 		var id: int = node_at(p)
-		if id in Nodes.CIRCUIT_NODES: circuits.register(p,id)
-		if id == Nodes.CHEST and not edits.has(p): _structure_loot(p)
+		if RedstoneCircuit.circuit_node(id): circuits.register(p,id)
+		if Doors.legacy(id): legacy_doors[p] = true
+		if RedstoneInputs.is_device(id): input_updates[p] = true
+		SnowCover.registered(self,p,id)
+		WoodTypes.scan(self,p,id)
+		if Amethyst.tracked(id): Amethyst.registered(self,p,id)
+		# Powder cells are swept for water contact, so a saved column must be
+		# tracked again on load.
+		if Concrete.is_powder(id): Concrete.placed_powder(self,p,id)
+		if EndMud.is_chorus_part(id): EndMud.registered(self,p)
+		if Beehives.is_hive(id): Beehives.registered(self,p)
+		if Farmland.is_soil(id): Farmland.registered(self,p,id)
+		if CropFarming.is_crop(id): CropFarming.registered(self,p,true)
+		if FruitCrops.is_stem(id): FruitCrops.registered(self,p,true); fruit_updates[p] = true
+		if WoodTypes.is_sapling(id) and not growth.has(p): growth[p] = 0.0
+		if id == Dungeons.SPAWNER:
+			# Corridor spawners carry their own mob; dungeon spawners fall back to
+			# the dungeon table.
+			var corridors: Dictionary = result.get("corridors",{})
+			Dungeons.registered(self,p,str(corridors.get("spawners",{}).get(p,result.get("dungeons",{}).get("spawners",{}).get(p,"zombie"))))
+		if SnowCover.is_snow(id): snow_updates[p] = true
+		if FoodFeatures.is_cake(id) or FoodFeatures.flower(id) or FoodFeatures.is_tall_grass(id): food_updates[p] = true
+		if id == Nodes.CHEST and not edits.has(p):
+			if result.get("wrecks",{}).get("buried",{}).has(p): _structure_loot(p,-1,false,true)
+			elif result.get("wrecks",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,true)
+			elif result.get("temples",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,true)
+			elif result.get("portals",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,true)
+			elif result.get("jungles",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,true)
+			elif result.get("outposts",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,true)
+			elif result.get("igloos",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,true)
+			elif result.get("monuments",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,false,true)
+			elif result.get("cabins",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,false,false,true)
+			elif result.get("treasure",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,true)
+			elif result.get("corridors",{}).get("chests",{}).has(p): _structure_loot(p,-1,true)
+			else: _structure_loot(p,int(result.get("dungeons",{}).get("chests",{}).get(p,-1)))
+		# A suspicious node's loot is drawn from the table of the structure that
+		# placed it. The source tags each node with the structure's name and reads
+		# that structure's own table, which is where the sherds live; without the
+		# tag every node would draw from the generic sand or gravel list and the
+		# sherds would be unreachable in survival.
+		if Archaeology.is_suspicious(id):
+			# Three structures place suspicious nodes, each with its own table.
+			var placed_by: String = String(result.get("ruins",{}).get("suspicious",{}).get(p,
+				String(result.get("temples",{}).get("suspicious",{}).get(p,""))))
+			if not placed_by.is_empty(): Archaeology.set_structure(self,p,placed_by)
+		# A mineshaft's loot is carried by a chest minecart standing on a rail, as
+		# the source constructs it. The cart service owns it like any other cart.
+		if result.get("corridors",{}).get("carts",{}).has(p):
+			var corridors_cart: Dictionary = result.corridors.carts
+			var cart: MinecartEntity = get_parent().rails.spawn(Rails.CHEST_CART,Vector3(p)+Vector3(0.5,0.06,0.5))
+			if cart != null:
+				var cart_station: Dictionary = _new_station("chest",27)
+				Corridors.fill_chest(cart_station,int(corridors_cart[p]))
+				var cart_record: Dictionary = get_parent().rails.records().get(cart.key,{})
+				cart_record["cargo"] = cart_station.slots
+				get_parent().rails.records()[cart.key] = cart_record
 		if Fire.is_fire(id): Fire.track(self,p)
+		if Campfires.is_campfire(id): Campfires.station(self,p)
+		if Signs.is_sign(id): Signs.station(self,p); sign_updates[p] = true
+		if id == VillageContent.CAULDRON: Cauldrons.station(self,p)
+		if Conduits.is_conduit(id): Conduits.registered(self,p)
+		if Corals.is_coral(id): Corals.registered(self,p,id)
+		if SeaPickles.is_pickle(id): SeaPickles.registered(self,p,id)
+		if Kelp.is_kelp(id): Kelp.registered(self,p,id)
+		if Beacons.is_beacon(id): Beacons.registered(self,p,id)
+	# A structure's own residents spawn once, at the marker block it reports. The
+	# markers are ordinary blocks (a chest or a cauldron), so they are not in the
+	# `special` index and must be read from each structure's own map.
+	for p in result.get("outposts",{}).get("party",{}):
+		if edits.has(p) or not loaded_at(Vector3(p)): continue
+		for member in result.outposts.party[p]:
+			var kind: String = String(member[0])
+			var spot: Array = member[1]
+			if spot.size() == 3:
+				get_parent().spawn_creature(kind,Vector3(float(spot[0])+0.5,float(spot[1])+0.1,float(spot[2])+0.5))
+	for p in result.get("igloos",{}).get("residents",{}):
+		if edits.has(p) or not loaded_at(Vector3(p)): continue
+		for kind in ["villager","zombie_villager"]:
+			var spot: Array = result.igloos.residents[p].get(kind,[])
+			if spot.size() == 3:
+				get_parent().spawn_creature(kind,Vector3(float(spot[0])+0.5,float(spot[1])+0.1,float(spot[2])+0.5))
+	for p in result.get("cabins",{}).get("garrison",{}):
+		if edits.has(p) or not loaded_at(Vector3(p)): continue
+		for member in result.cabins.garrison[p]:
+			var kind: String = String(member[0])
+			var spot: Array = member[1]
+			if spot.size() == 3:
+				get_parent().spawn_creature(kind,Vector3(float(spot[0])+0.5,float(spot[1])+0.1,float(spot[2])+0.5))
+	for p in result.get("monuments",{}).get("garrison",{}):
+		if edits.has(p) or not loaded_at(Vector3(p)): continue
+		for member in result.monuments.garrison[p]:
+			var kind: String = String(member[0])
+			var spot: Array = member[1]
+			if spot.size() == 3:
+				get_parent().spawn_creature(kind,Vector3(float(spot[0])+0.5,float(spot[1])+0.1,float(spot[2])+0.5))
+	for p in result.get("witches",{}).get("residents",{}):
+		if edits.has(p) or not loaded_at(Vector3(p)): continue
+		for kind in ["witch","cat"]:
+			var spot: Array = result.witches.residents[p].get(kind,[])
+			if spot.size() == 3:
+				get_parent().spawn_creature(kind,Vector3(float(spot[0])+0.5,float(spot[1])+0.1,float(spot[2])+0.5))
 	for p in result.get("reactive",{}):
 		react_fluid(p)
 		Fire.track(self,p)
@@ -143,12 +309,97 @@ func _apply_column(result: Dictionary) -> void:
 	for p in edits:
 		if p.x < c.x*16-1 or p.x > c.x*16+16 or p.z < c.y*16-1 or p.z > c.y*16+16: continue
 		if not loaded_at(Vector3(p)): continue
+		Pasture.changed(self,p)
 		var id: int = node_at(p)
-		if id in Nodes.CIRCUIT_NODES: circuits.register(p,id)
+		if RedstoneCircuit.circuit_node(id): circuits.register(p,id)
+		if Doors.legacy(id): legacy_doors[p] = true
+		if RedstoneInputs.is_device(id): input_updates[p] = true
+		SnowCover.registered(self,p,id)
+		WoodTypes.scan(self,p,id)
+		if Amethyst.tracked(id): Amethyst.registered(self,p,id)
+		# Powder cells are swept for water contact, so a saved column must be
+		# tracked again on load.
+		if Concrete.is_powder(id): Concrete.placed_powder(self,p,id)
+		if EndMud.is_chorus_part(id): EndMud.registered(self,p)
+		if Beehives.is_hive(id): Beehives.registered(self,p)
+		if Farmland.is_soil(id): Farmland.registered(self,p,id)
+		if CropFarming.is_crop(id): CropFarming.registered(self,p,true)
+		if FruitCrops.is_stem(id): FruitCrops.registered(self,p,true); fruit_updates[p] = true
+		if WoodTypes.is_sapling(id) and not growth.has(p): growth[p] = 0.0
+		if id == Dungeons.SPAWNER:
+			# Corridor spawners carry their own mob; dungeon spawners fall back to
+			# the dungeon table.
+			var corridors: Dictionary = result.get("corridors",{})
+			Dungeons.registered(self,p,str(corridors.get("spawners",{}).get(p,result.get("dungeons",{}).get("spawners",{}).get(p,"zombie"))))
+		if id == Nodes.CHEST and not edits.has(p):
+			if result.get("wrecks",{}).get("buried",{}).has(p): _structure_loot(p,-1,false,true)
+			elif result.get("wrecks",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,true)
+			elif result.get("temples",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,true)
+			elif result.get("portals",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,true)
+			elif result.get("jungles",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,true)
+			elif result.get("outposts",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,true)
+			elif result.get("igloos",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,true)
+			elif result.get("monuments",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,false,true)
+			elif result.get("cabins",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,false,false,true)
+			elif result.get("treasure",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,true)
+			elif result.get("corridors",{}).get("chests",{}).has(p): _structure_loot(p,-1,true)
+			else: _structure_loot(p,int(result.get("dungeons",{}).get("chests",{}).get(p,-1)))
+		# A suspicious node's loot is drawn from the table of the structure that
+		# placed it. The source tags each node with the structure's name and reads
+		# that structure's own table, which is where the sherds live; without the
+		# tag every node would draw from the generic sand or gravel list and the
+		# sherds would be unreachable in survival.
+		if Archaeology.is_suspicious(id):
+			# Three structures place suspicious nodes, each with its own table.
+			var placed_by: String = String(result.get("ruins",{}).get("suspicious",{}).get(p,
+				String(result.get("temples",{}).get("suspicious",{}).get(p,""))))
+			if not placed_by.is_empty(): Archaeology.set_structure(self,p,placed_by)
+		# A mineshaft's loot is carried by a chest minecart standing on a rail, as
+		# the source constructs it. The cart service owns it like any other cart.
+		if result.get("corridors",{}).get("carts",{}).has(p):
+			var corridors_cart: Dictionary = result.corridors.carts
+			var cart: MinecartEntity = get_parent().rails.spawn(Rails.CHEST_CART,Vector3(p)+Vector3(0.5,0.06,0.5))
+			if cart != null:
+				var cart_station: Dictionary = _new_station("chest",27)
+				Corridors.fill_chest(cart_station,int(corridors_cart[p]))
+				var cart_record: Dictionary = get_parent().rails.records().get(cart.key,{})
+				cart_record["cargo"] = cart_station.slots
+				get_parent().rails.records()[cart.key] = cart_record
+		if SnowCover.is_snow(id) or SnowCover.is_snow(node_at(p+Vector3i.UP)): snow_updates[p] = true
+		if FoodFeatures.is_cake(id) or FoodFeatures.flower(id) or FoodFeatures.is_tall_grass(id) or FoodFeatures.is_cake(node_at(p+Vector3i.UP)) or FoodFeatures.flower(node_at(p+Vector3i.UP)) or FoodFeatures.is_tall_grass(node_at(p+Vector3i.UP)): food_updates[p] = true
 		if Fire.is_fire(id) or Fluids.lava(id): Fire.track(self,p)
+		if Campfires.is_campfire(id): Campfires.station(self,p)
+		if Signs.is_sign(id): Signs.station(self,p); sign_updates[p] = true
+		if id == VillageContent.CAULDRON: Cauldrons.station(self,p)
+		if Conduits.is_conduit(id): Conduits.registered(self,p)
+		if Corals.is_coral(id): Corals.registered(self,p,id)
+		if SeaPickles.is_pickle(id): SeaPickles.registered(self,p,id)
+		if Kelp.is_kelp(id): Kelp.registered(self,p,id)
+		if Beacons.is_beacon(id): Beacons.registered(self,p,id)
 		if Fluids.liquid(id): react_fluid(p); fluids.activate(p)
 		if Fire.flammable(id):
 			for side in SIDES: Fire.track(self,p+side)
+	Pasture.column_loaded(self,c,result.get("pasture",{}))
+	# Validate after reconciling all edits. Removing support can write new edits,
+	# so it must run outside the dictionary iteration above.
+	for p in snow_updates: SnowCover.changed(self,p)
+	for p in sign_updates: Signs.validate_support(self,p)
+	for p in food_updates: FoodFeatures.changed(self,p)
+	for p in fruit_updates: FruitCrops.refresh(self,p)
+	Farmland.column_loaded(self,c)
+	CropFarming.column_loaded(self,c)
+	Amethyst.column_loaded(self,c)
+	Copper.column_loaded(self,c)
+	Sponges.column_loaded(self,c)
+	for p in legacy_doors: Doors.migrate_at(self,p)
+	for p in input_updates: RedstoneInputs.migrate_at(self,p)
+	for p in input_updates: RedstoneInputs.support_changed(self,p)
+	# A previously unloaded support column can invalidate a boundary attachment.
+	for p in circuits.tracked.keys():
+		var input_id: int = node_at(p)
+		if not RedstoneInputs.is_device(input_id): continue
+		var support_cell: Vector3i = p+RedstoneInputs.support(input_id)
+		if Vector2i(floori(support_cell.x/16.0),floori(support_cell.z/16.0)) == c: RedstoneInputs.support_changed(self,p)
 	fluids.column_loaded(c)
 	column_loaded.emit()
 
@@ -170,6 +421,22 @@ func _apply_mesh(coord: Vector3i, surfaces: Array) -> void:
 	# concave physics shape rebuilds are needed when a node changes.
 
 func _unload(c: Vector2i) -> void:
+	Pasture.column_unloaded(self,c)
+	SnowCover.unload(self,c)
+	WoodTypes.unload(self,c)
+	Jukeboxes.unload(self,c)
+	Dungeons.unload(self,c)
+	Farmland.unload(self,c)
+	CropFarming.unload(self,c)
+	FruitCrops.unload(self,c)
+	Amethyst.unload(self,c)
+	Beehives.unload(self,c)
+	Copper.unload(self,c)
+	Sponges.unload(self,c)
+	Concrete.unload(self,c)
+	EndMud.unload(self,c)
+	LushCaveExtra.unload(self,c)
+	PaleOak.unload(self,c)
 	sky_revision += 1
 	columns.erase(c)
 	for p in hazards.keys():
@@ -213,16 +480,25 @@ func set_node(p: Vector3i, id: int) -> bool:
 		if p.y < generator.terrain_ceiling() or not loaded_at(Vector3(p)): return false
 		_create_air_block(b)
 	var old_id: int = blocks[b].data[local_index(p)]
-	if Nodes.solid(old_id) != Nodes.solid(id): sky_revision += 1
+	if old_id != id and old_id in [VillageContent.COMPOSTER,VillageContent.CAULDRON]: stations.erase(station_key(p))
+	if old_id != id: sky_revision += 1
 	blocks[b].data[local_index(p)] = id
+	Campfires.changed(self,p,old_id,id)
+	Dripping.changed(self,p,old_id,id)
+	Dungeons.changed(self,p,old_id,id)
+	WoodTypes.changed(self,p,old_id,id)
+	Scaffolding.changed(self,p,old_id,id)
+	Pasture.changed(self,p)
+	if id == VillageContent.CAULDRON: Cauldrons.station(self,p)
 	Fire.track(self,p)
 	if Fire.flammable(id) or Fire.flammable(old_id):
 		for side in Fire.SIDES: Fire.track(self,p+side)
 	circuits.changed(p,old_id,id)
 	edits[p] = id
-	if id in [Nodes.WHEAT,Nodes.SAPLING,Nodes.SUGAR_CANE] or VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3: growth[p] = 0.0
+	if id == Nodes.SUGAR_CANE or WoodTypes.is_sapling(id) or not CropFarming.is_crop(id) and VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3: growth[p] = 0.0
 	else: growth.erase(p)
 	_mark_dirty(p)
+	if Barriers.is_wall(node_at(p+Vector3i.DOWN)): _mark_dirty(p+Vector3i.DOWN)
 	if BuildingShapes.stair(old_id) or BuildingShapes.stair(id):
 		for dx in range(-1,2):
 			for dz in range(-1,2):
@@ -239,6 +515,23 @@ func set_node(p: Vector3i, id: int) -> bool:
 	if game != null and game.has_method("remove_torch"):
 		if Torches.is_torch(old_id): game.remove_torch(p)
 		if Torches.is_torch(id): game.add_torch(p)
+	SnowCover.changed(self,p)
+	FoodFeatures.changed(self,p)
+	Signs.changed(self,p,old_id,id)
+	Jukeboxes.changed(self,p,old_id,id)
+	Farmland.changed(self,p,old_id,id)
+	CropFarming.changed(self,p,old_id,id)
+	FruitCrops.changed(self,p,old_id,id)
+	Amethyst.changed(self,p,old_id,id)
+	Concrete.changed(self,p,old_id,id)
+	EndMud.changed(self,p,old_id,id)
+	PaleOak.changed(self,p,old_id,id)
+	Beehives.changed(self,p,old_id,id)
+	Copper.changed(self,p,old_id,id)
+	Copper.support_changed(self,p)
+	Rails.support_changed(self,p)
+	Sponges.changed(self,p,old_id,id)
+	Decor.changed(self,p,old_id,id)
 	return true
 
 func _create_air_block(coord: Vector3i) -> void:
@@ -280,18 +573,45 @@ func _snapshot(coord: Vector3i) -> PackedInt32Array:
 							for x in range(x0,x1): data[dst+x] = source[src+(x+15)%16]
 	return data
 
+func collision_boxes(p: Vector3i) -> Array:
+	var id: int = node_at(p)
+	if Candles.is_candle(id): return Candles.boxes(id)
+	if Candles.is_cake(id): return Candles.boxes(Candles.FIRST)
+	if Farmland.is_soil(id): return Farmland.boxes(id)
+	if Amethyst.is_crystal(id): return Amethyst.boxes(id)
+	if Copper.is_rod(id): return Copper.boxes(id)
+	if SnowCover.is_snow(id): return SnowCover.boxes(id)
+	if FoodFeatures.is_cake(id): return FoodFeatures.boxes(id)
+	if Doors.is_door(id): return Doors.boxes(id)
+	if Trapdoors.is_trapdoor(id): return Trapdoors.boxes(id)
+	if Barriers.is_barrier(id): return Barriers.world_boxes(self,p,true)
+	if id == VillageContent.CAULDRON: return Cauldrons.boxes()
+	# A chain is a sixteenth of a block wide, so it must not block movement like a
+	# full cube. Without this it would be an invisible wall down the middle of a tile.
+	if Lanterns.is_chain(id): return [AABB(Vector3(0.5-Lanterns.CHAIN_WIDTH,0,0.5-Lanterns.CHAIN_WIDTH),Vector3(Lanterns.CHAIN_WIDTH*2,1.0,Lanterns.CHAIN_WIDTH*2))]
+	# A bamboo stalk is a narrow column, so it must not block movement as a cube.
+	if Bamboo.is_bamboo(id): return [AABB(Vector3(0.5-Bamboo.STALK_WIDTH,0,0.5-Bamboo.STALK_WIDTH),Vector3(Bamboo.STALK_WIDTH*2,1.0,Bamboo.STALK_WIDTH*2))]
+	if RedstoneSensors.is_detector(id): return RedstoneSensors.boxes(id)
+	if Campfires.is_campfire(id): return Campfires.boxes(id)
+	if BuildingShapes.is_shape(id): return BuildingShapes.boxes(BuildingShapes.world_mask(self,p))
+	return [AABB(Vector3.ZERO,Vector3.ONE)] if Nodes.solid(id) else []
+
 func intersects(pos: Vector3, half_width: float = 0.29, height: float = 1.8) -> bool:
 	var lo := Vector3i(floori(pos.x-half_width),floori(pos.y+0.002),floori(pos.z-half_width))
 	var hi := Vector3i(floori(pos.x+half_width),floori(pos.y+height-0.002),floori(pos.z+half_width))
-	for y in range(lo.y,hi.y+1):
+	var body := AABB(pos-Vector3(half_width,-0.002,half_width),Vector3(half_width*2,height-0.004,half_width*2))
+	# Fences/walls extend into the cell above; include that lower cell even when
+	# the actor's feet have left it. Ordinary cubes do not need the extra scan.
+	for y in range(lo.y-1,hi.y+1):
 		for z in range(lo.z,hi.z+1):
 			for x in range(lo.x,hi.x+1):
 				var p := Vector3i(x,y,z)
 				var id: int = node_at(p)
-				if not Nodes.solid(id): continue
-				if not BuildingShapes.is_shape(id): return true
-				var body := AABB(pos-Vector3(half_width,-0.002,half_width),Vector3(half_width*2,height-0.004,half_width*2))
-				for box in BuildingShapes.boxes(BuildingShapes.world_mask(self,p)):
+				if not Nodes.solid(id) or y < lo.y and not Barriers.is_barrier(id): continue
+				if not Farmland.is_soil(id) and not Amethyst.is_crystal(id) and not FoodFeatures.is_cake(id) and not Doors.is_door(id) and not SnowCover.is_snow(id) and not Trapdoors.is_trapdoor(id) and not Barriers.is_barrier(id) and not BuildingShapes.is_shape(id) and not Campfires.is_campfire(id) and id != VillageContent.CAULDRON and not RedstoneSensors.is_detector(id):
+					if body.position.x < x+1 and body.end.x > x and body.position.y < y+1 and body.end.y > y and body.position.z < z+1 and body.end.z > z: return true
+					continue
+				for box in collision_boxes(p):
 					if body.intersects(AABB(Vector3(p)+box.position,box.size)): return true
 	return false
 
@@ -310,7 +630,7 @@ func raycast(origin: Vector3, direction: Vector3, reach: float = 5.0, liquids: b
 	for iteration in 128:
 		var id: int = node_at(cell)
 		if id != Nodes.AIR and id not in [Nodes.NETHER_PORTAL,Nodes.END_PORTAL] and (liquids or not Fluids.liquid(id)):
-			if BuildingShapes.is_shape(id) or Fluids.flowing(id):
+			if RedstoneInputs.is_device(id) or BuildingShapes.is_shape(id) or Fluids.flowing(id) or Campfires.is_campfire(id) or Barriers.is_barrier(id) or RedstoneSensors.is_detector(id) or Trapdoors.is_trapdoor(id) or SnowCover.is_snow(id) or Doors.is_door(id) or FoodFeatures.is_cake(id) or Signs.is_sign(id) or CropFarming.is_crop(id) or Farmland.is_soil(id) or FruitCrops.is_stem(id) or Amethyst.is_crystal(id):
 				var hit: Dictionary = shape_hit(cell,origin,direction,reach)
 				if not hit.is_empty(): return hit
 			else: return {"pos":cell,"normal":normal,"id":id,"distance":distance,"point":origin+direction*distance}
@@ -329,6 +649,24 @@ func shape_hit(p: Vector3i, origin: Vector3, direction: Vector3, reach: float) -
 	var closest: float = reach+0.00001
 	var id: int = node_at(p)
 	var boxes: Array = [AABB(Vector3.ZERO,Vector3(1,1.0 if Fluids.base(node_at(p+Vector3i.UP)) == Fluids.base(id) else Fluids.height(id),1))] if Fluids.flowing(id) else BuildingShapes.boxes(BuildingShapes.world_mask(self,p))
+	if Campfires.is_campfire(id): boxes = Campfires.boxes(id)
+	if Barriers.is_barrier(id): boxes = Barriers.world_boxes(self,p,false,true)
+	if RedstoneSensors.is_detector(id): boxes = RedstoneSensors.boxes(id)
+	if Amethyst.is_crystal(id): boxes = Amethyst.boxes(id)
+	elif Copper.is_rod(id): boxes = Copper.boxes(id)
+	elif CropFarming.is_crop(id): boxes = CropFarming.boxes(id)
+	elif Farmland.is_soil(id): boxes = Farmland.boxes(id)
+	elif FruitCrops.is_stem(id): boxes = FruitCrops.boxes(id)
+	elif FoodFeatures.is_cake(id): boxes = FoodFeatures.boxes(id)
+	elif Doors.is_door(id): boxes = Doors.boxes(id)
+	elif Trapdoors.is_trapdoor(id): boxes = Trapdoors.boxes(id)
+	if SnowCover.is_snow(id): boxes = SnowCover.boxes(id,false)
+	if id == VillageContent.GLASS_PANE or GlassColors.is_stained_pane(id):
+		boxes = [AABB(Vector3(0.5-PANE_HALF_WIDTH,0.0,0.5-PANE_HALF_WIDTH),Vector3(PANE_HALF_WIDTH*2,1.0,PANE_HALF_WIDTH*2))]
+	if Candles.is_candle(id): boxes = Candles.boxes(id)
+	if Candles.is_cake(id): boxes = Candles.boxes(Candles.FIRST)
+	if Signs.is_sign(id): boxes = Signs.boxes(id)
+	if RedstoneInputs.is_device(id): boxes = RedstoneInputs.boxes(id,circuits.state(p))
 	for box in boxes:
 		var low: Vector3 = Vector3(p)+box.position
 		var high: Vector3 = low+box.size
@@ -357,12 +695,18 @@ func _simulate() -> void:
 		if not loaded_at(Vector3(p)): continue
 		growth[p] += 1.0
 		var id: int = node_at(p)
+		if CropFarming.is_crop(id): growth.erase(p); continue # Retire legacy crop timers after loading old saves.
 		if VillageContent.shape(id) == "crop" and growth[p] >= 30:
 			if VillageContent.DATA[id].stage < 3: set_node(p,id+1)
-		elif id == Nodes.WHEAT and growth[p] > 90:
-			set_node(p,Nodes.RIPE_WHEAT)
-		elif id == Nodes.SAPLING and growth[p] > 120:
-			grow_tree(p)
+		elif WoodTypes.is_sapling(id):
+			WoodTypes.sapling_tick(self,p)
+		elif Bamboo.is_bamboo(id) and growth[p] > 90:
+			growth[p] = 0.0
+			# A stalk grows one segment per tick, up to its own height, and only when
+			# the light above it is enough.
+			var bamboo_rng := RandomNumberGenerator.new()
+			bamboo_rng.seed = generator.hash_at(p.x,p.y,p.z)
+			Bamboo.grow(self,generator,p,func(q: Vector3i) -> int: return Pasture.light(self,q,14),bamboo_rng)
 		elif id == Nodes.SUGAR_CANE and growth[p] > 60:
 			growth[p] = 0.0
 			var bottom: Vector3i = p
@@ -371,13 +715,18 @@ func _simulate() -> void:
 				set_node(p+Vector3i.UP,Nodes.SUGAR_CANE)
 	for key in stations:
 		var s: Dictionary = stations[key]
-		if s.get("kind","") == "brewing": Brewing.step(s,1.0); continue
+		if s.get("kind","") == "brewing":
+			if Brewing.step(s,1.0):
+				var owner: Node = get_parent()
+				if owner != null and owner.has_method("toast"): owner.achievements.award("local_brewery")
+			continue
 		if s.get("kind","") != "furnace": continue
 		var input: Dictionary = s.slots[0]
 		var fuel: Dictionary = s.slots[1]
 		var output: Dictionary = s.slots[2]
 		var recipe: int = Nodes.smelt_result(input.id)
-		if s.get("device",0) in [VillageContent.SMOKER,VillageContent.CAMPFIRE] and Nodes.food(recipe) <= 0: recipe = 0
+		if Campfires.is_campfire(int(s.get("device",0))): continue
+		if s.get("device",0) == VillageContent.SMOKER and Nodes.food(recipe) <= 0: recipe = 0
 		if s.get("device",0) == VillageContent.BLAST_FURNACE and recipe not in [Nodes.IRON,Nodes.GOLD,Nodes.COPPER,VillageContent.EMERALD]: recipe = 0
 		if s.burn > 0: s.burn -= 1
 		if recipe == 0 or (output.id != 0 and output.id != recipe) or output.count >= 64: s.progress = 0.0; continue
@@ -393,10 +742,20 @@ func _simulate() -> void:
 		s.progress += 2.0 if s.get("device",0) in [VillageContent.SMOKER,VillageContent.BLAST_FURNACE] else 1.0
 		if s.progress >= 8:
 			s.progress = 0.0
+			# Source `_mcl_cooking_replacements`: drying a wet sponge pours its
+			# water into an empty bucket sitting in the fuel slot.
+			var replacement: int = Sponges.cooking_replacement(input.id) if fuel.id == Nodes.BUCKET and fuel.count == 1 else 0
 			input.count -= 1
+			if replacement != 0:
+				fuel.id = replacement
+				fuel.wear = 0
 			if input.count <= 0: input.id = 0
 			output.id = recipe
 			output.count += 1
+			# `delicious_fish`: the source's award for cooking a fish.
+			if recipe in [VillageContent.COOKED_COD,VillageContent.COOKED_SALMON]:
+				var fish_owner: Node = get_parent()
+				if fish_owner != null and fish_owner.has_method("toast"): fish_owner.achievements.award("delicious_fish")
 
 func can_plant_cane(p: Vector3i) -> bool:
 	var soil: Vector3i = p+Vector3i.DOWN
@@ -407,14 +766,10 @@ func can_plant_cane(p: Vector3i) -> bool:
 	return false
 
 func grow_tree(p: Vector3i) -> void:
-	for y in range(2,6):
-		for x in range(-2,3):
-			for z in range(-2,3):
-				if abs(x)+abs(z)>3: continue
-				var q: Vector3i = p+Vector3i(x,y,z)
-				if node_at(q) == Nodes.AIR: set_node(q,Nodes.LEAVES)
-	for y in 5: set_node(p+Vector3i(0,y,0),Nodes.LOG)
-	growth.erase(p)
+	WoodTypes.grow(self,p)
+
+# A pane's half width, from the source's `pane_nodebox` (-1/16 .. 1/16).
+const PANE_HALF_WIDTH = 0.0625
 
 const CHEST_SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]
 
@@ -458,6 +813,8 @@ static func pair_key(a: Vector3i, b: Vector3i) -> String:
 	return station_key(primary)+"+"+station_key(b if primary == a else a)
 
 func get_station(p: Vector3i, kind: String) -> Dictionary:
+	if Campfires.is_campfire(node_at(p)): return Campfires.station(self,p)
+	if PortableStorage.is_shulker(node_at(p)): return PortableStorage.station(self,p)
 	if kind == "chest" and node_at(p) == Nodes.CHEST:
 		var partner: Vector3i = chest_partner(p)
 		if partner != p: return _double_chest(p,partner)
@@ -474,6 +831,7 @@ func _double_chest(a: Vector3i, b: Vector3i) -> Dictionary:
 		for half in 2:
 			var single_key: String = station_key(primary if half == 0 else (b if primary == a else a))
 			if not stations.has(single_key): continue
+			if stations[single_key].get("dungeon_loot",false): station.dungeon_loot = true; station.label = stations[single_key].label
 			var old: Array = stations[single_key].slots
 			for i in mini(27,old.size()): station.slots[half*27+i] = old[i]
 			stations.erase(single_key)
@@ -578,18 +936,54 @@ func cave_spawn(near: Vector3, vertical_reach: int = 12) -> Vector3:
 			if y <= generator.min_y() or y >= generator.max_y()-2: continue
 			var feet := Vector3i(x,y,z)
 			var support: int = node_at(feet+Vector3i.DOWN)
-			if not Nodes.solid(support) or support in [Nodes.LOG,Nodes.LEAVES]: continue
+			if not Nodes.solid(support) or WoodTypes.is_log(support) or WoodTypes.is_leaves(support): continue
 			if node_at(feet) != Nodes.AIR or node_at(feet+Vector3i.UP) != Nodes.AIR: continue
 			var pos := Vector3(x+0.5,y+0.01,z+0.5)
 			if not intersects(pos): return pos
 	return Vector3.INF
 
-func _structure_loot(p: Vector3i) -> void:
+func _structure_loot(p: Vector3i, dungeon_seed: int = -1, corridor: bool = false, treasure: bool = false, wreck: bool = false, temple: bool = false, portal: bool = false, jungle: bool = false, outpost: bool = false, igloo: bool = false, monument: bool = false, cabin: bool = false) -> void:
+	var initialized: Dictionary = _structure_loot_ledger()
 	var key: String = station_key(p)
-	if stations.has(key): return
-	var station: Dictionary = get_station(p,"chest")
+	if initialized.has(key): return
+	if stations.has(key): initialized[key] = true; return
+	var partner: Vector3i = chest_partner(p)
+	var shared: String = pair_key(p,partner) if partner != p else ""
+	if not shared.is_empty() and stations.has(shared):
+		# A legacy pair predating per-half markers is already player storage,
+		# including an empty/fully looted pair. Never infer emptiness as new loot.
+		if not initialized.has(station_key(partner)):
+			initialized[key] = true; initialized[station_key(partner)] = true; return
+		var offset: int = 0 if chest_primary(p,partner) == p else 27
+		for slot in stations[shared].slots.slice(offset,offset+27):
+			if int(slot.get("count",0)) > 0: initialized[key] = true; return
+	# Every generated half rolls its own source27-slot inventory before any
+	# merging. A54-slot container must never be filled wholesale a second time.
+	var station: Dictionary = _new_station("chest",27)
+	if treasure:
+		BuriedTreasure.fill(station,generator.hash_at(p.x,20141,p.z)); _store_structure_loot(p,station,shared); return
+	if corridor:
+		Corridors.fill_chest(station,generator.hash_at(p.x,20137,p.z)); _store_structure_loot(p,station,shared); return
+	if wreck:
+		Shipwrecks.fill_chest(station,generator.hash_at(p.x,20161,p.z)); _store_structure_loot(p,station,shared); return
+	if temple:
+		DesertTemples.fill_chest(station,generator.hash_at(p.x,20183,p.z)); _store_structure_loot(p,station,shared); return
+	if portal:
+		RuinedPortals.fill_chest(station,generator.hash_at(p.x,20191,p.z)); _store_structure_loot(p,station,shared); return
+	if jungle:
+		JungleTemples.fill_chest(station,generator.hash_at(p.x,20203,p.z)); _store_structure_loot(p,station,shared); return
+	if outpost:
+		PillagerOutposts.fill_chest(station,generator.hash_at(p.x,20221,p.z)); _store_structure_loot(p,station,shared); return
+	if igloo:
+		Igloos.fill_chest(station,generator.hash_at(p.x,20237,p.z)); _store_structure_loot(p,station,shared); return
+	if monument:
+		OceanTemples.fill_chest(station,generator.hash_at(p.x,20263,p.z)); _store_structure_loot(p,station,shared); return
+	if cabin:
+		WoodlandCabins.fill_chest(station,generator.hash_at(p.x,20277,p.z)); _store_structure_loot(p,station,shared); return
+	if dungeon_seed >= 0:
+		Dungeons.fill(station,dungeon_seed); _store_structure_loot(p,station,shared); return
 	if dimension == "nether" and not Bastions.at(generator,p).is_empty():
-		Bastions.fill(station,generator.hash_at(p.x,p.y,p.z)); return
+		Bastions.fill(station,generator.hash_at(p.x,p.y,p.z)); _store_structure_loot(p,station,shared); return
 	var loot: Array = [[Nodes.PAPER,8],[Nodes.BOOK,3],[Nodes.IRON,4],[Nodes.ENDER_PEARL,1],[Nodes.BREAD,4]]
 	if dimension == "overworld" and p.y > 0:
 		loot = [[VillageContent.EMERALD,2+generator.hash_at(p.x,90,p.z)%4],[Nodes.BREAD,3],[VillageContent.CARROT,4],[VillageContent.POTATO,4],[VillageContent.BEETROOT_SEEDS,3],[Nodes.APPLE,2],[VillageContent.COCOA_BEANS,2]]
@@ -603,6 +997,32 @@ func _structure_loot(p: Vector3i) -> void:
 			station.slots[loot.size()+1] = {"id":VillageContent.HEAVY_CORE,"count":1,"wear":0}
 			station.slots[loot.size()+2] = {"id":PotionCatalog.find("luck"),"count":1,"wear":0}
 		if dimension == "nether": station.slots[loot.size()+1] = {"id":PotionCatalog.find("withering"),"count":1,"wear":0}
+		if dimension == "overworld":
+			for record in Jukeboxes.stronghold_records(rng):
+				for index in station.slots.size():
+					if int(station.slots[index].count) <= 0: station.slots[index] = record; break
+
+	_store_structure_loot(p,station,shared)
+
+func _structure_loot_ledger() -> Dictionary:
+	if not adventure_state.get("structure_loot",null) is Dictionary:
+		var initialized: Dictionary = {}
+		# Migration protects every existing single or double chest, even empty
+		# ones, before generation can rediscover their natural positions.
+		for key in stations:
+			if stations[key].get("kind","") != "chest": continue
+			for half in str(key).split("+"): initialized[half] = true
+		adventure_state.structure_loot = initialized
+	return adventure_state.structure_loot
+
+func _store_structure_loot(p: Vector3i, station: Dictionary, shared: String) -> void:
+	_structure_loot_ledger()[station_key(p)] = true
+	if not shared.is_empty() and stations.has(shared):
+		var partner: Vector3i = chest_partner(p)
+		var offset: int = 0 if chest_primary(p,partner) == p else 27
+		for i in 27: stations[shared].slots[offset+i] = station.slots[i]
+		if station.get("dungeon_loot",false): stations[shared].dungeon_loot = true; stations[shared].label = station.label
+	else: stations[station_key(p)] = station
 
 func open_sky(p: Vector3i) -> bool:
 	if dimension != "overworld": return false

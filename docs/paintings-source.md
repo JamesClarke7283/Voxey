@@ -1,0 +1,15 @@
+# Paintings
+
+Voxey follows the supplied Mineclonia 0.123.1 `mods/ENTITIES/mcl_paintings/{init,registrations}.lua`. The implementation is original GDScript using the source as a behavioural reference; all art is original procedural code.
+
+Craft a painting from three sticks, a wool centre row and three sticks — the source's own recipe. Use it against a horizontal wall: the largest registered motive that fits the free space is chosen, and when several share the largest area one is picked at random, which is the source's tie-break. The space is measured from the air cell in front of the clicked wall face, running along the wall and upward. A cell is usable only when the painting cell itself is replaceable and the block behind the wall is solid, so the source's "nothing floats" rule holds.
+
+The motive set is the source's 26, from 1×1 to 4×4: Ancient Octopus, Snowy Mountain, Balding Man, Poster, Notes, Viking Shield, Butcher Knives, Green Bottles, Battle Axe, Cooking Utensils, Dense Jungle Forest, Endless Dunes, Green Banner, Red Banner, Quest Board, Support Truss, Froggy Pond, Moonshine Tundra, Desert Castle, Sarmatian Decoration, Decorative Swords, Gloom Gloom Mountain, Elf Utopia, Waterfall Bridge, Mountain Tower and Volendam Costume. Sizes are transcribed from `registrations.lua`.
+
+A hung painting is a record in `world.adventure_state.paintings`, keyed by its anchor cell — the same place boats and carts keep theirs — so it persists in saves, streams with the loaded world and travels between dimensions with the rest of the world state. The motive travels on the item in `data["motive"]`, which is how the source's `mcl_paintings:placed_painting` metadata works; an item that names a motive that fits is placed as that motive rather than re-rolled. A punch removes the painting and returns the item in survival. Paintings claim every cell of their footprint, so a second painting never overlaps a hung one.
+
+Rendering is one quad per painting carrying the motive's own texture, sized sixteen pixels per block, offset one sixteenth in front of the wall and turned to face away from it. Paintings outside the loaded area or beyond 70 blocks are not built, matching the display budget the other decals use.
+
+`tests/painting_checks.gd` covers the motive set and sizes, biggest-fit selection, the one-row height limit, per-cell occupancy, punch-to-drop and persistence, plus the per-motive texture size. A functional smoke test placed a painting through the real `use()` dispatch, confirmed the display model, aimed at it and punched it through the real attack path.
+
+Known scope limits: the creative grid lists the painting as a single item rather than one entry per motive, so the source's `_get_all_virtual_items` virtual sub-items are not surfaced; a motive chosen at placement is still whatever fits, which is the source's behaviour for a painting item without a pre-set motive. The source's legacy `_motive` migration is not carried because Voxey never wrote the old painting format. The source's `_mcl_pistons_unmovable` group is moot, as Voxey's paintings are entities rather than nodes and pistons do not move entities.

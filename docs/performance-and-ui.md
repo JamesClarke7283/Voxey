@@ -39,3 +39,41 @@ The existing four suites passed 931 checks after the performance changes. `tests
 The final environment update, including stair/masonry content and active fluid support, measured median column generation at 323.69 ms in the Overworld and 234.04 ms in the Nether. Main-thread application remained 1.09 ms and 0.73 ms respectively; neighborhood snapshots were about 0.51 ms. These four-column CPU samples are retained under `environment_cpu` in the raw measurements.
 
 The completed fluid update’s rendered route covered 72.57 blocks in 12 seconds at view distance 4: 721 frames, median 16.667 ms, 95th percentile 16.836 ms, maximum 17.298 ms and 60 FPS at the configured cap. There were 319 draw calls and no unintended kelp drops. This route measures normal streaming with fluid simulation enabled; the separate environment tour verifies active waterfalls. The complete regression run passed 1,175 checks.
+
+## Habitat streaming, 2026-09-16
+
+The habitat update adds pasture simulation, sheep lifecycle changes, barriers, daylight detectors, targets and expanded cauldron behavior. A longer 40-second route crosses multiple unload boundaries and the first 30-second grass-spread interval. It exposed a repeated scan of all loaded grass/light entries for each departing column: median frames remained near 16.67 ms, but the worst frame reached 245.411 ms. Profiling localized the stalls to world processing at column boundaries.
+
+Pasture now records membership by column for removal, and scans simulation candidates incrementally within its frame budget. The same 40-second rendered route then covered 240.58 blocks over 2,401 frames: median **16.666 ms**, 95th percentile **17.060 ms**, maximum **19.594 ms**, and **60 FPS** at the configured cap. No frame exceeded 33.33 ms or 100 ms. The final scene had 87 loaded columns, 1,044 map blocks and 4,292 pasture cells. These figures describe this machine and route; the longer route is not directly equivalent to the older 12-second benchmarks.
+
+Reproduce it with `godot --path <isolated-project> --script res://tests/streaming_benchmark.gd -- 40`; omitting the duration keeps the original 12-second run. Both measurements are retained under `habitat_streaming_2026_09_16` in the [raw measurements](performance-measurements.json). The benchmark also reports counts of frames over 33.33 ms and 100 ms so rare stalls remain visible alongside percentiles.
+
+## Travel and building streaming, 2026-09-16
+
+The boat/map/trapdoor/snow update was checked on the same 40-second route, with a fixed camera and 60 FPS cap. The harness now explicitly draws the scene each frame because the desktop compositor can otherwise suppress drawing in an obscured window; a zero-draw run was discarded. The accepted final frame was visually checked and contained 448 draw calls and 239,632 primitives.
+
+This run covered 240.52 blocks over 2,400 frames: median **16.660 ms**, 95th percentile **17.182 ms**, and maximum **45.181 ms**. One frame exceeded 33.33 ms; none exceeded 100 ms. Other headless validation was running concurrently. The changed explicit-draw harness means these are new baseline measurements, rather than evidence of a precise speedup or slowdown relative to earlier runs. This warm-biome route contained no snow candidates; separate snow regressions exercise bounded melting scans and generated Frostpine terrain.
+
+Map capture also runs in background column jobs: its dedicated fixture measured 8.009 seconds to finish a mostly unseen survey, with a 0.574 ms maximum main-thread update. See [map scheduling](maps-source.md) and [raw measurements](performance-measurements.json).
+
+## Classic trees and home features, 2026-09-16
+
+The same rendered 40-second route, at the same 60 FPS cap and fixed camera, covered 240.57 blocks over 2,399 frames with the new tree/leaf simulation. Median frame time was **16.678 ms**, 95th percentile **17.499 ms**, maximum **33.342 ms**; one frame exceeded 33.33 ms and none exceeded 100 ms. The final image was visually checked and contained 322 draw calls and 186,922 primitives. Other headless validation ran concurrently.
+
+The final loaded world contained 64 columns, 768 map blocks, 854 tracked leaves, zero orphan leaves and 25 queued leaf checks. Natural tree geometry and loaded column counts differ from the previous procedural-tree route, so these figures do not isolate a speedup or slowdown. Focused tests separately exercise unsupported leaf decay and bounded queue processing; this route measures ordinary streaming. The data is retained as `home_streaming_2026_09_16` in the raw measurements.
+
+## Music and mechanisms, 2026-09-16
+
+The 40-second rendered route with dungeon generation and the new mechanisms covered 240.57 blocks over 2,390 frames. Median frame time was **16.669 ms**, 95th percentile **17.700 ms**, maximum **34.121 ms**, at the 60 FPS cap. Six frames exceeded 33.33 ms; none exceeded 100 ms. The final scene had 53 columns, 636 map blocks, 364 draw calls and 146,770 primitives. Concurrent headless validation and different loaded geometry limit comparisons with earlier runs. The report is retained as `mechanisms_rendered` in the raw measurements.
+
+Pressure plates share one spatial entity index per circuit tick. Dungeon generation runs on workers; active spawners limit collision/light candidates to eight per frame. The sixteen original note tones are generated offline and loaded from assets; a cold-load probe measured 2.7 ms for all sixteen, avoiding synthesis during live playback. The exported content smoke test loaded all eight music recordings, sixteen tones, tree data and music attribution from a standalone resource pack.
+
+`tests/mechanism_tour.gd` checks rendered buttons, pressure plates, note blocks, jukeboxes, compressed ice, bone axes, spawner cages, inventory icons and the field guide's music credits. It uses an isolated save directory.
+
+## Crops, honey and crystals, 2026-09-16
+
+The same 40-second rendered route covered 240.56 blocks over 2,397 frames at the 60 FPS cap. Median frame time was **16.686 ms**, 95th percentile **17.404 ms**, and maximum **50.183 ms**. One frame exceeded 33.33 ms; none exceeded 100 ms. The final frame was visually inspected: 45 columns, 540 map blocks, 344 draw calls and 132,710 primitives. Full headless regression ran concurrently, and loaded geometry differs from earlier batches. These measurements do not isolate a speedup or slowdown; the raw report is `nature_rendered`.
+
+Geode planning stays on generation workers. In a sampled geode area, planning the 25 neighboring candidates cost about 73 ms cold, including approximately 14 ms of structure checks and 50 ms of geometry planning. The generator-local cache makes repeated direct calls inexpensive, but normal streaming creates a fresh generator for each worker job and therefore still pays cold planning costs. No main-thread or cross-thread cache speedup is claimed. Hive simulation shares a 128-sample budget among production jobs; seven due hives took 1.056 ms in the focused check.
+
+`tests/nature_tour.gd` visually checks all stem stages, fruit and carved faces, hive honey levels, transparent honey/tinted glass, all crystal attachment directions, inventory icons, actual held/dropped transparent models, the pumpkin helmet mask, the spyglass aperture and a cutaway of an actual seeded geode. It uses temporary saves. The initial render exposed invalid crystal icon polygons and the pumpkin mask's missing eye cutouts; both were fixed and the clean tour repeated. A separate review found empty held/dropped meshes for the two new transparent blocks; their mesh surface and material selection were corrected and visually verified.

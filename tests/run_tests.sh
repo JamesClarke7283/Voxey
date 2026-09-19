@@ -26,7 +26,7 @@ if rg -q 'SCRIPT ERROR:|^ERROR:' "$voxey_check_dir/import.log"; then
   cat "$voxey_check_dir/import.log"
   exit 1
 fi
-for voxey_suite in test_survival village_runner alchemy_runner parity_runner polish_runner building_runner environment_runner; do
+for voxey_suite in test_survival village_runner alchemy_runner parity_runner polish_runner building_runner environment_runner systems_runner lifecycle_runner; do
   godot --headless --path "$voxey_check_dir" --script "res://tests/$voxey_suite.gd" 2>&1 | tee "$voxey_check_dir/$voxey_suite.log"
   if rg -q 'SCRIPT ERROR:|^ERROR:' "$voxey_check_dir/$voxey_suite.log"; then
     exit 1

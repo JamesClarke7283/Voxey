@@ -9,7 +9,7 @@ static func leave(game: Node3D) -> void:
 		if Inventory.enchantment(slot,"Curse of Vanishing") > 0: slot.clear(); slot.merge({"id":0,"count":0,"wear":0})
 	game.inventory.sync_pouches()
 	var storage: Dictionary = VoxelWorld._new_station("chest",54)
-	var sources: Array = game.inventory.slots.slice(0,Inventory.BASE_SLOTS)+game.inventory.pouch_slots+game.player.armor_slots+game.inventory.grid+[game.hud.cursor]
+	var sources: Array = game.inventory.slots.slice(0,Inventory.BASE_SLOTS)+game.inventory.pouch_slots+game.player.armor_slots+[game.player.offhand_slot]+game.inventory.grid+[game.hud.cursor]
 	for i in sources.size():
 		if Inventory.enchantment(sources[i],"Curse of Vanishing") == 0: storage.slots[i] = sources[i].duplicate(true)
 	storage["label"] = "Recovery chest · "+game.player_id
@@ -21,6 +21,7 @@ static func leave(game: Node3D) -> void:
 	game.world.adventure_state["pending_recovery"] = pending
 	# Even the exceptional unloaded/solid case retains all cargo in the save.
 	retry(game)
+	game.player.offhand_slot.clear(); game.player.offhand_slot.merge({"id":0,"count":0,"wear":0})
 	for slot in game.player.armor_slots+game.inventory.grid: slot.clear(); slot.merge({"id":0,"count":0,"wear":0})
 	game.hud.cursor = {"id":0,"count":0,"wear":0}
 	game.survival.open_pouch_index = -1; game.survival.open_equipped_pouch = -1

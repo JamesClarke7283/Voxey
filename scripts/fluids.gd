@@ -31,12 +31,16 @@ static func height(id: int) -> float: return 1.0 if source(id) or falling(id) el
 static func contains(owner_world: VoxelWorld, point: Vector3, kind: int) -> bool:
 	var p := Vector3i(point.floor())
 	var id: int = owner_world.node_at(p)
+	# Kelp occupies a waterlogged cell. Swimmers must not lose their stroke or
+	# start breathing air when crossing the plant inside a submerged column.
+	if kind == Nodes.WATER and id == VillageContent.KELP_PLANT: return true
 	return base(id) == kind and (base(owner_world.node_at(p+Vector3i.UP)) == kind or point.y-p.y < height(id))
 static func replaceable(id: int) -> bool:
 	# Kelp already occupies submerged cells. Treating it as a land plant would
 	# uproot whole oceans as soon as their source water activates.
 	if id == VillageContent.KELP_PLANT: return false
-	return id == Nodes.AIR or Fire.is_fire(id) or Nodes.plant(id) or Torches.is_torch(id) or id in Nodes.SMALL_CIRCUITS and id != Nodes.IRON_DOOR_OPEN
+	if RedstoneInputs.is_plate(id): return false
+	return RedstoneInputs.is_button(id) or SnowCover.is_snow(id) or id == Nodes.AIR or Fire.is_fire(id) or Nodes.plant(id) or Torches.is_torch(id) or id in Nodes.SMALL_CIRCUITS and id != Nodes.IRON_DOOR_OPEN
 
 func schedule(p: Vector3i, kind: int) -> void:
 	if kind == 0 or not WorldBounds.horizontal(p) or p.y <= world.generator.min_y() or p.y >= world.generator.max_y(): return
@@ -135,7 +139,14 @@ func settle(p: Vector3i, kind: int) -> void:
 	if world.node_at(p) != before: return
 	var after: int = wanted(p,kind)
 	if before == after: return
-	if replaceable(before) and before != Nodes.AIR and not Fire.is_fire(before):
+	if SnowCover.is_snow(before): SnowCover.drop(world,p,before)
+	elif CropFarming.is_crop(before):
+		if kind == Nodes.WATER:
+			for entry in CropFarming.harvest(before): world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
+	elif FruitCrops.is_stem(before):
+		if kind == Nodes.WATER:
+			for entry in FruitCrops.harvest(before): world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
+	elif replaceable(before) and before != Nodes.AIR and not Fire.is_fire(before):
 		var drop: int = Nodes.drop(before)
 		if drop != 0: world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,drop,1)
 	world.set_node(p,after)

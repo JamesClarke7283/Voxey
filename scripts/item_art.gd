@@ -5,8 +5,20 @@ extends RefCounted
 static var textures: Dictionary = {}
 static var meshes: Dictionary = {}
 static var materials: Dictionary = {}
+# Dials are the only animated icons; they remember the frame they last drew so a
+# frame change rebuilds the texture and an unchanged frame reuses it.
+static var dial_frames: Dictionary = {}
+static var dial_game: Node3D = null
 
 static func texture(id: int) -> Texture2D:
+	# A clock or compass re-renders whenever its dial frame changes.
+	if id in [Nodes.CLOCK,Nodes.COMPASS]:
+		var frame: int = Dials.frame(dial_game,id) if dial_game != null else 0
+		if dial_frames.get(id,-1) != frame or not textures.has(id):
+			dial_frames[id] = frame
+			textures.erase(id)
+			textures[id] = _build_dial(id,frame)
+		return textures[id]
 	if textures.has(id): return textures[id]
 	var img := Image.create(16,16,false,Image.FORMAT_RGBA8)
 	var base: Color = Nodes.color(id)
@@ -167,11 +179,21 @@ static func texture(id: int) -> Texture2D:
 	textures[id] = ImageTexture.create_from_image(img)
 	return textures[id]
 
+# Build one dial frame's icon.
+static func _build_dial(id: int, frame: int) -> Texture2D:
+	var img := Image.create(16,16,false,Image.FORMAT_RGBA8)
+	if id == Nodes.CLOCK:
+		# Noon is frame 0 in the source's table, so the second half is night.
+		Dials.draw_clock(img,frame,frame >= Dials.CLOCK_FRAMES/2)
+	else:
+		Dials.draw_compass(img,frame,dial_game == null or Dials.works(dial_game))
+	return ImageTexture.create_from_image(img)
+
 static func _polygon(img: Image, points: Array, color: Color) -> void:
 	var polygon := PackedVector2Array()
 	for p in points: polygon.append(Vector2(p[0],p[1]))
-	for y in 16:
-		for x in 16:
+	for y in img.get_height():
+		for x in img.get_width():
 			if Geometry2D.is_point_in_polygon(Vector2(x+0.5,y+0.5),polygon): img.set_pixel(x,y,color)
 
 static func _line(img: Image, a: Vector2, b: Vector2, color: Color, width: int = 1) -> void:

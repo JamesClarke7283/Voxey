@@ -32,14 +32,14 @@ func _draw() -> void:
 	if item_id == 0: return
 	var center: Vector2 = size*Vector2(0.5,0.47)
 	var scale_value: float = minf(size.x,size.y)*0.027
-	if BuildingShapes.is_shape(item_id):
+	if RedstoneInputs.is_device(item_id) or BuildingShapes.is_shape(item_id) or Barriers.is_barrier(item_id) or Trapdoors.is_trapdoor(item_id) or SnowCover.is_snow(item_id) or Doors.is_door(item_id) or Doors.is_item(item_id) or FoodFeatures.is_cake(item_id) or Signs.is_sign(item_id) or Farmland.is_soil(item_id) or Amethyst.is_crystal(item_id):
 		if Art.atlas_texture == null: Art.make_atlas()
-		for face in BuildingShapes.icon_faces(item_id):
+		for face in (Farmland.icon_faces(item_id) if Farmland.is_soil(item_id) else Amethyst.icon_faces(item_id) if Amethyst.is_crystal(item_id) else RedstoneInputs.icon_faces(item_id) if RedstoneInputs.is_device(item_id) else Signs.icon_faces(item_id) if Signs.is_sign(item_id) else FoodFeatures.icon_faces(item_id) if FoodFeatures.is_cake(item_id) else Doors.icon_faces(item_id) if Doors.is_door(item_id) or Doors.is_item(item_id) else SnowCover.icon_faces(item_id) if SnowCover.is_snow(item_id) else Trapdoors.icon_faces(item_id) if Trapdoors.is_trapdoor(item_id) else (Barriers.icon_faces(item_id) if Barriers.is_barrier(item_id) else BuildingShapes.icon_faces(item_id))):
 			var points := PackedVector2Array(); var uv := PackedVector2Array()
 			for point in face.points: points.append(center+point*scale_value)
 			for point in face.uv: uv.append((face.tile*16+point*15+Vector2.ONE*0.5)/Vector2(Art.atlas_texture.get_size()))
 			draw_polygon(points,PackedColorArray([face.shade]),uv,Art.atlas_texture)
-	elif item_id in Nodes.SMALL_CIRCUITS or item_id == Nodes.TORCH:
+	elif RedstoneSensors.is_device(item_id) or item_id in Nodes.SMALL_CIRCUITS or item_id == Nodes.TORCH:
 		var extent: float = maxf(16,roundf(minf(size.x,size.y)*0.75/16.0)*16.0)
 		draw_texture_rect(ItemArt.texture(item_id),Rect2(center-Vector2.ONE*extent*0.5,Vector2.ONE*extent),false)
 	elif Nodes.placeable(item_id) or item_id in [Nodes.WATER,Nodes.BEDROCK,Nodes.RIPE_WHEAT]:
@@ -55,6 +55,7 @@ func _draw() -> void:
 			_face(top,Nodes.tile(item_id,2),Color.WHITE)
 			_face(left,Nodes.tile(item_id,5),Color(0.8,0.8,0.8))
 			_face(right,Nodes.tile(item_id,0),Color(0.62,0.62,0.62))
+			if FruitCrops.is_pumpkin_head(item_id): PumpkinHelmet.icon_face(self,center,s,item_id)
 	else:
 		var extent: float = roundf(minf(size.x,size.y)*0.72/16.0)*16.0
 		if extent < 16: extent = 16

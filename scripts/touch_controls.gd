@@ -97,7 +97,9 @@ func show_game_controls() -> void:
 	var edge: float = 18.0
 	stick_base.position = Vector2(edge,view.y-STICK_RADIUS*2.0-edge)
 	# Jump bottom-right; sneak beside it; fly above (creative only).
-	var jump := _touch_button("▲",_on_jump)
+	var jump := _touch_button("▲",func(): pass)
+	jump.button_down.connect(_on_jump)
+	jump.button_up.connect(func(): jump_held = false)
 	jump.position = Vector2(view.x-BUTTON_SIZE-edge,view.y-BUTTON_SIZE-edge)
 	button_box.add_child(jump)
 	var sneak := _touch_button("⬇",_on_sneak_press,false)
@@ -182,7 +184,6 @@ func _on_jump() -> void:
 	var now: int = Time.get_ticks_msec()
 	if now-_last_jump_tap < 300 and game.gamemode=="creative": game.player.flying = not game.player.flying; game.player.velocity=Vector3.ZERO
 	_last_jump_tap = now
-	get_tree().create_timer(0.25).timeout.connect(func(): jump_held = false)
 
 func _on_sneak_press() -> void:
 	sneak_held = not sneak_held

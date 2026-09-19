@@ -53,6 +53,29 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	suite.check(circuit.state(torch).out == 0,"redstone torch inverts its supporting block's power")
 	circuit.interact(switch); circuit.step(); circuit.step()
 	suite.check(circuit.state(torch).out == 15,"torch turns back on after its support loses power")
+	# Burnout: the source's fast-clock limiter. A torch switched off eight times
+	# within thirty seconds refuses to relight, then recovers once a count expires.
+	# Without this a torch in a tight loop toggles forever.
+	var fast := Vector3i(15,52,5)
+	game.world.set_node(fast,Nodes.REDSTONE_TORCH)
+	game.world.set_node(fast+Vector3i.DOWN,Nodes.STONE)
+	# The lever beside the support block drives the support's power, which is what
+	# switches the torch off, exactly as the inverter above does.
+	var fast_switch := fast+Vector3i(-1,-1,0)
+	game.world.set_node(fast_switch,Nodes.LEVER)
+	circuit.step()
+	suite.check(circuit.state(fast).out == 15,"the burnout torch starts lit")
+	for i in 8:
+		circuit.interact(fast_switch); circuit.step(); circuit.step()
+		suite.check(circuit.state(fast).out == 0,"the torch is off while its support is powered")
+		circuit.interact(fast_switch); circuit.step(); circuit.step()
+	suite.check(circuit.state(fast).out == 0,"a torch burned out eight times refuses to relight")
+	suite.check(circuit.state(fast).burnout.size() >= 8,"the burnout count is held for its thirty-second window")
+	# Time passes and the counts expire, so the torch lights again.
+	for i in 310: circuit.step()
+	suite.check(circuit.state(fast).burnout.size() < 8,"burnout counts expire after their window")
+	circuit.step()
+	suite.check(circuit.state(fast).out == 15,"the torch relights once the count falls below the limit")
 	var button := Vector3i(6,50,5)
 	game.world.set_node(button,Nodes.BUTTON); circuit.interact(button); circuit.step()
 	suite.check(circuit.state(button).out == 15,"button produces a temporary pulse")
@@ -63,7 +86,9 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.player.position = Vector3(plate)+Vector3(0.5,0.01,0.5); circuit.step()
 	suite.check(circuit.state(plate).out == 15,"player standing on a plate powers it")
 	game.player.position = Vector3(8,55,28); circuit.step()
-	suite.check(circuit.state(plate).out == 0,"pressure plate releases when empty")
+	suite.check(circuit.state(plate).out == 15,"pressure plate retains its pulse during the release delay")
+	for i in 9: circuit.step()
+	suite.check(circuit.state(plate).out == 0,"pressure plate releases after one second empty")
 	var observer := Vector3i(13,50,5)
 	game.world.set_node(observer,Nodes.OBSERVER); circuit.configure(observer,Vector3i.RIGHT)
 	game.world.set_node(observer+Vector3i.LEFT,Nodes.DIRT); circuit.step()
@@ -93,11 +118,28 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.world.set_node(sticky,Nodes.STICKY_PISTON); circuit.configure(sticky,Vector3i.RIGHT)
 	game.world.set_node(sticky+Vector3i.RIGHT,Nodes.GLASS)
 	suite.check(circuit.piston(sticky,true),"sticky piston extends")
-	suite.check(circuit.piston(sticky,false) and game.world.node_at(sticky+Vector3i.RIGHT) == Nodes.GLASS and game.world.node_at(sticky+Vector3i.RIGHT*2) == Nodes.AIR,"sticky piston pulls one block back")
+	# `mcl_redstone_sticky_pistons_one_tick_detach` (default true): a sticky piston
+	# reversed within one redstone tick does **not** pull its block back.
+	suite.check(circuit.piston(sticky,false) and game.world.node_at(sticky+Vector3i.RIGHT) == Nodes.AIR and game.world.node_at(sticky+Vector3i.RIGHT*2) == Nodes.GLASS,"a one-tick sticky pulse detaches and leaves the block where it was pushed")
+	# Advance beyond the one-tick window and the pull happens, which is the other
+	# half of the source's rule.
+	game.world.set_node(sticky+Vector3i.RIGHT,Nodes.GLASS)
+	circuit.piston(sticky,true)
+	circuit.ticks += 5
+	suite.check(circuit.piston(sticky,false) and game.world.node_at(sticky+Vector3i.RIGHT) == Nodes.GLASS and game.world.node_at(sticky+Vector3i.RIGHT*2) == Nodes.AIR,"a later retraction pulls the block back, as the source's tick window allows")
 	game.world.set_node(sticky+Vector3i.RIGHT,Nodes.OBSIDIAN)
 	suite.check(not circuit.piston(sticky,true),"obsidian is immovable")
-	game.world.set_node(sticky+Vector3i.RIGHT,Nodes.CHEST)
-	suite.check(not circuit.piston(sticky,true),"containers cannot be pushed or lose their contents")
+	# `mcl_pistons/api.lua`: `inv_nodes_movable` defaults to true, so a container is
+	# pushed like any other block — and its contents move with it.
+	# Kept inside the test world's loaded radius, which `movable` requires.
+	var push_chest := Vector3i(1,50,25)
+	game.world.set_node(push_chest,Nodes.PISTON); circuit.configure(push_chest,Vector3i.RIGHT)
+	game.world.set_node(push_chest+Vector3i.RIGHT,Nodes.CHEST)
+	game.world.get_station(push_chest+Vector3i.RIGHT,"chest").slots[0] = {"id":Nodes.DIAMOND,"count":7,"wear":0}
+	suite.check(circuit.piston(push_chest,true),"a chest is pushed by a piston, as the source's movable-inventory default allows")
+	suite.check(game.world.node_at(push_chest+Vector3i.RIGHT) == Nodes.PISTON_HEAD and game.world.node_at(push_chest+Vector3i.RIGHT*2) == Nodes.CHEST and circuit.container(push_chest+Vector3i.RIGHT*2)[0].count == 7,"the pushed chest keeps its contents")
+	game.world.set_node(sticky+Vector3i.RIGHT,Nodes.BEDROCK)
+	suite.check(not circuit.piston(sticky,true),"bedrock is immovable")
 	var vertical := Vector3i(25,50,13)
 	game.world.set_node(vertical,Nodes.PISTON); circuit.configure(vertical,Vector3i.UP)
 	game.world.set_node(vertical+Vector3i.UP,Nodes.DIRT)
@@ -210,9 +252,19 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	suite.check(game.dimension == "end" and game.world.node_at(Vector3i(51,44,0)) == Nodes.OBSIDIAN,"End arrival builds a safe obsidian platform")
 	suite.check(game.world.node_at(Vector3i(51,-1,0)) == Nodes.AIR,"End void remains open below the world")
 	# Stream the central island and all ten towers for the encounter.
+	#
+	# `area_ready` only asks for a 3x3 of columns and so goes true long before the
+	# towers are in, and `ensure_end` *skips* a tower whose column is not loaded. The
+	# old loop therefore burned its whole frame budget and then asserted, which is a
+	# race rather than a check — it failed whenever streaming happened to be slow.
+	# Wait for the towers' own columns instead.
 	game.player.position = Vector3(0,54,0); game.world.target = game.player.position; game.world.radius = 3
-	for i in 1000:
-		if game.world.columns.size() >= 49 and game.world.area_ready(Vector3.ZERO): break
+	var towers: Array = WorldStructures.towers()
+	for i in 3000:
+		var all_loaded: bool = true
+		for tower in towers:
+			if not game.world.loaded_at(Vector3(tower)+Vector3(0.5,1,0.5)): all_loaded = false; break
+		if all_loaded and game.world.area_ready(Vector3.ZERO): break
 		await suite.process_frame
 	game.adventure.ensure_end()
 	var crystals: Array = []; var dragon: Creature
@@ -282,5 +334,21 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	while game.state == "loading": await suite.process_frame
 	game.pause(); game.world.active = false
 	suite.check(game.dimension == "overworld" and int(game.world.circuits.state(repeater).delay) == 4,"returning from the End restores Overworld circuit state")
+	# --- a blaze fireball sets what it hits alight --------------------------
+	# The source's fireball carries `hit_mob`/`hit_player` handlers that call
+	# `mcl_burning.set_on_fire(x, 5)`, and a fire-resistant mob is `_fire_resistant`
+	# so it never catches. Voxey's fireball dealt fire damage but never ignited, so
+	# a blaze was a plain archer.
+	suite.check(Fire.resistant("blaze") and Fire.resistant("magma_cube") and Fire.resistant("ghast"),"the source's fire-resistant mobs are recognised")
+	suite.check(not Fire.resistant("zombie") and not Fire.resistant("player"),"an ordinary mob and the player are not fire-resistant")
+	var burn_zombie: Creature = game.spawn_creature("zombie",game.player.position+Vector3(3,1,3))
+	var burn_blaze: Creature = game.spawn_creature("blaze",game.player.position+Vector3(5,1,5))
+	if burn_zombie != null and burn_blaze != null:
+		MagicProjectile.ignite(burn_zombie)
+		MagicProjectile.ignite(burn_blaze)
+		suite.check(PotionEffects.level(burn_zombie,"burning") > 0,"a fireball sets an ordinary mob alight")
+		suite.check(PotionEffects.level(burn_blaze,"burning") == 0,"a fire-resistant mob never catches, as the source's `_fire_resistant` means")
+		burn_zombie.queue_free(); burn_blaze.queue_free()
+	suite.check(MagicProjectile.IGNITE_SECONDS == 5.0,"the ignition lasts the source's five seconds")
 	for path in ["user://expansion-check.json","user://expansion-check.json.bak"]:
 		if FileAccess.file_exists(path): DirAccess.remove_absolute(path)

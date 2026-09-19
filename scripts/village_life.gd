@@ -15,6 +15,11 @@ func state() -> Dictionary:
 	return game.world.adventure_state.village_life
 
 func record(key: String) -> Dictionary:
+	# A wandering trader is not a village resident, so its record lives in the trader
+	# module's own store. Falling through here is what makes the existing trading
+	# panel, its cost display and its transaction all work unchanged.
+	var trader: Dictionary = WanderingTraders.stored(game,key)
+	if not trader.is_empty(): return trader
 	return state().people.get(key,{})
 
 func make_record(key: String, profession: String, p: Vector3, workplace: Vector3i, home: Vector3i, center: Vector3i) -> Dictionary:
@@ -35,6 +40,7 @@ func make_record(key: String, profession: String, p: Vector3, workplace: Vector3
 					var enchant: String = choices[rng.randi_range(0,choices.size()-1)]
 					offer.data = {"enchantments":{enchant:rng.randi_range(1,Enchantments.DATA[enchant].max)}}
 		result.offers.append(offer)
+	result.custom_name = str(state().people.get(key,{}).get("custom_name",""))
 	state().people[key] = result
 	return result
 
@@ -50,14 +56,13 @@ static func vec(value: Array) -> Vector3:
 	return Vector3(float(value[0]),float(value[1]),float(value[2]))
 
 func update(delta: float) -> void:
-	if game.dimension != "overworld": return
 	state().clock += delta
 	alarm = maxf(0,alarm-delta)
 	timer -= delta
 	if timer > 0: return
 	timer = 0.5
 	var village: Dictionary = VillageGenerator.nearest(game.world.generator,game.player.position)
-	if Vector3(village.center).distance_to(game.player.position) < 95:
+	if game.dimension == "overworld" and Vector3(village.center).distance_to(game.player.position) < 95:
 		for i in VillageGenerator.HOMES.size():
 			var key: String = village.key+"/"+str(i)
 			if not state().people.has(key):
@@ -75,7 +80,9 @@ func update(delta: float) -> void:
 		if person.dead: continue
 		var pos: Vector3 = vec(person.position)
 		if live.has(key):
-			if pos.distance_to(game.player.position) > 95 or not game.world.loaded_at(pos): live[key].queue_free(); continue
+			if pos.distance_to(game.player.position) > 95 or not game.world.loaded_at(pos):
+				if Boats.is_passenger(live[key]): continue
+				game.leads.hibernate(live[key]); live[key].queue_free(); continue
 			if person.profession != "golem":
 				work(person,live[key],0.5)
 		elif pos.distance_to(game.player.position) < 70 and game.world.loaded_at(pos):
@@ -167,9 +174,13 @@ func transaction(person: Dictionary, offer: Dictionary, commit: bool = false) ->
 	return ""
 
 func open(mob: VillageMob) -> void:
-	if mob.kind != "villager": return
+	# A wandering trader uses the same panel, but is never unemployed and is never a
+	# child, so only the profession and age gates apply to a villager.
+	var trader: bool = mob.kind == "wandering_trader"
+	if mob.kind != "villager" and not trader: return
 	var person: Dictionary = record(mob.person_key)
-	if person.is_empty() or person.profession == "unemployed" or person.get("age",0.0) > 0:
+	if person.is_empty(): return
+	if not trader and (person.profession == "unemployed" or person.get("age",0.0) > 0):
 		game.toast("A child is still growing." if person.get("age",0.0) > 0 else "Place an unclaimed job block nearby to give this villager a profession."); return
 	trading_key = mob.person_key
 	game.hud.return_cursor(); game.state = "trading"; game.world.active = false
@@ -186,6 +197,7 @@ func trade(key: String, index: int, all_available: bool = false) -> void:
 		if not reason.is_empty(): break
 		amount += 1
 	game.toast("Traded %d time(s)."%amount if amount > 0 else reason)
+	if amount > 0: game.achievements.award("what_a_deal")
 	game.hud.show_trading(key,index)
 
 func snapshot() -> void:
@@ -258,8 +270,15 @@ func relocate(mob: VillageMob) -> void:
 func harvest_near(mob: VillageMob) -> void:
 	var p: Vector3i = Vector3i(mob.position.floor())+Vector3i(randi_range(-2,2),0,randi_range(-2,2))
 	var id: int = game.world.node_at(p)
-	if id == Nodes.RIPE_WHEAT:
-		game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.GRAIN,1); game.world.set_node(p,Nodes.WHEAT)
+	if CropFarming.is_crop(id):
+		if not CropFarming.mature(id): return
+		var planted: bool = false
+		for drop in CropFarming.harvest(id):
+			var count: int = drop[1]
+			if drop[0] == CropFarming.seed_item(id) and count > 0 and not planted:
+				count -= 1; planted = true
+			if count > 0: game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,drop[0],count)
+		game.world.set_node(p,CropFarming.first(id) if planted else Nodes.AIR)
 	elif VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage == 3 and VillageContent.crop_seed(id) != 0:
 		for drop in VillageContent.crop_drops(id):
 			var count: int = drop[1]-(1 if drop[0] == VillageContent.crop_seed(id) else 0)

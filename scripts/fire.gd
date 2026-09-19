@@ -6,7 +6,18 @@ const SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.UP,Vector3i.DOWN,Vector3i.F
 
 static func is_fire(id: int) -> bool: return id in [FLAME,ETERNAL]
 
+# The source's `_fire_resistant = true`, which ten of its mobs carry: a blaze, an
+# ender dragon, a ghast, a hoglin or zoglin, a piglin, a shulker, a wither skeleton,
+# a magma cube, a strider and a wither. A fire-resistant creature never catches light
+# and takes no burning damage, which is why a blaze cannot be set alight by its own
+# fireball.
+const RESISTANT = ["blaze","ender_dragon","ghast","hoglin","zoglin","piglin","piglin_brute","shulker","wither_skeleton","magma_cube","strider","wither"]
+
+static func resistant(kind: String) -> bool: return RESISTANT.has(kind)
+
 static func flammable(id: int) -> bool:
+	if WoodTypes.is_wood(id): return true
+	if Barriers.is_barrier(id): return WoodTypes.is_planks(Barriers.material(id))
 	if BuildingShapes.is_shape(id): return flammable(BuildingShapes.material(id))
 	if VillageContent.DATA.get(id,{}).has("flammable"): return bool(VillageContent.DATA[id].flammable)
 	return id in [Nodes.TNT,Nodes.COAL_BLOCK,Nodes.LOG,Nodes.PLANKS,Nodes.LEAVES,Nodes.WOOL,Nodes.BOOKSHELF,Nodes.HAY_BALE,Nodes.CHEST,Nodes.WORKBENCH,Nodes.SAPLING,Nodes.WHEAT,Nodes.RIPE_WHEAT,Nodes.VINE] or VillageContent.DATA.get(id,{}).get("family","") in ["wool","carpet","banner"]
@@ -27,7 +38,12 @@ static func ignite(world: VoxelWorld, p: Vector3i) -> bool:
 	if world.ignite_portal(p): return true
 	var support: int = world.node_at(p+Vector3i.DOWN)
 	if not Nodes.solid(support) and nearby_fuel(world,p).is_empty(): return false
-	return world.set_node(p,ETERNAL if support == Nodes.NETHERRACK or support == Nodes.BEDROCK and world.dimension == "end" else FLAME)
+	# Magma is eternal fuel too, which the source's `eternal_on_ignite` gives it.
+	# `mcl_blackstone` extends the eternal-fire rule to `group:soul_block`, but the
+	# replacement is soul fire rather than plain eternal fire.
+	var soul: int = NetherBlocks.flame_for(support)
+	if soul != 0: return world.set_node(p,soul)
+	return world.set_node(p,ETERNAL if support == Nodes.NETHERRACK or Magma.eternal(support) or support == Nodes.BEDROCK and world.dimension == "end" else FLAME)
 
 static func use(game: Node3D, target: Dictionary) -> bool:
 	var held: int = game.inventory.held().id

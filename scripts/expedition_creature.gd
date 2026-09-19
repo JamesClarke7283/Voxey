@@ -111,6 +111,8 @@ func _physics_process(delta: float) -> void:
 			velocity.y = 5.4; slime_hop = randf_range(0.6,1.4)
 		model.scale = Vector3.ONE*(slime_size/2.0)*Vector3(1.0+sin(life*7)*0.04,1.0-sin(life*7)*0.06,1.0+sin(life*7)*0.04)
 	if not game.playing(): return
+	if game.leads.sleep_if_unloaded(self): return
+	if Farming.sleep_if_unloaded(self): return
 	if kind == "shulker":
 		life += delta; attack_cooldown -= delta
 		var near: bool = position.distance_to(game.player.position) < 22
@@ -126,10 +128,15 @@ func _physics_process(delta: float) -> void:
 		model.position.y = sin(life*2)*0.12
 		return
 	if kind == "ender_dragon": _dragon(delta); return
-	if kind in ["ghast","blaze"]: _fly(delta); return
+	if kind in ["ghast","blaze"]:
+		# A flying mob runs its own movement, but the weather rules still apply:
+		# without this a blaze could never be put out by rain or hurt by water,
+		# because it never reaches the shared step below.
+		if not weather_step(delta): return
+		_fly(delta); return
 	if kind == "enderman":
 		var eye: Vector3 = center()-game.player.camera.global_position
-		if eye.length() < 24 and (-game.player.camera.global_basis.z).dot(eye.normalized()) > 0.985 and _sees_player(): provoked = true
+		if not PumpkinHelmet.worn(game.player) and eye.length() < 24 and (-game.player.camera.global_basis.z).dot(eye.normalized()) > 0.985 and _sees_player(): provoked = true
 		if Fluids.water(game.world.node_at(Vector3i(position.floor()))) or (provoked and position.distance_to(game.player.position) > 8 and leap_cooldown <= 0):
 			teleport_near(game.player.position if provoked else position)
 			leap_cooldown = 4
@@ -213,15 +220,16 @@ func _dragon(delta: float) -> void:
 	game.world.adventure_state["dragon_health"] = health
 	game.world.adventure_state["dragon_phase"] = life
 
-func hit(damage: float, from: Vector3 = Vector3.INF) -> void:
+func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> void:
 	if is_queued_for_deletion(): return
 	if kind == "enderman" and leap_cooldown <= 0:
 		teleport_near(position)
 		leap_cooldown = 3
-	super.hit(damage,from)
+	super.hit(damage,from,reason)
 	if kind == "ender_dragon": game.world.adventure_state["dragon_health"] = maxf(0,health)
 
 func die() -> void:
+	Farming.forget(self)
 	PotionEffects.died(self)
 	if kind == "slime":
 		if slime_size > 1:

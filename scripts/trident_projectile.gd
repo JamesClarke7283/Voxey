@@ -34,13 +34,18 @@ func _physics_process(delta: float) -> void:
 	var motion: Vector3 = velocity*delta; var steps: int = maxi(1,ceili(motion.length()/0.08))
 	for i in steps:
 		var next: Vector3 = position+motion/steps
-		if game.world.intersects(next,0.04,0.08): impact(); return
+		if game.world.intersects(next,0.04,0.08):
+			RedstoneSensors.projectile_hit(game.world,position,motion,true,game.player)
+			RedstoneInputs.projectile_hit(game.world,position,motion)
+			impact(); return
 		position = next
 		for mob in game.creatures.get_children():
 			if not mob.is_queued_for_deletion() and position.distance_to(mob.center()) < mob.width+0.25:
 				var damage: float = 8
 				if Fluids.water(game.world.node_at(Vector3i(mob.position.floor()))) or mob.kind == "turtle": damage += Inventory.enchantment(stack,"Impaling")*2.5
 				mob.hit(damage,position-velocity)
+				# `a_throwaway_joke`: hit a creature with a thrown trident.
+				game.achievements.award("a_throwaway_joke")
 				if Inventory.enchantment(stack,"Channeling") and game.survival.weather() == "thunder" and game.world.open_sky(Vector3i(mob.position.floor())):
 					PotionEffects.apply(mob,"burning",8); mob.hit(5)
 					for y in 18: game.puff(mob.position+Vector3.UP*(y+1),Color("e4efff"),1,0.05)
