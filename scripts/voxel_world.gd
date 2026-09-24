@@ -39,6 +39,9 @@ var unmeshed: Dictionary = {}
 var mesh_queue: Array = []
 var mesh_level: int = 999999
 var mesh_radius: int = -1
+# Blocks meshed before a neighbouring column had loaded. Their borders assumed
+# air there, so they are meshed again when that column arrives.
+var partial: Dictionary = {}
 var desired: Vector2i = Vector2i(999999,999999)
 var generation_queue: Array = []
 # Terrain jobs run at high priority because the worker pool gives low-priority
@@ -145,13 +148,15 @@ func _process(delta: float) -> void:
 		# Out of range, the block is meshed from its current nodes on arrival.
 		if unmeshed.has(coord) and not in_mesh_range(coord.y): continue
 		if _remeshing(coord): dirty[coord] = true; break
+		if partial.has(coord) and _neighbors_loaded(Vector2i(coord.x,coord.z)): partial.erase(coord)
 		_start_remesh(coord)
-	# Blocks entering the vertical range come after the player's own edits.
-	while remesh_jobs.size() < remesh_slots and not mesh_queue.is_empty():
+	# Blocks entering the vertical range come after the player's own edits, and
+	# may also use generation slots that are standing idle.
+	var queue_slots: int = remesh_slots+maxi(0,generation_slots-jobs.size())
+	while remesh_jobs.size() < queue_slots and not mesh_queue.is_empty():
 		var coord: Vector3i = mesh_queue.pop_back()
 		if not unmeshed.has(coord) or not blocks.has(coord) or not in_mesh_range(coord.y) or _remeshing(coord): continue
-		# A snapshot needs the neighbouring columns; loading one re-queues this.
-		if not _neighbors_loaded(Vector2i(coord.x,coord.z)): continue
+		if not _neighbors_loaded(Vector2i(coord.x,coord.z)): partial[coord] = true
 		_start_remesh(coord)
 	while jobs.size() < generation_slots and not generation_queue.is_empty():
 		var nearest: Vector2i = generation_queue.pop_back()
@@ -287,7 +292,9 @@ func _queue_column(coord: Vector2i) -> void:
 	var info: NodeInfo.View = NodeInfo.view()
 	var job: Dictionary = {"coord":coord,"result":{},"info":info,"gen":gen}
 	var levels := Vector2i(mesh_level-radius,mesh_level+radius) if mesh_level != 999999 else TerrainGenerator.ALL_LEVELS
-	job.task = WorkerThreadPool.add_task(func(): job.result = gen.generate_column(coord,local_edits,false,info,levels),true,"Generate map blocks")
+	job.task = WorkerThreadPool.add_task(func():
+		job.result = gen.generate_column(coord,local_edits,false,info,levels)
+		job.result["edit_snapshot"] = local_edits,true,"Generate map blocks")
 	jobs.append(job)
 	pending[coord] = true
 
@@ -316,6 +323,9 @@ const HOOK_PICKLE = 1 << 19
 const HOOK_KELP = 1 << 20
 const HOOK_BEACON = 1 << 21
 const HOOK_LEAVES = 1 << 22
+# Registrations the worker's `special` index does not cover; an edit carrying
+# one is always registered when its column loads.
+const UNINDEXED_HOOKS = HOOK_LEGACY_DOOR|HOOK_POWDER|HOOK_CHORUS|HOOK_CONDUIT|HOOK_CORAL|HOOK_PICKLE|HOOK_KELP|HOOK_BEACON
 static var hook_memo: Dictionary = {}
 
 static func load_hooks(id: int) -> int:
@@ -369,12 +379,14 @@ func _apply_column(result: Dictionary) -> void:
 		_index_block(coord)
 		if entry.has("surfaces"): _apply_mesh(coord,entry.surfaces)
 		else: unmeshed[coord] = true
-	# This column may complete the neighbourhood an unmeshed block waits for.
+	# Blocks the worker left unmeshed may have entered range since it started,
+	# and neighbours meshed without this column need their borders again.
 	var waiting: bool = false
-	for coord in unmeshed:
-		if absi(coord.x-c.x) <= 1 and absi(coord.z-c.y) <= 1 and in_mesh_range(coord.y):
-			mesh_queue.append(coord); waiting = true
+	for coord in column_blocks.get(c,[]):
+		if unmeshed.has(coord) and in_mesh_range(coord.y): mesh_queue.append(coord); waiting = true
 	if waiting: _sort_mesh_queue()
+	for coord in partial:
+		if absi(coord.x-c.x) <= 1 and absi(coord.z-c.y) <= 1: dirty[coord] = true
 	# Reconcile edits made while the worker was running, including border halos.
 	var nearby_edits: Array = edits_near(c)
 	for p in nearby_edits:
@@ -514,8 +526,14 @@ func _apply_column(result: Dictionary) -> void:
 	# Changes made after the worker snapshot must also update simulation indexes.
 	var corridor_spawners: Dictionary = result.get("corridors",{}).get("spawners",{})
 	var dungeon_spawners: Dictionary = result.get("dungeons",{}).get("spawners",{})
+	# The worker generated this column with the edits it was given, so its
+	# indexes (special cells, pasture, fluids, fire) already include those that
+	# are unchanged since. Only newer edits and unindexed registrations remain.
+	var worker_edits: Dictionary = result.get("edit_snapshot",{})
+	var indexed: bool = result.has("edit_snapshot")
 	for p in nearby_edits:
 		if not loaded_at(Vector3(p)): continue
+		if indexed and worker_edits.get(p,-1) == edits[p] and load_hooks(edits[p]) & UNINDEXED_HOOKS == 0 and not carts.has(p): continue
 		Pasture.changed(self,p)
 		var id: int = node_at(p)
 		var hooks: int = load_hooks(id)
@@ -641,7 +659,7 @@ func _unload(c: Vector2i) -> void:
 	circuits.unload(c)
 	for b in column_blocks.get(c,[]):
 		if not blocks.has(b): continue
-		blocks[b].root.queue_free(); blocks.erase(b); dirty.erase(b); unmeshed.erase(b)
+		blocks[b].root.queue_free(); blocks.erase(b); dirty.erase(b); unmeshed.erase(b); partial.erase(b)
 	column_blocks.erase(c)
 
 func _index_block(coord: Vector3i) -> void:
@@ -816,13 +834,25 @@ func intersects(pos: Vector3, half_width: float = 0.29, height: float = 1.8) -> 
 	# Read the shared trait table directly; a miss falls back to NodeInfo.
 	var traits: PackedInt32Array = NodeInfo.traits if NodeInfo.cached() else PackedInt32Array()
 	var known: int = traits.size()
+	# Inside the world's bounds, read each map block's nodes directly; a body
+	# almost always spans one or two blocks. Elsewhere node_at decides.
+	var direct: bool = lo.x >= WorldBounds.MIN_XZ and hi.x <= WorldBounds.MAX_XZ and lo.z >= WorldBounds.MIN_XZ and hi.z <= WorldBounds.MAX_XZ and lo.y-1 >= generator.floor_y and hi.y < generator.top_y
+	var block_key := Vector3i(2147483647,0,0)
+	var block_data := PackedInt32Array()
 	# Fences/walls extend into the cell above; include that lower cell even when
 	# the actor's feet have left it. Ordinary cubes do not need the extra scan.
 	for y in range(lo.y-1,hi.y+1):
 		for z in range(lo.z,hi.z+1):
 			for x in range(lo.x,hi.x+1):
-				var p := Vector3i(x,y,z)
-				var id: int = node_at(p)
+				var id: int
+				if direct:
+					var key := Vector3i(x >> 4,y >> 4,z >> 4)
+					if key != block_key:
+						block_key = key
+						var block: Variant = blocks.get(key)
+						block_data = block.data if block != null else PackedInt32Array()
+					id = block_data[(x & 15)+(z & 15)*16+(y & 15)*256] if not block_data.is_empty() else node_at(Vector3i(x,y,z))
+				else: id = node_at(Vector3i(x,y,z))
 				var bits: int = traits[id] if id >= 0 and id < known else 0
 				if bits == 0: bits = NodeInfo.of(id)
 				if bits & NodeInfo.SOLID == 0: continue
@@ -832,6 +862,7 @@ func intersects(pos: Vector3, half_width: float = 0.29, height: float = 1.8) -> 
 					if body.position.x < x+1 and body.end.x > x and body.position.y < y+1 and body.end.y > y and body.position.z < z+1 and body.end.z > z: return true
 					continue
 				if y < lo.y and not Barriers.is_barrier(id): continue
+				var p := Vector3i(x,y,z)
 				for box in collision_boxes(p):
 					if body.intersects(AABB(Vector3(p)+box.position,box.size)): return true
 	return false

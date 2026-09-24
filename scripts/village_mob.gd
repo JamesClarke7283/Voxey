@@ -97,6 +97,8 @@ func store_record() -> void:
 
 func _physics_process(delta: float) -> void:
 	if not game.playing(): return
+	delta = _engine_step(delta)
+	if delta < 0.0: return
 	if game.leads.sleep_if_unloaded(self) or not game.world.loaded_at(position): return
 	var r: Dictionary = game.villages.record(person_key)
 	if r.is_empty(): return

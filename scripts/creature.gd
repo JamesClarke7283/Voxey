@@ -154,12 +154,35 @@ func water_surface() -> int:
 
 # Whether the mob is standing in powder snow. The block is not solid — a mob sinks
 # into it — so this reads the body cell rather than a collision.
+func _surface_height() -> int:
+	var cell := Vector2i(int(floor(position.x)),int(floor(position.z)))
+	if cell != surface_cell:
+		surface_cell = cell
+		surface_height = game.world.generator.terrain_height(cell.x,cell.y)
+	return surface_height
+
 func in_powder_snow() -> bool:
 	var cell := Vector3i(position.floor())
 	if PowderSnow.is_powder_snow(game.world.node_at(cell)): return true
 	return PowderSnow.is_powder_snow(game.world.node_at(cell+Vector3i.UP))
 # The villager this mob is currently hunting, when the source has it attack NPCs.
 var prey_target: Node3D = null
+# The villager search scans every creature and traces sight to each nearby
+# villager, so its answer is kept for a quarter of a second.
+var prey_choice: Node3D = null
+var prey_timer: float = 0.0
+# Engine ticks pose the model once per rendered frame, with the time since.
+var anim_frame: int = -1
+var anim_delta: float = 0.0
+# Engine ticks bunch up after a slow frame, and only the last one is ever seen.
+# A mob steps on the first tick of each rendered frame and again only once
+# 1/30 s has built up, carrying the time forward; at 60 FPS every tick steps
+# as before. Direct calls (scripted steps, checks) always step.
+var step_frame: int = -1
+var step_delta: float = 0.0
+# The terrain surface under the mob's cell, for the daylight burn check.
+var surface_cell := Vector2i(2147483647,0)
+var surface_height: int = 0
 var grounded: bool = false
 var tinted: bool = false
 var sheared: bool = false
@@ -633,7 +656,7 @@ func weather_step(delta: float) -> bool:
 	var data: Dictionary = info()
 	# An `ignited_by_sunlight` mob burns in daylight, which is the source's own name
 	# for the `burns` flag.
-	if data.get("burns",false) and not has_meta("effect_fire_resistance") and game.daylight > 0.8 and position.y > game.world.generator.terrain_height(int(floor(position.x)),int(floor(position.z))):
+	if data.get("burns",false) and not has_meta("effect_fire_resistance") and game.daylight > 0.8 and position.y > _surface_height():
 		health -= delta*0.8
 		if fmod(life,0.4) < delta: game.puff(center(),Color("f0a23a"),3)
 		if health <= 0: Farming.forget(self); queue_free(); return false
@@ -693,8 +716,20 @@ func aggressive() -> bool:
 	if info().get("neutral",false) and not provoked: return false
 	return true
 
+func _engine_step(delta: float) -> float:
+	if not Engine.is_in_physics_frame(): return delta
+	step_delta += delta
+	var frame: int = Engine.get_process_frames()
+	if frame == step_frame and step_delta < 1.0/30.0: return -1.0
+	step_frame = frame
+	var elapsed: float = step_delta
+	step_delta = 0.0
+	return elapsed
+
 func _physics_process(delta: float) -> void:
 	if not game.playing(): return
+	delta = _engine_step(delta)
+	if delta < 0.0: return
 	if game.leads.sleep_if_unloaded(self): return
 	if Farming.sleep_if_unloaded(self): return
 	if not custom_name.is_empty() and not Farming.managed(self) and (not game.world.loaded_at(position) or position.distance_to(game.player.position) > 90): return
@@ -740,7 +775,11 @@ func _physics_process(delta: float) -> void:
 	# zombie never lands the killing blow that infects a villager, so the infection
 	# rule below could never fire.
 	if data.get("hunts_villagers",false) and not (scared > 0 and not hostile):
-		var prey: Node3D = nearest_villager()
+		prey_timer -= delta
+		if prey_timer <= 0 or prey_choice != null and (not is_instance_valid(prey_choice) or prey_choice.is_queued_for_deletion()):
+			prey_timer = 0.25
+			prey_choice = nearest_villager()
+		var prey: Node3D = prey_choice
 		if prey != null:
 			var to_prey: Vector3 = ((prey.position-position)*Vector3(1,0,1)).normalized()
 			if not chasing or prey.position.distance_to(position) < distance:
@@ -795,7 +834,9 @@ func _physics_process(delta: float) -> void:
 					game.player.hurt(Guardians.MAGIC_DAMAGE+data.damage,false,position,"magic")
 					game.puff(game.player.position+Vector3.UP,Color("b98adf"),12,2.0)
 					laser = Guardians.laser_delay(kind)
-	elif direction.length() > 0.1: model.rotation.y = lerp_angle(model.rotation.y,atan2(-direction.x,-direction.z),delta*5)
+	elif direction.length() > 0.1:
+		var facing: float = lerp_angle(model.rotation.y,atan2(-direction.x,-direction.z),delta*5)
+		if absf(angle_difference(facing,model.rotation.y)) > 0.0001: model.rotation.y = facing
 	knock = knock.move_toward(Vector3.ZERO,delta*12)
 	velocity.x = direction.x*speed+knock.x
 	velocity.z = direction.z*speed+knock.z
@@ -820,17 +861,30 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y = maxf(-25,velocity.y-22*delta)
 	if data.get("glides",false) and velocity.y < -1.6: velocity.y = -1.6
+	# Move in a local first: every assignment to `position` pushes a transform
+	# update through each part of the model.
 	grounded = false
+	var moved: Vector3 = position
 	for axis in [0,2,1]:
-		var next: Vector3 = position
+		# A still axis cannot collide anew; only an embedded mob would differ.
+		if axis != 1 and velocity[axis] == 0.0: continue
+		var next: Vector3 = moved
 		next[axis] += velocity[axis]*delta
-		if not game.world.intersects(next,width,height): position = next
+		if not game.world.intersects(next,width,height): moved = next
 		elif axis == 1:
 			if velocity.y < 0: grounded = true
 			velocity.y = 0
-		elif game.world.intersects(position-Vector3.UP*0.08,width,1.0) and not game.world.intersects(position+Vector3.UP*1.05,width,height): velocity.y = 7.2
-	if not grounded and game.world.intersects(position-Vector3.UP*0.04,width,0.5): grounded = true
-	animate(delta,chasing)
+		elif game.world.intersects(moved-Vector3.UP*0.08,width,1.0) and not game.world.intersects(moved+Vector3.UP*1.05,width,height): velocity.y = 7.2
+	if not grounded and game.world.intersects(moved-Vector3.UP*0.04,width,0.5): grounded = true
+	if moved != position: position = moved
+	# Beyond the fog's far edge a pose cannot be seen. Several engine ticks in
+	# one slow frame share a single pose update; direct calls always animate.
+	if distance < 64:
+		anim_delta += delta
+		if not Engine.is_in_physics_frame() or Engine.get_process_frames() != anim_frame:
+			anim_frame = Engine.get_process_frames()
+			animate(anim_delta,chasing)
+			anim_delta = 0.0
 	if data.get("explodes",false):
 		model.scale = Vector3.ONE*(1.0+fuse*0.25)
 		_tint(Color.WHITE,0.7 if fuse > 0 and int(fuse*12)%2 == 0 else 0.0)

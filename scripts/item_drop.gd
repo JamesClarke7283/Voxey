@@ -10,6 +10,10 @@ var age: float = 0.0
 var pickup_delay: float = 0.0
 var velocity := Vector3.ZERO
 var mesh_instance: MeshInstance3D
+# As with mobs, bunched engine ticks after a slow frame merge into one step per
+# rendered frame (at most 1/30 s apart); at 60 FPS every tick steps.
+var step_frame: int = -1
+var step_delta: float = 0.0
 
 func _ready() -> void:
 	velocity = Vector3(randf_range(-1.2,1.2),2.8,randf_range(-1.2,1.2))
@@ -28,6 +32,12 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	if not game.playing(): return
+	if Engine.is_in_physics_frame():
+		step_delta += delta
+		if Engine.get_process_frames() == step_frame and step_delta < 1.0/30.0: return
+		step_frame = Engine.get_process_frames()
+		delta = step_delta
+		step_delta = 0.0
 	age += delta
 	pickup_delay = maxf(0,pickup_delay-delta)
 	if age >= (600.0 if item_id == Nodes.ARROW_ITEM else 300.0): queue_free(); return

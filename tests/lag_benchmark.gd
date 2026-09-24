@@ -28,6 +28,8 @@ func run() -> void:
 		var local: Dictionary = {}
 		for p in world.edits_near(Vector2i.ZERO): local[p] = world.edits[p]
 		var result: Dictionary = TerrainGenerator.new(8675309,"overworld").generate_column(Vector2i.ZERO,local)
+		# A streaming job records the edits it generated with, as here.
+		result["edit_snapshot"] = local
 		var start: int = Time.get_ticks_usec()
 		world._apply_column(result)
 		report["apply_ms_with_%d_edits" % count] = (Time.get_ticks_usec()-start)/1000.0

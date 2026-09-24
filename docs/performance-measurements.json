@@ -680,6 +680,117 @@
         "primitives": 5356,
         "radius": 4
       }
-    ]
+    ],
+    "second_pass": {
+      "mob_crowd_before": {
+        "hostile": {
+          "avg_fps": 12.4124650351307,
+          "creatures": 59,
+          "draw_calls": 793,
+          "gpu": "Mesa Intel(R) HD Graphics 520 (SKL GT2)",
+          "max": 128.113998413086,
+          "median": 78.5350036621094,
+          "p95": 114.295997619629
+        },
+        "passive": {
+          "avg_fps": 13.6633255177971,
+          "creatures": 52,
+          "draw_calls": 439,
+          "gpu": "Mesa Intel(R) HD Graphics 520 (SKL GT2)",
+          "max": 153.615005493164,
+          "median": 71.4940032958984,
+          "p95": 100.708000183105
+        }
+      },
+      "mob_crowd_after": {
+        "hostile": {
+          "avg_fps": 32.3477874726966,
+          "creatures": 54,
+          "draw_calls": 712,
+          "gpu": "Mesa Intel(R) HD Graphics 520 (SKL GT2)",
+          "max": 88.9089965820312,
+          "median": 29.0990009307861,
+          "p95": 50.9869995117188
+        },
+        "passive": {
+          "avg_fps": 33.8672599559379,
+          "creatures": 58,
+          "draw_calls": 504,
+          "gpu": "Mesa Intel(R) HD Graphics 520 (SKL GT2)",
+          "max": 80.7119979858398,
+          "median": 27.4309997558594,
+          "p95": 52.3170013427734
+        }
+      },
+      "lag_benchmark_after": {
+        "apply_ms_with_0_edits": 4.245,
+        "apply_ms_with_1000_edits": 20.197,
+        "apply_ms_with_4000_edits": 52.928,
+        "autosave_main_thread_ms_40000_edits": 5.325,
+        "cpus": 4,
+        "generation_slots": 2,
+        "nether_generation_ms": [
+          93.993,
+          97.794,
+          121.958,
+          105.538,
+          118.492,
+          132.98
+        ],
+        "overworld_generation_ms": [
+          433.326,
+          293.649,
+          306.317,
+          305.483,
+          416.98,
+          352.191
+        ],
+        "synchronous_save_ms_40000_edits": 142.925
+      },
+      "survival_streaming_after": [
+        {
+          "avg_fps": 45.8764240851608,
+          "creatures": 22,
+          "distance": 120.557518005371,
+          "draw_calls": 355,
+          "edits": 404,
+          "frames": 918,
+          "gpu": "Mesa Intel(R) HD Graphics 520 (SKL GT2)",
+          "load_ms": 3009.956,
+          "loaded_fraction": 0.851851851851852,
+          "map_blocks": 912,
+          "max": 91.0810012817383,
+          "median": 18.5,
+          "over100": 0,
+          "over33": 130,
+          "over50": 27,
+          "p95": 44.4000015258789,
+          "p99": 62.4669990539551,
+          "primitives": 120854,
+          "radius": 4
+        },
+        {
+          "avg_fps": 44.5136367574675,
+          "creatures": 21,
+          "distance": 120.591506958008,
+          "draw_calls": 340,
+          "edits": 369,
+          "frames": 891,
+          "gpu": "Mesa Intel(R) HD Graphics 520 (SKL GT2)",
+          "load_ms": 3549.932,
+          "loaded_fraction": 0.790123456790123,
+          "map_blocks": 852,
+          "max": 115.042999267578,
+          "median": 17.7929992675781,
+          "over100": 2,
+          "over33": 125,
+          "over50": 51,
+          "p95": 53.3660011291504,
+          "p99": 80.6119995117188,
+          "primitives": 112428,
+          "radius": 4
+        }
+      ]
+    }
   }
 }

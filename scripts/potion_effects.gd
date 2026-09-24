@@ -61,6 +61,8 @@ static func clear_one(target: Node3D, effect: String) -> void:
 static func update(target: Node3D, delta: float) -> void:
 	if target.is_queued_for_deletion() or target.health <= 0: return
 	var player: bool = target is VoxeyPlayer
+	# Every creature is updated each frame; most carry no effect at all.
+	if not player and not _has_effect(target): return
 	for effect in NAMES:
 		var potency: int = level(target,effect)
 		if potency <= 0: continue
@@ -96,6 +98,11 @@ static func update(target: Node3D, delta: float) -> void:
 			else: target.hit(1)
 		target.set_meta("effectclock_"+effect,timer)
 	if level(target,"slow_falling") > 0: target.velocity.y = maxf(target.velocity.y,-1.6)
+
+static func _has_effect(target: Node3D) -> bool:
+	for meta in target.get_meta_list():
+		if String(meta).begins_with("effect_"): return true
+	return false
 
 static func damaged(target: Node3D) -> void:
 	if level(target,"infested") > 0 and randf() < 0.05:

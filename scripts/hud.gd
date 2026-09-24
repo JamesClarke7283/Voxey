@@ -854,7 +854,31 @@ func _process(delta: float) -> void:
 			refresh_slots()
 			if is_instance_valid(furnace_label) and station == "brewing": furnace_label.text = "Brewing %d%% · Fuel: %d / 20 batches"%[int(station_data.get("progress",0)*10),int(station_data.get("fuel_batches",0))]
 			if is_instance_valid(furnace_label) and station == "furnace": furnace_label.text="Smelting  %d%%  ·  Fuel remaining: %ds" % [int(station_data.progress/8.0*100),int(station_data.burn)] if station_data.burn>0 else "Add ore or food, then coal, charcoal, wood or a lava bucket."
-	queue_redraw()
+	# The in-game overlay is redrawn only when something it shows has changed.
+	# While anything on it animates it redraws every frame, and the frame after
+	# the animation ends always redraws too.
+	if screen != "game" or game == null or game.player == null or game.world == null or _overlay_animating():
+		drawn_state = []
+		queue_redraw()
+	else:
+		var shown: Array = _overlay_state()
+		if shown != drawn_state:
+			drawn_state = shown
+			queue_redraw()
+
+var drawn_state: Array = []
+
+func _overlay_animating() -> bool:
+	var player: VoxeyPlayer = game.player
+	return debug or player.scoping or player.mining > 0 or player.levitation > 0 or toast_time > 0 or flash > 0 or not game.survival.effects.is_empty() or game.world.adventure_state.has("raid") or game.dimension == "end" or PowderSnow.stage(PowderSnow.time_in_snow(player)) > 0
+
+# Everything the overlay reads outside the animated elements above.
+func _overlay_state() -> Array:
+	var player: VoxeyPlayer = game.player
+	var at: Vector3 = player.position
+	var held: Dictionary = game.inventory.held()
+	var target: Dictionary = player.target
+	return [size,game.dimension,int(at.x),int(at.y),int(at.z),at.y < 0,at.y < -32,player.underwater,PumpkinHelmet.worn(player),game.day_number(),game.time_name(),game.daylight > 0.4,target.get("id",-1),target.get("pos",Vector3i.ZERO),held.id,held.get("data",{}).get("custom_name",""),game.gamemode,player.health,player.hunger,player.flying,player.gliding,game.xp_level(),game.xp_progress(),player.armor_points(),player.breath,game.journal_step,game.touch]
 
 # The powder snow frost, drawn as a vignette that deepens with the source's stage.
 # Stage 1 is a faint icy edge, stage 2 spreads further in, and stage 3 closes over

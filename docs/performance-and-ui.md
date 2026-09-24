@@ -125,3 +125,25 @@ The rendered benchmark is `tests/survival_streaming_benchmark.gd`. It is a survi
 Both runs pass a pillager outpost. Its party of about twenty mobs fighting iron golems accounts for most frames over 33 ms near the end of the route. Before the shader warm-up and creature-sight changes, the same route had around fifty frames over 100 ms, and single frames of up to 400 ms.
 
 `tests/lag_benchmark.gd` reproduces the CPU rows, and `tests/world_benchmark.gd` the per-column figures. Raw results are under `streaming_lag_2026_09_24` in the [raw measurements](performance-measurements.json). All nine suites passed: 7,411 checks.
+
+### Second pass: mobs, the overlay and streaming
+
+On the same machine, the next largest costs were mob simulation, the in-game overlay and repeated work when streamed columns arrived.
+
+- **Bunched physics ticks.** After a slow frame the engine runs several physics ticks, and each mob stepped in every one, although only the last is ever seen. A mob now steps on the first tick of each rendered frame, and again only once 1/30 s has built up, carrying the time forward. At 60 FPS every tick steps as before. Direct calls, as scripted checks use, always step. Dropped items do the same.
+- **Mob step costs.** The villager search that hunting mobs run is refreshed four times a second instead of scanning every creature each tick. Collision reads each map block's nodes directly. Still axes skip collision queries. The terrain height for the daylight burn check is cached per cell. Mobs beyond the fog's far edge skip posing, and the body turns only when its facing actually changes. Mobs with no potion effect skip the per-effect scan.
+- **Overlay.** The in-game overlay is redrawn only when something it shows changes, and every frame while something on it animates.
+- **Worker table reads.** Worker threads read the shared node tables directly. The main thread writes whole entries in place and the tables are shared by reference, so readers never see a torn entry. Custom geometry on workers, such as grass, flowers and village decorations, no longer falls back to the full rule chains.
+- **Column loads with edits.** A column's worker records the edits it generated with. When the column is applied, those unchanged edits are not registered a second time, except for the few kinds the worker's index does not cover.
+- **Vertical meshing.** Map blocks entering the vertical range are meshed immediately, even if a neighbouring column is still generating, and meshed again when it arrives. They may use idle generation slots.
+
+| Measurement | After the first pass | After the second pass |
+| --- | ---: | ---: |
+| 32 hostile mobs around the player at night (`tests/mob_crowd_benchmark.gd hostile`) | 12.4 FPS, median 78.5 ms | 32.3 FPS, median 29.1 ms |
+| 32 farm animals around the player (`… passive`) | 13.7 FPS, median 71.5 ms | 33.9 FPS, median 27.4 ms |
+| Rendered survival route, average FPS | 40.0–40.9 | 44.5–45.9 |
+| Rendered survival route, 95th percentile | 64.7–66.2 ms | 44.4–53.4 ms |
+| Apply a column containing 1,000 edits | 54 ms | 20 ms |
+| Apply a column containing 4,000 edits | 171 ms | 53 ms |
+
+Each crowd run adds its 32 mobs to the world's own spawns, about 55 mobs in total. The parent commit could not complete the crowd benchmark: it had not finished loading after ten minutes. Raw results are under `streaming_lag_2026_09_24.second_pass` in the [raw measurements](performance-measurements.json). All nine suites passed: 7,411 checks.
