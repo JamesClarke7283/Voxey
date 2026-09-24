@@ -211,13 +211,21 @@ static func actor_record(game: Node3D, actor: Node3D) -> Dictionary:
 	else: return {} # Thrown eggs/snowballs/pearls and spell clouds are nonphysical in source.
 	return {"position":pos,"box":box,"living":living}
 
-static func entity_index(world: VoxelWorld) -> Dictionary:
+# Given plates, actors outside the box around them are left out: a plate reads
+# the cells within one node of itself, and a record's cell is at most one node
+# from its actor's.
+static func entity_index(world: VoxelWorld, plates: Array = []) -> Dictionary:
 	var game: Node3D = world.get_parent(); var result: Dictionary = {}
 	var actors: Array = [game.player]
 	for container in [game.creatures,game.drops,game.entities]:
 		if is_instance_valid(container): actors.append_array(container.get_children())
+	var low := Vector3i(2147483647,2147483647,2147483647); var high := -low
+	for p in plates: low = low.min(p-Vector3i(2,2,2)); high = high.max(p+Vector3i(2,2,2))
 	for actor in actors:
 		if not actor is Node3D: continue
+		if not plates.is_empty() and is_instance_valid(actor):
+			var cell := Vector3i(actor.global_position.floor())
+			if cell.x < low.x or cell.y < low.y or cell.z < low.z or cell.x > high.x or cell.y > high.y or cell.z > high.z: continue
 		var record: Dictionary = actor_record(game,actor)
 		if record.is_empty(): continue
 		var cell := Vector3i(record.position.floor())
@@ -226,6 +234,7 @@ static func entity_index(world: VoxelWorld) -> Dictionary:
 	return result
 
 static func touching_count(p: Vector3i, id: int, index: Dictionary) -> int:
+	if index.is_empty(): return 0
 	var center := Vector3(p)+Vector3.ONE*0.5
 	var result: int = 0
 	for x in range(-1,2):

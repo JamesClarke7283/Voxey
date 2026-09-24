@@ -82,6 +82,10 @@ static func runtime(world: VoxelWorld) -> Dictionary:
 # re-examined. That is what makes a dig under a drip stop it.
 static func changed(world: VoxelWorld, p: Vector3i, old_id: int, new_id: int) -> void:
 	var state: Dictionary = runtime(world)
+	# A cell is eligible only under a liquid, so with no liquid above any of the
+	# three and none of them indexed, nothing changes.
+	var cells: Dictionary = state.cells
+	if not cells.has(p) and not cells.has(p+Vector3i.UP) and not cells.has(p+Vector3i.DOWN) and not Fluids.liquid(world.node_at(p)) and not Fluids.liquid(world.node_at(p+Vector3i.UP)) and not Fluids.liquid(world.node_at(p+Vector3i.UP*2)): return
 	for offset in [Vector3i.ZERO,Vector3i.UP,Vector3i.DOWN]:
 		var cell: Vector3i = p+offset
 		if eligible(world,cell): state.cells[cell] = liquid_above(world,cell)

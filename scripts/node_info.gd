@@ -63,6 +63,8 @@ static func invalidate() -> void:
 	RedstoneSensors.filter_memo.clear()
 	Pasture.emission_memo.clear()
 	Nodes.title_memo.clear()
+	VoxelWorld.change_memo.clear()
+	RedstoneCircuit.preserve_memo.clear()
 
 # Bits for one id. Worker threads read the table and compute what it lacks.
 static func of(id: int) -> int:

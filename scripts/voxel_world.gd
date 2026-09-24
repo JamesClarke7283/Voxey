@@ -22,6 +22,18 @@ var edits: Dictionary = {}
 var edit_columns: Dictionary = {}
 var edit_count: int = 0
 var stations: Dictionary = {}
+# The stations updated every frame (cauldrons, campfires and composters), in
+# `stations` order. Generated chests and spawners pile up in `stations` as the
+# world is explored, so scanning the whole table each frame grew with the
+# distance travelled. The index is rebuilt when the table is replaced or
+# resized, when a listed entry was replaced or changed kind, and when a station
+# helper hands out one it does not list.
+var frame_stations: Dictionary = {}
+var frame_station_list: Array = []
+var frame_station_keys: Dictionary = {}
+var frame_station_table: Dictionary = {}
+var frame_station_size: int = -1
+var frame_stations_stale: bool = true
 var growth: Dictionary = {}
 var block_states: Dictionary = {}
 var adventure_state: Dictionary = {}
@@ -56,6 +68,11 @@ var target: Vector3 = Vector3(8,30,8)
 var material: ShaderMaterial
 var water_material: ShaderMaterial
 var sky_revision: int = 0
+# The column (16x16) of each `sky_revision` step, oldest first, so light caches
+# can drop only what a change can reach. `sky_log_start` is the revision before
+# the first entry; a step taken without an entry makes readers refresh fully.
+var sky_log: Array[Vector2i] = []
+var sky_log_start: int = 0
 var tick: float = 0.0
 var active: bool = true
 var last_mesh_ms: float = 0.0
@@ -190,11 +207,8 @@ func _process(delta: float) -> void:
 		if siege_owner != null and siege_owner.has_method("toast"): PaleOak.update(siege_owner,delta)
 		Kelp.update(self,delta)
 		Beacons.update(self,delta)
-		for key in stations:
-			var station: Dictionary = stations[key]
-			if station.get("kind","") != "composter": continue
-			var xyz: PackedStringArray = key.split(",")
-			if xyz.size() == 3 and loaded_at(Vector3(float(xyz[0]),float(xyz[1]),float(xyz[2]))): Composters.step(station,delta)
+		for entry in stations_of("composter"):
+			if loaded_at(Vector3(entry[1])): Composters.step(entry[2],delta)
 		if get_parent() != null and get_parent().has_method("playing") and get_parent().playing(): circuits.update(delta)
 		tick += delta
 		if tick >= 1.0:
@@ -360,8 +374,8 @@ static func load_hooks(id: int) -> int:
 
 func _apply_column(result: Dictionary) -> void:
 	WoodTypes.restore_legacy(self)
-	sky_revision += 1
 	var c: Vector2i = result.coord
+	_sky_changed(c)
 	var snow_updates: Dictionary = {}
 	var food_updates: Dictionary = {}
 	var legacy_doors: Dictionary = {}
@@ -652,7 +666,7 @@ func _unload(c: Vector2i) -> void:
 	EndMud.unload(self,c)
 	LushCaveExtra.unload(self,c)
 	PaleOak.unload(self,c)
-	sky_revision += 1
+	_sky_changed(c)
 	columns.erase(c)
 	for p in hazards.keys():
 		if block_coord(p).x == c.x and block_coord(p).z == c.y: hazards.erase(p)
@@ -704,8 +718,14 @@ func set_node(p: Vector3i, id: int) -> bool:
 		_create_air_block(b)
 	var old_id: int = blocks[b].data[local_index(p)]
 	if old_id != id and old_id in [VillageContent.COMPOSTER,VillageContent.CAULDRON]: stations.erase(station_key(p))
-	if old_id != id: sky_revision += 1
+	if old_id != id: _sky_changed(Vector2i(b.x,b.z))
 	blocks[b].data[local_index(p)] = id
+	node_writes += 1
+	# Hooks that look for particular nodes at or beside p are skipped when none
+	# is there (see `change_bits`). While a piston moves, several hooks defer
+	# their checks instead, so then every hook runs.
+	var gated: bool = not circuits.moving
+	var own: int = change_bits(old_id)|change_bits(id)
 	Campfires.changed(self,p,old_id,id)
 	Dripping.changed(self,p,old_id,id)
 	Dungeons.changed(self,p,old_id,id)
@@ -714,9 +734,9 @@ func set_node(p: Vector3i, id: int) -> bool:
 	Pasture.changed(self,p)
 	if id == VillageContent.CAULDRON: Cauldrons.station(self,p)
 	Fire.track(self,p)
-	if Fire.flammable(id) or Fire.flammable(old_id):
+	if (NodeInfo.of(id)|NodeInfo.of(old_id)) & NodeInfo.FUEL:
 		for side in Fire.SIDES: Fire.track(self,p+side)
-	circuits.changed(p,old_id,id)
+	circuits.changed(p,old_id,id,_near(p) & NEAR_OBSERVER != 0)
 	record_edit(p,id)
 	if id == Nodes.SUGAR_CANE or WoodTypes.is_sapling(id) or not CropFarming.is_crop(id) and VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3: growth[p] = 0.0
 	else: growth.erase(p)
@@ -730,32 +750,95 @@ func set_node(p: Vector3i, id: int) -> bool:
 				Torches.support_changed(self,neighbor)
 				circuits.support_changed(neighbor)
 	if Fluids.liquid(id): react_fluid(p)
-	if id != Nodes.NETHER_PORTAL: validate_portals_near(p)
-	Torches.support_changed(self,p)
-	circuits.support_changed(p)
-	fluids.changed(p,old_id,node_at(p))
+	if id != Nodes.NETHER_PORTAL and _near(p) & NEAR_PORTAL: validate_portals_near(p)
+	if not gated or _near(p) & NEAR_TORCH: Torches.support_changed(self,p)
+	if not gated or _near(p) & (NEAR_INPUT|NEAR_SMALL_CIRCUIT): circuits.support_changed(p)
+	if (own|_near(p)) & NEAR_LIQUID: fluids.changed(p,old_id,node_at(p))
 	var game: Node = get_parent()
 	if game != null and game.has_method("remove_torch"):
 		if Torches.is_torch(old_id): game.remove_torch(p)
 		if Torches.is_torch(id): game.add_torch(p)
-	SnowCover.changed(self,p)
-	FoodFeatures.changed(self,p)
-	Signs.changed(self,p,old_id,id)
+	if not gated or _near(p) & NEAR_SNOW or SnowCover.tracks(self,p): SnowCover.changed(self,p)
+	if not gated or _near(p) & NEAR_FOOD: FoodFeatures.changed(self,p)
+	if not gated or (own|_near(p)) & NEAR_SIGN: Signs.changed(self,p,old_id,id)
 	Jukeboxes.changed(self,p,old_id,id)
 	Farmland.changed(self,p,old_id,id)
-	CropFarming.changed(self,p,old_id,id)
-	FruitCrops.changed(self,p,old_id,id)
-	Amethyst.changed(self,p,old_id,id)
-	Concrete.changed(self,p,old_id,id)
+	if not gated or (own|_near(p)) & NEAR_CROP: CropFarming.changed(self,p,old_id,id)
+	if not gated or (own|_near(p)) & NEAR_STEM: FruitCrops.changed(self,p,old_id,id)
+	if not gated or change_bits(id) & OWN_AMETHYST or _near(p) & NEAR_CRYSTAL or Amethyst.tracks(self,p): Amethyst.changed(self,p,old_id,id)
+	if change_bits(id) & OWN_POWDER or Concrete.tracks(self,p): Concrete.changed(self,p,old_id,id)
 	EndMud.changed(self,p,old_id,id)
 	PaleOak.changed(self,p,old_id,id)
 	Beehives.changed(self,p,old_id,id)
-	Copper.changed(self,p,old_id,id)
-	Copper.support_changed(self,p)
-	Rails.support_changed(self,p)
-	Sponges.changed(self,p,old_id,id)
+	if own & OWN_COPPER or Copper.tracks(self,p): Copper.changed(self,p,old_id,id)
+	if _near(p) & NEAR_ROD: Copper.support_changed(self,p)
+	if _near(p) & NEAR_RAIL: Rails.support_changed(self,p)
+	if id == Sponges.SPONGE or Sponges.tracks(self,p): Sponges.changed(self,p,old_id,id)
 	Decor.changed(self,p,old_id,id)
 	return true
+
+# What the change hooks in `set_node` look for, by node id: kinds at or beside
+# a changed node (NEAR_*), and kinds tracked for the node itself (OWN_*).
+const NEAR_INPUT = 1
+const NEAR_SMALL_CIRCUIT = 2
+const NEAR_TORCH = 4
+const NEAR_ROD = 8
+const NEAR_RAIL = 16
+const NEAR_OBSERVER = 32
+const NEAR_PORTAL = 64
+const NEAR_LIQUID = 128
+const NEAR_SNOW = 256
+const NEAR_FOOD = 512
+const NEAR_SIGN = 1024
+const NEAR_CROP = 2048
+const NEAR_STEM = 4096
+const NEAR_CRYSTAL = 8192
+const OWN_AMETHYST = 16384
+const OWN_COPPER = 32768
+const OWN_POWDER = 65536
+static var change_memo: Dictionary = {}
+# Counts node writes, so a hook that changes nodes invalidates `_near`.
+var node_writes: int = 0
+var near_cell: Vector3i
+var near_writes: int = -1
+var near_bits: int = 0
+
+static func change_bits(id: int) -> int:
+	var known: Variant = change_memo.get(id)
+	if known != null: return known
+	var bits: int = 0
+	if RedstoneInputs.is_device(id): bits |= NEAR_INPUT
+	if id in Nodes.SMALL_CIRCUITS: bits |= NEAR_SMALL_CIRCUIT
+	if Torches.is_torch(id): bits |= NEAR_TORCH
+	if Copper.is_rod(id): bits |= NEAR_ROD
+	if Rails.is_rail(id): bits |= NEAR_RAIL
+	if id == Nodes.OBSERVER: bits |= NEAR_OBSERVER
+	if id == Nodes.NETHER_PORTAL: bits |= NEAR_PORTAL
+	if Fluids.liquid(id): bits |= NEAR_LIQUID
+	if SnowCover.is_snow(id): bits |= NEAR_SNOW
+	if FoodFeatures.is_cake(id) or FoodFeatures.flower(id) or FoodFeatures.is_tall_grass(id): bits |= NEAR_FOOD
+	if Signs.is_sign(id): bits |= NEAR_SIGN
+	if CropFarming.is_crop(id): bits |= NEAR_CROP
+	if FruitCrops.is_stem(id): bits |= NEAR_STEM
+	if Amethyst.is_crystal(id): bits |= NEAR_CRYSTAL
+	if Amethyst.tracked(id): bits |= OWN_AMETHYST
+	if Copper.is_copper(id) or Copper.stage(id) >= 0: bits |= OWN_COPPER
+	if Concrete.is_powder(id): bits |= OWN_POWDER
+	change_memo[id] = bits
+	return bits
+
+# The `change_bits` of p and its six neighbours.
+func _near(p: Vector3i) -> int:
+	if near_writes == node_writes and near_cell == p: return near_bits
+	var bits: int = change_bits(node_at(p))
+	for side in SIDES: bits |= change_bits(node_at(p+side))
+	near_cell = p; near_writes = node_writes; near_bits = bits
+	return bits
+
+func _sky_changed(column: Vector2i) -> void:
+	sky_revision += 1
+	sky_log.append(column)
+	if sky_log.size() > 4096: sky_log = sky_log.slice(2048); sky_log_start += 2048
 
 func _create_air_block(coord: Vector3i) -> void:
 	var root := Node3D.new(); root.name = "SkyBlock_%d_%d_%d"%[coord.x,coord.y,coord.z]
@@ -1028,6 +1111,43 @@ const CHEST_SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK
 static func station_key(p: Vector3i) -> String:
 	return "%d,%d,%d" % [p.x,p.y,p.z]
 
+static func frame_kind(state: Dictionary) -> String:
+	var kind: String = str(state.get("kind",""))
+	if kind == "cauldron" or kind == "campfire" or kind == "composter": return kind
+	# Legacy campfires were furnaces; Campfires.update migrates them.
+	if kind == "furnace" and int(state.get("device",0)) == Campfires.LIT: return "campfire"
+	return ""
+
+# Entries are [key, position, station, kind field].
+func stations_of(kind: String) -> Array:
+	if frame_stations_stale or not is_same(frame_station_table,stations) or frame_station_size != stations.size() or not _frame_stations_current(): _index_frame_stations()
+	return frame_stations[kind]
+
+func note_station(key: String, state: Dictionary) -> void:
+	if not frame_station_keys.has(key) and not frame_kind(state).is_empty(): frame_stations_stale = true
+
+func _frame_stations_current() -> bool:
+	for entry in frame_station_list:
+		var state: Variant = stations.get(entry[0])
+		if not is_same(state,entry[2]) or state.get("kind","") != entry[3]: return false
+		if entry[3] == "furnace" and int(state.get("device",0)) != Campfires.LIT: return false
+	return true
+
+func _index_frame_stations() -> void:
+	frame_stations = {"cauldron":[],"campfire":[],"composter":[]}
+	frame_station_list = []; frame_station_keys = {}
+	for key in stations:
+		var state: Variant = stations[key]
+		if not state is Dictionary: continue
+		var kind: String = frame_kind(state)
+		if kind.is_empty(): continue
+		frame_station_keys[key] = true
+		var xyz: PackedStringArray = str(key).split(",")
+		if xyz.size() != 3: continue
+		var entry: Array = [key,Vector3i(int(xyz[0]),int(xyz[1]),int(xyz[2])),state,state.kind]
+		frame_stations[kind].append(entry); frame_station_list.append(entry)
+	frame_station_table = stations; frame_station_size = stations.size(); frame_stations_stale = false
+
 static func _new_station(kind: String, count: int) -> Dictionary:
 	var slots: Array = []
 	for i in count: slots.append({"id":0,"count":0,"wear":0})
@@ -1072,7 +1192,9 @@ func get_station(p: Vector3i, kind: String) -> Dictionary:
 		if partner != p: return _double_chest(p,partner)
 	var key: String = station_key(p)
 	if not stations.has(key): stations[key] = _new_station(kind,5 if kind == "brewing" else (3 if kind == "furnace" else (5 if node_at(p) == Nodes.HOPPER else (9 if node_at(p) in [Nodes.DISPENSER,Nodes.DROPPER] else (54 if node_at(p) == VillageContent.RECOVERY_CHEST else 27)))))
-	return stations[key]
+	var state: Dictionary = stations[key]
+	note_station(key,state)
+	return state
 
 func _double_chest(a: Vector3i, b: Vector3i) -> Dictionary:
 	var key: String = pair_key(a,b)
@@ -1173,6 +1295,7 @@ func validate_portals_near(p: Vector3i) -> void:
 			# Batch clear prevents recursive validation of a half-removed portal.
 			for cell in connected:
 				blocks[block_coord(cell)].data[local_index(cell)] = Nodes.AIR
+				node_writes += 1
 				record_edit(cell,Nodes.AIR)
 				_mark_dirty(cell)
 

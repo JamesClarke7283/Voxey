@@ -70,6 +70,10 @@ static func absorb(world: VoxelWorld, p: Vector3i) -> Dictionary:
 
 # --- registration -----------------------------------------------------------
 
+# Whether p is in this module's index, without creating the index.
+static func tracks(world: VoxelWorld, p: Vector3i) -> bool:
+	return world.has_meta("sponges") and runtime(world).cells.has(p)
+
 static func runtime(world: VoxelWorld) -> Dictionary:
 	if not world.has_meta("sponges"):
 		world.set_meta("sponges",{"cells":{},"columns":{},"clock":0.0})

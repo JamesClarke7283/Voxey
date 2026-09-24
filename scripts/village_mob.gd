@@ -158,19 +158,26 @@ func _physics_process(delta: float) -> void:
 	for i in legs.size(): legs[i].rotation.x = sin(life*7+i*PI)*0.38 if moving else 0.0
 	for arm in arms: arm.rotation.x = -1.0 if attack_cooldown > 0.65 else 0.0
 
+const PATH_SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]
+
 func path_to(goal: Vector3) -> Array:
+	var world: VoxelWorld = game.world
 	var start := Vector3i(position.floor()); var end := Vector3i(goal.floor())
 	var queue: Array = [start]; var parents: Dictionary = {start:start}; var best: Vector3i = start
+	var best_distance: float = 0.0 if start == end else Vector3(start-end).length_squared()
 	var cursor: int = 0
 	while cursor < queue.size() and cursor < 600:
 		var p: Vector3i = queue[cursor]; cursor += 1
-		if Vector3(p-end).length_squared() < Vector3(best-end).length_squared(): best = p
+		var distance: float = Vector3(p-end).length_squared()
+		if distance < best_distance: best = p; best_distance = distance
 		if p == end: break
-		for dir in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
+		for dir in PATH_SIDES:
 			var q: Vector3i = p+dir
 			if parents.has(q): continue
-			if game.world.node_at(q) != VillageContent.WOODEN_DOOR and not Doors.wooden(game.world.node_at(q)) and game.world.intersects(Vector3(q)+Vector3(0.5,0,0.5),width,height): continue
-			if not Nodes.solid(game.world.node_at(q+Vector3i.DOWN)): continue
+			# A cell needs a floor and room to stand; the floor is the cheaper test.
+			if not Nodes.solid(world.node_at(q+Vector3i.DOWN)): continue
+			var id: int = world.node_at(q)
+			if id != VillageContent.WOODEN_DOOR and not Doors.wooden(id) and world.intersects(Vector3(q)+Vector3(0.5,0,0.5),width,height): continue
 			parents[q] = p; queue.append(q)
 	var result: Array = []
 	while best != start: result.push_front(Vector3(best)+Vector3(0.5,0,0.5)); best = parents[best]

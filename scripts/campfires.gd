@@ -100,6 +100,7 @@ static func station(world: VoxelWorld, p: Vector3i) -> Dictionary:
 	if not world.stations.has(key): world.stations[key] = {}
 	var result: Dictionary = world.stations[key]
 	migrate(result)
+	world.note_station(key,result)
 	return result
 
 static func add(state: Dictionary, held: Dictionary, creative: bool = false) -> bool:
@@ -239,12 +240,9 @@ static func contact(world: VoxelWorld, p: Vector3i, id: int) -> void:
 static func update(world: VoxelWorld, delta: float) -> void:
 	if delta <= 0: return
 	var game: Node3D = world.get_parent()
-	for key in world.stations.keys():
-		var state: Dictionary = world.stations[key]
-		if state.get("kind","") != "campfire" and not (state.get("kind","") == "furnace" and int(state.get("device",0)) == LIT): continue
-		var xyz: PackedStringArray = key.split(",")
-		if xyz.size() != 3: continue
-		var p := Vector3i(int(xyz[0]),int(xyz[1]),int(xyz[2]))
+	for entry in world.stations_of("campfire"):
+		var state: Dictionary = entry[2]
+		var p: Vector3i = entry[1]
 		if not world.loaded_at(Vector3(p)): continue
 		var id: int = world.node_at(p)
 		if not is_campfire(id):

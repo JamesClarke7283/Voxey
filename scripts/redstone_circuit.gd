@@ -56,7 +56,7 @@ func configure(p: Vector3i, d: Vector3i, support: Vector3i = Vector3i.DOWN) -> v
 	refresh(p)
 
 func register(p: Vector3i, id: int) -> void:
-	if circuit_node(id):
+	if VoxelWorld.load_hooks(id) & VoxelWorld.HOOK_CIRCUIT:
 		tracked[p] = id
 		if RedstoneSensors.is_device(id): RedstoneSensors.registered(world,p,id)
 		if RedstoneInputs.is_device(id): RedstoneInputs.registered(world,p,id)
@@ -64,12 +64,12 @@ func register(p: Vector3i, id: int) -> void:
 	else: tracked.erase(p)
 	refresh(p)
 
-func changed(p: Vector3i, old_id: int, id: int) -> void:
-	var preserve: bool = (Farmland.is_soil(old_id) and Farmland.is_soil(id)) or RedstoneInputs.same_family(old_id,id) or Doors.same_family(old_id,id) or Copper.same_family(old_id,id) or Rails.same_family(old_id,id) or (old_id in [Nodes.IRON_DOOR,Nodes.IRON_DOOR_OPEN] and id in [Nodes.IRON_DOOR,Nodes.IRON_DOOR_OPEN]) or Trapdoors.same_family(old_id,id) or RedstoneSensors.same_family(old_id,id) or (Barriers.is_gate(old_id) and Barriers.is_gate(id) and Barriers.item(old_id) == Barriers.item(id))
-	if old_id != id and not preserve:
+# `observers` false: the caller knows no observer is beside p.
+func changed(p: Vector3i, old_id: int, id: int, observers: bool = true) -> void:
+	if old_id != id and not preserves(old_id,id):
 		world.block_states.erase(VoxelWorld.station_key(p))
 	register(p,id)
-	notify_observers(p)
+	if observers: notify_observers(p)
 	# Removing a piston removes its head; removing a head retracts the base.
 	if old_id in [Nodes.PISTON,Nodes.STICKY_PISTON] and not moving:
 		piston_extended_at.erase(VoxelWorld.station_key(p))
@@ -94,6 +94,18 @@ func changed(p: Vector3i, old_id: int, id: int) -> void:
 						game.spawn_drop(Vector3(base)+Vector3.ONE*0.5,kind,1)
 					if game != null and game.has_method("sound_at"):
 						game.sound_at("piston_retract",Vector3(base)+Vector3.ONE*0.5)
+
+# Whether a change between two ids keeps the node's block state. It depends only
+# on the ids, so the main thread keeps each answer until the registry changes.
+static var preserve_memo: Dictionary = {}
+
+static func preserves(old_id: int, id: int) -> bool:
+	var pair := Vector2i(old_id,id)
+	var known: Variant = preserve_memo.get(pair)
+	if known != null: return known
+	var preserve: bool = (Farmland.is_soil(old_id) and Farmland.is_soil(id)) or RedstoneInputs.same_family(old_id,id) or Doors.same_family(old_id,id) or Copper.same_family(old_id,id) or Rails.same_family(old_id,id) or (old_id in [Nodes.IRON_DOOR,Nodes.IRON_DOOR_OPEN] and id in [Nodes.IRON_DOOR,Nodes.IRON_DOOR_OPEN]) or Trapdoors.same_family(old_id,id) or RedstoneSensors.same_family(old_id,id) or (Barriers.is_gate(old_id) and Barriers.is_gate(id) and Barriers.item(old_id) == Barriers.item(id))
+	preserve_memo[pair] = preserve
+	return preserve
 
 func notify_observers(p: Vector3i) -> void:
 	for d in SIDES:
@@ -210,7 +222,10 @@ func _wire_neighbors(p: Vector3i) -> Array:
 func step(dt: float = 0.1) -> void:
 	if tracked.is_empty(): return
 	var previous: Dictionary = power.duplicate()
-	var plate_entities: Variant = RedstoneInputs.entity_index(world) if tracked.values().any(RedstoneInputs.is_plate) else null
+	var plates: Array = []
+	for p in tracked:
+		if RedstoneInputs.is_plate(tracked[p]): plates.append(p)
+	var plate_entities: Variant = RedstoneInputs.entity_index(world,plates) if not plates.is_empty() else null
 	# Sources and delayed outputs are evaluated against the previous tick.
 	for p in tracked.keys():
 		if not world.loaded_at(Vector3(p)): continue
@@ -278,6 +293,10 @@ func step(dt: float = 0.1) -> void:
 	# Directional components and controls can strongly power one solid block.
 	for p in tracked:
 		var id: int = tracked[p]
+		# Nothing without output can add strong power, and `strong` is only read
+		# through `get(q,0)`. The state is looked up without creating it.
+		var saved: Variant = world.block_states.get(VoxelWorld.station_key(p))
+		if saved is Dictionary and int(saved.get("out",0)) <= 0: continue
 		if RedstoneInputs.is_device(id):
 			for d in SIDES:
 				var q: Vector3i = p+d

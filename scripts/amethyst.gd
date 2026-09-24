@@ -121,6 +121,10 @@ static func try_place(game: Node3D, target: Dictionary) -> bool:
 		game.sound("place"); game.api.emit_node_placed(at,id)
 	return true
 
+# Whether p is in this module's index, without creating the index.
+static func tracks(world: VoxelWorld, p: Vector3i) -> bool:
+	return world.has_meta("amethyst") and runtime(world).cells.has(p)
+
 static func runtime(world: VoxelWorld) -> Dictionary:
 	if not world.has_meta("amethyst"):
 		var rng := RandomNumberGenerator.new(); rng.seed = world.seed_value+7701

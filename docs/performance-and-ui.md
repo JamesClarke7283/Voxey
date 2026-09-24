@@ -147,3 +147,38 @@ On the same machine, the next largest costs were mob simulation, the in-game ove
 | Apply a column containing 4,000 edits | 171 ms | 53 ms |
 
 Each crowd run adds its 32 mobs to the world's own spawns, about 55 mobs in total. The parent commit could not complete the crowd benchmark: it had not finished loading after ten minutes. Raw results are under `streaming_lag_2026_09_24.second_pass` in the [raw measurements](performance-measurements.json). All nine suites passed: 7,411 checks.
+
+### Third pass: world systems and node changes
+
+The third pass looked at the per-frame world systems after longer play, and at the cost of changing a single node. Several costs grew with the distance travelled, or with lava that keeps flowing in caves.
+
+- **Stations.** Campfires, cauldrons and composters scanned every station in the world each frame. Stations include every generated loot chest and spawner, about 240 after 1.5 km. They now keep an index of the stations updated every frame, in the same order. The index is rebuilt when the table is replaced or resized, when a listed entry changes, or when a station helper hands out an unlisted one.
+- **Node changes.** `set_node` ran about thirty-five change hooks. Many only act when a torch, rail, redstone part, crop, sign or liquid is at or beside the node. A table of what each node id is lets it skip those hooks when none is there. It is recomputed if a hook changes a node. While a piston moves, every hook runs, because several defer their checks then.
+- **Light caches.** Any node change anywhere cleared every cached natural-light value. Flowing lava changes a node every few frames. Caches are now kept per 16×16 column, and a change clears only its own column and the eight around it, which is as far as light reaches.
+- **Leaf decay.** The support search reads log and leaf ids from a memo. A search that finds a log also settles every leaf it passed within reach of that log, so later checks in the same update skip their search.
+- **Redstone.** Pressure plates index only the mobs and items near them, and plates with nothing nearby skip the contact test. Components with no output skip the strong-power pass.
+- **Scans and schedulers.** Grass and snow scans handle their cells in batches, with the same cells and chance rolls in the same order. Crop growth rolls use a table of crop families. A large backlog of crop growth, which a farm column queues when it loads, is spread over frames in order. Villager route searches test the floor before the more expensive room check. The resulting routes are identical.
+
+The first table was measured headless, on a world after 1.5 km of travel. The second covers a rendered route: 45 s of travel at 25 blocks per second, then 20 s at sprint speed, measured per system in the same session for both builds.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| `set_node`, digging underground | 560–720 µs | 230–380 µs |
+| TNT-sized explosion (radius 3), main thread | 57–93 ms | 26–56 ms |
+| Campfire station scan, per frame | 472 µs | 48–82 µs |
+| Composter station scan, per frame | 290–324 µs | 40–94 µs |
+| Pressure-plate temple, one redstone step | 2.5–3.8 ms | 1.6 ms |
+| Villager route search, 12 routes | 21 ms | 11 ms |
+
+| System, milliseconds per frame | Before | After |
+| --- | ---: | ---: |
+| Fluids | 2.07 | 1.39–1.44 |
+| Leaf decay | 1.93 | 0.76–0.97 |
+| Redstone | 1.13 | 0.60–0.63 |
+| Campfires | 0.90 | 0.13–0.16 |
+| Grass | 0.81 | 0.45–0.50 |
+| Cauldrons | 0.81 | 0.29–0.33 |
+| Composters | 0.55 | 0.08 |
+| Average frame on that route | 31.9 ms | 26.7–28.1 ms |
+
+The timings vary by about 30% between runs on this laptop. Each row compares runs made back to back. On the shorter `tests/survival_streaming_benchmark.gd` route the change is within that noise (40–43 FPS), since a fresh world has few stations and little flowing lava. Raw results are under `streaming_lag_2026_09_24.third_pass` in the [raw measurements](performance-measurements.json). All nine suites passed: 7,411 checks.

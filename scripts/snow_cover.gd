@@ -85,6 +85,10 @@ static func recipes(inv: Inventory) -> void:
 static func reset(world: VoxelWorld) -> void:
 	if world.has_meta("snow_cover"): world.remove_meta("snow_cover")
 
+# Whether p is in this module's index, without creating the index.
+static func tracks(world: VoxelWorld, p: Vector3i) -> bool:
+	return world.has_meta("snow_cover") and state(world).cells.has(p)
+
 static func state(world: VoxelWorld) -> Dictionary:
 	if not world.has_meta("snow_cover"):
 		var rng := RandomNumberGenerator.new(); rng.seed = world.seed_value^5281780
@@ -131,11 +135,19 @@ static func update(world: VoxelWorld, delta: float) -> void:
 	var started: int = Time.get_ticks_usec()
 	var attempts: int = 0
 	var rng: RandomNumberGenerator = data.rng
-	for i in 128:
-		if data.scans.is_empty() or attempts >= 4 or i > 0 and Time.get_ticks_usec()-started >= 1500: break
+	var columns: Dictionary = world.columns
+	var budget: int = 128
+	while budget > 0 and attempts < 4 and not data.scans.is_empty():
 		var scan: Dictionary = data.scans[0]
-		if scan.cursor >= scan.cells.size(): data.scans.pop_front(); continue
-		var p: Vector3i = scan.cells[scan.cursor]; scan.cursor += 1
-		if world.node_at(p) != BASE or not world.loaded_at(Vector3(p)): continue
-		if rng.randi_range(1,MELT_CHANCE) == 1:
-			attempts += 1; melt(world,p)
+		var cells: Array = scan.cells
+		var cursor: int = scan.cursor
+		if cursor >= cells.size(): data.scans.pop_front(); budget -= 1; continue
+		var end: int = mini(cells.size(),cursor+budget)
+		while cursor < end and attempts < 4:
+			var p: Vector3i = cells[cursor]; cursor += 1
+			if world.node_at(p) != BASE or not columns.has(Vector2i(p.x >> 4,p.z >> 4)): continue
+			if rng.randi_range(1,MELT_CHANCE) == 1:
+				attempts += 1; melt(world,p)
+			if cursor & 15 == 0 and Time.get_ticks_usec()-started >= 1500: break
+		budget -= cursor-int(scan.cursor); scan.cursor = cursor
+		if Time.get_ticks_usec()-started >= 1500: break
