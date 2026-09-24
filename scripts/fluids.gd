@@ -108,30 +108,41 @@ func update(delta: float) -> void:
 		if count >= 96 or Time.get_ticks_usec()-start >= 2500: break
 
 func can_fall(p: Vector3i, kind: int) -> bool:
-	var below: int = world.node_at(p+Vector3i.DOWN)
-	return replaceable(below) or flowing(below) and base(below) == kind
+	var below: int = NodeInfo.of(world.node_at(p+Vector3i.DOWN))
+	return below & NodeInfo.REPLACEABLE != 0 or below & NodeInfo.FLOWING != 0 and below & _base_bit(kind) != 0
 
+# The NodeInfo bit for `base(id) == kind`.
+static func _base_bit(kind: int) -> int:
+	return NodeInfo.BASE_WATER if kind == Nodes.WATER else NodeInfo.BASE_LAVA
+
+# Settling mostly confirms that nothing changes, so the fluid rules read the
+# NodeInfo bits (SOURCE, FLOWING, REPLACEABLE, BASE_*) instead of the rule chains.
 func wanted(p: Vector3i, kind: int) -> int:
 	var current: int = world.node_at(p)
-	if source(current): return current
-	if current != Nodes.AIR and base(current) != kind and not replaceable(current): return current
+	var bits: int = NodeInfo.of(current)
+	if bits & NodeInfo.SOURCE: return current
+	var own: int = _base_bit(kind)
+	if current != Nodes.AIR and bits & own == 0 and bits & NodeInfo.REPLACEABLE == 0: return current
 	# Pause at unloaded boundaries; resume when the missing source column arrives.
+	var columns: Dictionary = world.columns
 	for side in HORIZONTAL:
-		if not world.loaded_at(Vector3(p+side)) and WorldBounds.horizontal(p+side):
-			wait_for_column(p+side,p,kind)
+		var q: Vector3i = p+side
+		if not columns.has(Vector2i(q.x >> 4,q.z >> 4)) and WorldBounds.horizontal(q):
+			wait_for_column(q,p,kind)
 			return current
 	if world.dimension == "nether" and kind == Nodes.WATER: return Nodes.AIR if water(current) else current
-	if base(world.node_at(p+Vector3i.UP)) == kind: return flow_id(kind,0,true)
+	if NodeInfo.of(world.node_at(p+Vector3i.UP)) & own: return flow_id(kind,0,true)
 	var nearest: int = 99; var sources: int = 0
 	for side in HORIZONTAL:
 		var neighbor: int = world.node_at(p+side)
-		if base(neighbor) != kind: continue
-		if source(neighbor): sources += 1
+		var neighbor_bits: int = NodeInfo.of(neighbor)
+		if neighbor_bits & own == 0: continue
+		if neighbor_bits & NodeInfo.SOURCE: sources += 1
 		if not can_fall(p+side,kind): nearest = mini(nearest,level(neighbor)+1)
 	if kind == Nodes.WATER and sources >= 2 and (Nodes.solid(world.node_at(p+Vector3i.DOWN)) or world.node_at(p+Vector3i.DOWN) == Nodes.WATER): return Nodes.WATER
 	var distance: int = 7 if kind == Nodes.WATER or world.dimension == "nether" else 3
 	if nearest <= distance: return flow_id(kind,nearest)
-	return Nodes.AIR if base(current) == kind else current
+	return Nodes.AIR if bits & own else current
 
 func settle(p: Vector3i, kind: int) -> void:
 	var before: int = world.node_at(p)

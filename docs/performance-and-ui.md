@@ -212,6 +212,7 @@ The worst remaining frames were column loads (12–28 ms each while travelling) 
 - **Leaves on load.** Every generated leaf is a special cell. Each one went through the whole registration loop, which tests about thirty hook flags and calls snow registration. A plain leaf now skips straight to a batch, registered after the loop in the same order. Snow registration runs only for snow or cells already indexed as snow, the only cases where it does anything.
 - **Villagers.** A village mob is bound as soon as it is added, and binding rebuilds its model. The merge at the first build is skipped, since that model is discarded.
 - **Phantoms.** They fly their own path and stepped on every physics tick. They now merge ticks like other mobs.
+- **Fluid rules.** Most settle checks confirm that nothing changes. They now read the `NodeInfo` bits for sources, flowing fluid, fluid kind and replaceable nodes instead of the rule chains, and check loaded columns directly. Compared with the previous rules on 40,164 cell and fluid combinations around every loaded fluid cell, the results were identical and each check was 25% faster (6.5 µs to 4.9 µs).
 
 | Measurement | Before | After |
 | --- | ---: | ---: |
