@@ -1268,7 +1268,13 @@
         "with": 9.36,
         "without": 6.16
       },
-      "checks": "7,411 passed in nine suites"
+      "checks": "7,411 passed in nine suites",
+      "fluid_rules": {
+        "combinations": 40164,
+        "mismatches": 0,
+        "new_us": 4.93,
+        "old_us": 6.54
+      }
     }
   }
 }
