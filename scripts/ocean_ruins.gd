@@ -173,7 +173,13 @@ static func overlay(gen: TerrainGenerator, coord: Vector2i, data: PackedInt32Arr
 			if x < 1 or x > 16 or z < 1 or z > 16: continue
 			floor_cells.append(p)
 		if floor_cells.is_empty(): continue
-		floor_cells.shuffle()
+		# The ruin's own generator, not the global one, keeps the choice identical
+		# on every load.
+		for i in range(floor_cells.size()-1,0,-1):
+			var j: int = rng.randi_range(0,i)
+			var swap: Vector3i = floor_cells[i]
+			floor_cells[i] = floor_cells[j]
+			floor_cells[j] = swap
 		var count: int = mini(floor_cells.size(),rng.randi_range(1,mini(250,floor_cells.size())))
 		for i in count:
 			var p: Vector3i = floor_cells[i]

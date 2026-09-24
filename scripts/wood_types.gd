@@ -331,7 +331,10 @@ static func enqueue(world: VoxelWorld, p: Vector3i) -> void:
 	if not data.leaves.has(p) or data.queued.has(p): return
 	data.queued[p] = true; data.pending.append(p)
 
-static func scan(world: VoxelWorld, p: Vector3i, id: int) -> void:
+# `check` false registers the leaf without a support search. A column load uses
+# that for generated leaves with no edit within reach: an untouched tree is
+# whole, and only a change within six nodes can cut a leaf off from its log.
+static func scan(world: VoxelWorld, p: Vector3i, id: int, check: bool = true) -> void:
 	if not is_leaves(id): return
 	var data: Dictionary = runtime(world)
 	if data.leaves.has(p): return
@@ -339,7 +342,7 @@ static func scan(world: VoxelWorld, p: Vector3i, id: int) -> void:
 	var column := Vector2i(floori(p.x/16.0),floori(p.z/16.0))
 	if not data.columns.has(column): data.columns[column] = {}
 	data.columns[column][p] = true
-	if not persistent(world,p): enqueue(world,p)
+	if check and not persistent(world,p): enqueue(world,p)
 
 static func around(world: VoxelWorld, p: Vector3i) -> void:
 	var data: Dictionary = runtime(world)

@@ -414,7 +414,18 @@ const ARMOR_COLORS = [Color("9a6238"), Color("d6dedb"), Color("e8c34a"), Color("
 const ARMOR_POINTS = [[1, 3, 2, 1], [2, 6, 5, 2], [2, 5, 3, 1], [3, 8, 6, 3]]
 const ARMOR_DURABILITY = [80, 240, 112, 528]
 
+# Names are asked for every frame (the HUD) and depend only on the id.
+static var title_memo: Dictionary = {}
+
 static func title(id: int) -> String:
+	if not NodeInfo.cached(): return uncached_title(id)
+	var known: Variant = title_memo.get(id)
+	if known != null: return known
+	var text: String = uncached_title(id)
+	title_memo[id] = text
+	return text
+
+static func uncached_title(id: int) -> String:
 	if Totems.is_totem(id): return "Totem of Undying"
 	if Beacons.is_beacon(id): return "Beacon"
 	if Beacons.is_beam(id): return "Beacon beam"
@@ -575,6 +586,7 @@ static func register_node(name_text: String, properties: Dictionary) -> int:
 	properties["name"] = name_text
 	custom_nodes[id] = properties
 	custom_tiles[id] = 58 + custom_tiles.size()
+	NodeInfo.invalidate()
 	return id
 
 static func register_item(name_text: String, properties: Dictionary) -> int:
@@ -583,6 +595,7 @@ static func register_item(name_text: String, properties: Dictionary) -> int:
 	while exists(id): id += 1
 	properties["name"] = name_text
 	custom_items[id] = properties
+	NodeInfo.invalidate()
 	return id
 
 static func is_tool_id(id: int) -> bool:
@@ -638,7 +651,24 @@ static func max_stack(id: int) -> int:
 	if id in [EGG,SNOWBALL,ENDER_PEARL]: return 16
 	return 1 if is_tool_id(id) or is_armor(id) or id in [SHEARS,BUCKET,WATER_BUCKET,MILK_BUCKET,SADDLE,MUSHROOM_STEW] else 64
 
+# The hot property queries are memoized by NodeInfo on the main thread. Worker
+# threads use the uncached rules directly, which never touch shared state.
 static func solid(id: int) -> bool:
+	if NodeInfo.cached(): return NodeInfo.memo(id) & NodeInfo.SOLID != 0
+	return uncached_solid(id)
+
+static func plant(id: int) -> bool:
+	if NodeInfo.cached(): return NodeInfo.memo(id) & NodeInfo.PLANT != 0
+	return uncached_plant(id)
+
+static func transparent(id: int) -> bool:
+	if NodeInfo.cached(): return NodeInfo.memo(id) & NodeInfo.TRANSPARENT != 0
+	return uncached_transparent(id)
+
+static func tile(id: int, face: int) -> int:
+	return NodeInfo.tile(id,face)
+
+static func uncached_solid(id: int) -> bool:
 	# A soul flame is a flame: it never blocks movement.
 	if NetherBlocks.is_soul_fire(id): return false
 	# Rails are a 1/16 plate and are not walkable, as source's raillike is.
@@ -674,15 +704,15 @@ static func solid(id: int) -> bool:
 	# movement.
 	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("block",false) and VillageContent.shape(id) not in ["crop","plant","vine","door_open","carpet","banner","frame","painting","candle","lantern","brewing","chain"]
 	if custom_nodes.has(id): return not bool(custom_nodes[id].get("transparent",false))
-	return id not in [AIR,WATER,LAVA,NETHER_PORTAL,END_PORTAL,END_GATEWAY,END_ROD,SOUL_TORCH] and id not in SMALL_CIRCUITS and not plant(id) and id not in [TORCH,LADDER]
+	return id not in [AIR,WATER,LAVA,NETHER_PORTAL,END_PORTAL,END_GATEWAY,END_ROD,SOUL_TORCH] and id not in SMALL_CIRCUITS and not uncached_plant(id) and id not in [TORCH,LADDER]
 
-static func plant(id: int) -> bool:
+static func uncached_plant(id: int) -> bool:
 	if NetherBlocks.is_soul_fire(id): return true
 	if WoodTypes.is_sapling(id): return true
 	# A vine is a plant too: it is drawn as a thin hanging strand rather than a cube.
 	return VillageContent.shape(id) in ["crop","plant","vine"] or id in [WHEAT, RIPE_WHEAT, SAPLING, FLOWER, VINE, SUGAR_CANE, RED_MUSHROOM, BROWN_MUSHROOM]
 
-static func transparent(id: int) -> bool:
+static func uncached_transparent(id: int) -> bool:
 	if NetherBlocks.is_soul_fire(id): return true
 	if Seagrass.is_seagrass(id): return true
 	if Beacons.is_beacon(id) or Beacons.is_beam(id): return true
@@ -716,7 +746,7 @@ static func transparent(id: int) -> bool:
 	if BuildingShapes.is_shape(id): return BuildingShapes.variant(id) != 2
 	if VillageContent.DATA.has(id): return VillageContent.shape(id) != "cube"
 	if custom_nodes.has(id): return bool(custom_nodes[id].get("transparent",false))
-	return id in CIRCUIT_NODES or id in [AIR, WATER, LAVA, NETHER_PORTAL, END_PORTAL, END_GATEWAY, END_ROD, SOUL_TORCH, IRON_BARS, GLASS, LADDER, ICE] or plant(id) or id == TORCH
+	return id in CIRCUIT_NODES or id in [AIR, WATER, LAVA, NETHER_PORTAL, END_PORTAL, END_GATEWAY, END_ROD, SOUL_TORCH, IRON_BARS, GLASS, LADDER, ICE] or uncached_plant(id) or id == TORCH
 
 # Sand and gravel are Luanti-style falling nodes: they drop when unsupported.
 # Concrete powder carries the source's `falling_node` group too, so an unsupported
@@ -1004,7 +1034,7 @@ static func food(id: int) -> int:
 	if custom_items.has(id): return clampi(int(custom_items[id].get("food",0)),0,20)
 	return {CHORUS_FRUIT:4,APPLE:4, RAW_MEAT:3, COOKED_MEAT:8, BREAD:5, ROTTEN_FLESH:4, PUMPKIN_PIE:8, MELON_SLICE:2, GOLDEN_APPLE:4, MUSHROOM_STEW:6}.get(id, 0)
 
-static func tile(id: int, face: int) -> int:
+static func uncached_tile(id: int, face: int) -> int:
 	if Rails.DATA.has(id): return 137+VillageContent.BLOCKS.find(Rails.item(id))
 	if Archaeology.DATA.has(id): return 137+VillageContent.BLOCKS.find(id)
 	if Decor.is_pot(id) or Decor.is_stand(id): return 137+VillageContent.BLOCKS.find(id)

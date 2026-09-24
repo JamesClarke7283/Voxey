@@ -17,6 +17,7 @@ static func register_family(item_id: int, material_id: int, display_name: String
 	for family in extra_families:
 		if family.item == item_id: return
 	extra_families.append({"item":item_id,"material":material_id,"name":display_name,"base":base})
+	NodeInfo.invalidate()
 
 static func item(id: int) -> int:
 	if id >= OAK and id < IRON+16: return OAK+(id-OAK)/16*16

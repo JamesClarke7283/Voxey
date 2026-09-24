@@ -102,6 +102,12 @@ var laser: float = 0.0
 # A boss's invulnerable opening phase, in seconds; it ignores damage while set.
 var spawn_invulnerable: float = 0.0
 var last_seen: float = 0.0
+# Sight is sampled a few times a second rather than every physics tick: it was
+# the largest part of a mob's step, and a chase already remembers four seconds.
+const SIGHT_INTERVAL = 0.2
+# Beyond this a mob cannot close to chase range within that memory.
+const SIGHT_RANGE = 64.0
+var sight_timer: float = 0.0
 var hurt_flash: float = 0.0
 # A lightning-struck creeper, and the only death cause that yields a head:
 # source `mob_head` requires an explosion from `mobs_mc:creeper_charged`.
@@ -723,7 +729,11 @@ func _physics_process(delta: float) -> void:
 		direction = Vector3(randf_range(-1,1),0,randf_range(-1,1)).normalized() if randf()>0.35 else Vector3.ZERO
 	var toward: Vector3 = ((player_pos-position)*Vector3(1,0,1)).normalized()
 	# Mobs keep hunting for a few seconds after losing sight, then give up.
-	if _sees_player(): last_seen = life
+	# Only a hostile mob ever chases, so only it needs to look.
+	sight_timer -= delta
+	if hostile and sight_timer <= 0 and distance < SIGHT_RANGE:
+		sight_timer = SIGHT_INTERVAL
+		if _sees_player(): last_seen = life
 	var chasing: bool = aggressive() and distance < 24 and life-last_seen < 4.0
 	# The source gives a zombie `attack_npcs = true`, so it goes for a villager as
 	# readily as for the player, and takes whichever is nearer. Without this a

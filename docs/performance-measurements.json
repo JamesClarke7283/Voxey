@@ -466,5 +466,220 @@
       "snow_cells": 0
     },
     "note": "Same 40-second 60 FPS explicit-draw harness. Final frame visually checked. Full headless regression ran concurrently. Fresh generator per worker job means normal streaming pays cold geode planning costs; different column counts and terrain prevent an isolated before/after speed comparison."
+  },
+  "streaming_lag_2026_09_24": {
+    "machine": {
+      "cpus": 4,
+      "gpu": "Mesa Intel(R) HD Graphics 520 (SKL GT2)",
+      "renderer": "gl_compatibility",
+      "engine": "Godot 4.7.2"
+    },
+    "lag_benchmark_after": {
+      "apply_ms_with_0_edits": 7.544,
+      "apply_ms_with_1000_edits": 54.027,
+      "apply_ms_with_4000_edits": 171.055,
+      "autosave_main_thread_ms_40000_edits": 5.149,
+      "cpus": 4,
+      "generation_slots": 2,
+      "nether_generation_ms": [
+        104.398,
+        94.443,
+        168.992,
+        104.446,
+        128.6,
+        151.895
+      ],
+      "overworld_generation_ms": [
+        388.027,
+        255.296,
+        248.293,
+        281.175,
+        393.252,
+        339.862
+      ],
+      "synchronous_save_ms_40000_edits": 149.738
+    },
+    "lag_benchmark_before": {
+      "apply_ms_with_0_edits": 16.479,
+      "apply_ms_with_1000_edits": 179.375,
+      "apply_ms_with_4000_edits": 627.118,
+      "autosave_main_thread_ms_40000_edits": 251.483,
+      "nether_generation_ms": [
+        1271.187,
+        1302.061,
+        1409.549,
+        1342.102,
+        1382.157,
+        1416.981
+      ],
+      "overworld_generation_ms": [
+        2344.797,
+        2054.724,
+        2212.271,
+        2162.454,
+        2410.291,
+        2233.483
+      ],
+      "synchronous_save_ms_40000_edits": 257.213
+    },
+    "world_benchmark_after": [
+      {
+        "blocks": 48,
+        "dimension": "overworld",
+        "generation_ms": [
+          393.083,
+          251.839,
+          280.162,
+          236.276
+        ],
+        "main_thread_apply_ms": [
+          6.626,
+          2.719,
+          4.02,
+          8.245
+        ],
+        "remesh_snapshot_ms": [
+          0.357,
+          0.306,
+          0.327,
+          0.365
+        ]
+      },
+      {
+        "blocks": 36,
+        "dimension": "nether",
+        "generation_ms": [
+          94.556,
+          103.867,
+          108.516,
+          107.125
+        ],
+        "main_thread_apply_ms": [
+          1.852,
+          1.586,
+          1.908,
+          1.441
+        ],
+        "remesh_snapshot_ms": [
+          0.987,
+          0.75,
+          0.908,
+          0.308
+        ]
+      }
+    ],
+    "world_benchmark_before": [
+      {
+        "blocks": 48,
+        "dimension": "overworld",
+        "generation_ms": [
+          2525.017,
+          2299.844,
+          2488.127,
+          2348.409
+        ],
+        "main_thread_apply_ms": [
+          16.261,
+          4.48,
+          27.66,
+          19.395
+        ],
+        "remesh_snapshot_ms": [
+          0.843,
+          0.773,
+          1.526,
+          2.042
+        ]
+      },
+      {
+        "blocks": 36,
+        "dimension": "nether",
+        "generation_ms": [
+          1502.322,
+          1506.396,
+          1622.247,
+          1435.176
+        ],
+        "main_thread_apply_ms": [
+          1.076,
+          7.672,
+          7.05,
+          6.481
+        ],
+        "remesh_snapshot_ms": [
+          0.867,
+          0.789,
+          1.212,
+          1.098
+        ]
+      }
+    ],
+    "survival_streaming_after": [
+      {
+        "avg_fps": 40.9394995543742,
+        "creatures": 21,
+        "distance": 120.665504455566,
+        "draw_calls": 349,
+        "edits": 389,
+        "frames": 820,
+        "gpu": "Mesa Intel(R) HD Graphics 520 (SKL GT2)",
+        "load_ms": 4120.107,
+        "loaded_fraction": 0.814814814814815,
+        "map_blocks": 876,
+        "max": 111.013999938965,
+        "median": 17.2280006408691,
+        "over100": 2,
+        "over33": 167,
+        "over50": 91,
+        "p95": 66.1709976196289,
+        "p99": 90.4649963378906,
+        "primitives": 117150,
+        "radius": 4
+      },
+      {
+        "avg_fps": 40.0436831066604,
+        "creatures": 21,
+        "distance": 120.517684936523,
+        "draw_calls": 349,
+        "edits": 384,
+        "frames": 801,
+        "gpu": "Mesa Intel(R) HD Graphics 520 (SKL GT2)",
+        "load_ms": 3576.065,
+        "loaded_fraction": 0.814814814814815,
+        "map_blocks": 876,
+        "max": 146.25,
+        "median": 17.8369998931885,
+        "over100": 7,
+        "over33": 168,
+        "over50": 79,
+        "p95": 64.7009963989258,
+        "p99": 97.2630004882812,
+        "primitives": 117134,
+        "radius": 4
+      }
+    ],
+    "survival_streaming_before": [
+      {
+        "avg_fps": 89.8265283353247,
+        "creatures": 1,
+        "distance": 120.529319763184,
+        "draw_calls": 94,
+        "edits": 6,
+        "frames": 1797,
+        "gpu": "Mesa Intel(R) HD Graphics 520 (SKL GT2)",
+        "load_ms": 85328.909,
+        "loaded_fraction": 0.0,
+        "map_blocks": 12,
+        "max": 187.705001831055,
+        "median": 11.1070003509521,
+        "over100": 1,
+        "over33": 6,
+        "over50": 2,
+        "p95": 17.4160003662109,
+        "p99": 24.4389991760254,
+        "primitives": 5356,
+        "radius": 4
+      }
+    ]
   }
 }

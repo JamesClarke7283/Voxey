@@ -183,9 +183,9 @@ static func _step_fire(world: VoxelWorld, data: Dictionary, delta: float) -> voi
 	if float(data.fire_clock) < FIRE_INTERVAL: return
 	data.fire_clock = 0.0
 	var rng: RandomNumberGenerator = data.rng
-	for p in world.edits.keys():
+	for p in world.loaded_edits():
 		if world.edits[p] not in [Fire.FLAME,Fire.ETERNAL]: continue
-		if not world.loaded_at(Vector3(p)) or rng.randi_range(1,FIRE_CHANCE) != 1: continue
+		if rng.randi_range(1,FIRE_CHANCE) != 1: continue
 		for side in FIRE_SIDES:
 			var at: Vector3i = p+side
 			if outdoor(world,at) and has_rain(world,at):
@@ -199,8 +199,8 @@ static func _step_snow(world: VoxelWorld, data: Dictionary, delta: float) -> voi
 	if float(data.snow_clock) < SNOW_INTERVAL: return
 	data.snow_clock = 0.0
 	var rng: RandomNumberGenerator = data.rng
-	for p in world.edits.keys():
-		if not world.loaded_at(Vector3(p)) or rng.randi_range(1,SNOW_CHANCE) != 1: continue
+	for p in world.loaded_edits():
+		if rng.randi_range(1,SNOW_CHANCE) != 1: continue
 		var id: int = world.node_at(p)
 		var piling: bool = id == Nodes.SNOW_BLOCK or Pasture.opaque(id) or WoodTypes.is_leaves(id) or SnowCover.is_snow(id)
 		if not piling: continue

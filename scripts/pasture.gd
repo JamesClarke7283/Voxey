@@ -26,11 +26,32 @@ static func opaque(id: int) -> bool:
 	return RedstoneSensors.light_filter(id) < 0
 
 static func covered(world: VoxelWorld, p: Vector3i) -> bool:
-	var above: int = world.node_at(p+Vector3i.UP)
-	return Fluids.liquid(above) or opaque(above)
+	return NodeInfo.of(world.node_at(p+Vector3i.UP)) & NodeInfo.COVER != 0
+
+# Light from a node id alone. A few lights also depend on live state; they
+# report STATEFUL and are resolved by `emission`. Memoized on the main thread.
+const STATEFUL = -1
+static var emission_memo: Dictionary = {}
 
 static func emission(world: VoxelWorld, p: Vector3i) -> int:
 	var id: int = world.node_at(p)
+	var level: int = id_emission(id)
+	if level != STATEFUL: return level
+	if id == Nodes.REDSTONE_LAMP: return 14 if world.circuits.state(p).get("powered",false) else 0
+	if id == Nodes.REDSTONE_TORCH: return int(world.circuits.state(p).get("out",0))/2
+	if id in [Nodes.FURNACE,VillageContent.SMOKER,VillageContent.BLAST_FURNACE]:
+		return 13 if float(world.stations.get(world.station_key(p),{}).get("burn",0.0)) > 0 else 0
+	return 14 if Cauldrons.liquid(world.stations.get(world.station_key(p),{})) == "lava" else 0
+
+static func id_emission(id: int) -> int:
+	if not NodeInfo.cached(): return _id_emission(id)
+	var known: Variant = emission_memo.get(id)
+	if known != null: return known
+	var level: int = _id_emission(id)
+	emission_memo[id] = level
+	return level
+
+static func _id_emission(id: int) -> int:
 	if FruitCrops.lit(id): return 14
 	if Amethyst.is_crystal(id): return Amethyst.light_level(id)
 	if Copper.is_bulb(id): return Copper.light_level(id)
@@ -60,12 +81,7 @@ static func emission(world: VoxelWorld, p: Vector3i) -> int:
 	if id == Nodes.NETHER_PORTAL: return 11
 	if id == Nodes.END_PORTAL: return 14
 	if Campfires.is_campfire(id): return Campfires.light_level(id)
-	if id == Nodes.REDSTONE_LAMP: return 14 if world.circuits.state(p).get("powered",false) else 0
-	if id == Nodes.REDSTONE_TORCH: return int(world.circuits.state(p).get("out",0))/2
-	if id in [Nodes.FURNACE,VillageContent.SMOKER,VillageContent.BLAST_FURNACE]:
-		return 13 if float(world.stations.get(world.station_key(p),{}).get("burn",0.0)) > 0 else 0
-	if id == VillageContent.CAULDRON:
-		return 14 if Cauldrons.liquid(world.stations.get(world.station_key(p),{})) == "lava" else 0
+	if id in [Nodes.REDSTONE_LAMP,Nodes.REDSTONE_TORCH,Nodes.FURNACE,VillageContent.SMOKER,VillageContent.BLAST_FURNACE,VillageContent.CAULDRON]: return STATEFUL
 	return 0
 
 static func track(world: VoxelWorld, p: Vector3i) -> void:
@@ -74,11 +90,11 @@ static func track(world: VoxelWorld, p: Vector3i) -> void:
 		remove_cell(data,p); remove_light(data,p); return
 	var id: int = world.node_at(p)
 	if is_grass(id) or id == Nodes.DIRT and not covered(world,p): add_cell(data,p)
-	else: remove_cell(data,p)
+	elif data.cells.has(p): remove_cell(data,p)
 	# Retain switchable nodes while off/empty; sample their live metadata.
 	if id in STATEFUL_LIGHTS or emission(world,p) > 0:
 		add_light(data,p)
-	else: remove_light(data,p)
+	elif data.lights.has(p): remove_light(data,p)
 
 static func add_cell(data: Dictionary, p: Vector3i) -> void:
 	data.cells[p] = true
@@ -138,6 +154,22 @@ static func column_loaded(world: VoxelWorld, column: Vector2i, candidates: Dicti
 		if world.edits.has(p) or world.edits.has(p+Vector3i.UP): track(world,p); continue
 		if is_grass(id) or id == Nodes.DIRT: add_cell(data,p)
 		elif id not in [Campfires.UNLIT,Campfires.SOUL_UNLIT]: add_light(data,p)
+
+# The worker's pre-split membership for a freshly generated column, merged
+# whole. The caller re-tracks cells touched by later edits afterwards.
+static func column_generated(world: VoxelWorld, column: Vector2i, cells: Dictionary, lights: Dictionary) -> void:
+	var data: Dictionary = state(world)
+	if not cells.is_empty():
+		data.cells.merge(cells)
+		if data.cell_columns.has(column): data.cell_columns[column].merge(cells)
+		else: data.cell_columns[column] = cells
+	if lights.is_empty(): return
+	if not data.light_columns.has(column): data.light_columns[column] = {}
+	for block in lights:
+		data.lights.merge(lights[block])
+		if data.light_blocks.has(block): data.light_blocks[block].merge(lights[block])
+		else: data.light_blocks[block] = lights[block]
+		data.light_columns[column][block] = true
 
 static func column_unloaded(world: VoxelWorld, column: Vector2i) -> void:
 	var data: Dictionary = state(world)

@@ -19,6 +19,7 @@ static func register_family(item_id: int, material_id: int, display_name: String
 	for family in extra_families:
 		if family.item == item_id: return
 	extra_families.append({"item":item_id,"material":material_id,"name":display_name,"base":base})
+	NodeInfo.invalidate()
 
 static func family_of(id: int) -> Dictionary:
 	var item_id: int = id if is_item(id) else item(id)

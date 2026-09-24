@@ -104,9 +104,8 @@ static func unload(world: VoxelWorld, column: Vector2i) -> void:
 
 static func column_loaded(world: VoxelWorld, column: Vector2i) -> void:
 	if not world.has_meta("sponges"): return
-	for p in world.edits:
-		if world.edits[p] != SPONGE or not world.loaded_at(Vector3(p)): continue
-		if Vector2i(floori(p.x/16.0),floori(p.z/16.0)) == column: registered(world,p,SPONGE)
+	for p in world.column_edits(column):
+		if world.edits[p] == SPONGE and world.loaded_at(Vector3(p)): registered(world,p,SPONGE)
 
 # Source ABM: one second, every dry sponge, water as a neighbour.
 static func update(world: VoxelWorld, delta: float) -> void:
