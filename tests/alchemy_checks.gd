@@ -113,7 +113,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.resume(); game.pause(); game.gamemode = "creative"
 	for kind in ["silverfish","phantom","turtle","breeze","pillager"]:
 		var mob: Creature = game.spawn_creature(kind,Vector3(p)+Vector3(3,1,0)); mob.set_physics_process(false)
-		suite.check(mob.parts.size() >= 3 and mob.health > 0,"alchemy ingredient creature has a visible model: "+kind)
+		suite.check(mob.box_count >= 3 and mob.health > 0,"alchemy ingredient creature has a visible model: "+kind)
 		mob.free()
 	var cow: Creature = game.spawn_creature("cow",Vector3(p)+Vector3(4,1,0)); cow.set_physics_process(false)
 	PotionEffects.apply(cow,"oozing",20); cow.hit(100)

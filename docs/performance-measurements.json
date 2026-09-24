@@ -984,6 +984,150 @@
         ]
       },
       "checks": "7,411 passed in nine suites"
+    },
+    "fourth_pass": {
+      "machine": "4 CPUs, Mesa Intel(R) HD Graphics 520 (SKL GT2), Godot 4.7.2, gl_compatibility; a Godot editor was open during these runs",
+      "note": "Before is the parent commit, measured back to back with the same arguments.",
+      "creature_gallery": {
+        "kinds": 64,
+        "boxes": 865,
+        "meshes_after": 325,
+        "differing_pixels_standing": 77,
+        "differing_pixels_walking_tinted": 55,
+        "pixels": 1440000
+      },
+      "draw_call_bound_probe": {
+        "creatures_in_view": 44,
+        "separate": {
+          "draw_calls": 1892,
+          "render_cpu_ms": 30.2,
+          "gpu_ms": 26.2,
+          "frame_ms": 48.9
+        },
+        "merged_per_joint_untextured": {
+          "draw_calls": 774,
+          "render_cpu_ms": 11.7,
+          "gpu_ms": 15.0,
+          "frame_ms": 26.1
+        }
+      },
+      "mob_crowd_passive": {
+        "before": [
+          {
+            "avg_fps": 40.6,
+            "median": 22.3,
+            "p95": 41.2,
+            "draw_calls": 413
+          },
+          {
+            "avg_fps": 36.9,
+            "median": 24.6,
+            "p95": 47.5,
+            "draw_calls": 448
+          }
+        ],
+        "after": [
+          {
+            "avg_fps": 43.6,
+            "median": 20.8,
+            "p95": 36.6,
+            "draw_calls": 245
+          },
+          {
+            "avg_fps": 41.7,
+            "median": 21.4,
+            "p95": 39.9,
+            "draw_calls": 261
+          }
+        ]
+      },
+      "mob_crowd_hostile": {
+        "before": [
+          {
+            "avg_fps": 30.9,
+            "median": 28.7,
+            "p95": 60.0,
+            "draw_calls": 798
+          },
+          {
+            "avg_fps": 30.9,
+            "median": 29.5,
+            "p95": 54.8,
+            "draw_calls": 792
+          }
+        ],
+        "after": [
+          {
+            "avg_fps": 37.9,
+            "median": 23.1,
+            "p95": 49.0,
+            "draw_calls": 410
+          },
+          {
+            "avg_fps": 39.0,
+            "median": 22.7,
+            "p95": 42.4,
+            "draw_calls": 441
+          }
+        ]
+      },
+      "survival_streaming_benchmark": {
+        "args": "30 s, radius 4, 5.6 blocks/s",
+        "before": [
+          {
+            "avg_fps": 45.7,
+            "median": 19.4,
+            "p95": 44.7,
+            "p99": 64.2,
+            "over50": 40,
+            "draw_calls": 721
+          },
+          {
+            "avg_fps": 41.9,
+            "median": 21.3,
+            "p95": 49.7,
+            "p99": 66.6,
+            "over50": 61,
+            "draw_calls": 685
+          }
+        ],
+        "after": [
+          {
+            "avg_fps": 47.6,
+            "median": 19.2,
+            "p95": 39.5,
+            "p99": 56.0,
+            "over50": 27,
+            "draw_calls": 461
+          },
+          {
+            "avg_fps": 46.3,
+            "median": 19.8,
+            "p95": 41.1,
+            "p99": 55.6,
+            "over50": 26,
+            "draw_calls": 466
+          }
+        ]
+      },
+      "creature_build_ms": {
+        "before": {
+          "zombie": 1.01,
+          "cow": 1.51,
+          "villager": 1.97
+        },
+        "after": {
+          "zombie": 1.72,
+          "cow": 2.63,
+          "villager": 3.26
+        },
+        "after_trim": {
+          "zombie": 1.91,
+          "cow": 2.56,
+          "villager": 3.11
+        }
+      },
+      "checks": "7,411 passed in nine suites"
     }
   }
 }

@@ -185,15 +185,23 @@ static func station(world: VoxelWorld, p: Vector3i, kind: String = "zombie") -> 
 	var key: String = VoxelWorld.station_key(p)
 	if not world.stations.has(key): world.stations[key] = {"kind":"mob_spawner","mob":kind,"remaining":2.0,"slots":[]}
 	var result: Dictionary = world.stations[key]
-	result.kind = "mob_spawner"; result.slots = []
-	result.mob = str(result.get("mob",kind)) if str(result.get("mob",kind)) in MOBS else "zombie"
-	result.remaining = clampf(float(result.get("remaining",2.0)),0,40)
+	# Normalized in place. The spawner update reads this every frame, so only
+	# fields that differ are written.
+	if result.get("kind") != "mob_spawner": result.kind = "mob_spawner"
+	var slots: Variant = result.get("slots")
+	if not (slots is Array and slots.is_empty()): result.slots = []
+	var mob: String = str(result.get("mob",kind))
+	if mob not in MOBS: mob = "zombie"
+	if not (result.get("mob") is String and result.mob == mob): result.mob = mob
+	var remaining: Variant = result.get("remaining",2.0)
+	var clamped: float = clampf(float(remaining),0,40)
+	if not (remaining is float and remaining == clamped): result.remaining = clamped
 	return result
 
 static func doll(kind: String) -> Node3D:
 	# Build a visual-only copy of existing original art, never a registered mob.
 	var builder := Creature.new(); builder.kind = kind; builder.model = Node3D.new(); builder.add_child(builder.model)
-	builder._build_model()
+	builder._build_model(); builder.merge_parts()
 	var model: Node3D = builder.model; builder.remove_child(model); builder.free()
 	model.scale = Vector3.ONE*0.32
 	return model

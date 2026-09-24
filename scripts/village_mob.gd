@@ -29,7 +29,7 @@ func bind(person: Dictionary) -> void:
 
 func rebuild() -> void:
 	for child in model.get_children(): child.queue_free()
-	parts.clear(); colors.clear(); legs.clear(); arms.clear(); crack_parts.clear(); _build_model()
+	parts.clear(); colors.clear(); box_count = 0; legs.clear(); arms.clear(); crack_parts.clear(); _build_model(); merge_parts()
 	NameTags.refresh(self)
 
 func _build_model() -> void:

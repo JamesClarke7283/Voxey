@@ -121,6 +121,9 @@ var head: Node3D
 var gait: float = 0.0
 var egg_timer: float = 300.0
 var parts: Array = []
+# How many boxes the model was built from; `merge_parts` joins them into fewer
+# meshes.
+var box_count: int = 0
 var colors: Array = []
 var model: Node3D
 var scared: float = 0.0
@@ -185,6 +188,9 @@ var surface_cell := Vector2i(2147483647,0)
 var surface_height: int = 0
 var grounded: bool = false
 var tinted: bool = false
+# The tint last written to the part materials, with the part count; a new part
+# clears it. A creeper sets its tint every step, mostly to the same value.
+var tint_applied: Array = []
 var sheared: bool = false
 var wool_timer: float = 0.0
 var wool_parts: Array = []
@@ -212,6 +218,7 @@ func _ready() -> void:
 	_build_model()
 	Farming.initialize(self)
 	Farming.register(self)
+	merge_parts()
 
 func _build_model() -> void:
 	# A guardian is a spiked water orb with a single eye, so it takes its own
@@ -568,7 +575,128 @@ func _box(pos: Vector3, size_value: Vector3, color: Color, skin: String = "", pa
 	(parent if parent != null else model).add_child(instance)
 	parts.append(instance)
 	colors.append(Color.WHITE)
+	tint_applied = []
+	box_count += 1
 	return instance
+
+# Boxes that move together are drawn as one mesh, and the merged meshes of a
+# creature share one material over an atlas of their skins: a creature costs a
+# draw call per joint instead of one per box. Boxes that may change later stay
+# apart: those another variable refers to, those with children, metadata or a
+# customised material, and every box of a shulker, which moves one by index.
+static var skin_atlases: Dictionary = {}
+# Merged meshes by an exact key of their boxes, shared by creatures built alike.
+static var merged_meshes: Dictionary = {}
+# Per script, the variables other than `parts` that can refer to a box.
+static var box_references: Dictionary = {}
+
+func merge_parts() -> void:
+	if kind == "shulker": return
+	var names: Variant = box_references.get(get_script())
+	if names == null:
+		names = []
+		for property in get_property_list():
+			if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE == 0 or property.name == "parts": continue
+			if property.type in [TYPE_NIL,TYPE_OBJECT,TYPE_ARRAY,TYPE_DICTIONARY]: names.append(property.name)
+		box_references[get_script()] = names
+	var kept: Dictionary = {}
+	for property_name in names:
+		var value: Variant = get(property_name)
+		var items: Array = value.values() if value is Dictionary else (value if value is Array else [value])
+		for item in items:
+			if item is MeshInstance3D: kept[item] = true
+	var groups: Dictionary = {}
+	for part in parts:
+		if kept.has(part) or not _plain_part(part): continue
+		var parent: Node = part.get_parent()
+		if not groups.has(parent): groups[parent] = []
+		groups[parent].append(part)
+	var textures: Array = []
+	for parent in groups.keys():
+		if groups[parent].size() < 2: groups.erase(parent); continue
+		for box in groups[parent]:
+			if not textures.has(box.material_override.albedo_texture): textures.append(box.material_override.albedo_texture)
+	if groups.is_empty(): return
+	var material := StandardMaterial3D.new()
+	material.albedo_texture = _skin_atlas(textures)
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	material.roughness = 1.0
+	var merged_boxes: Dictionary = {}
+	var meshes: Array = []
+	for parent in groups:
+		var key: Array = [textures.size()]
+		for box in groups[parent]:
+			key.append(box.mesh.get_instance_id()); key.append(box.transform); key.append(textures.find(box.material_override.albedo_texture))
+			merged_boxes[box] = true
+		var hash_value: int = key.hash()
+		var cached: Variant = merged_meshes.get(hash_value)
+		if cached == null or cached[0] != key:
+			cached = [key,_merged_mesh(groups[parent],textures)]
+			merged_meshes[hash_value] = cached
+		var merged := MeshInstance3D.new()
+		merged.mesh = cached[1]; merged.material_override = material
+		parent.add_child(merged)
+		meshes.append(merged)
+	var kept_parts: Array = []; var kept_colors: Array = []
+	for i in parts.size():
+		if merged_boxes.has(parts[i]): parts[i].free()
+		else: kept_parts.append(parts[i]); kept_colors.append(colors[i])
+	parts = kept_parts+meshes
+	colors = kept_colors
+	for mesh in meshes: colors.append(Color.WHITE)
+	tint_applied = []
+
+static func _merged_mesh(boxes: Array, textures: Array) -> ArrayMesh:
+	var width: float = textures.size()*18.0
+	var vertices := PackedVector3Array(); var normals := PackedVector3Array(); var uvs := PackedVector2Array(); var indices := PackedInt32Array()
+	for box in boxes:
+		var arrays: Array = box.mesh.surface_get_arrays(0)
+		var offset: int = vertices.size()
+		var xform: Transform3D = box.transform
+		var normal_basis: Basis = xform.basis.inverse().transposed()
+		# Each skin sits one texel inside its 18-texel cell, so nearest filtering
+		# reads the same texels as the skin on its own.
+		var left: float = textures.find(box.material_override.albedo_texture)*18.0+1.0
+		for v in arrays[Mesh.ARRAY_VERTEX]: vertices.append(xform*v)
+		for n in arrays[Mesh.ARRAY_NORMAL]: normals.append((normal_basis*n).normalized())
+		for uv in arrays[Mesh.ARRAY_TEX_UV]: uvs.append(Vector2((left+uv.x*16.0)/width,(1.0+uv.y*16.0)/18.0))
+		for index in arrays[Mesh.ARRAY_INDEX]: indices.append(offset+index)
+	var arrays: Array = []; arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices; arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs; arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+	return mesh
+
+# A box exactly as `_box` made it, with a 16x16 skin. Creature code changes only
+# emission, transparency and the albedo alpha, so those are what is compared.
+func _plain_part(part: Variant) -> bool:
+	if not part is MeshInstance3D or not is_instance_valid(part) or part.get_child_count() > 0 or not part.get_meta_list().is_empty(): return false
+	if not part.visible or part.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_ON or part.transparency != 0.0: return false
+	if not part.mesh is ArrayMesh or part.mesh.get_surface_count() != 1: return false
+	var mat: Variant = part.material_override
+	if not mat is StandardMaterial3D or mat.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED or mat.emission_enabled or mat.albedo_color != Color.WHITE: return false
+	if mat.texture_filter != BaseMaterial3D.TEXTURE_FILTER_NEAREST or mat.roughness != 1.0: return false
+	var skin: Variant = mat.albedo_texture
+	return skin is Texture2D and skin.get_width() == 16 and skin.get_height() == 16
+
+# One row of 18x18 cells, each skin framed by the texels of its opposite edges,
+# as the repeating skin on its own would read past an edge.
+static func _skin_atlas(textures: Array) -> Texture2D:
+	var key: String = ""
+	for texture in textures: key += str(texture.get_instance_id())+","
+	if skin_atlases.has(key): return skin_atlases[key]
+	var image := Image.create(textures.size()*18,18,false,Image.FORMAT_RGBA8)
+	for i in textures.size():
+		var skin: Image = textures[i].get_image()
+		if skin.get_format() != Image.FORMAT_RGBA8: skin.convert(Image.FORMAT_RGBA8)
+		var x: int = i*18
+		image.blit_rect(skin,Rect2i(0,0,16,16),Vector2i(x+1,1))
+		image.blit_rect(skin,Rect2i(0,15,16,1),Vector2i(x+1,0)); image.blit_rect(skin,Rect2i(0,0,16,1),Vector2i(x+1,17))
+		image.blit_rect(skin,Rect2i(15,0,1,16),Vector2i(x,1)); image.blit_rect(skin,Rect2i(0,0,1,16),Vector2i(x+17,1))
+	var atlas := ImageTexture.create_from_image(image)
+	skin_atlases[key] = atlas
+	return atlas
 
 func animate(delta: float, chasing: bool = false) -> void:
 	var moving: bool = direction.length() > 0.1
@@ -949,6 +1077,9 @@ func _sees(point: Vector3) -> bool:
 
 func _tint(color: Color, amount: float) -> void:
 	tinted = amount > 0
+	var applied: Array = [color,amount,parts.size()]
+	if applied == tint_applied: return
+	tint_applied = applied
 	for i in parts.size():
 		var mat: StandardMaterial3D = parts[i].material_override
 		mat.albedo_color = colors[i].lerp(color,amount)
