@@ -3,122 +3,180 @@ extends RefCounted
 
 # Greedy face merging: one quad for a coplanar rectangle of matching nodes.
 # Only packed arrays leave the worker; GPU and scene resources stay on the main thread.
-static func build(data: Variant, external_circuits: bool = false) -> Array:
-	# Classify each tile once instead of doing registry lookups for every face.
-	var flags := PackedByteArray(); flags.resize(data.size())
-	var types: Dictionary = {}
+const BRIGHTNESS = [0.82,0.73,1.0,0.53,0.87,0.77]
+
+# Classification bits for every cell of an 18^3 buffer. Runs of one id reuse the
+# previous lookup, which covers most stone, air and water.
+static func classify(data: PackedInt32Array, info: NodeInfo.View) -> PackedInt32Array:
+	var flags := PackedInt32Array()
+	flags.resize(data.size())
+	var table: PackedInt32Array = info.traits
+	var known: int = table.size()
+	var last_id: int = -1
+	var last_bits: int = 0
 	for index in data.size():
 		var id: int = data[index]
-		if not types.has(id):
-			var cube: bool = id != 0 and not FoodFeatures.is_cake(id) and not Doors.is_door(id) and not SnowCover.is_snow(id) and not Trapdoors.is_trapdoor(id) and not Barriers.is_barrier(id) and not Fluids.flowing(id) and (not BuildingShapes.is_shape(id) or BuildingShapes.variant(id) == 2) and not VillageContent.special(id) and id not in Nodes.CIRCUIT_NODES and not Nodes.plant(id) and id not in [Nodes.TORCH,Nodes.LADDER,Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.NETHER_PORTAL,Nodes.END_PORTAL,Nodes.ENCHANTING_TABLE]
-			cube = cube and not Farmland.is_soil(id) and not Signs.is_sign(id) and not RedstoneInputs.is_device(id) and not Copper.is_rod(id) and not Sponges.is_sponge(id) and not Archaeology.DATA.has(id) and not Decor.is_pot(id) and not Decor.is_stand(id) and not Rails.is_rail(id) and not Heads.is_any(id) and not Scaffolding.is_scaffolding(id) and not Conduits.is_conduit(id) and not Corals.is_coral(id) and not SeaPickles.is_pickle(id) and not Seagrass.is_seagrass(id) and not Beacons.is_beacon(id) and not Beacons.is_beam(id)
-			var occludes: bool = not Nodes.transparent(id) and id not in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.ENCHANTING_TABLE]
-			types[id] = (1 if cube else 0) | (2 if occludes else 0) | (4 if Fluids.source(id) else 0) | (8 if Fluids.flowing(id) else 0) | (16 if Fluids.water(id) else 0)
-		flags[index] = types[id]
+		if id != last_id:
+			last_id = id
+			last_bits = table[id] if id >= 0 and id < known else 0
+			if last_bits == 0: last_bits = info.of(id)
+		flags[index] = last_bits
+	return flags
+
+# A lookup for callers that did not bring one: the shared tables on the main
+# thread, or a private cache on a worker.
+static func default_info() -> NodeInfo.View:
+	return NodeInfo.live_view() if NodeInfo.on_main_thread() else NodeInfo.View.new(PackedInt32Array(),PackedInt32Array())
+
+static func build(source: Variant, external_circuits: bool = false, info: NodeInfo.View = null, flags: PackedInt32Array = PackedInt32Array()) -> Array:
+	var data: PackedInt32Array = source if source is PackedInt32Array else PackedInt32Array(Array(source))
+	if info == null: info = default_info()
+	if flags.size() != data.size(): flags = classify(data,info)
+	var shift: int = NodeInfo.EXTERNAL_SHIFT if external_circuits else NodeInfo.MESH_SHIFT
 	var outputs: Array = [_empty(), _empty()]
 	var has_nodes: bool = false
 	var has_cubes: bool = false
+	# Visible cube faces are recorded in their own plane as `position << 20 | id`,
+	# where position is the cell's place in that plane's 16 x 16 mask, so the
+	# greedy merge below touches only faces that are actually drawn.
+	var planes: Array = []
+	planes.resize(96)
+	for index in 96: planes[index] = PackedInt32Array()
+	var inert: int = NodeInfo.FLOWING|NodeInfo.SOURCE|(NodeInfo.MESH_MASK << shift)
 	for y in 16:
+		var layer: int = (y+1)*324
+		# A layer of air draws nothing. Neither does a layer of one plain cube
+		# between two more layers of it: every face touches the same node.
+		var fill: int = data[layer]
+		if data.slice(layer,layer+324).count(fill) == 324:
+			if fill == 0: continue
+			if flags[layer] & NodeInfo.CUBE and flags[layer] & inert == 0 and data.slice(layer-324,layer).count(fill) == 324 and data.slice(layer+324,layer+648).count(fill) == 324:
+				has_nodes = true
+				continue
 		for z in 16:
+			var row: int = layer+(z+1)*18
+			if data.slice(row,row+18).count(0) == 18: continue
 			for x in 16:
-				var center: int = x+1+(z+1)*18+(y+1)*324
+				var center: int = row+x+1
 				var id: int = data[center]
 				if id == 0: continue
 				has_nodes = true
-				if flags[center]&1: has_cubes = true
-				if flags[center]&8: Fluids.mesh(outputs[1 if flags[center]&16 else 0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
-				elif flags[center]&4:
+				var bits: int = flags[center]
+				if bits & NodeInfo.CUBE:
+					has_cubes = true
+					var hide: int = NodeInfo.OCCLUDES
+					if bits & NodeInfo.SOURCE: hide |= NodeInfo.BASE_WATER if id == Nodes.WATER else NodeInfo.BASE_LAVA
+					var water: bool = id == Nodes.WATER
+					var neighbor: int = data[center+1]
+					if neighbor != id and flags[center+1] & hide == 0 and not (water and neighbor == Nodes.GLASS): planes[x].append((y+z*16) << 20 | id)
+					neighbor = data[center-1]
+					if neighbor != id and flags[center-1] & hide == 0 and not (water and neighbor == Nodes.GLASS): planes[16+x].append((y+z*16) << 20 | id)
+					neighbor = data[center+324]
+					if neighbor != id and flags[center+324] & hide == 0 and not (water and neighbor == Nodes.GLASS): planes[32+y].append((z+x*16) << 20 | id)
+					neighbor = data[center-324]
+					if neighbor != id and flags[center-324] & hide == 0 and not (water and neighbor == Nodes.GLASS): planes[48+y].append((z+x*16) << 20 | id)
+					neighbor = data[center+18]
+					if neighbor != id and flags[center+18] & hide == 0 and not (water and neighbor == Nodes.GLASS): planes[64+z].append((x+y*16) << 20 | id)
+					neighbor = data[center-18]
+					if neighbor != id and flags[center-18] & hide == 0 and not (water and neighbor == Nodes.GLASS): planes[80+z].append((x+y*16) << 20 | id)
+				if bits & inert == 0: continue
+				if bits & NodeInfo.FLOWING: Fluids.mesh(outputs[1 if bits & NodeInfo.WATERY else 0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
+				elif bits & NodeInfo.SOURCE:
 					for offset in [-1,1,-18,18]:
-						if flags[center+offset]&8 and Fluids.base(data[center+offset]) == id:
+						if flags[center+offset] & NodeInfo.FLOWING and Fluids.base(data[center+offset]) == id:
 							Fluids.mesh(outputs[1 if id == Nodes.WATER else 0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
 							break
-				if Farmland.is_soil(id): Farmland.mesh(outputs[0],Vector3(x,y,z),id)
-				elif CropFarming.is_crop(id): CropFarming.mesh(outputs[0],Vector3(x,y,z),id)
-				elif FruitCrops.is_stem(id): FruitCrops.mesh(outputs[0],Vector3(x,y,z),id)
-				elif RedstoneInputs.is_device(id) and not external_circuits: RedstoneInputs.mesh(outputs[0],Vector3(x,y,z),id)
-				elif RedstoneSensors.is_device(id) and not external_circuits: RedstoneSensors.mesh(outputs[0],Vector3(x,y,z),id)
-				elif id in Nodes.CIRCUIT_NODES and not external_circuits: _art_box(outputs[0],Vector3(x,y,z)+Vector3(0.5,0.2,0.5),Vector3(0.85,0.4,0.85),Nodes.tile(id,0),Nodes.tile(id,2))
-				elif SnowCover.is_snow(id): SnowCover.mesh(outputs[0],Vector3(x,y,z),id)
-				elif Signs.is_sign(id): Signs.mesh(outputs[0],Vector3(x,y,z),id)
-				elif FoodFeatures.is_cake(id): FoodFeatures.mesh(outputs[0],Vector3(x,y,z),id)
-				elif Doors.is_door(id): Doors.mesh(outputs[0],Vector3(x,y,z),id)
-				elif Trapdoors.is_trapdoor(id): Trapdoors.mesh(outputs[0],Vector3(x,y,z),id)
-				elif Barriers.is_barrier(id): Barriers.mesh(outputs[0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
-				elif BuildingShapes.is_shape(id) and BuildingShapes.variant(id) != 2: BuildingShapes.mesh(outputs[0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
-				elif Torches.is_torch(id): _torch(outputs[0],Vector3(x,y,z),id)
-				elif Heads.is_any(id): Heads.mesh(outputs[0],Vector3(x,y,z),id)
-				elif Beacons.is_beacon(id) or Beacons.is_beam(id): Beacons.mesh(outputs[0],Vector3(x,y,z),id)
-				elif Seagrass.is_seagrass(id): Seagrass.mesh(outputs[0],Vector3(x,y,z),id)
-				elif SeaPickles.is_pickle(id): SeaPickles.mesh(outputs[0],Vector3(x,y,z),id)
-				elif Corals.is_coral(id): Corals.mesh(outputs[0],Vector3(x,y,z),id)
-				elif Conduits.is_conduit(id): Conduits.mesh(outputs[0],Vector3(x,y,z),id)
-				elif Scaffolding.is_scaffolding(id): Scaffolding.mesh(outputs[0],Vector3(x,y,z),id)
-				elif VillageContent.special(id): VillageArt.mesh(outputs[0],Vector3(x,y,z),id)
-				elif Sponges.is_sponge(id): Sponges.mesh(outputs[0],Vector3(x,y,z),id)
-				elif Archaeology.DATA.has(id): Archaeology.mesh(outputs[0],Vector3(x,y,z),id)
-				elif Copper.is_rod(id): Copper.mesh(outputs[0],Vector3(x,y,z),id)
-				elif id == Nodes.NETHER_PORTAL: _portal(outputs[0],Vector3(x,y,z),data,Vector3i(x,y,z))
-				elif id == Nodes.END_PORTAL: _end_portal(outputs[0],Vector3(x,y,z))
-				elif Rails.is_rail(id): Rails.mesh_in(outputs[0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
-				elif id == Nodes.ENCHANTING_TABLE: _enchanting_table(outputs[0],Vector3(x,y,z))
-				elif Nodes.plant(id): _plant(outputs[0], Vector3(x,y,z), id)
-				elif id == Nodes.LADDER: _ladder(outputs[0], Vector3(x,y,z), data, Vector3i(x,y,z))
-				elif id in [Nodes.BED_FOOT,Nodes.BED_HEAD]: _bed_half(outputs[0], Vector3(x,y,z), id, data, Vector3i(x,y,z))
+				var kind: int = (bits >> shift) & NodeInfo.MESH_MASK
+				if kind != 0: _custom(kind,outputs[0],Vector3(x,y,z),id,data,info)
 	if not has_nodes: return [[], []]
+	var mask := PackedInt32Array()
+	mask.resize(256)
+	# Opaque greedy faces go straight into typed arrays; taking them out of the
+	# output list keeps each array singly owned, so appends never copy it.
+	var verts: PackedVector3Array = outputs[0][0]
+	var normals: PackedVector3Array = outputs[0][1]
+	var uvs: PackedVector2Array = outputs[0][2]
+	var cells: PackedVector2Array = outputs[0][3]
+	var colors: PackedColorArray = outputs[0][4]
+	var indices: PackedInt32Array = outputs[0][5]
+	outputs[0] = []
+	# Per id and face: the atlas cell, negative for translucent surface faces.
+	var face_cells: Dictionary = {}
 	for axis in (range(3) if has_cubes else []):
 		var u: int = (axis + 1) % 3
 		var v: int = (axis + 2) % 3
-		var stride: int = [1,324,18][axis]
-		var u_stride: int = [1,324,18][u]
-		var v_stride: int = [1,324,18][v]
 		for sign_dir in [-1, 1]:
 			var normal := Vector3.ZERO
 			normal[axis] = sign_dir
 			var face: int = axis * 2 + (0 if sign_dir == 1 else 1)
+			var brightness: float = BRIGHTNESS[face]
+			var shade := Color(brightness,brightness,brightness)
+			var four_normals := PackedVector3Array([normal,normal,normal,normal])
+			var four_shades := PackedColorArray([shade,shade,shade,shade])
 			for plane in 16:
-				var mask := PackedInt32Array()
-				mask.resize(256)
-				for j in 16:
-					for i in 16:
-						var index: int = 343+plane*stride+i*u_stride+j*v_stride
-						if flags[index]&1 == 0: continue
-						var id: int = data[index]
-						var neighbor_index: int = index+sign_dir*stride
-						var neighbor: int = data[neighbor_index]
-						if neighbor == id or flags[neighbor_index]&2 != 0: continue
-						if flags[index]&4 and Fluids.base(neighbor) == id: continue
-						if id == Nodes.WATER and neighbor == Nodes.GLASS: continue
-						mask[i + j*16] = id
-				var j: int = 0
-				while j < 16:
-					var i: int = 0
-					while i < 16:
-						var id: int = mask[i + j*16]
-						if id == 0: i += 1; continue
-						var w: int = 1
-						while i+w < 16 and mask[i+w+j*16] == id: w += 1
-						var h: int = 1
-						var expand: bool = true
-						while j+h < 16 and expand:
-							for k in w:
-								if mask[i+k+(j+h)*16] != id: expand = false; break
-							if expand: h += 1
-						var p := Vector3.ZERO
-						p[axis] = plane + (1 if sign_dir == 1 else 0)
-						p[u] = i
-						p[v] = j
-						var du := Vector3.ZERO
-						var dv := Vector3.ZERO
-						du[u] = w
-						dv[v] = h
+				var faces: PackedInt32Array = planes[face*16+plane]
+				if faces.is_empty(): continue
+				# Start cells are visited row by row, the order of a full mask scan.
+				# The z planes were recorded in that order already.
+				if axis != 2: faces.sort()
+				for entry in faces: mask[entry >> 20] = entry & 0xFFFFF
+				for entry in faces:
+					var start: int = entry >> 20
+					var id: int = mask[start]
+					if id == 0: continue
+					var i: int = start & 15
+					var j: int = start >> 4
+					var w: int = 1
+					while i+w < 16 and mask[start+w] == id: w += 1
+					var h: int = 1
+					var expand: bool = true
+					while j+h < 16 and expand:
+						var row: int = start+h*16
+						for k in w:
+							if mask[row+k] != id: expand = false; break
+						if expand: h += 1
+					var p := Vector3.ZERO
+					p[axis] = plane + (1 if sign_dir == 1 else 0)
+					p[u] = i
+					p[v] = j
+					var du := Vector3.ZERO
+					var dv := Vector3.ZERO
+					du[u] = w
+					dv[v] = h
+					var key: int = id*8+face
+					var tile: int = face_cells.get(key,-1)
+					if tile == -1:
+						tile = info.tile(id,face)
+						if info.of(id) & NodeInfo.SURFACE: tile = -2-tile
+						face_cells[key] = tile
+					if tile < -1:
 						var uv: Array = [Vector2(0,h),Vector2(w,h),Vector2(w,0),Vector2(0,0)]
 						if axis == 0: uv = [Vector2(0,w),Vector2(0,0),Vector2(h,0),Vector2(h,w)]
-						var brightness: float = [0.82,0.73,1.0,0.53,0.87,0.77][face]
-						_quad(outputs[1 if id in [Nodes.WATER,Amethyst.TINTED_GLASS,Beehives.HONEY_BLOCK] else 0], [p,p+du,p+du+dv,p+dv], uv, normal, Nodes.tile(id,face), Color(brightness,brightness,brightness), sign_dir == 1)
-						for yy in h:
-							for xx in w: mask[i+xx+(j+yy)*16] = 0
-						i += w
-					j += 1
+						_quad(outputs[1], [p,p+du,p+du+dv,p+dv], uv, normal, -2-tile, shade, sign_dir == 1)
+					else:
+						var offset: int = verts.size()
+						var corner: Vector3 = p+du
+						verts.append(p)
+						verts.append(corner)
+						verts.append(corner+dv)
+						verts.append(p+dv)
+						normals.append_array(four_normals)
+						if axis == 0:
+							uvs.append(Vector2(0,w)); uvs.append(Vector2(0,0)); uvs.append(Vector2(h,0)); uvs.append(Vector2(h,w))
+						else:
+							uvs.append(Vector2(0,h)); uvs.append(Vector2(w,h)); uvs.append(Vector2(w,0)); uvs.append(Vector2(0,0))
+						var cell := Vector2(tile % 8, tile / 8)
+						cells.append(cell); cells.append(cell); cells.append(cell); cells.append(cell)
+						colors.append_array(four_shades)
+						if sign_dir == 1:
+							indices.append(offset); indices.append(offset+2); indices.append(offset+1)
+							indices.append(offset); indices.append(offset+3); indices.append(offset+2)
+						else:
+							indices.append(offset); indices.append(offset+1); indices.append(offset+2)
+							indices.append(offset); indices.append(offset+2); indices.append(offset+3)
+					for yy in h:
+						for xx in w: mask[start+xx+yy*16] = 0
+	outputs[0] = [verts,normals,uvs,cells,colors,indices]
 	var result: Array = []
 	for out in outputs:
 		if out[0].is_empty(): result.append([]); continue
@@ -133,6 +191,43 @@ static func build(data: Variant, external_circuits: bool = false) -> Array:
 		result.append(arrays)
 	return result
 
+# Custom geometry, dispatched on the kind NodeInfo recorded for the node.
+static func _custom(kind: int, out: Array, p: Vector3, id: int, data: PackedInt32Array, info: NodeInfo.View) -> void:
+	var cell := Vector3i(p)+Vector3i.ONE
+	match kind:
+		1: Farmland.mesh(out,p,id)
+		2: CropFarming.mesh(out,p,id)
+		3: FruitCrops.mesh(out,p,id)
+		4: RedstoneInputs.mesh(out,p,id)
+		5: RedstoneSensors.mesh(out,p,id)
+		6: _art_box(out,p+Vector3(0.5,0.2,0.5),Vector3(0.85,0.4,0.85),info.tile(id,0),info.tile(id,2))
+		7: SnowCover.mesh(out,p,id)
+		8: Signs.mesh(out,p,id)
+		9: FoodFeatures.mesh(out,p,id)
+		10: Doors.mesh(out,p,id)
+		11: Trapdoors.mesh(out,p,id)
+		12: Barriers.mesh(out,p,id,data,cell)
+		13: BuildingShapes.mesh(out,p,id,data,cell)
+		14: _torch(out,p,id)
+		15: Heads.mesh(out,p,id)
+		16: Beacons.mesh(out,p,id)
+		17: Seagrass.mesh(out,p,id)
+		18: SeaPickles.mesh(out,p,id)
+		19: Corals.mesh(out,p,id)
+		20: Conduits.mesh(out,p,id)
+		21: Scaffolding.mesh(out,p,id)
+		22: VillageArt.mesh(out,p,id)
+		23: Sponges.mesh(out,p,id)
+		24: Archaeology.mesh(out,p,id)
+		25: Copper.mesh(out,p,id)
+		26: _portal(out,p,data,Vector3i(p))
+		27: _end_portal(out,p)
+		28: Rails.mesh_in(out,p,id,data,cell)
+		29: _enchanting_table(out,p)
+		30: _plant(out,p,id,info)
+		31: _ladder(out,p,data,Vector3i(p))
+		32: _bed_half(out,p,id,data,Vector3i(p))
+
 static func _empty() -> Array:
 	return [PackedVector3Array(),PackedVector3Array(),PackedVector2Array(),PackedVector2Array(),PackedColorArray(),PackedInt32Array()]
 
@@ -146,15 +241,16 @@ static func _quad(out: Array, vertices: Array, uvs: Array, normal: Vector3, tile
 		out[4].append(shade)
 	for index in ([0,2,1,0,3,2] if reverse else [0,1,2,0,2,3]): out[5].append(offset + index)
 
-static func _plant(out: Array, p: Vector3, id: int) -> void:
+static func _plant(out: Array, p: Vector3, id: int, info: NodeInfo.View = null) -> void:
 	var h: float = 0.55 if id == Nodes.WHEAT else 0.9
 	if id in [Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM]: h = 0.45
 	if id in [Nodes.SUGAR_CANE,Nodes.VINE]: h = 1.0
 	var uv: Array = [Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)]
 	for flip in 2:
 		var verts: Array = [p+Vector3(0.08,0,0.08),p+Vector3(0.92,0,0.92),p+Vector3(0.92,h,0.92),p+Vector3(0.08,h,0.08)] if flip == 0 else [p+Vector3(0.08,0,0.92),p+Vector3(0.92,0,0.08),p+Vector3(0.92,h,0.08),p+Vector3(0.08,h,0.92)]
-		_quad(out,verts,uv,Vector3.UP,Nodes.tile(id,0),Color.WHITE,false)
-		_quad(out,verts,uv,Vector3.UP,Nodes.tile(id,0),Color.WHITE,true)
+		var tile: int = info.tile(id,0) if info != null else Nodes.tile(id,0)
+		_quad(out,verts,uv,Vector3.UP,tile,Color.WHITE,false)
+		_quad(out,verts,uv,Vector3.UP,tile,Color.WHITE,true)
 
 static func _torch(out: Array, p: Vector3, id: int = Nodes.TORCH) -> void:
 	var start: int = out[0].size()

@@ -93,6 +93,7 @@ static func state(world: VoxelWorld) -> Dictionary:
 
 static func registered(world: VoxelWorld, p: Vector3i, id: int) -> void:
 	var data: Dictionary = state(world)
+	if id != BASE and not data.cells.has(p): return
 	var column := Vector2i(floori(p.x/16.0),floori(p.z/16.0))
 	# The installed source melting ABM lists only the one-layer snow node.
 	if id == BASE and world.loaded_at(Vector3(p)):

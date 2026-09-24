@@ -48,6 +48,23 @@ var villages: VillageLife
 var survival: VillageSurvival
 var adventure: Adventure
 var dimension_states: Dictionary = {}
+# The autosave serializes on a worker, so a large world never stalls play. It
+# holds a detached copy of the state; every other save, world switch and
+# deletion waits for it first so two writers never touch the same files.
+var save_task: int = -1
+var save_status: Dictionary = {}
+# Shader variants compile the first time something is drawn with them, which
+# stalled play for 200-1200 ms on a Mesa/Intel driver when the first creature
+# or dropped item came into view. One of each common kind is drawn while the
+# loading screen covers the view instead.
+var shader_warmup: Node3D = null
+# Godot frees a material's compiled shader with the last material using it, so
+# the warm-up materials are kept for the whole session.
+static var warm_materials: Array = []
+# Each creature kind builds its textures and meshes on first use, 10-30 ms.
+# The loading screen builds them ahead, a few kinds per frame, once per session.
+static var creature_art_queue: Array = []
+static var creature_art_started: bool = false
 var portal_cooldown: float = 0.0
 var portal_time: float = 0.0
 var journal_step: int = 0
@@ -79,6 +96,10 @@ var achievements: VoxeyAchievements
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
+	# After a slow frame the engine replays missed physics ticks, up to eight by
+	# default; with many mobs those ticks made the next frame slow as well. Four
+	# keeps one hitch from cascading, at the cost of briefly slower game time.
+	Engine.max_physics_steps_per_frame = 4
 	adventure = Adventure.new(self)
 	leads = LeadManager.new(self)
 	boats = Boats.new(self)
@@ -168,7 +189,8 @@ func _setup_environment() -> void:
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.fog_enabled = true
 	env.fog_light_color = Color("b7cbb7")
-	env.fog_density = 0.009
+	env.fog_mode = Environment.FOG_MODE_DEPTH
+	env.fog_density = 1.0
 	env.fog_sky_affect = 0.2
 	environment.environment = env
 	add_child(environment)
@@ -217,10 +239,14 @@ func playing() -> bool:
 	return state == "playing"
 
 func _process(delta: float) -> void:
+	if save_task >= 0 and WorkerThreadPool.is_task_completed(save_task): finish_background_save()
 	if world == null: return
 	Jukeboxes.update(world,delta)
 	maps.update()
+	if state == "loading" and not is_instance_valid(shader_warmup): _warm_shaders()
+	if state == "loading": _warm_creature_art()
 	if state == "loading" and world.area_ready(world.target): _finish_loading()
+	if state != "loading" and is_instance_valid(shader_warmup): shader_warmup.queue_free(); shader_warmup = null
 	if state != "title" and state != "loading": world.target = player.position
 	if playing():
 		Dungeons.update(world,delta)
@@ -255,7 +281,7 @@ func _process(delta: float) -> void:
 		# module's 60-second counter, so this is per frame, unlike the six-second
 		# natural-spawn cadence above.
 		WanderingTraders.update(self,delta)
-		if autosave >= 45: autosave=0; save_game(); toast("World saved")
+		if autosave >= 45: autosave=0; save_game("",true); toast("World saved")
 		if spawn_timer > 6:
 			spawn_timer = 0
 			_spawn_creature()
@@ -279,7 +305,11 @@ func _update_day() -> void:
 	environment.environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	clouds.visible = dimension == "overworld"
 	environment.environment.background_mode = Environment.BG_COLOR if dimension != "overworld" else Environment.BG_SKY
-	environment.environment.fog_density = 0.035 if dimension == "nether" else 0.009
+	# Depth fog is opaque at the view distance. Columns stream in no nearer than
+	# that, so terrain that is still loading stays hidden behind the haze.
+	var view: float = world.radius*16.0
+	environment.environment.fog_depth_end = view*(0.7 if dimension == "nether" else 1.0)
+	environment.environment.fog_depth_begin = view*(0.1 if dimension == "nether" else (0.6 if dimension == "end" else 0.45))
 	if dimension == "end":
 		daylight = 0.1
 		sunlight.light_energy = 0.3
@@ -288,7 +318,6 @@ func _update_day() -> void:
 		end_sky.sky_top_color = Color("141020"); end_sky.sky_horizon_color = Color("252033")
 		end_sky.ground_horizon_color = Color("252033"); end_sky.ground_bottom_color = Color("141020")
 		sunlight.light_color = Color("cbbddb")
-		environment.environment.fog_density = 0.004
 		environment.environment.fog_light_color = Color("252032")
 		environment.environment.ambient_light_color = Color("c5b7d7")
 		environment.environment.ambient_light_energy = 0.6
@@ -406,6 +435,7 @@ func _reset_inventory() -> Inventory:
 	return bag
 
 func _replace_world(seed_number: int) -> void:
+	finish_background_save()
 	var previous_radius: int = world.radius
 	for light in torch_lights.values(): light.queue_free()
 	torch_lights.clear()
@@ -793,6 +823,28 @@ func explode(center: Vector3, radius: float, source: Node = null, fire: bool = f
 	hud.flash = maxf(hud.flash,0.3 if player_distance < blast else 0.0)
 	sound_at("explode",center,randf_range(0.9,1.1))
 
+func _warm_creature_art() -> void:
+	if not creature_art_started:
+		creature_art_started = true
+		creature_art_queue = Creature.KINDS.keys()+Creature.ALCHEMY_KINDS+["rabbit","horse","villager","iron_golem"]
+	var started: int = Time.get_ticks_usec()
+	while not creature_art_queue.is_empty() and Time.get_ticks_usec()-started < 8000:
+		var kind: String = creature_art_queue.pop_back()
+		var mob: Creature = _creature_class(kind)
+		mob.game = self; mob.kind = kind
+		mob.model = Node3D.new(); mob.add_child(mob.model)
+		mob._build_model()
+		mob.free()
+
+# The script class that plays a creature kind, as spawn_creature chooses it.
+static func _creature_class(kind: String) -> Creature:
+	if kind in Creature.ALCHEMY_KINDS: return AlchemyCreature.new()
+	if kind in ["rabbit","horse"]: return RuralAnimal.new()
+	if kind in ["villager","iron_golem"]: return VillageMob.new()
+	if kind in ["ghast","blaze","slime","enderman","end_crystal","ender_dragon","shulker"]: return ExpeditionCreature.new()
+	if kind in ["piglin","piglin_brute"]: return NetherResident.new()
+	return Creature.new()
+
 func spawn_creature(kind: String, pos: Vector3, farm_key: String = "") -> Creature:
 	if kind == "snow_golem": return Golems.spawn(self,kind,pos)
 	if kind in Creature.ALCHEMY_KINDS:
@@ -1033,28 +1085,76 @@ func _resize_ui() -> void:
 func has_save() -> bool:
 	return not saves.list_worlds().is_empty()
 
-func save_game(path: String = "") -> bool:
+func save_game(path: String = "", background: bool = false) -> bool:
 	if state in ["title","loading"]: return false
+	finish_background_save()
 	var world_save: bool = path.is_empty()
 	if world_save: path=saves.save_path(active_world_id)
 	if path.is_empty(): return false
 	inventory.sync_pouches()
-	var snapshot: Dictionary = dimension_snapshot()
-	dimension_states[dimension] = snapshot
-	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":snapshot.edits,"growth":snapshot.growth,"stations":snapshot.stations,"block_states":snapshot.block_states,"adventure":snapshot.adventure,"inventory":inventory.slots.slice(0,Inventory.BASE_SLOTS),"pouches":inventory.pouch_slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"homes":player_homes.duplicate(true),"gamerules":game_rules.duplicate(),"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"nutrition":Hunger.snapshot(player),"ender_storage":ender_storage.duplicate(true),"effects":survival.effect_snapshot(),"armor":player.armor_slots,"offhand":player.offhand_slot,"time":day_time,"experience":experience,"journal":journal_step,"drops":snapshot.drops,"arrows":snapshot.arrows,"leads":snapshot.leads,"animals":snapshot.animals,"dimension":dimension,"dimensions":dimension_states,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
+	var snapshot: Dictionary = dimension_snapshot(background)
+	var dimensions: Dictionary = dimension_states
+	if background:
+		# The live states are replaced whole, never edited, so a shallow copy
+		# detaches them. The current dimension's edits are filled in by the worker.
+		dimensions = dimension_states.duplicate()
+		dimensions[dimension] = snapshot
+	else: dimension_states[dimension] = snapshot
+	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":snapshot.get("edits",[]),"growth":snapshot.growth,"stations":snapshot.stations,"block_states":snapshot.block_states,"adventure":snapshot.adventure,"inventory":inventory.slots.slice(0,Inventory.BASE_SLOTS),"pouches":inventory.pouch_slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"homes":player_homes.duplicate(true),"gamerules":game_rules.duplicate(),"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"nutrition":Hunger.snapshot(player),"ender_storage":ender_storage.duplicate(true),"effects":survival.effect_snapshot(),"armor":player.armor_slots,"offhand":player.offhand_slot,"time":day_time,"experience":experience,"journal":journal_step,"drops":snapshot.drops,"arrows":snapshot.arrows,"leads":snapshot.leads,"animals":snapshot.animals,"dimension":dimension,"dimensions":dimensions,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
 	data["maps"] = maps.snapshot()
+	if background:
+		var keys: Array = snapshot.edit_keys
+		var values: Array = snapshot.edit_values
+		snapshot.erase("edit_keys"); snapshot.erase("edit_values")
+		data.erase("edits"); data.erase("dimensions")
+		var frozen: Dictionary = data.duplicate(true)
+		frozen["dimensions"] = dimensions
+		var current: String = dimension
+		var status: Dictionary = {"error":"","path":path,"world_save":world_save,"id":active_world_id,"name":world_name,"seed":world.seed_value,"mode":gamemode,"day":day_number()}
+		save_status = status
+		save_task = WorkerThreadPool.add_task(func():
+			var changes: Array = edit_records(keys,values)
+			frozen["edits"] = changes
+			frozen.dimensions[current]["edits"] = changes
+			status.error = write_save(frozen,path),false,"Save world")
+		return true
+	var error: String = write_save(data,path)
+	if not error.is_empty(): toast(error); return false
+	if world_save: saves.update_metadata(active_world_id,world_name,world.seed_value,gamemode,day_number())
+	return true
+
+# Writes a save next to its previous version, keeping that as the backup. It
+# touches only its own arguments, so the autosave worker can run it.
+static func write_save(data: Dictionary, path: String) -> String:
 	var file := FileAccess.open(path+".tmp",FileAccess.WRITE)
-	if file==null: toast("Couldn't save the world: storage is unavailable."); return false
+	if file==null: return "Couldn't save the world: storage is unavailable."
 	file.store_string(JSON.stringify(data))
 	file.flush()
 	file.close()
 	if FileAccess.file_exists(path):
 		var backup_error: Error=DirAccess.copy_absolute(path,path+".bak")
-		if backup_error!=OK: toast("Couldn't create the save backup."); return false
+		if backup_error!=OK: return "Couldn't create the save backup."
 	var error: Error=DirAccess.rename_absolute(path+".tmp",path)
-	if error!=OK: toast("Couldn't finish saving the world."); return false
-	if world_save: saves.update_metadata(active_world_id,world_name,world.seed_value,gamemode,day_number())
-	return true
+	if error!=OK: return "Couldn't finish saving the world."
+	return ""
+
+static func edit_records(keys: Array, values: Array) -> Array:
+	var changes: Array = []
+	changes.resize(keys.size())
+	for i in keys.size():
+		var p: Vector3i = keys[i]
+		changes[i] = [p.x,p.y,p.z,values[i]]
+	return changes
+
+# Waits for an autosave still being written, then reports its outcome.
+func finish_background_save() -> void:
+	if save_task < 0: return
+	WorkerThreadPool.wait_for_task_completion(save_task)
+	save_task = -1
+	var status: Dictionary = save_status
+	save_status = {}
+	if not String(status.error).is_empty(): toast(status.error); return
+	if status.world_save and not String(status.id).is_empty(): saves.update_metadata(status.id,status.name,status.seed,status.mode,status.day)
 
 func read_save(path: String = "") -> Dictionary:
 	if path.is_empty(): path=saves.save_path(active_world_id)
@@ -1075,6 +1175,7 @@ func continue_world() -> void:
 
 func delete_world(id: String) -> bool:
 	if state != "title": toast("Return to the title screen before deleting a world."); return false
+	finish_background_save()
 	if not saves.delete_world(id): toast(saves.error_message); return false
 	if active_world_id == id:
 		active_world_id = ""; pending_save.clear()
@@ -1173,6 +1274,9 @@ func load_world_data(data: Dictionary) -> void:
 		if Torches.is_torch(world.edits[p]) or world.edits[p] == Nodes.GLOWSTONE: add_torch(p)
 	state="loading"
 	world.active=false
+
+func _exit_tree() -> void:
+	finish_background_save()
 
 func _notification(what: int) -> void:
 	if what==NOTIFICATION_WM_CLOSE_REQUEST:
@@ -1312,6 +1416,44 @@ func sound_at(kind: String, pos: Vector3, pitch: float = 1.0) -> void:
 	audio.stream=sounds[kind]
 	audio.pitch_scale=pitch
 	audio.play()
+
+func _warm_shaders() -> void:
+	var camera: Camera3D = get_viewport().get_camera_3d()
+	if camera == null or world.material == null: return
+	shader_warmup = Node3D.new()
+	shader_warmup.name = "ShaderWarmup"
+	shader_warmup.position = Vector3(0,-0.4,-3)
+	camera.add_child(shader_warmup)
+	var add := func(mesh: Mesh, material: Material, offset: Vector3) -> void:
+		var instance := MeshInstance3D.new()
+		instance.mesh = mesh; instance.material_override = material; instance.position = offset; instance.scale = Vector3.ONE*0.3
+		shader_warmup.add_child(instance)
+	# Terrain and translucent surfaces, in the map block vertex format.
+	var padded := PackedInt32Array(); padded.resize(5832)
+	padded[1+18+324] = Nodes.WATER; padded[2+18+324] = Nodes.STONE
+	var surfaces: Array = BlockMesher.build(padded,true)
+	for i in 2:
+		if surfaces[i].is_empty(): continue
+		var block := ArrayMesh.new(); block.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,surfaces[i])
+		add.call(block,world.material if i == 0 else world.water_material,Vector3(-1.2,0,0))
+	# Dropped nodes and items, and creature-style textured cuboids.
+	add.call(node_mesh(Nodes.STONE),node_material,Vector3(-0.6,0,0))
+	add.call(ItemArt.mesh(Nodes.STICK),ItemArt.material(Nodes.STICK),Vector3(0,0,0))
+	if warm_materials.is_empty():
+		var skin := StandardMaterial3D.new(); skin.albedo_texture = CreatureArt.texture("fur",Color.WHITE); skin.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		var glow := skin.duplicate(); glow.emission_enabled = true; glow.emission = Color.WHITE
+		var clear := skin.duplicate(); clear.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		var overlay := StandardMaterial3D.new(); overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED; overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		var plain := StandardMaterial3D.new(); plain.albedo_color = Color.WHITE
+		warm_materials = [skin,glow,clear,overlay,plain]
+	for index in warm_materials.size():
+		add.call(CreatureArt.cuboid(Vector3.ONE*0.5),warm_materials[index],Vector3(0.6+0.6*(index/3),0.4*(index%3)-0.4,0))
+	# Particle bursts render through instanced meshes.
+	var particles := CPUParticles3D.new()
+	particles.amount = 1; particles.lifetime = 5.0; particles.mesh = _particle_mesh(Nodes.STONE)
+	shader_warmup.add_child(particles)
+	var label := Label3D.new(); label.text = "Voxey"; label.position = Vector3(0,0.5,0)
+	shader_warmup.add_child(label)
 
 func node_mesh(id: int) -> ArrayMesh:
 	if not node_meshes.has(id): node_meshes[id] = Art.build_node_mesh(id)
@@ -1496,7 +1638,9 @@ func teleport(destination: Vector3) -> void:
 	state="loading"
 	hud.show_loading()
 
-func dimension_snapshot() -> Dictionary:
+# `deferred` leaves the edit list to the caller as `edit_keys`/`edit_values`;
+# the autosave converts them on its worker instead of the main thread.
+func dimension_snapshot(deferred: bool = false) -> Dictionary:
 	boats.snapshot()
 	rails.snapshot()
 	Farming.snapshot(self)
@@ -1509,8 +1653,6 @@ func dimension_snapshot() -> Dictionary:
 		if mob.kind == "ender_dragon" and not mob.is_queued_for_deletion():
 			world.adventure_state["dragon_health"] = mob.health
 			world.adventure_state["dragon_phase"] = mob.life
-	var changes: Array = []
-	for p in world.edits: changes.append([p.x,p.y,p.z,world.edits[p]])
 	var growing: Array = []
 	for p in world.growth: growing.append([p.x,p.y,p.z,world.growth[p]])
 	var dropped: Array = []
@@ -1521,7 +1663,12 @@ func dimension_snapshot() -> Dictionary:
 		if entity is TridentProjectile and entity.consumed and not entity.is_queued_for_deletion(): dropped.append({"position":[entity.position.x,entity.position.y,entity.position.z],"id":entity.stack.id,"count":1,"wear":entity.stack.wear,"data":entity.stack.get("data",{}).duplicate(true),"age":0})
 		if entity is Arrow and entity.stuck and not entity.is_queued_for_deletion():
 			arrows.append({"position":[entity.position.x,entity.position.y,entity.position.z],"rotation":[entity.rotation.x,entity.rotation.y,entity.rotation.z],"life":entity.life,"id":entity.item_id,"recoverable":entity.recoverable})
-	return {"animals":survival.animal_snapshot(),"leads":leads.snapshot(),"edits":changes,"growth":growing,"stations":world.stations.duplicate(true),"block_states":world.block_states.duplicate(true),"adventure":world.adventure_state.duplicate(true),"drops":dropped,"arrows":arrows,"position":[player.position.x,player.position.y,player.position.z]}
+	var snapshot: Dictionary = {"animals":survival.animal_snapshot(),"leads":leads.snapshot(),"growth":growing,"stations":world.stations.duplicate(true),"block_states":world.block_states.duplicate(true),"adventure":world.adventure_state.duplicate(true),"drops":dropped,"arrows":arrows,"position":[player.position.x,player.position.y,player.position.z]}
+	if deferred:
+		snapshot["edit_keys"] = world.edits.keys()
+		snapshot["edit_values"] = world.edits.values()
+	else: snapshot["edits"] = edit_records(world.edits.keys(),world.edits.values())
+	return snapshot
 
 func travel_dimension(destination: String, respawning: bool = false) -> void:
 	var retained_effects: Dictionary = survival.effect_snapshot()

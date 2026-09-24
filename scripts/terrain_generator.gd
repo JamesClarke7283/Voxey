@@ -6,7 +6,11 @@ const HEIGHT = 64 # Existing Overworld ceiling; surface coordinates are unchange
 const OVERWORLD_MIN = -128
 const NETHER_HEIGHT = 129
 const SEA = 21
+const ALL_LEVELS = Vector2i(-2147483647,2147483647)
+# Cells the column index must look at: pasture, gameplay, or any fluid.
+const INDEXED = NodeInfo.PASTURE|NodeInfo.SPECIAL|NodeInfo.BASE_WATER|NodeInfo.BASE_LAVA
 var ore_cache: Dictionary = {}
+var ore_cluster_cache: Dictionary = {}
 var dungeon_cache: Dictionary = {}
 var corridor_cache: Dictionary = {}
 var treasure_cache: Dictionary = {}
@@ -20,7 +24,17 @@ var igloo_cache: Dictionary = {}
 var witch_cache: Dictionary = {}
 var ocean_temple_cache: Dictionary = {}
 var cabin_cache: Dictionary = {}
-var dimension: String = "overworld"
+# Vertical bounds are read for nearly every node lookup, so they are kept as
+# plain values and refreshed whenever the dimension changes.
+var dimension: String = "overworld":
+	set(value):
+		dimension = value
+		floor_y = OVERWORLD_MIN if value == "overworld" else 0
+		top_y = WorldBounds.maximum(value)+1
+		ceiling_y = HEIGHT if value == "overworld" else (NETHER_HEIGHT if value == "nether" else 128)
+var floor_y: int = OVERWORLD_MIN
+var top_y: int = WorldBounds.OVERWORLD_MAX+1
+var ceiling_y: int = HEIGHT
 var world_seed: int
 var hills := FastNoiseLite.new()
 var detail := FastNoiseLite.new()
@@ -43,13 +57,13 @@ func _init(seed_value: int = 8675309, dimension_name: String = "overworld") -> v
 	caves.fractal_octaves = 2
 
 func min_y() -> int:
-	return OVERWORLD_MIN if dimension == "overworld" else 0
+	return floor_y
 
 func max_y() -> int:
-	return WorldBounds.maximum(dimension)+1
+	return top_y
 
 func terrain_ceiling() -> int:
-	return HEIGHT if dimension == "overworld" else (NETHER_HEIGHT if dimension == "nether" else 128)
+	return ceiling_y
 
 func block_levels() -> Array:
 	var levels: Array = range(0,ceili(terrain_ceiling()/16.0))
@@ -123,7 +137,9 @@ func bamboo_grove(data: PackedInt32Array, base_x: int, base_z: int, wx: int, wz:
 		placed = true
 	return placed
 
-func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false) -> Dictionary:
+# `info` is the node lookup for this job; worker jobs bring a NodeInfo snapshot.
+# Only map blocks whose level lies within `mesh_levels` get render surfaces.
+func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false, info: NodeInfo.View = null, mesh_levels: Vector2i = ALL_LEVELS) -> Dictionary:
 	# An 18-node halo gives the mesher complete boundary information. Trees are
 	# seeded in world coordinates, including roots outside the requested column.
 	var data := PackedInt32Array()
@@ -156,12 +172,9 @@ func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false)
 					for y in range(45,49): data[x+z*18+y*324] = Nodes.AIR
 				continue
 			if dimension == "nether":
-				var metrics: Dictionary = {"floor":terrain_height(wx,wz),"roof":108+int(detail.get_noise_2d(wx+500,wz)*8),"region":biome(wx,wz)}
-				for y in terrain_ceiling():
-					var structure_id: int = WorldStructures.fortress_node(Vector3i(wx,y,wz))
-					data[x+z*18+y*324] = structure_id if structure_id >= 0 else nether_node(wx,y,wz,false,metrics)
+				nether_column(data,x+z*18,wx,wz)
 				continue
-			for y in range(min_y(),0): deep[x+z*18+(y-min_y())*324] = deep_node(wx,y,wz,false)
+			deep_column(deep,x+z*18,wx,wz)
 			if absi(wx-stronghold.x) <= 24 and absi(wz-stronghold.z) <= 11:
 				for y in range(stronghold.y,stronghold.y+10):
 					var structure_id: int = WorldStructures.stronghold_node(Vector3i(wx,y,wz),stronghold)
@@ -294,69 +307,161 @@ func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false)
 	var special: Dictionary = {}
 	var reactive: Dictionary = {}
 	var flowing: Dictionary = {}
-	var pasture: Dictionary = {}
-	var pasture_cache: Dictionary = {}
-	var cover_cache: Dictionary = {}
-	var fuel_cache: Dictionary = {}
-	var fluid_cache: Dictionary = {}
-	var replaceable_cache: Dictionary = {}
+	# Pasture membership is split here so the main thread can merge it whole:
+	# grass cells, and light cells grouped by map block.
+	var pasture_cells: Dictionary = {}
+	var pasture_lights: Dictionary = {}
+	# Flowers and tall grass whose ground a later structure replaced would break
+	# (and drop as items) the moment the column loads. They are never generated.
+	var plant_cache: Dictionary = {}
+	var soil_cache: Dictionary = {}
+	if info == null: info = BlockMesher.default_info()
 	var levels: Array = block_levels()
+	var high_edits: Array = []
 	for p in edits:
-		if p.y >= terrain_ceiling() and p.y < max_y():
+		if p.y < terrain_ceiling(): continue
+		high_edits.append(p)
+		if p.y < max_y():
 			var by: int = floori(p.y/16.0)
 			if not levels.has(by): levels.append(by)
+	# Whole 18 x 18 layers are contiguous in both the terrain buffers and the
+	# padded block, so each block is assembled from layer slices.
+	var air_layer := PackedInt32Array()
+	air_layer.resize(324)
+	var floor_layer := PackedInt32Array()
+	floor_layer.resize(324)
+	floor_layer.fill(Nodes.AIR if dimension == "end" else Nodes.BEDROCK)
 	for by in levels:
 		var padded := PackedInt32Array()
-		padded.resize(18 * 18 * 18)
-		var compact := PackedInt32Array()
-		compact.resize(4096)
 		for y in 18:
 			var wy: int = by * 16 + y - 1
-			for z in 18:
-				for x in 18:
-					var id: int = Nodes.AIR
-					if wy < min_y(): id = Nodes.AIR if dimension == "end" else Nodes.BEDROCK
-					elif wy < 0: id = deep[x+z*18+(wy-min_y())*324]
-					elif wy < terrain_ceiling(): id = data[x+z*18+wy*324]
-					var p := Vector3i(base_x+x,wy,base_z+z)
-					if wy >= terrain_ceiling() and edits.has(p): id = edits[p]
-					padded[x + z * 18 + y * 324] = id
-					if x > 0 and x < 17 and y > 0 and y < 17 and z > 0 and z < 17:
-						compact[(x-1) + (z-1)*16 + (y-1)*256] = id
+			if wy < min_y(): padded.append_array(floor_layer)
+			elif wy < 0: padded.append_array(deep.slice((wy-min_y())*324,(wy-min_y()+1)*324))
+			elif wy < terrain_ceiling(): padded.append_array(data.slice(wy*324,(wy+1)*324))
+			else: padded.append_array(air_layer)
+		for p in high_edits:
+			var ly: int = p.y-by*16+1
+			var lx: int = p.x-base_x
+			var lz: int = p.z-base_z
+			if ly >= 0 and ly < 18 and lx >= 0 and lx < 18 and lz >= 0 and lz < 18: padded[lx+lz*18+ly*324] = edits[p]
+		var compact := PackedInt32Array()
+		for y in range(1,17):
+			for z in range(1,17):
+				var row: int = 1+z*18+y*324
+				compact.append_array(padded.slice(row,row+16))
 		# Surveys need the identical generated voxels, but no render meshes or
 		# active simulation indexes. Keep normal world generation unchanged.
 		if map_only:
 			blocks.append({"y":by,"data":compact})
 			continue
+		var flags: PackedInt32Array = BlockMesher.classify(padded,info)
 		# Index gameplay nodes on the worker, using its complete halo. Ordinary
 		# terrain and inert lava never need a main-thread scan on arrival.
 		for y in 16:
 			for z in 16:
 				for x in 16:
-					var index: int = x+z*16+y*256
-					var id: int = compact[index]
-					if not pasture_cache.has(id): pasture_cache[id] = Pasture.TRACKED.has(id) or Fluids.lava(id) or FruitCrops.lit(id) or Amethyst.is_crystal(id)
-					if pasture_cache[id]:
-						var above: int = padded[x+1+(z+1)*18+(y+2)*324]
-						if not cover_cache.has(above): cover_cache[above] = Fluids.liquid(above) or Pasture.opaque(above)
-						if id != Nodes.DIRT or not cover_cache[above]: pasture[Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)] = id
-					if RedstoneCircuit.circuit_node(id) or Archaeology.is_suspicious(id) or id in [Nodes.CHEST,VillageContent.CAULDRON,Dungeons.SPAWNER] or Campfires.is_campfire(id) or SnowCover.is_snow(id) or Fire.is_fire(id) or WoodTypes.is_leaves(id) or WoodTypes.is_sapling(id) or FoodFeatures.is_cake(id) or FoodFeatures.flower(id) or FoodFeatures.is_tall_grass(id) or Signs.is_sign(id) or CropFarming.is_crop(id) or Farmland.is_soil(id) or FruitCrops.is_stem(id) or FruitCrops.is_pumpkin_head(id) or Amethyst.tracked(id) or Beehives.is_hive(id):
-						special[Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)] = id
-					if not fluid_cache.has(id): fluid_cache[id] = Fluids.base(id)
-					if fluid_cache[id] == 0: continue
 					var center: int = x+1+(z+1)*18+(y+1)*324
-					var fluid_pos := Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)
-					if Fluids.flowing(id): flowing[fluid_pos] = id
+					var bits: int = flags[center]
+					if bits & INDEXED == 0: continue
+					var id: int = padded[center]
+					var cell := Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)
+					if bits & NodeInfo.PASTURE:
+						if id != Nodes.DIRT or flags[center+324] & NodeInfo.COVER == 0:
+							if Pasture.is_grass(id) or id == Nodes.DIRT: pasture_cells[cell] = true
+							elif id not in [Campfires.UNLIT,Campfires.SOUL_UNLIT]:
+								var light_block := Vector3i(coord.x,by,coord.y)
+								if not pasture_lights.has(light_block): pasture_lights[light_block] = {}
+								pasture_lights[light_block][cell] = true
+					if bits & NodeInfo.SPECIAL:
+						if not plant_cache.has(id): plant_cache[id] = FoodFeatures.flower(id) or FoodFeatures.is_tall_grass(id)
+						if plant_cache[id] and not edits.has(cell):
+							var ground: int = padded[center-324]
+							if not soil_cache.has(ground): soil_cache[ground] = Farmland.is_soil(ground) or ground in [Nodes.DIRT,Nodes.GRASS]
+							if not soil_cache[ground]:
+								padded[center] = Nodes.AIR
+								compact[x+z*16+y*256] = Nodes.AIR
+								flags[center] = info.of(Nodes.AIR)
+								if cell.y >= 0 and cell.y < terrain_ceiling(): data[x+1+(z+1)*18+cell.y*324] = Nodes.AIR
+								continue
+						special[cell] = id
+					var fluid: int = bits & (NodeInfo.BASE_WATER|NodeInfo.BASE_LAVA)
+					if fluid == 0: continue
+					if bits & NodeInfo.FLOWING: flowing[cell] = id
 					for offset in [-1,1,-18,18,-324,324]:
-						var neighbor: int = padded[center+offset]
-						if not replaceable_cache.has(neighbor): replaceable_cache[neighbor] = Fluids.replaceable(neighbor)
-						if offset != 324 and replaceable_cache[neighbor]: flowing[fluid_pos] = id
-						if not fuel_cache.has(neighbor): fuel_cache[neighbor] = Fire.flammable(neighbor)
-						if not fluid_cache.has(neighbor): fluid_cache[neighbor] = Fluids.base(neighbor)
-						if fluid_cache[id] == Nodes.LAVA and (fluid_cache[neighbor] == Nodes.WATER or fuel_cache[neighbor]) or fluid_cache[id] == Nodes.WATER and fluid_cache[neighbor] == Nodes.LAVA:
-							reactive[Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)] = id
-		blocks.append({"y":by,"data":compact, "surfaces":BlockMesher.build(padded,true)})
-	return {"coord":coord, "blocks":blocks,"special":special,"reactive":reactive,"flowing":flowing,"pasture":pasture,"dungeons":dungeons,"corridors":corridors,"treasure":treasure,"ruins":ruins,"wrecks":wrecks,"temples":temples,"portals":portals,"jungles":jungles,"outposts":outposts,"igloos":igloos,"witches":witches,"monuments":monuments,"cabins":cabins}
+						var neighbor: int = flags[center+offset]
+						if offset != 324 and neighbor & NodeInfo.REPLACEABLE: flowing[cell] = id
+						if fluid == NodeInfo.BASE_LAVA and neighbor & (NodeInfo.BASE_WATER|NodeInfo.FUEL) or fluid == NodeInfo.BASE_WATER and neighbor & NodeInfo.BASE_LAVA:
+							reactive[cell] = id
+		if by < mesh_levels.x or by > mesh_levels.y: blocks.append({"y":by,"data":compact})
+		else: blocks.append({"y":by,"data":compact, "surfaces":BlockMesher.build(padded,true,info,flags)})
+	return {"coord":coord, "blocks":blocks,"special":special,"reactive":reactive,"flowing":flowing,"pasture_cells":pasture_cells,"pasture_lights":pasture_lights,"dungeons":dungeons,"corridors":corridors,"treasure":treasure,"ruins":ruins,"wrecks":wrecks,"temples":temples,"portals":portals,"jungles":jungles,"outposts":outposts,"igloos":igloos,"witches":witches,"monuments":monuments,"cabins":cabins}
+
+# The column forms below write exactly what the per-node functions return, but
+# compute everything that depends only on x and z once per column.
+func deep_column(deep: PackedInt32Array, column: int, x: int, z: int) -> void:
+	deep[column] = Nodes.BEDROCK
+	for y in range(OVERWORLD_MIN+1,0):
+		var id: int
+		var h: int = hash_at(x,y,z)
+		if y < OVERWORLD_MIN+4 and h%5 < OVERWORLD_MIN+4-y: id = Nodes.BEDROCK
+		elif y > OVERWORLD_MIN+4 and (caves.get_noise_3d(x,y*1.3,z) > 0.33 or (y < -12 and detail.get_noise_3d(x*0.7,y*1.2,z*0.7) > 0.32)):
+			id = Nodes.LAVA if y <= -112 else Nodes.AIR
+		elif h%1000 > 984: id = Nodes.GRAVEL
+		elif y < -64 or (y <= -46 and h%18 < -46-y): id = Nodes.DEEPSLATE
+		else: id = Nodes.STONE
+		deep[column+(y-OVERWORLD_MIN)*324] = id
+
+func nether_column(data: PackedInt32Array, column: int, x: int, z: int) -> void:
+	var floor_y: int = terrain_height(x,z)
+	var roof: int = 108+int(detail.get_noise_2d(x+500,z)*8)
+	var region: String = biome(x,z)
+	var floor_id: int = Nodes.NETHERRACK
+	match region:
+		"Soul sand valley": floor_id = Nodes.SOUL_SAND
+		"Warped forest": floor_id = Nodes.WARPED_NYLIUM
+		"Crimson forest": floor_id = Nodes.CRIMSON_NYLIUM
+		"Basalt deltas": floor_id = Nodes.BASALT
+	var rock: int = Nodes.BASALT if region == "Basalt deltas" else Nodes.NETHERRACK
+	var qx: int = posmod(x,160)-60
+	var qz: int = posmod(z,160)-60
+	var fortress: bool = absi(qx) <= 28 and absi(qz) <= 28 and (absi(qx) <= 3 or absi(qz) <= 3 or absi(qx) <= 9 and absi(qz) <= 9)
+	var fx: int = posmod(x,160)
+	var fz: int = posmod(z,160)
+	var bridge_area: bool = fx >= 44 and fx < 77 and fz >= 44 and fz < 77
+	var bridge: bool = bridge_area and (fx >= 57 and fx < 62 or fz >= 57 and fz < 62)
+	var rail: bool = bridge and (fx == 57 or fx == 61 or fz == 57 or fz == 61) and not (fx >= 58 and fx < 61 and fz >= 58 and fz < 61)
+	var pillar: bool = bridge_area and fx in [45,46,74,75] and (fz == 57 or fz == 61)
+	var lavafall: bool = hash_at(x/2,90,z/2)%173 == 0
+	var glow: bool = hash_at(x/3,80,z/3)%13 == 0
+	var warped: bool = region == "Warped forest"
+	var tree_ground: int = -1000
+	var stem_column: bool = false
+	var cap_column: bool = false
+	if warped or region == "Crimson forest":
+		var rx: int = floori(float(x)/7)*7+3
+		var rz: int = floori(float(z)/7)*7+3
+		var ground_y: int = terrain_height(rx,rz)
+		if ground_y > 13 and hash_at(rx,83,rz)%3 != 0:
+			tree_ground = ground_y
+			stem_column = x == rx and z == rz
+			cap_column = absi(x-rx) <= 2 and absi(z-rz) <= 2
+	var stem: int = Nodes.WARPED_STEM if warped else Nodes.CRIMSON_STEM
+	var cap: int = Nodes.WARPED_NYLIUM if warped else Nodes.CRIMSON_NYLIUM
+	for y in NETHER_HEIGHT:
+		var id: int = WorldStructures.fortress_node(Vector3i(x,y,z)) if fortress else -1
+		if id < 0:
+			if y == 0 or y == NETHER_HEIGHT-1: id = Nodes.BEDROCK
+			elif y <= floor_y or y >= roof or (y > 10 and absf(caves.get_noise_3d(x,y*0.7,z)) > 0.49): id = floor_id if y == floor_y else rock
+			elif y <= 13: id = Nodes.LAVA
+			elif bridge and (y == 28 or y == 29): id = Nodes.NETHER_BRICKS
+			elif rail and (y == 30 or y == 31): id = Nodes.NETHER_BRICKS
+			elif pillar and y < 29: id = Nodes.NETHER_BRICKS
+			elif lavafall: id = Nodes.LAVA
+			elif y >= roof-2 and glow: id = Nodes.GLOWSTONE
+			elif stem_column and y > tree_ground and y <= tree_ground+4: id = stem
+			elif cap_column and (y == tree_ground+4 or y == tree_ground+5): id = Nodes.SHROOMLIGHT if hash_at(x,y,z)%5 == 0 else cap
+			else: id = Nodes.AIR
+		data[column+y*324] = id
 
 # World-coordinate evaluation keeps terrain and vegetation identical in halos.
 func nether_node(x: int, y: int, z: int, ores: bool = true, metrics: Dictionary = {}) -> int:

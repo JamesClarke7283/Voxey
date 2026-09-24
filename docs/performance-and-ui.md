@@ -77,3 +77,51 @@ The same 40-second rendered route covered 240.56 blocks over 2,397 frames at the
 Geode planning stays on generation workers. In a sampled geode area, planning the 25 neighboring candidates cost about 73 ms cold, including approximately 14 ms of structure checks and 50 ms of geometry planning. The generator-local cache makes repeated direct calls inexpensive, but normal streaming creates a fresh generator for each worker job and therefore still pays cold planning costs. No main-thread or cross-thread cache speedup is claimed. Hive simulation shares a 128-sample budget among production jobs; seven due hives took 1.056 ms in the focused check.
 
 `tests/nature_tour.gd` visually checks all stem stages, fruit and carved faces, hive honey levels, transparent honey/tinted glass, all crystal attachment directions, inventory icons, actual held/dropped transparent models, the pumpkin helmet mask, the spyglass aperture and a cutaway of an actual seeded geode. It uses temporary saves. The initial render exposed invalid crystal icon polygons and the pumpkin mask's missing eye cutouts; both were fixed and the clean tour repeated. A separate review found empty held/dropped meshes for the two new transparent blocks; their mesh surface and material selection were corrected and visually verified.
+
+## Streaming lag fixes (issue #1), 2026-09-24
+
+Issue #1 reported slow chunk generation and "extreme lag at random" that went away once the player stayed in one place. It was measured on a four-core laptop CPU with **Mesa Intel HD Graphics 520**, which is closer to typical player hardware than earlier measurements. There, generation had become about eight times slower than the figures above, and several main-thread tasks grew with the size of the world.
+
+- **Per-node rule chains.** `Nodes.solid` cost about 22 µs, `transparent` 26 µs and `tile` 16 µs, because each is a long chain of family checks. The mesher and the column index asked them for all 49,152 nodes of a column, so generating one Overworld column took about 2.4 s.
+- **One worker.** Terrain jobs were low-priority tasks. Godot's worker pool gives those only 30% of its threads, which is a single thread on a four-core CPU. With a fresh generator per job, structure and ore plans were rebuilt for every column.
+- **Whole-world walks.** Each column that streamed in walked every edit in the world three times and re-registered every nearby edit through about forty checks. Applying a column next to 4,000 edits took over 600 ms. `open_sky` also walked every edit.
+- **Churn in fresh terrain.** Every natural leaf was queued for a decay search when its column loaded. About 5% of generated flowers and tall grass stood on ground a structure had replaced, so they broke and dropped as items as soon as their column arrived.
+- **Autosave stalls.** The 45-second autosave serialized the world on the main thread: 251 ms with 40,000 edits.
+- **First-use costs.** Shader variants compile when a material is first drawn: 200–1,200 ms on this driver, the first time a creature, dropped item or particle came into view. Each creature kind also builds its textures and meshes on first spawn: 12–32 ms.
+
+### Changes
+
+- **`NodeInfo` lookup tables.** `NodeInfo` classifies each node id once into a bit set: solidity, transparency, cube and occlusion flags, fluid kind, gameplay index flags, custom mesh kind, unit-cube collision and atlas tiles. Only the main thread writes the shared tables. A worker job gets its own snapshot and returns the ids it had to classify. `Nodes.solid`, `transparent`, `plant`, `tile` and `title`, light filters and light emission are memoized the same way.
+- **Mesher.** The mesher reads one flag word per node. It finds visible faces in one pass that skips air and enclosed solid layers, and greedy-merges only the faces it found. Its output is byte-identical to the previous mesher.
+- **Generator.** Padded blocks are assembled from layer slices. Deep and Nether terrain are evaluated one column at a time. Pasture membership is split on the worker, so the main thread merges it whole.
+- **Worker scheduling.** Generators are pooled, one job each at a time, and ore clusters are cached per mapchunk. Terrain jobs run at high priority, up to CPU count minus two at once. Desert temples and ocean ruins shuffled their suspicious nodes with the global random generator; they now use their own seeded one, so generation is deterministic and independent of column order.
+- **Vertical view range.** Map blocks more than `radius` levels above or below the player are generated but not meshed until the player's level brings them into range. The fog makes them invisible anyway.
+- **Edit index and load hooks.** Edits are indexed by column. Column loads, `open_sky`, sponges, copper and rain read only the columns they need. Load-time registration uses a per-id hook table. Generated leaves are only searched for support when an edit lies within reach, and unsupported flowers and grass are never generated.
+- **Autosave.** The main thread captures the world state. A worker builds the edit list, serializes it and writes the file. Manual saves, world switches and deletion wait for it first.
+- **Loading-screen warm-up.** During the loading screen, the game draws one object of each common material kind, keeping those materials for the session so their shaders stay compiled, and builds every creature kind's art.
+- **Per-tick and per-frame savings.** Creatures sample line of sight five times a second rather than every physics tick, and only hostile mobs look. Remesh snapshots copy whole rows. The HUD reuses its style boxes. Physics replays at most four missed ticks after a slow frame, so one hitch no longer cascades.
+- **Fog.** Fog uses depth mode and is opaque at the view distance (`radius × 16` blocks). Columns still loading at the edge are hidden behind haze, as the issue suggested.
+
+### Measurements
+
+The CPU figures are headless, seed 8675309, on the same four-core machine for both builds. Before is the parent commit, run the same way.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| Generate and mesh an Overworld column (median of 4) | 2,418 ms | 266 ms |
+| Generate and mesh a Nether column (median of 4) | 1,504 ms | 106 ms |
+| Apply a column on the main thread, no edits | 16.5 ms | 7.5 ms |
+| Apply a column containing 1,000 edits | 179 ms | 54 ms |
+| Apply a column containing 4,000 edits | 627 ms | 171 ms |
+| Autosave, main-thread time, 40,000 edits | 251 ms | 5 ms |
+
+The rendered benchmark is `tests/survival_streaming_benchmark.gd`. It is a survival world at view distance 4 with an uncapped frame rate, crossing 120 blocks at sprint speed in 20 seconds. On the parent commit, loading into the world took **85.3 s**. While moving, generation never caught up: the final view had **0%** of its columns loaded, with one column drawn. Its frame times therefore measure an almost empty scene. With the fixes:
+
+| Rendered run | Load | View loaded at end | Median | 95th percentile | Frames > 100 ms | Average FPS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Run 1 | 4.1 s | 81% | 17.2 ms | 66.2 ms | 2 | 40.9 |
+| Run 2 | 3.6 s | 81% | 17.8 ms | 64.7 ms | 7 | 40.0 |
+
+Both runs pass a pillager outpost. Its party of about twenty mobs fighting iron golems accounts for most frames over 33 ms near the end of the route. Before the shader warm-up and creature-sight changes, the same route had around fifty frames over 100 ms, and single frames of up to 400 ms.
+
+`tests/lag_benchmark.gd` reproduces the CPU rows, and `tests/world_benchmark.gd` the per-column figures. Raw results are under `streaming_lag_2026_09_24` in the [raw measurements](performance-measurements.json). All nine suites passed: 7,411 checks.

@@ -131,12 +131,9 @@ static func natural_light(world: VoxelWorld, p: Vector3i) -> int:
 	var sky: int = clampi(roundi(2.0+12.0*clampf((game.daylight-0.05)/0.95,0,1)),2,14)
 	var geometry_key: Array = [world.get_instance_id(),world.dimension,world.sky_revision]
 	if geometry_key != geometry_cache_key:
+		# Any node change invalidates the geometry. Columns are re-sorted lazily,
+		# only when a light query reaches them.
 		geometry_cache_key = geometry_key; light_block_columns.clear(); sky_column_cache.clear()
-		for block in world.blocks:
-			var column := Vector2i(block.x,block.z)
-			if not light_block_columns.has(column): light_block_columns[column] = []
-			light_block_columns[column].append(block)
-		for blocks in light_block_columns.values(): blocks.sort_custom(func(a: Vector3i,b: Vector3i): return a.y > b.y)
 	var cache_key: Array = geometry_key+[sky]
 	if cache_key != light_cache_key:
 		light_cache_key = cache_key; light_cache.clear()
@@ -197,7 +194,12 @@ static func _sky_column(world: VoxelWorld, column: Vector2i) -> Dictionary:
 	var offset: int = posmod(column.x,16)+posmod(column.y,16)*16
 	# Empty altitude gaps are implicit air, even with a building at Y30,900.
 	# Inspect only allocated mapblocks, from the top until the first opaque cell.
-	for block in light_block_columns.get(chunk,[]):
+	if not light_block_columns.has(chunk):
+		var sorted: Array = world.column_blocks.get(chunk,[]).duplicate()
+		sorted.sort_custom(func(a: Vector3i,b: Vector3i): return a.y > b.y)
+		light_block_columns[chunk] = sorted
+	for block in light_block_columns[chunk]:
+		if not world.blocks.has(block): continue
 		var data: PackedInt32Array = world.blocks[block].data
 		for y in range(15,-1,-1):
 			var id: int = data[offset+y*256]
@@ -211,7 +213,19 @@ static func _sky_column(world: VoxelWorld, column: Vector2i) -> Dictionary:
 	sky_column_cache[column] = result
 	return result
 
+# Light propagation asks this for every cell it visits. It depends only on the
+# id, so the main thread keeps each answer (see NodeInfo for the thread rules).
+static var filter_memo: Dictionary = {}
+
 static func light_filter(id: int) -> int:
+	if not NodeInfo.cached(): return uncached_light_filter(id)
+	var known: Variant = filter_memo.get(id)
+	if known != null: return known
+	var value: int = uncached_light_filter(id)
+	filter_memo[id] = value
+	return value
+
+static func uncached_light_filter(id: int) -> int:
 	if id == Amethyst.TINTED_GLASS: return -1
 	if id == Nodes.AIR: return 0
 	if WoodTypes.is_leaves(id) or Fluids.water(id): return 1

@@ -77,7 +77,7 @@ Craft an **enchanting table** from a book, two diamonds, and four obsidian. Righ
 
 Select a saved world and choose **Delete…** to delete it. The confirmation names the world; **Cancel** or Escape keeps it. Confirmed deletion includes its dimensions and backups.
 
-See [the performance and interface update](docs/performance-and-ui.md) for the gray recipe grid, GPU diagnostics, wall torches, inventory rules and measured streaming improvements.
+See [the performance and interface update](docs/performance-and-ui.md) for the gray recipe grid, GPU diagnostics, wall torches, inventory rules and measured streaming improvements. Its [streaming lag section](docs/performance-and-ui.md#streaming-lag-fixes-issue-1-2026-09-24) covers faster column generation, fog that hides terrain still loading at the view distance, and background autosaves.
 
 ## Console
 

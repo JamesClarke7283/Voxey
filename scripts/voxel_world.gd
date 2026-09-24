@@ -6,10 +6,21 @@ const SIZE = 16
 var dimension: String = "overworld"
 var seed_value: int = 8675309
 var generator: TerrainGenerator
+# Idle generators for worker jobs. Each job owns one at a time, so structure and
+# ore caches carry over between columns without being shared across threads.
+var generator_pool: Array = []
 var blocks: Dictionary = {}
+# Map block coordinates per column, so unloading never scans every block.
+var column_blocks: Dictionary = {}
 var hazards: Dictionary = {}
 var columns: Dictionary = {}
 var edits: Dictionary = {}
+# Edited positions grouped by column, so streaming and sky checks never walk
+# every edit in the world. Writes that go straight to `edits` (save loading,
+# structure repair, tests) are caught by a size check, and a removed key is
+# caught when its column is read; either rebuilds the index from `edits`.
+var edit_columns: Dictionary = {}
+var edit_count: int = 0
 var stations: Dictionary = {}
 var growth: Dictionary = {}
 var block_states: Dictionary = {}
@@ -20,8 +31,20 @@ var pending: Dictionary = {}
 var jobs: Array = []
 var remesh_jobs: Array = []
 var dirty: Dictionary = {}
+# Vertical view range. Depth fog is opaque at `radius` columns, so a map block
+# more than `radius` levels above or below the camera can never be seen. Such
+# blocks keep their nodes but no mesh; they are meshed, nearest first, when the
+# player's level brings them into range.
+var unmeshed: Dictionary = {}
+var mesh_queue: Array = []
+var mesh_level: int = 999999
+var mesh_radius: int = -1
 var desired: Vector2i = Vector2i(999999,999999)
 var generation_queue: Array = []
+# Terrain jobs run at high priority because the worker pool gives low-priority
+# tasks only 30% of its threads, which is a single thread on a four-core CPU.
+# The cap leaves one core for the main thread and one for block remeshes.
+static var generation_slots: int = clampi(OS.get_processor_count()-2,1,6)
 var radius: int = 4:
 	set(value):
 		if value != radius:
@@ -64,6 +87,7 @@ func configure(seed_number: int, atlas: Texture2D, dimension_name: String = "ove
 	SnowCover.reset(self)
 	if has_meta("wood_runtime"): remove_meta("wood_runtime")
 	generator = TerrainGenerator.new(seed_value,dimension)
+	generator_pool.clear()
 	circuits = RedstoneCircuit.new(self)
 	fluids = Fluids.new(self)
 	material = ShaderMaterial.new()
@@ -91,12 +115,18 @@ func _process(delta: float) -> void:
 		generation_queue.sort_custom(func(a: Vector2i,b: Vector2i): return a.distance_squared_to(center) > b.distance_squared_to(center))
 		for c in columns.keys():
 			if maxi(absi(c.x-center.x),absi(c.y-center.y)) > radius + 1: _unload(c)
+	var level: int = floori(target.y/16.0)
+	if level != mesh_level or radius != mesh_radius:
+		mesh_level = level; mesh_radius = radius
+		_refresh_vertical_meshes()
 	var started: int = Time.get_ticks_usec()
 	for job in jobs.duplicate():
 		if not WorkerThreadPool.is_task_completed(job.task): continue
 		WorkerThreadPool.wait_for_task_completion(job.task)
 		jobs.erase(job)
 		pending.erase(job.coord)
+		NodeInfo.learn(job.info)
+		if job.gen.world_seed == seed_value and job.gen.dimension == dimension: generator_pool.append(job.gen)
 		if maxi(absi(job.coord.x-center.x), absi(job.coord.y-center.y)) <= radius+1:
 			_apply_column(job.result)
 		if Time.get_ticks_usec() - started > 5000: break
@@ -104,21 +134,26 @@ func _process(delta: float) -> void:
 		if not WorkerThreadPool.is_task_completed(job.task): continue
 		WorkerThreadPool.wait_for_task_completion(job.task)
 		remesh_jobs.erase(job)
+		NodeInfo.learn(job.info)
 		if blocks.has(job.coord): _apply_mesh(job.coord,job.result)
 		if Time.get_ticks_usec() - started > 7000: break
-	while remesh_jobs.size() < 2 and not dirty.is_empty():
+	var remesh_slots: int = maxi(2,generation_slots)
+	while remesh_jobs.size() < remesh_slots and not dirty.is_empty():
 		var coord: Vector3i = dirty.keys()[0]
 		dirty.erase(coord)
 		if not blocks.has(coord): continue
-		var already: bool = false
-		for job in remesh_jobs:
-			if job.coord == coord: already = true
-		if already: dirty[coord] = true; break
-		var snapshot: PackedInt32Array = _snapshot(coord)
-		var job: Dictionary = {"coord":coord, "result":[]}
-		job.task = WorkerThreadPool.add_task(func(): job.result = BlockMesher.build(snapshot,true))
-		remesh_jobs.append(job)
-	while jobs.size() < 2 and not generation_queue.is_empty():
+		# Out of range, the block is meshed from its current nodes on arrival.
+		if unmeshed.has(coord) and not in_mesh_range(coord.y): continue
+		if _remeshing(coord): dirty[coord] = true; break
+		_start_remesh(coord)
+	# Blocks entering the vertical range come after the player's own edits.
+	while remesh_jobs.size() < remesh_slots and not mesh_queue.is_empty():
+		var coord: Vector3i = mesh_queue.pop_back()
+		if not unmeshed.has(coord) or not blocks.has(coord) or not in_mesh_range(coord.y) or _remeshing(coord): continue
+		# A snapshot needs the neighbouring columns; loading one re-queues this.
+		if not _neighbors_loaded(Vector2i(coord.x,coord.z)): continue
+		_start_remesh(coord)
+	while jobs.size() < generation_slots and not generation_queue.is_empty():
 		var nearest: Vector2i = generation_queue.pop_back()
 		if not columns.has(nearest) and not pending.has(nearest): _queue_column(nearest)
 	if active:
@@ -161,15 +196,157 @@ func _process(delta: float) -> void:
 			tick = 0.0
 			_simulate()
 
+func record_edit(p: Vector3i, id: int) -> void:
+	if not edits.has(p) and edit_count == edits.size():
+		var column := Vector2i(floori(p.x/16.0),floori(p.z/16.0))
+		if not edit_columns.has(column): edit_columns[column] = []
+		edit_columns[column].append(p)
+		edit_count += 1
+	edits[p] = id
+
+func column_edits(column: Vector2i) -> Array:
+	if edit_count != edits.size(): _reindex_edits()
+	var found: Array = edit_columns.get(column,[])
+	for p in found:
+		if not edits.has(p):
+			_reindex_edits()
+			return edit_columns.get(column,[])
+	return found
+
+func _reindex_edits() -> void:
+	edit_columns.clear()
+	for p in edits:
+		var key := Vector2i(floori(p.x/16.0),floori(p.z/16.0))
+		if not edit_columns.has(key): edit_columns[key] = []
+		edit_columns[key].append(p)
+	edit_count = edits.size()
+
+# Every edit in the loaded columns, without visiting unloaded ones.
+func loaded_edits() -> Array:
+	var found: Array = []
+	for column in columns: found.append_array(column_edits(column))
+	return found
+
+# Edits inside a column and its one-node border.
+func edits_near(column: Vector2i) -> Array:
+	var found: Array = []
+	for dz in range(-1,2):
+		for dx in range(-1,2):
+			for p in column_edits(column+Vector2i(dx,dz)):
+				if p.x >= column.x*16-1 and p.x <= column.x*16+16 and p.z >= column.y*16-1 and p.z <= column.y*16+16: found.append(p)
+	return found
+
+func _remeshing(coord: Vector3i) -> bool:
+	for job in remesh_jobs:
+		if job.coord == coord: return true
+	return false
+
+func _start_remesh(coord: Vector3i) -> void:
+	var snapshot: PackedInt32Array = _snapshot(coord)
+	var info: NodeInfo.View = NodeInfo.view()
+	var job: Dictionary = {"coord":coord, "result":[], "info":info}
+	# Player edits jump ahead of terrain generation in the worker pool.
+	job.task = WorkerThreadPool.add_task(func(): job.result = BlockMesher.build(snapshot,true,info),true,"Remesh map block")
+	remesh_jobs.append(job)
+
+func in_mesh_range(level: int) -> bool:
+	return absi(level-mesh_level) <= radius
+
+# A neighbour that is still due to generate would supply the block's border.
+# Beyond the view radius it never loads; the faces toward it point away from the
+# player and are back-face culled.
+func _neighbors_loaded(column: Vector2i) -> bool:
+	for dz in range(-1,2):
+		for dx in range(-1,2):
+			var c: Vector2i = column+Vector2i(dx,dz)
+			if columns.has(c) or not WorldBounds.horizontal(Vector3i(c.x*16,0,c.y*16)): continue
+			if maxi(absi(c.x-desired.x),absi(c.y-desired.y)) <= radius: return false
+	return true
+
+# Frees meshes well outside the vertical range (one level of hysteresis keeps a
+# player on a boundary from churning) and queues blocks that entered it.
+func _refresh_vertical_meshes() -> void:
+	mesh_queue.clear()
+	for coord in blocks:
+		var gap: int = absi(coord.y-mesh_level)
+		if gap > radius+1 and not blocks[coord].meshes.is_empty():
+			for mesh_node in blocks[coord].meshes: mesh_node.queue_free()
+			blocks[coord].meshes.clear()
+			unmeshed[coord] = true
+		elif gap <= radius and unmeshed.has(coord): mesh_queue.append(coord)
+	_sort_mesh_queue()
+
+func _sort_mesh_queue() -> void:
+	var eye := Vector3(target.x/16.0-0.5,target.y/16.0-0.5,target.z/16.0-0.5)
+	mesh_queue.sort_custom(func(a: Vector3i,b: Vector3i): return Vector3(a).distance_squared_to(eye) > Vector3(b).distance_squared_to(eye))
+
 func _queue_column(coord: Vector2i) -> void:
 	var local_edits: Dictionary = {}
-	for p in edits:
-		if p.x >= coord.x*16-1 and p.x <= coord.x*16+16 and p.z >= coord.y*16-1 and p.z <= coord.y*16+16: local_edits[p] = edits[p]
-	var gen := TerrainGenerator.new(seed_value,dimension)
-	var job: Dictionary = {"coord":coord,"result":{}}
-	job.task = WorkerThreadPool.add_task(func(): job.result = gen.generate_column(coord,local_edits),false,"Generate map blocks")
+	for p in edits_near(coord): local_edits[p] = edits[p]
+	var gen: TerrainGenerator = generator_pool.pop_back() if not generator_pool.is_empty() else TerrainGenerator.new(seed_value,dimension)
+	var info: NodeInfo.View = NodeInfo.view()
+	var job: Dictionary = {"coord":coord,"result":{},"info":info,"gen":gen}
+	var levels := Vector2i(mesh_level-radius,mesh_level+radius) if mesh_level != 999999 else TerrainGenerator.ALL_LEVELS
+	job.task = WorkerThreadPool.add_task(func(): job.result = gen.generate_column(coord,local_edits,false,info,levels),true,"Generate map blocks")
 	jobs.append(job)
 	pending[coord] = true
+
+# The load-time registrations a node id needs, classified once per id. Only the
+# main thread applies columns, so the memo needs no locking.
+const HOOK_CIRCUIT = 1
+const HOOK_LEGACY_DOOR = 1 << 1
+const HOOK_INPUT = 1 << 2
+const HOOK_AMETHYST = 1 << 3
+const HOOK_POWDER = 1 << 4
+const HOOK_CHORUS = 1 << 5
+const HOOK_HIVE = 1 << 6
+const HOOK_SOIL = 1 << 7
+const HOOK_CROP = 1 << 8
+const HOOK_STEM = 1 << 9
+const HOOK_SAPLING = 1 << 10
+const HOOK_SNOW = 1 << 11
+const HOOK_FOOD = 1 << 12
+const HOOK_SUSPICIOUS = 1 << 13
+const HOOK_FIRE = 1 << 14
+const HOOK_CAMPFIRE = 1 << 15
+const HOOK_SIGN = 1 << 16
+const HOOK_CONDUIT = 1 << 17
+const HOOK_CORAL = 1 << 18
+const HOOK_PICKLE = 1 << 19
+const HOOK_KELP = 1 << 20
+const HOOK_BEACON = 1 << 21
+const HOOK_LEAVES = 1 << 22
+static var hook_memo: Dictionary = {}
+
+static func load_hooks(id: int) -> int:
+	var hooks: int = hook_memo.get(id,-1)
+	if hooks >= 0: return hooks
+	hooks = 0
+	if RedstoneCircuit.circuit_node(id): hooks |= HOOK_CIRCUIT
+	if Doors.legacy(id): hooks |= HOOK_LEGACY_DOOR
+	if RedstoneInputs.is_device(id): hooks |= HOOK_INPUT
+	if Amethyst.tracked(id): hooks |= HOOK_AMETHYST
+	if Concrete.is_powder(id): hooks |= HOOK_POWDER
+	if EndMud.is_chorus_part(id): hooks |= HOOK_CHORUS
+	if Beehives.is_hive(id): hooks |= HOOK_HIVE
+	if Farmland.is_soil(id): hooks |= HOOK_SOIL
+	if CropFarming.is_crop(id): hooks |= HOOK_CROP
+	if FruitCrops.is_stem(id): hooks |= HOOK_STEM
+	if WoodTypes.is_sapling(id): hooks |= HOOK_SAPLING
+	if SnowCover.is_snow(id): hooks |= HOOK_SNOW
+	if FoodFeatures.is_cake(id) or FoodFeatures.flower(id) or FoodFeatures.is_tall_grass(id): hooks |= HOOK_FOOD
+	if Archaeology.is_suspicious(id): hooks |= HOOK_SUSPICIOUS
+	if Fire.is_fire(id): hooks |= HOOK_FIRE
+	if Campfires.is_campfire(id): hooks |= HOOK_CAMPFIRE
+	if Signs.is_sign(id): hooks |= HOOK_SIGN
+	if Conduits.is_conduit(id): hooks |= HOOK_CONDUIT
+	if Corals.is_coral(id): hooks |= HOOK_CORAL
+	if SeaPickles.is_pickle(id): hooks |= HOOK_PICKLE
+	if Kelp.is_kelp(id): hooks |= HOOK_KELP
+	if Beacons.is_beacon(id): hooks |= HOOK_BEACON
+	if WoodTypes.is_leaves(id): hooks |= HOOK_LEAVES
+	hook_memo[id] = hooks
+	return hooks
 
 func _apply_column(result: Dictionary) -> void:
 	WoodTypes.restore_legacy(self)
@@ -189,39 +366,67 @@ func _apply_column(result: Dictionary) -> void:
 		root.position = Vector3(coord * SIZE)
 		add_child(root)
 		blocks[coord] = {"data":entry.data,"root":root,"meshes":[]}
-		_apply_mesh(coord,entry.surfaces)
+		_index_block(coord)
+		if entry.has("surfaces"): _apply_mesh(coord,entry.surfaces)
+		else: unmeshed[coord] = true
+	# This column may complete the neighbourhood an unmeshed block waits for.
+	var waiting: bool = false
+	for coord in unmeshed:
+		if absi(coord.x-c.x) <= 1 and absi(coord.z-c.y) <= 1 and in_mesh_range(coord.y):
+			mesh_queue.append(coord); waiting = true
+	if waiting: _sort_mesh_queue()
 	# Reconcile edits made while the worker was running, including border halos.
-	for p in edits:
-		if p.x >= c.x*16-1 and p.x <= c.x*16+16 and p.z >= c.y*16-1 and p.z <= c.y*16+16:
-			var b: Vector3i = block_coord(p)
-			if not blocks.has(b) and b.x == c.x and b.z == c.y and p.y >= generator.terrain_ceiling() and p.y < generator.max_y(): _create_air_block(b)
-			if blocks.has(b) and blocks[b].data[local_index(p)] != edits[p]:
-				blocks[b].data[local_index(p)] = edits[p]
-				_mark_dirty(p)
-	for p in result.get("special",{}):
+	var nearby_edits: Array = edits_near(c)
+	for p in nearby_edits:
+		var b: Vector3i = block_coord(p)
+		if not blocks.has(b) and b.x == c.x and b.z == c.y and p.y >= generator.terrain_ceiling() and p.y < generator.max_y(): _create_air_block(b)
+		if blocks.has(b) and blocks[b].data[local_index(p)] != edits[p]:
+			blocks[b].data[local_index(p)] = edits[p]
+			_mark_dirty(p)
+	var carts: Dictionary = result.get("corridors",{}).get("carts",{})
+	# Generated leaves and plants are supported as generated. Only an edit within
+	# reach can change that: leaf support is searched within six nodes, a plant
+	# rests on the node below. Mark the 8-node cells within seven nodes of such
+	# edits, from this and adjacent columns and the special cells' height band.
+	var special: Dictionary = result.get("special",{})
+	var edit_zone: Dictionary = {}
+	var low_y: int = 2147483647
+	var high_y: int = -2147483647
+	for p in special:
+		low_y = mini(low_y,p.y); high_y = maxi(high_y,p.y)
+	for dz in range(-1,2):
+		for dx in range(-1,2):
+			for q in column_edits(c+Vector2i(dx,dz)):
+				if q.x < c.x*16-7 or q.x > c.x*16+22 or q.z < c.y*16-7 or q.z > c.y*16+22 or q.y < low_y-7 or q.y > high_y+7: continue
+				for zz in range((q.z-7) >> 3,((q.z+7) >> 3)+1):
+					for yy in range((q.y-7) >> 3,((q.y+7) >> 3)+1):
+						for xx in range((q.x-7) >> 3,((q.x+7) >> 3)+1): edit_zone[Vector3i(xx,yy,zz)] = true
+	for p in special:
 		var id: int = node_at(p)
-		if RedstoneCircuit.circuit_node(id): circuits.register(p,id)
-		if Doors.legacy(id): legacy_doors[p] = true
-		if RedstoneInputs.is_device(id): input_updates[p] = true
+		var hooks: int = load_hooks(id)
+		if hooks & HOOK_CIRCUIT: circuits.register(p,id)
+		if hooks & HOOK_LEGACY_DOOR: legacy_doors[p] = true
+		if hooks & HOOK_INPUT: input_updates[p] = true
 		SnowCover.registered(self,p,id)
-		WoodTypes.scan(self,p,id)
-		if Amethyst.tracked(id): Amethyst.registered(self,p,id)
+		var touched: bool = not edit_zone.is_empty() and edit_zone.has(Vector3i(p.x >> 3,p.y >> 3,p.z >> 3))
+		if hooks & HOOK_LEAVES: WoodTypes.scan(self,p,id,touched)
+		if hooks & HOOK_AMETHYST: Amethyst.registered(self,p,id)
 		# Powder cells are swept for water contact, so a saved column must be
 		# tracked again on load.
-		if Concrete.is_powder(id): Concrete.placed_powder(self,p,id)
-		if EndMud.is_chorus_part(id): EndMud.registered(self,p)
-		if Beehives.is_hive(id): Beehives.registered(self,p)
-		if Farmland.is_soil(id): Farmland.registered(self,p,id)
-		if CropFarming.is_crop(id): CropFarming.registered(self,p,true)
-		if FruitCrops.is_stem(id): FruitCrops.registered(self,p,true); fruit_updates[p] = true
-		if WoodTypes.is_sapling(id) and not growth.has(p): growth[p] = 0.0
+		if hooks & HOOK_POWDER: Concrete.placed_powder(self,p,id)
+		if hooks & HOOK_CHORUS: EndMud.registered(self,p)
+		if hooks & HOOK_HIVE: Beehives.registered(self,p)
+		if hooks & HOOK_SOIL: Farmland.registered(self,p,id)
+		if hooks & HOOK_CROP: CropFarming.registered(self,p,true)
+		if hooks & HOOK_STEM: FruitCrops.registered(self,p,true); fruit_updates[p] = true
+		if hooks & HOOK_SAPLING and not growth.has(p): growth[p] = 0.0
 		if id == Dungeons.SPAWNER:
 			# Corridor spawners carry their own mob; dungeon spawners fall back to
 			# the dungeon table.
 			var corridors: Dictionary = result.get("corridors",{})
 			Dungeons.registered(self,p,str(corridors.get("spawners",{}).get(p,result.get("dungeons",{}).get("spawners",{}).get(p,"zombie"))))
-		if SnowCover.is_snow(id): snow_updates[p] = true
-		if FoodFeatures.is_cake(id) or FoodFeatures.flower(id) or FoodFeatures.is_tall_grass(id): food_updates[p] = true
+		if hooks & HOOK_SNOW: snow_updates[p] = true
+		if hooks & HOOK_FOOD and touched: food_updates[p] = true
 		if id == Nodes.CHEST and not edits.has(p):
 			if result.get("wrecks",{}).get("buried",{}).has(p): _structure_loot(p,-1,false,true)
 			elif result.get("wrecks",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,true)
@@ -240,31 +445,30 @@ func _apply_column(result: Dictionary) -> void:
 		# that structure's own table, which is where the sherds live; without the
 		# tag every node would draw from the generic sand or gravel list and the
 		# sherds would be unreachable in survival.
-		if Archaeology.is_suspicious(id):
+		if hooks & HOOK_SUSPICIOUS:
 			# Three structures place suspicious nodes, each with its own table.
 			var placed_by: String = String(result.get("ruins",{}).get("suspicious",{}).get(p,
 				String(result.get("temples",{}).get("suspicious",{}).get(p,""))))
 			if not placed_by.is_empty(): Archaeology.set_structure(self,p,placed_by)
 		# A mineshaft's loot is carried by a chest minecart standing on a rail, as
 		# the source constructs it. The cart service owns it like any other cart.
-		if result.get("corridors",{}).get("carts",{}).has(p):
-			var corridors_cart: Dictionary = result.corridors.carts
+		if not carts.is_empty() and carts.has(p):
 			var cart: MinecartEntity = get_parent().rails.spawn(Rails.CHEST_CART,Vector3(p)+Vector3(0.5,0.06,0.5))
 			if cart != null:
 				var cart_station: Dictionary = _new_station("chest",27)
-				Corridors.fill_chest(cart_station,int(corridors_cart[p]))
+				Corridors.fill_chest(cart_station,int(carts[p]))
 				var cart_record: Dictionary = get_parent().rails.records().get(cart.key,{})
 				cart_record["cargo"] = cart_station.slots
 				get_parent().rails.records()[cart.key] = cart_record
-		if Fire.is_fire(id): Fire.track(self,p)
-		if Campfires.is_campfire(id): Campfires.station(self,p)
-		if Signs.is_sign(id): Signs.station(self,p); sign_updates[p] = true
+		if hooks & HOOK_FIRE: Fire.track(self,p)
+		if hooks & HOOK_CAMPFIRE: Campfires.station(self,p)
+		if hooks & HOOK_SIGN: Signs.station(self,p); sign_updates[p] = true
 		if id == VillageContent.CAULDRON: Cauldrons.station(self,p)
-		if Conduits.is_conduit(id): Conduits.registered(self,p)
-		if Corals.is_coral(id): Corals.registered(self,p,id)
-		if SeaPickles.is_pickle(id): SeaPickles.registered(self,p,id)
-		if Kelp.is_kelp(id): Kelp.registered(self,p,id)
-		if Beacons.is_beacon(id): Beacons.registered(self,p,id)
+		if hooks & HOOK_CONDUIT: Conduits.registered(self,p)
+		if hooks & HOOK_CORAL: Corals.registered(self,p,id)
+		if hooks & HOOK_PICKLE: SeaPickles.registered(self,p,id)
+		if hooks & HOOK_KELP: Kelp.registered(self,p,id)
+		if hooks & HOOK_BEACON: Beacons.registered(self,p,id)
 	# A structure's own residents spawn once, at the marker block it reports. The
 	# markers are ordinary blocks (a chest or a cauldron), so they are not in the
 	# `special` index and must be read from each structure's own map.
@@ -305,81 +509,73 @@ func _apply_column(result: Dictionary) -> void:
 		react_fluid(p)
 		Fire.track(self,p)
 	for p in result.get("flowing",{}): fluids.activate(p)
+	# Bulk pasture membership first; the loop below re-tracks edited cells.
+	Pasture.column_generated(self,c,result.get("pasture_cells",{}),result.get("pasture_lights",{}))
 	# Changes made after the worker snapshot must also update simulation indexes.
-	for p in edits:
-		if p.x < c.x*16-1 or p.x > c.x*16+16 or p.z < c.y*16-1 or p.z > c.y*16+16: continue
+	var corridor_spawners: Dictionary = result.get("corridors",{}).get("spawners",{})
+	var dungeon_spawners: Dictionary = result.get("dungeons",{}).get("spawners",{})
+	for p in nearby_edits:
 		if not loaded_at(Vector3(p)): continue
 		Pasture.changed(self,p)
 		var id: int = node_at(p)
-		if RedstoneCircuit.circuit_node(id): circuits.register(p,id)
-		if Doors.legacy(id): legacy_doors[p] = true
-		if RedstoneInputs.is_device(id): input_updates[p] = true
+		var hooks: int = load_hooks(id)
+		var bits: int = NodeInfo.of(id)
+		if hooks & HOOK_CIRCUIT: circuits.register(p,id)
+		if hooks & HOOK_LEGACY_DOOR: legacy_doors[p] = true
+		if hooks & HOOK_INPUT: input_updates[p] = true
 		SnowCover.registered(self,p,id)
-		WoodTypes.scan(self,p,id)
-		if Amethyst.tracked(id): Amethyst.registered(self,p,id)
+		if hooks & HOOK_LEAVES: WoodTypes.scan(self,p,id)
+		if hooks & HOOK_AMETHYST: Amethyst.registered(self,p,id)
 		# Powder cells are swept for water contact, so a saved column must be
 		# tracked again on load.
-		if Concrete.is_powder(id): Concrete.placed_powder(self,p,id)
-		if EndMud.is_chorus_part(id): EndMud.registered(self,p)
-		if Beehives.is_hive(id): Beehives.registered(self,p)
-		if Farmland.is_soil(id): Farmland.registered(self,p,id)
-		if CropFarming.is_crop(id): CropFarming.registered(self,p,true)
-		if FruitCrops.is_stem(id): FruitCrops.registered(self,p,true); fruit_updates[p] = true
-		if WoodTypes.is_sapling(id) and not growth.has(p): growth[p] = 0.0
+		if hooks & HOOK_POWDER: Concrete.placed_powder(self,p,id)
+		if hooks & HOOK_CHORUS: EndMud.registered(self,p)
+		if hooks & HOOK_HIVE: Beehives.registered(self,p)
+		if hooks & HOOK_SOIL: Farmland.registered(self,p,id)
+		if hooks & HOOK_CROP: CropFarming.registered(self,p,true)
+		if hooks & HOOK_STEM: FruitCrops.registered(self,p,true); fruit_updates[p] = true
+		if hooks & HOOK_SAPLING and not growth.has(p): growth[p] = 0.0
 		if id == Dungeons.SPAWNER:
 			# Corridor spawners carry their own mob; dungeon spawners fall back to
 			# the dungeon table.
-			var corridors: Dictionary = result.get("corridors",{})
-			Dungeons.registered(self,p,str(corridors.get("spawners",{}).get(p,result.get("dungeons",{}).get("spawners",{}).get(p,"zombie"))))
-		if id == Nodes.CHEST and not edits.has(p):
-			if result.get("wrecks",{}).get("buried",{}).has(p): _structure_loot(p,-1,false,true)
-			elif result.get("wrecks",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,true)
-			elif result.get("temples",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,true)
-			elif result.get("portals",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,true)
-			elif result.get("jungles",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,true)
-			elif result.get("outposts",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,true)
-			elif result.get("igloos",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,true)
-			elif result.get("monuments",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,false,true)
-			elif result.get("cabins",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,false,false,true)
-			elif result.get("treasure",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,true)
-			elif result.get("corridors",{}).get("chests",{}).has(p): _structure_loot(p,-1,true)
-			else: _structure_loot(p,int(result.get("dungeons",{}).get("chests",{}).get(p,-1)))
+			Dungeons.registered(self,p,str(corridor_spawners.get(p,dungeon_spawners.get(p,"zombie"))))
+		# An edited position is never unlooted structure storage (`edits.has(p)`),
+		# so the structure chest branch of the generated-node loop cannot apply.
 		# A suspicious node's loot is drawn from the table of the structure that
 		# placed it. The source tags each node with the structure's name and reads
 		# that structure's own table, which is where the sherds live; without the
 		# tag every node would draw from the generic sand or gravel list and the
 		# sherds would be unreachable in survival.
-		if Archaeology.is_suspicious(id):
+		if hooks & HOOK_SUSPICIOUS:
 			# Three structures place suspicious nodes, each with its own table.
 			var placed_by: String = String(result.get("ruins",{}).get("suspicious",{}).get(p,
 				String(result.get("temples",{}).get("suspicious",{}).get(p,""))))
 			if not placed_by.is_empty(): Archaeology.set_structure(self,p,placed_by)
 		# A mineshaft's loot is carried by a chest minecart standing on a rail, as
 		# the source constructs it. The cart service owns it like any other cart.
-		if result.get("corridors",{}).get("carts",{}).has(p):
-			var corridors_cart: Dictionary = result.corridors.carts
+		if not carts.is_empty() and carts.has(p):
 			var cart: MinecartEntity = get_parent().rails.spawn(Rails.CHEST_CART,Vector3(p)+Vector3(0.5,0.06,0.5))
 			if cart != null:
 				var cart_station: Dictionary = _new_station("chest",27)
-				Corridors.fill_chest(cart_station,int(corridors_cart[p]))
+				Corridors.fill_chest(cart_station,int(carts[p]))
 				var cart_record: Dictionary = get_parent().rails.records().get(cart.key,{})
 				cart_record["cargo"] = cart_station.slots
 				get_parent().rails.records()[cart.key] = cart_record
-		if SnowCover.is_snow(id) or SnowCover.is_snow(node_at(p+Vector3i.UP)): snow_updates[p] = true
-		if FoodFeatures.is_cake(id) or FoodFeatures.flower(id) or FoodFeatures.is_tall_grass(id) or FoodFeatures.is_cake(node_at(p+Vector3i.UP)) or FoodFeatures.flower(node_at(p+Vector3i.UP)) or FoodFeatures.is_tall_grass(node_at(p+Vector3i.UP)): food_updates[p] = true
-		if Fire.is_fire(id) or Fluids.lava(id): Fire.track(self,p)
-		if Campfires.is_campfire(id): Campfires.station(self,p)
-		if Signs.is_sign(id): Signs.station(self,p); sign_updates[p] = true
+		var above: int = load_hooks(node_at(p+Vector3i.UP))
+		if (hooks|above) & HOOK_SNOW: snow_updates[p] = true
+		if (hooks|above) & HOOK_FOOD: food_updates[p] = true
+		if hooks & HOOK_FIRE or bits & NodeInfo.BASE_LAVA: Fire.track(self,p)
+		if hooks & HOOK_CAMPFIRE: Campfires.station(self,p)
+		if hooks & HOOK_SIGN: Signs.station(self,p); sign_updates[p] = true
 		if id == VillageContent.CAULDRON: Cauldrons.station(self,p)
-		if Conduits.is_conduit(id): Conduits.registered(self,p)
-		if Corals.is_coral(id): Corals.registered(self,p,id)
-		if SeaPickles.is_pickle(id): SeaPickles.registered(self,p,id)
-		if Kelp.is_kelp(id): Kelp.registered(self,p,id)
-		if Beacons.is_beacon(id): Beacons.registered(self,p,id)
-		if Fluids.liquid(id): react_fluid(p); fluids.activate(p)
-		if Fire.flammable(id):
+		if hooks & HOOK_CONDUIT: Conduits.registered(self,p)
+		if hooks & HOOK_CORAL: Corals.registered(self,p,id)
+		if hooks & HOOK_PICKLE: SeaPickles.registered(self,p,id)
+		if hooks & HOOK_KELP: Kelp.registered(self,p,id)
+		if hooks & HOOK_BEACON: Beacons.registered(self,p,id)
+		if bits & (NodeInfo.BASE_WATER|NodeInfo.BASE_LAVA): react_fluid(p); fluids.activate(p)
+		if bits & NodeInfo.FUEL:
 			for side in SIDES: Fire.track(self,p+side)
-	Pasture.column_loaded(self,c,result.get("pasture",{}))
 	# Validate after reconciling all edits. Removing support can write new edits,
 	# so it must run outside the dictionary iteration above.
 	for p in snow_updates: SnowCover.changed(self,p)
@@ -404,6 +600,7 @@ func _apply_column(result: Dictionary) -> void:
 	column_loaded.emit()
 
 func _apply_mesh(coord: Vector3i, surfaces: Array) -> void:
+	unmeshed.erase(coord)
 	var entry: Dictionary = blocks[coord]
 	for mesh_node in entry.meshes: mesh_node.queue_free()
 	entry.meshes.clear()
@@ -442,9 +639,15 @@ func _unload(c: Vector2i) -> void:
 	for p in hazards.keys():
 		if block_coord(p).x == c.x and block_coord(p).z == c.y: hazards.erase(p)
 	circuits.unload(c)
-	for b in blocks.keys():
-		if b.x == c.x and b.z == c.y:
-			blocks[b].root.queue_free(); blocks.erase(b); dirty.erase(b)
+	for b in column_blocks.get(c,[]):
+		if not blocks.has(b): continue
+		blocks[b].root.queue_free(); blocks.erase(b); dirty.erase(b); unmeshed.erase(b)
+	column_blocks.erase(c)
+
+func _index_block(coord: Vector3i) -> void:
+	var column := Vector2i(coord.x,coord.z)
+	if not column_blocks.has(column): column_blocks[column] = []
+	column_blocks[column].append(coord)
 
 static func block_coord(p: Vector3i) -> Vector3i:
 	return Vector3i(floori(p.x/16.0),floori(p.y/16.0),floori(p.z/16.0))
@@ -452,13 +655,15 @@ static func block_coord(p: Vector3i) -> Vector3i:
 static func local_index(p: Vector3i) -> int:
 	return posmod(p.x,16) + posmod(p.z,16)*16 + posmod(p.y,16)*256
 
+# The hottest lookup in the game: collision, AI, light and fluids all use it.
+# Shifts and masks are exact floor division and modulo by 16 for negatives too.
 func node_at(p: Vector3i) -> int:
-	if not WorldBounds.horizontal(p): return Nodes.BEDROCK
-	if p.y < generator.min_y(): return Nodes.AIR if dimension == "end" else Nodes.BEDROCK
-	if p.y >= generator.max_y(): return Nodes.BEDROCK
-	var b: Vector3i = block_coord(p)
-	if blocks.has(b): return blocks[b].data[local_index(p)]
-	if p.y >= generator.terrain_ceiling() and loaded_at(Vector3(p)): return Nodes.AIR
+	if p.x < WorldBounds.MIN_XZ or p.x > WorldBounds.MAX_XZ or p.z < WorldBounds.MIN_XZ or p.z > WorldBounds.MAX_XZ: return Nodes.BEDROCK
+	if p.y < generator.floor_y: return Nodes.AIR if dimension == "end" else Nodes.BEDROCK
+	if p.y >= generator.top_y: return Nodes.BEDROCK
+	var block: Variant = blocks.get(Vector3i(p.x >> 4,p.y >> 4,p.z >> 4))
+	if block != null: return block.data[(p.x & 15)+(p.z & 15)*16+(p.y & 15)*256]
+	if p.y >= generator.ceiling_y and columns.has(Vector2i(p.x >> 4,p.z >> 4)): return Nodes.AIR
 	# Treat unloaded terrain as solid for movement; streaming never drops a player.
 	return Nodes.BEDROCK
 
@@ -494,7 +699,7 @@ func set_node(p: Vector3i, id: int) -> bool:
 	if Fire.flammable(id) or Fire.flammable(old_id):
 		for side in Fire.SIDES: Fire.track(self,p+side)
 	circuits.changed(p,old_id,id)
-	edits[p] = id
+	record_edit(p,id)
 	if id == Nodes.SUGAR_CANE or WoodTypes.is_sapling(id) or not CropFarming.is_crop(id) and VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3: growth[p] = 0.0
 	else: growth.erase(p)
 	_mark_dirty(p)
@@ -539,6 +744,7 @@ func _create_air_block(coord: Vector3i) -> void:
 	root.position = Vector3(coord*16); add_child(root)
 	var data := PackedInt32Array(); data.resize(4096)
 	blocks[coord] = {"data":data,"root":root,"meshes":[]}
+	_index_block(coord)
 
 func _mark_dirty(p: Vector3i) -> void:
 	dirty[block_coord(p)] = true
@@ -546,31 +752,38 @@ func _mark_dirty(p: Vector3i) -> void:
 		if block_coord(p+d) != block_coord(p): dirty[block_coord(p+d)] = true
 
 func _snapshot(coord: Vector3i) -> PackedInt32Array:
-	var data := PackedInt32Array()
-	data.resize(5832)
-	# Resolve the 27 blocks once, then copy contiguous rows. Missing neighbors
-	# remain invisible, while the bottom world boundary still occludes faces.
+	# Resolve the 27 blocks once. Missing neighbours remain invisible (air),
+	# while the bottom world boundary still occludes faces.
+	var near: Array = []
+	near.resize(27)
 	for dy in range(-1,2):
-		var y0: int = 0 if dy < 0 else (1 if dy == 0 else 17)
-		var y1: int = 17 if dy == 0 else y0+1
 		for dz in range(-1,2):
-			var z0: int = 0 if dz < 0 else (1 if dz == 0 else 17)
-			var z1: int = 17 if dz == 0 else z0+1
 			for dx in range(-1,2):
-				var x0: int = 0 if dx < 0 else (1 if dx == 0 else 17)
-				var x1: int = 17 if dx == 0 else x0+1
 				var b: Vector3i = coord+Vector3i(dx,dy,dz)
-				var source: PackedInt32Array = blocks[b].data if blocks.has(b) else PackedInt32Array()
-				for y in range(y0,y1):
-					for z in range(z0,z1):
-						var dst: int = z*18+y*324
-						var src: int = ((z+15)%16)*16+((y+15)%16)*256
-						if source.is_empty():
-							var wy: int = coord.y*16+y-1
-							if wy <= generator.min_y() and dimension != "end":
-								for x in range(x0,x1): data[dst+x] = Nodes.BEDROCK
-						else:
-							for x in range(x0,x1): data[dst+x] = source[src+(x+15)%16]
+				near[(dx+1)+(dz+1)*3+(dy+1)*9] = blocks[b].data if blocks.has(b) else PackedInt32Array()
+	var air_row := PackedInt32Array()
+	air_row.resize(16)
+	var rock_row := PackedInt32Array()
+	rock_row.resize(16)
+	rock_row.fill(Nodes.BEDROCK)
+	# Each padded row is a left halo node, sixteen contiguous nodes of the middle
+	# block and a right halo node.
+	var data := PackedInt32Array()
+	for y in 18:
+		var dy: int = -1 if y == 0 else (1 if y == 17 else 0)
+		var below_world: bool = coord.y*16+y-1 <= generator.min_y() and dimension != "end"
+		var fill: int = Nodes.BEDROCK if below_world else Nodes.AIR
+		var fill_row: PackedInt32Array = rock_row if below_world else air_row
+		for z in 18:
+			var dz: int = -1 if z == 0 else (1 if z == 17 else 0)
+			var row: int = ((z+15)%16)*16+((y+15)%16)*256
+			var slot: int = (dz+1)*3+(dy+1)*9
+			var left: PackedInt32Array = near[slot]
+			var middle: PackedInt32Array = near[slot+1]
+			var right: PackedInt32Array = near[slot+2]
+			data.append(fill if left.is_empty() else left[row+15])
+			data.append_array(fill_row if middle.is_empty() else middle.slice(row,row+16))
+			data.append(fill if right.is_empty() else right[row])
 	return data
 
 func collision_boxes(p: Vector3i) -> Array:
@@ -600,6 +813,9 @@ func intersects(pos: Vector3, half_width: float = 0.29, height: float = 1.8) -> 
 	var lo := Vector3i(floori(pos.x-half_width),floori(pos.y+0.002),floori(pos.z-half_width))
 	var hi := Vector3i(floori(pos.x+half_width),floori(pos.y+height-0.002),floori(pos.z+half_width))
 	var body := AABB(pos-Vector3(half_width,-0.002,half_width),Vector3(half_width*2,height-0.004,half_width*2))
+	# Read the shared trait table directly; a miss falls back to NodeInfo.
+	var traits: PackedInt32Array = NodeInfo.traits if NodeInfo.cached() else PackedInt32Array()
+	var known: int = traits.size()
 	# Fences/walls extend into the cell above; include that lower cell even when
 	# the actor's feet have left it. Ordinary cubes do not need the extra scan.
 	for y in range(lo.y-1,hi.y+1):
@@ -607,10 +823,15 @@ func intersects(pos: Vector3, half_width: float = 0.29, height: float = 1.8) -> 
 			for x in range(lo.x,hi.x+1):
 				var p := Vector3i(x,y,z)
 				var id: int = node_at(p)
-				if not Nodes.solid(id) or y < lo.y and not Barriers.is_barrier(id): continue
-				if not Farmland.is_soil(id) and not Amethyst.is_crystal(id) and not FoodFeatures.is_cake(id) and not Doors.is_door(id) and not SnowCover.is_snow(id) and not Trapdoors.is_trapdoor(id) and not Barriers.is_barrier(id) and not BuildingShapes.is_shape(id) and not Campfires.is_campfire(id) and id != VillageContent.CAULDRON and not RedstoneSensors.is_detector(id):
+				var bits: int = traits[id] if id >= 0 and id < known else 0
+				if bits == 0: bits = NodeInfo.of(id)
+				if bits & NodeInfo.SOLID == 0: continue
+				if bits & NodeInfo.BOX:
+					# Only fences and walls reach up from the cell below the feet.
+					if y < lo.y: continue
 					if body.position.x < x+1 and body.end.x > x and body.position.y < y+1 and body.end.y > y and body.position.z < z+1 and body.end.z > z: return true
 					continue
+				if y < lo.y and not Barriers.is_barrier(id): continue
 				for box in collision_boxes(p):
 					if body.intersects(AABB(Vector3(p)+box.position,box.size)): return true
 	return false
@@ -921,7 +1142,7 @@ func validate_portals_near(p: Vector3i) -> void:
 			# Batch clear prevents recursive validation of a half-removed portal.
 			for cell in connected:
 				blocks[block_coord(cell)].data[local_index(cell)] = Nodes.AIR
-				edits[cell] = Nodes.AIR
+				record_edit(cell,Nodes.AIR)
 				_mark_dirty(cell)
 
 # Find a dry floor near the requested height without teleporting cave mobs to
@@ -1028,6 +1249,6 @@ func open_sky(p: Vector3i) -> bool:
 	if dimension != "overworld": return false
 	for y in range(p.y+2,mini(generator.terrain_ceiling(),generator.max_y())):
 		if Nodes.solid(node_at(Vector3i(p.x,y,p.z))): return false
-	for point in edits:
+	for point in column_edits(Vector2i(floori(p.x/16.0),floori(p.z/16.0))):
 		if point.x == p.x and point.z == p.z and point.y > p.y+1 and Nodes.solid(edits[point]): return false
 	return true

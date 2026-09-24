@@ -117,7 +117,13 @@ static func after_place(gen: TerrainGenerator, state: Dictionary, rng: RandomNum
 	var suspicious: Dictionary = {}
 	var cells: Array = state.floor.keys()
 	if cells.is_empty(): return suspicious
-	cells.shuffle()
+	# The plan's own generator, not the global one, keeps the choice identical in
+	# every column that overlaps the temple and on every load.
+	for i in range(cells.size()-1,0,-1):
+		var j: int = rng.randi_range(0,i)
+		var swap: Vector3i = cells[i]
+		cells[i] = cells[j]
+		cells[j] = swap
 	var count: int = rng.randi_range(1,mini(SUSPICIOUS_CAP,cells.size()))
 	for i in count:
 		suspicious[cells[i]] = "desert_temple"

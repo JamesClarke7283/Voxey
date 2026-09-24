@@ -240,9 +240,8 @@ static func unload(world: VoxelWorld, column: Vector2i) -> void:
 
 static func column_loaded(world: VoxelWorld, column: Vector2i) -> void:
 	if not world.has_meta("copper"): return
-	for p in world.edits:
-		if stage(world.edits[p]) < 0 or not world.loaded_at(Vector3(p)): continue
-		if Vector2i(floori(p.x/16.0),floori(p.z/16.0)) == column: registered(world,p,world.edits[p])
+	for p in world.column_edits(column):
+		if stage(world.edits[p]) >= 0 and world.loaded_at(Vector3(p)): registered(world,p,world.edits[p])
 
 static func reset(world: VoxelWorld) -> void:
 	if world.has_meta("copper"): world.remove_meta("copper")

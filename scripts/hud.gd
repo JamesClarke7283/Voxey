@@ -78,6 +78,14 @@ func _ready() -> void:
 	game.inventory.changed.connect(refresh_slots)
 	show_title()
 
+# The in-game overlay redraws every frame; its boxes are made once and reused.
+var drawn_styles: Dictionary = {}
+
+func _drawn_style(bg: Color, border: Color = Color.TRANSPARENT, width: int = 0, radius: int = 4) -> StyleBoxFlat:
+	var key: Array = [bg,border,width,radius]
+	if not drawn_styles.has(key): drawn_styles[key] = _style(bg,border,width,radius)
+	return drawn_styles[key]
+
 func _style(bg: Color, border: Color = Color.TRANSPARENT, width: int = 0, radius: int = 4) -> StyleBoxFlat:
 	var result := StyleBoxFlat.new()
 	result.bg_color = bg
@@ -889,17 +897,17 @@ func _draw() -> void:
 		if player.scoping: Spyglass.draw_scope(self)
 		draw_line(center-Vector2(6,0),center+Vector2(6,0),Color(0.94,0.95,0.85,0.85),2)
 		draw_line(center-Vector2(0,6),center+Vector2(0,6),Color(0.94,0.95,0.85,0.85),2)
-		draw_style_box(_style(Color(0.12,0.12,0.12,0.76),Color(0.6,0.6,0.6,0.2),1),Rect2(24,24,253,65))
+		draw_style_box(_drawn_style(Color(0.12,0.12,0.12,0.76),Color(0.6,0.6,0.6,0.2),1),Rect2(24,24,253,65))
 		draw_string(font,Vector2(40,48),"V /  "+("Deepslate caverns" if game.dimension == "overworld" and player.position.y < -32 else ("Deep caves" if game.dimension == "overworld" and player.position.y < 0 else game.world.generator.biome(int(player.position.x),int(player.position.z)))),HORIZONTAL_ALIGNMENT_LEFT,-1,16,TEXT)
 		draw_string(font,Vector2(40,72),"%d   /   %d   /   %d" % [player.position.x,player.position.y,player.position.z],HORIZONTAL_ALIGNMENT_LEFT,-1,12,MUTED)
 		var time_label: String = "THE END" if game.dimension == "end" else "THE NETHER" if game.dimension == "nether" else "DAY %d  ·  %s" % [game.day_number(),game.time_name()]
-		draw_style_box(_style(Color(0.12,0.12,0.12,0.76)),Rect2(size.x-217,24,193,45))
+		draw_style_box(_drawn_style(Color(0.12,0.12,0.12,0.76)),Rect2(size.x-217,24,193,45))
 		draw_circle(Vector2(size.x-193,46),7,Color("e8cc80") if game.daylight>0.4 else Color("bdcede"))
 		draw_string(font,Vector2(size.x-175,51),time_label,HORIZONTAL_ALIGNMENT_LEFT,-1,12,TEXT)
 		if not player.target.is_empty():
 			var node_name: String = Nodes.title(player.target.id)
 			var width: float = font.get_string_size(node_name,HORIZONTAL_ALIGNMENT_LEFT,-1,15).x+36
-			draw_style_box(_style(Color(0.12,0.12,0.12,0.8)),Rect2(center.x-width/2,30,width,35))
+			draw_style_box(_drawn_style(Color(0.12,0.12,0.12,0.8)),Rect2(center.x-width/2,30,width,35))
 			draw_string(font,Vector2(center.x-width/2+18,53),node_name,HORIZONTAL_ALIGNMENT_LEFT,-1,15,TEXT)
 			if not Nodes.harvestable(player.target.id,game.inventory.held().id):
 				draw_string(font,Vector2(center.x-100,84),"A better pickaxe is needed",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("e0b07a"))
@@ -919,7 +927,7 @@ func _draw() -> void:
 		var bar_w: float = 536.0*bar_scale
 		var bar_h: float = 107.0*bar_scale
 		var bar_y: float = size.y-bar_h-(62.0 if game.touch else 0.0)
-		draw_style_box(_style(Color(0.12,0.12,0.12,0.84),Color(0.6,0.6,0.6,0.5),1),Rect2(center.x-bar_w*0.5,bar_y,bar_w,bar_h))
+		draw_style_box(_drawn_style(Color(0.12,0.12,0.12,0.84),Color(0.6,0.6,0.6,0.5),1),Rect2(center.x-bar_w*0.5,bar_y,bar_w,bar_h))
 		var left: float = center.x-255.0*bar_scale
 		var row_y: float = bar_y+16.0*bar_scale
 		for i in (10 if game.gamemode=="survival" else 0):
@@ -943,7 +951,7 @@ func _draw() -> void:
 			draw_string(font,Vector2(center.x-140,160),"RAID · Wave %d / 3 · %d pillagers"%[int(raid.wave),int(raid.get("alive",0))],HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color("e8aaa0"))
 		var selected_name: String = str(game.inventory.held().get("data",{}).get("custom_name",Nodes.title(game.inventory.held().id))) if game.inventory.held().id else "Empty hand"
 		var text_width: float = font.get_string_size(selected_name,HORIZONTAL_ALIGNMENT_LEFT,-1,16).x
-		draw_style_box(_style(Color(0.12,0.12,0.12,0.8)),Rect2(center.x-text_width/2-14,bar_y-32,text_width+28,32))
+		draw_style_box(_drawn_style(Color(0.12,0.12,0.12,0.8)),Rect2(center.x-text_width/2-14,bar_y-32,text_width+28,32))
 		draw_string(font,Vector2(center.x-text_width/2,bar_y-9),selected_name,HORIZONTAL_ALIGNMENT_LEFT,-1,16,TEXT)
 		var defence: int = player.armor_points()
 		if defence>0 and game.gamemode=="survival":
@@ -955,22 +963,22 @@ func _draw() -> void:
 			var craft_hint: String = "Tap the bag button. Turn your logs into planks." if game.touch else "Press E. Turn your logs into planks."
 			var place_hint: String = "Craft a table, then place it with the ✋ button." if game.touch else "Craft a table, then place it with RMB."
 			var tasks: Array = [["A HUMBLE BEGINNING",mine_hint],["MAKE SOMETHING",craft_hint],["ROOM TO GROW",place_hint],["THE NEXT CHAPTER","Use your table to craft a wooden pickaxe."]]
-			draw_style_box(_style(Color(0.12,0.12,0.12,0.78)),Rect2(24,size.y-177,286,85))
+			draw_style_box(_drawn_style(Color(0.12,0.12,0.12,0.78)),Rect2(24,size.y-177,286,85))
 			draw_string(font,Vector2(40,size.y-151),tasks[game.journal_step][0],HORIZONTAL_ALIGNMENT_LEFT,-1,11,ACCENT)
 			draw_string(font,Vector2(40,size.y-125),tasks[game.journal_step][1],HORIZONTAL_ALIGNMENT_LEFT,-1,13,TEXT)
 		if not game.touch:
-			draw_style_box(_style(Color(0.12,0.12,0.12,0.75)),Rect2(size.x-236,size.y-89,212,65))
+			draw_style_box(_drawn_style(Color(0.12,0.12,0.12,0.75)),Rect2(size.x-236,size.y-89,212,65))
 			draw_string(font,Vector2(size.x-223,size.y-64),"E  Inventory     ESC  Pause",HORIZONTAL_ALIGNMENT_LEFT,-1,12,TEXT)
 			draw_string(font,Vector2(size.x-223,size.y-41),"LMB  Mine       RMB  Use",HORIZONTAL_ALIGNMENT_LEFT,-1,12,MUTED)
 		if debug:
 			var info: String = "%d FPS  ·  %d map blocks  ·  %d columns\n%d generation jobs  ·  %d remesh jobs\nSeed %d  ·  Greedy meshing  ·  16³ nodes / block" % [Engine.get_frames_per_second(),game.world.blocks.size(),game.world.columns.size(),game.world.jobs.size(),game.world.remesh_jobs.size(),game.world.seed_value]
 			info += "\nGPU: "+RenderingServer.get_video_adapter_name()+"\nRenderer: "+RenderingServer.get_current_rendering_method()
-			draw_style_box(_style(Color(0,0,0,0.72)),Rect2(24,105,510,130))
+			draw_style_box(_drawn_style(Color(0,0,0,0.72)),Rect2(24,105,510,130))
 			for i in 5: draw_string(font,Vector2(36,129+i*23),info.split("\n")[i],HORIZONTAL_ALIGNMENT_LEFT,-1,13,TEXT)
 		if flash>0: draw_rect(Rect2(Vector2.ZERO,size),Color(0.6,0.15,0.1,flash*0.6))
 	if toast_time>0:
 		var width: float = font.get_string_size(toast_text,HORIZONTAL_ALIGNMENT_LEFT,-1,15).x+40
-		draw_style_box(_style(Color(0.12,0.12,0.12,0.95),Color("858585"),1),Rect2(size.x/2-width/2,100,width,42))
+		draw_style_box(_drawn_style(Color(0.12,0.12,0.12,0.95),Color("858585"),1),Rect2(size.x/2-width/2,100,width,42))
 		draw_string(font,Vector2(size.x/2-width/2+20,127),toast_text,HORIZONTAL_ALIGNMENT_LEFT,-1,15,TEXT)
 
 func _heart(p: Vector2, full: bool) -> void:
