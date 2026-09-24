@@ -652,18 +652,21 @@ static func max_stack(id: int) -> int:
 	return 1 if is_tool_id(id) or is_armor(id) or id in [SHEARS,BUCKET,WATER_BUCKET,MILK_BUCKET,SADDLE,MUSHROOM_STEW] else 64
 
 # The hot property queries are memoized by NodeInfo on the main thread. Worker
-# threads use the uncached rules directly, which never touch shared state.
+# threads read what the table already holds and use the rules for the rest.
 static func solid(id: int) -> bool:
 	if NodeInfo.cached(): return NodeInfo.memo(id) & NodeInfo.SOLID != 0
-	return uncached_solid(id)
+	var bits: int = NodeInfo.peek(id)
+	return bits & NodeInfo.SOLID != 0 if bits != 0 else uncached_solid(id)
 
 static func plant(id: int) -> bool:
 	if NodeInfo.cached(): return NodeInfo.memo(id) & NodeInfo.PLANT != 0
-	return uncached_plant(id)
+	var bits: int = NodeInfo.peek(id)
+	return bits & NodeInfo.PLANT != 0 if bits != 0 else uncached_plant(id)
 
 static func transparent(id: int) -> bool:
 	if NodeInfo.cached(): return NodeInfo.memo(id) & NodeInfo.TRANSPARENT != 0
-	return uncached_transparent(id)
+	var bits: int = NodeInfo.peek(id)
+	return bits & NodeInfo.TRANSPARENT != 0 if bits != 0 else uncached_transparent(id)
 
 static func tile(id: int, face: int) -> int:
 	return NodeInfo.tile(id,face)

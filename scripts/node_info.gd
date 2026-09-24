@@ -6,10 +6,11 @@ extends RefCounted
 # generation, meshing and collision ask them for almost every voxel, so each id
 # is classified once and kept as a bit set.
 #
-# The shared tables belong to the main thread: only it writes them. A worker job
-# receives a View holding its own snapshot, fills misses locally, and hands its
-# additions back to the main thread with the job result. No thread ever writes
-# memory that another thread is reading.
+# The shared tables belong to the main thread: only it writes them, and only by
+# overwriting whole entries in place. Packed arrays are shared by reference and
+# these are never resized or replaced, so any thread may read them and sees
+# either the old entry or the new one. A worker computes an entry the table does
+# not have yet in its View and hands it back to the main thread with its job.
 const LIMIT = 12288
 const KNOWN = 1
 const SOLID = 1 << 1
@@ -63,10 +64,15 @@ static func invalidate() -> void:
 	Pasture.emission_memo.clear()
 	Nodes.title_memo.clear()
 
-# Bits for one id. Worker threads compute directly and never touch the tables.
+# Bits for one id. Worker threads read the table and compute what it lacks.
 static func of(id: int) -> int:
-	if not cached(): return compute(id)
-	return memo(id)
+	if cached(): return memo(id)
+	var bits: int = peek(id)
+	return bits if bits != 0 else compute(id)
+
+# An entry as the table holds it now, or 0. Safe from any thread.
+static func peek(id: int) -> int:
+	return traits[id] if id >= 0 and id < LIMIT else 0
 
 # The main-thread lookup. Callers must already be on the main thread.
 static func memo(id: int) -> int:
@@ -79,12 +85,12 @@ static func memo(id: int) -> int:
 	return bits
 
 static func tile(id: int, face: int) -> int:
-	if id < 0 or id >= LIMIT or face < 0 or face > 5 or not cached(): return Nodes.uncached_tile(id,face)
+	if id < 0 or id >= LIMIT or face < 0 or face > 5: return Nodes.uncached_tile(id,face)
 	var index: int = id*6+face
 	var value: int = tiles[index]
 	if value == NO_TILE:
 		value = Nodes.uncached_tile(id,face)
-		tiles[index] = value
+		if cached(): tiles[index] = value
 	return value
 
 # A worker-safe copy of the current tables. Create it on the main thread.
