@@ -344,6 +344,21 @@ static func scan(world: VoxelWorld, p: Vector3i, id: int, check: bool = true) ->
 	data.columns[column][p] = true
 	if check and not persistent(world,p): enqueue(world,p)
 
+# `scan` for a loading column's leaves, in order. Every cell is a leaf.
+static func scan_loaded(world: VoxelWorld, cells: Array, checks: Array) -> void:
+	if cells.is_empty(): return
+	var data: Dictionary = runtime(world)
+	var leaves: Dictionary = data.leaves; var columns: Dictionary = data.columns
+	for i in cells.size():
+		var p: Vector3i = cells[i]
+		if leaves.has(p): continue
+		leaves[p] = true
+		var column := Vector2i(p.x >> 4,p.z >> 4)
+		var members: Variant = columns.get(column)
+		if members == null: members = {}; columns[column] = members
+		members[p] = true
+		if checks[i] and not persistent(world,p): enqueue(world,p)
+
 static func around(world: VoxelWorld, p: Vector3i) -> void:
 	var data: Dictionary = runtime(world)
 	for dx in range(-6,7):
