@@ -86,10 +86,10 @@ static func _id_emission(id: int) -> int:
 
 static func track(world: VoxelWorld, p: Vector3i) -> void:
 	var data: Dictionary = state(world)
-	if not world.loaded_at(Vector3(p)):
+	if not world.columns.has(Vector2i(p.x >> 4,p.z >> 4)):
 		remove_cell(data,p); remove_light(data,p); return
 	var id: int = world.node_at(p)
-	if is_grass(id) or id == Nodes.DIRT and not covered(world,p): add_cell(data,p)
+	if id == Nodes.GRASS or id == VillageContent.SWAMP_GRASS or id == Nodes.DIRT and not covered(world,p): add_cell(data,p)
 	elif data.cells.has(p): remove_cell(data,p)
 	# Retain switchable nodes while off/empty; sample their live metadata.
 	if id in STATEFUL_LIGHTS or emission(world,p) > 0:
@@ -272,15 +272,26 @@ static func update(world: VoxelWorld, delta: float) -> void:
 	# Scheduling itself used to walk the entire loaded surface in one frame.
 	# Preserve every per-cell chance while processing the scan over frames.
 	var rng: RandomNumberGenerator = data.rng
-	for i in 256:
-		if data.scans.is_empty() or i > 0 and Time.get_ticks_usec()-started >= 1500: break
+	var columns: Dictionary = world.columns
+	var budget: int = 256
+	while budget > 0 and not data.scans.is_empty():
 		var scan: Dictionary = data.scans[0]
-		if scan.cursor >= scan.cells.size(): data.scans.pop_front(); continue
-		var p: Vector3i = scan.cells[scan.cursor]; scan.cursor += 1
-		if not world.loaded_at(Vector3(p)): continue
-		var id: int = world.node_at(p)
-		if scan.spread and id == Nodes.DIRT and rng.randi_range(1,SPREAD_CHANCE) == 1: data.jobs.append({"p":p,"spread":true})
-		elif scan.decay and is_grass(id) and covered(world,p) and rng.randi_range(1,DECAY_CHANCE) == 1: data.jobs.append({"p":p,"spread":false})
+		var cells: Array = scan.cells
+		var cursor: int = scan.cursor
+		if cursor >= cells.size(): data.scans.pop_front(); budget -= 1; continue
+		var spreading_scan: bool = scan.spread; var decaying_scan: bool = scan.decay
+		# The same cells and chance rolls in the same order, with the per-cell
+		# lookups inlined; this runs over the whole loaded surface.
+		var end: int = mini(cells.size(),cursor+budget)
+		while cursor < end:
+			var p: Vector3i = cells[cursor]; cursor += 1
+			if not columns.has(Vector2i(p.x >> 4,p.z >> 4)): continue
+			var id: int = world.node_at(p)
+			if spreading_scan and id == Nodes.DIRT and rng.randi_range(1,SPREAD_CHANCE) == 1: data.jobs.append({"p":p,"spread":true})
+			elif decaying_scan and (id == Nodes.GRASS or id == VillageContent.SWAMP_GRASS) and NodeInfo.of(world.node_at(p+Vector3i.UP)) & NodeInfo.COVER != 0 and rng.randi_range(1,DECAY_CHANCE) == 1: data.jobs.append({"p":p,"spread":false})
+			if cursor & 15 == 0 and Time.get_ticks_usec()-started >= 1500: break
+		budget -= cursor-int(scan.cursor); scan.cursor = cursor
+		if Time.get_ticks_usec()-started >= 1500: break
 	# Include candidate scans in the budget; expensive light jobs remain few.
 	for i in 4:
 		if Time.get_ticks_usec()-started >= 3000: break

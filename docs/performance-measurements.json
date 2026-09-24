@@ -791,6 +791,199 @@
           "radius": 4
         }
       ]
+    },
+    "third_pass": {
+      "machine": "4 CPUs, Mesa Intel(R) HD Graphics 520 (SKL GT2), Godot 4.7.2, gl_compatibility",
+      "note": "Before is the parent commit. Timings vary by about 30% between runs on this machine; each pair was measured back to back.",
+      "node_changes_headless": {
+        "probe": "radius 3 world, seed 8675309; 8 explosions of radius 3 a few nodes under the surface, then 60 digs and 60 placements",
+        "before": [
+          {
+            "dig_us_each": 558.3,
+            "place_us_each": 502.9,
+            "explode_ms": [
+              69.0,
+              75.3,
+              70.9,
+              63.8,
+              65.2,
+              67.3,
+              85.2,
+              64.3
+            ]
+          },
+          {
+            "dig_us_each": 718.9,
+            "place_us_each": 605.3,
+            "explode_ms": [
+              92.5,
+              56.5,
+              60.8,
+              85.1,
+              83.6,
+              65.0,
+              65.8,
+              63.5
+            ]
+          }
+        ],
+        "after": [
+          {
+            "dig_us_each": 224.9,
+            "place_us_each": 214.7,
+            "explode_ms": [
+              49.4,
+              37.7,
+              29.8,
+              26.2,
+              30.6,
+              26.5,
+              26.4,
+              32.8
+            ]
+          },
+          {
+            "dig_us_each": 378.7,
+            "place_us_each": 369.5,
+            "explode_ms": [
+              51.6,
+              56.3,
+              51.7,
+              36.9,
+              35.2,
+              35.8,
+              42.1,
+              39.9
+            ]
+          }
+        ]
+      },
+      "station_scans_headless": {
+        "probe": "radius 4, 60 s of travel at 25 blocks/s (1.5 km), then 100 calls of each scan",
+        "before": {
+          "stations": 226,
+          "cauldrons_us": 462.8,
+          "campfires_us": 472.1,
+          "composters_us": 289.8
+        },
+        "after": [
+          {
+            "stations": 239,
+            "cauldrons_us": 223.7,
+            "campfires_us": 82.3,
+            "composters_us": 39.8
+          },
+          {
+            "stations": 232,
+            "cauldrons_us": 269.6,
+            "campfires_us": 48.4,
+            "composters_us": 94.1
+          }
+        ]
+      },
+      "redstone_step_headless": {
+        "probe": "desert temple with pressure plates and dispensers, one 0.1 s step, 20 repetitions",
+        "before": [
+          {
+            "tracked": 16,
+            "step_ms": 3.29
+          },
+          {
+            "tracked": 15,
+            "step_ms": 3.83
+          },
+          {
+            "tracked": 12,
+            "step_ms": 2.52
+          }
+        ],
+        "after": [
+          {
+            "tracked": 15,
+            "step_ms": 1.61
+          },
+          {
+            "tracked": 11,
+            "step_ms": 1.66
+          }
+        ]
+      },
+      "villager_routes_headless": {
+        "routes": 12,
+        "before_total_ms": 21.1,
+        "after_total_ms": 10.7,
+        "mismatches": 0
+      },
+      "systems_rendered": {
+        "probe": "radius 4, 45 s at 25 blocks/s, then 20 s at 5.6 blocks/s (measured), per-system timers",
+        "before": {
+          "avg_frame_ms": 31.86,
+          "fluids": 2.07,
+          "leaf_decay": 1.929,
+          "redstone": 1.131,
+          "campfires": 0.902,
+          "grass": 0.814,
+          "cauldrons": 0.813,
+          "composters": 0.549,
+          "crops": 0.529
+        },
+        "after": [
+          {
+            "avg_frame_ms": 28.05,
+            "fluids": 1.437,
+            "leaf_decay": 0.972,
+            "redstone": 0.633,
+            "campfires": 0.164,
+            "grass": 0.449,
+            "cauldrons": 0.328,
+            "composters": 0.078,
+            "crops": 0.491
+          },
+          {
+            "avg_frame_ms": 26.69,
+            "fluids": 1.39,
+            "leaf_decay": 0.762,
+            "redstone": 0.604,
+            "campfires": 0.129,
+            "grass": 0.498,
+            "cauldrons": 0.286,
+            "composters": 0.079,
+            "crops": 0.446
+          }
+        ]
+      },
+      "survival_streaming_benchmark": {
+        "args": "30 s, radius 4, 5.6 blocks/s",
+        "before": [
+          {
+            "avg_fps": 41.2,
+            "median": 20.5,
+            "p95": 52.8,
+            "over50": 79
+          },
+          {
+            "avg_fps": 39.7,
+            "median": 21.2,
+            "p95": 57.1,
+            "over50": 96
+          }
+        ],
+        "after": [
+          {
+            "avg_fps": 41.7,
+            "median": 20.4,
+            "p95": 52.2,
+            "over50": 77
+          },
+          {
+            "avg_fps": 42.8,
+            "median": 19.9,
+            "p95": 49.6,
+            "over50": 63
+          }
+        ]
+      },
+      "checks": "7,411 passed in nine suites"
     }
   }
 }

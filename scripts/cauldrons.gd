@@ -30,6 +30,7 @@ static func set_contents(station: Dictionary, amount: int, material: String = "w
 static func station(world: VoxelWorld, p: Vector3i) -> Dictionary:
 	var result: Dictionary = world.get_station(p,"cauldron")
 	set_contents(result,level(result),liquid(result))
+	world.note_station(VoxelWorld.station_key(p),result)
 	return result
 
 static func description(station: Dictionary) -> String:
@@ -226,12 +227,9 @@ static func update(world: VoxelWorld, delta: float) -> void:
 	var check_contact: bool = elapsed >= CONTACT_INTERVAL
 	world.set_meta("cauldron_contact_clock",fmod(elapsed,CONTACT_INTERVAL))
 	var changed: bool = false
-	for key in world.stations.keys():
-		var station: Dictionary = world.stations[key]
-		if station.get("kind","") != "cauldron": continue
-		var xyz: PackedStringArray = key.split(",")
-		if xyz.size() != 3: continue
-		var p := Vector3i(int(xyz[0]),int(xyz[1]),int(xyz[2]))
+	for entry in world.stations_of("cauldron"):
+		var station: Dictionary = entry[2]
+		var p: Vector3i = entry[1]
 		if not world.loaded_at(Vector3(p)) or world.node_at(p) != VillageContent.CAULDRON: continue
 		var precipitation: bool = _rain_clock(station)+delta >= RAIN_INTERVAL and rain_eligible(world,p)
 		if rain_step(station,delta,precipitation,precipitation_material(world,p)): changed = true

@@ -104,6 +104,10 @@ static func update(world: VoxelWorld, delta: float) -> void:
 	for p in done: tracked.erase(p)
 	world.set_meta("concrete",tracked)
 
+# Whether p is in this module's index, without creating the index.
+static func tracks(world: VoxelWorld, p: Vector3i) -> bool:
+	return world.has_meta("concrete") and _tracked(world).has(p)
+
 static func _tracked(world: VoxelWorld) -> Dictionary:
 	if not world.has_meta("concrete"): world.set_meta("concrete",{})
 	return world.get_meta("concrete")

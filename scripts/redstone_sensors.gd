@@ -10,11 +10,16 @@ const TARGET_ON = 1243
 const HEIGHT = 0.375
 const PULSE_SECONDS = 1.0
 const SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.UP,Vector3i.DOWN,Vector3i.FORWARD,Vector3i.BACK]
-static var light_cache_key: Array = []
+# Natural light and sky columns are kept per 16x16 column. A node change can
+# only reach light within 13 nodes horizontally, so it drops the cached light
+# of its own and the eight surrounding columns, and its own sky columns.
 static var light_cache: Dictionary = {}
-static var geometry_cache_key: Array = []
+static var light_sky: int = -1
 static var light_block_columns: Dictionary = {}
 static var sky_column_cache: Dictionary = {}
+static var synced_world: int = 0
+static var synced_dimension: String = ""
+static var synced_revision: int = -1
 
 static func is_detector(id: int) -> bool: return id in [DAYLIGHT,INVERTED]
 static func is_target(id: int) -> bool: return id in [TARGET,TARGET_ON]
@@ -129,18 +134,35 @@ static func natural_light(world: VoxelWorld, p: Vector3i) -> int:
 	if world.dimension != "overworld" or p.y >= world.generator.max_y() or not world.loaded_at(Vector3(p)): return 0
 	var game: Node3D = world.get_parent()
 	var sky: int = clampi(roundi(2.0+12.0*clampf((game.daylight-0.05)/0.95,0,1)),2,14)
-	var geometry_key: Array = [world.get_instance_id(),world.dimension,world.sky_revision]
-	if geometry_key != geometry_cache_key:
-		# Any node change invalidates the geometry. Columns are re-sorted lazily,
-		# only when a light query reaches them.
-		geometry_cache_key = geometry_key; light_block_columns.clear(); sky_column_cache.clear()
-	var cache_key: Array = geometry_key+[sky]
-	if cache_key != light_cache_key:
-		light_cache_key = cache_key; light_cache.clear()
-	if light_cache.has(p): return int(light_cache[p])
+	_sync_geometry(world)
+	if sky != light_sky: light_sky = sky; light_cache.clear()
+	var column := Vector2i(p.x >> 4,p.z >> 4)
+	var known: Variant = light_cache.get(column)
+	if known == null: known = {}; light_cache[column] = known
+	if known.has(p): return int(known[p])
 	var result: int = _natural_light(world,p,sky)
-	light_cache[p] = result
+	known[p] = result
 	return result
+
+# Columns are re-sorted lazily, only when a light query reaches them.
+static func _sync_geometry(world: VoxelWorld) -> void:
+	var revision: int = world.sky_revision
+	if revision == synced_revision and world.get_instance_id() == synced_world and world.dimension == synced_dimension: return
+	var changes: Array[Vector2i] = world.sky_log
+	var from: int = synced_revision-world.sky_log_start
+	if world.get_instance_id() != synced_world or world.dimension != synced_dimension or from < 0 or revision < synced_revision or revision != world.sky_log_start+changes.size():
+		light_block_columns.clear(); sky_column_cache.clear(); light_cache.clear()
+		if revision != world.sky_log_start+changes.size(): changes.clear(); world.sky_log_start = revision
+	else:
+		var seen: Dictionary = {}
+		for i in range(from,changes.size()):
+			var column: Vector2i = changes[i]
+			if seen.has(column): continue
+			seen[column] = true
+			light_block_columns.erase(column); sky_column_cache.erase(column)
+			for dz in range(-1,2):
+				for dx in range(-1,2): light_cache.erase(column+Vector2i(dx,dz))
+	synced_world = world.get_instance_id(); synced_dimension = world.dimension; synced_revision = revision
 
 static func _natural_light(world: VoxelWorld, p: Vector3i, sky: int) -> int:
 	var initial: Dictionary = _sky_column(world,Vector2i(p.x,p.z))
@@ -188,9 +210,11 @@ static func _filter_count(column: Dictionary, y: int) -> int:
 	return count
 
 static func _sky_column(world: VoxelWorld, column: Vector2i) -> Dictionary:
-	if sky_column_cache.has(column): return sky_column_cache[column]
+	var chunk := Vector2i(column.x >> 4,column.y >> 4)
+	var cached: Variant = sky_column_cache.get(chunk)
+	if cached == null: cached = {}; sky_column_cache[chunk] = cached
+	if cached.has(column): return cached[column]
 	var result: Dictionary = {"opaque":world.generator.min_y()-1,"filters":[]}
-	var chunk := Vector2i(floori(column.x/16.0),floori(column.y/16.0))
 	var offset: int = posmod(column.x,16)+posmod(column.y,16)*16
 	# Empty altitude gaps are implicit air, even with a building at Y30,900.
 	# Inspect only allocated mapblocks, from the top until the first opaque cell.
@@ -207,10 +231,10 @@ static func _sky_column(world: VoxelWorld, column: Vector2i) -> Dictionary:
 			var cost: int = light_filter(id)
 			if cost < 0:
 				result.opaque = block.y*16+y
-				sky_column_cache[column] = result
+				cached[column] = result
 				return result
 			if cost > 0: result.filters.append(block.y*16+y)
-	sky_column_cache[column] = result
+	cached[column] = result
 	return result
 
 # Light propagation asks this for every cell it visits. It depends only on the

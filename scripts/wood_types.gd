@@ -355,7 +355,11 @@ static func around(world: VoxelWorld, p: Vector3i) -> void:
 
 static func changed(world: VoxelWorld, p: Vector3i, old_id: int, new_id: int) -> void:
 	if old_id == new_id: return
-	if not is_leaves(old_id) and not is_leaves(new_id) and is_log(old_id) == is_log(new_id): return
+	var old_kind: Variant = wood_kinds.get(old_id)
+	if old_kind == null: old_kind = _wood_kind(old_id)
+	var new_kind: Variant = wood_kinds.get(new_id)
+	if new_kind == null: new_kind = _wood_kind(new_id)
+	if old_kind != 2 and new_kind != 2 and (old_kind == 1) == (new_kind == 1): return
 	var data: Dictionary = runtime(world)
 	if is_leaves(old_id):
 		data.leaves.erase(p); data.orphans.erase(p); data.retry.erase(p); data.decay.erase(p); data.queued.erase(p)
@@ -380,8 +384,12 @@ static func mark_placed(world: VoxelWorld, p: Vector3i) -> void:
 # Connected leaf paths may reach any log species within six edges. Placed
 # leaves carry source distance zero and never decay. Unknown columns postpone
 # the decision so streaming boundaries cannot destroy a supported canopy.
-static func support(world: VoxelWorld, p: Vector3i) -> int:
+#
+# A search that finds support at distance d also proves it for every leaf it
+# reached within 6-d steps, through the same path; `found` collects those.
+static func support(world: VoxelWorld, p: Vector3i, found: Variant = null) -> int:
 	if persistent(world,p): return 1
+	var columns: Dictionary = world.columns
 	var queue: Array = [p]; var distances: Dictionary = {p:0}; var head: int = 0; var unknown: bool = false
 	while head < queue.size():
 		var q: Vector3i = queue[head]; head += 1
@@ -390,18 +398,30 @@ static func support(world: VoxelWorld, p: Vector3i) -> int:
 		for side in SIDES:
 			var neighbor: Vector3i = q+side
 			if distances.has(neighbor): continue
-			if not world.loaded_at(Vector3(neighbor)): unknown = true; continue
+			if not columns.has(Vector2i(neighbor.x >> 4,neighbor.z >> 4)): unknown = true; continue
 			var id: int = world.node_at(neighbor)
-			if is_log(id): return 1
-			if is_leaves(id):
-				if persistent(world,neighbor): return 1
-				distances[neighbor] = distance; queue.append(neighbor)
+			var kind: Variant = wood_kinds.get(id)
+			if kind == null: kind = _wood_kind(id)
+			if kind == 1 or kind == 2 and persistent(world,neighbor):
+				if found != null:
+					for leaf in distances:
+						if int(distances[leaf])+distance <= 6: found[leaf] = true
+				return 1
+			if kind == 2: distances[neighbor] = distance; queue.append(neighbor)
 	return -1 if unknown else 0
 
-static func check_leaf(world: VoxelWorld, p: Vector3i, decay: bool = false) -> void:
+# 1 for logs, 2 for leaves, 0 otherwise; no node is both.
+static var wood_kinds: Dictionary = {}
+
+static func _wood_kind(id: int) -> int:
+	var kind: int = 1 if is_log(id) else (2 if is_leaves(id) else 0)
+	wood_kinds[id] = kind
+	return kind
+
+static func check_leaf(world: VoxelWorld, p: Vector3i, decay: bool = false, found: Variant = null) -> void:
 	var data: Dictionary = runtime(world)
 	if not world.loaded_at(Vector3(p)) or not is_leaves(world.node_at(p)): return
-	var supported: int = support(world,p)
+	var supported: int = 1 if found != null and found.has(p) else support(world,p,found)
 	var key: String = VoxelWorld.station_key(p)
 	if supported == 1:
 		data.orphans.erase(p); data.retry.erase(p)
@@ -428,12 +448,15 @@ static func update(world: VoxelWorld, delta: float) -> void:
 			if randi_range(1,10) == 1: data.decay[p] = true; enqueue(world,p)
 		for p in data.retry: enqueue(world,p)
 	var started: int = Time.get_ticks_usec(); var checked: int = 0
+	# Nothing in one update can cut a leaf off: a decaying leaf was already
+	# unsupported, so it is on no supported leaf's path.
+	var found: Dictionary = {}
 	while int(data.head) < data.pending.size() and checked < 16:
 		var p: Vector3i = data.pending[int(data.head)]; data.head += 1; checked += 1
 		if not data.queued.has(p): continue
 		data.queued.erase(p)
 		var decay: bool = data.decay.has(p); data.decay.erase(p)
-		check_leaf(world,p,decay)
+		check_leaf(world,p,decay,found)
 		if Time.get_ticks_usec()-started >= 1500: break
 	if int(data.head) >= data.pending.size() or int(data.head) > 1024:
 		data.pending = data.pending.slice(int(data.head)); data.head = 0

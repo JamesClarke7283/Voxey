@@ -77,6 +77,9 @@ const INFO = {
 }
 const BLOCKS = [22, 8010, 8011, 8012, 8013, 8014, 8015, 29, 551, 8020, 552, 8021, 553, 8022, 8023, 554, 555, 8030, 556, 8031, 557, 8032, 8033, 558, 559, 560, 561, 562]
 
+# The family of each crop ID that can still grow, for the interval rolls.
+static var growing: Dictionary = {}
+
 static func is_crop(id: int) -> bool: return INFO.has(id)
 static func family(id: int) -> int: return int(INFO[id][0]) if is_crop(id) else SEEDS.find(id)
 static func stage(id: int) -> int: return int(INFO[id][1]) if is_crop(id) else 0
@@ -237,10 +240,19 @@ static func update(world: VoxelWorld, delta: float) -> void:
 		state.clocks[f] += maxf(0,delta)
 		if state.clocks[f] < INTERVALS[f]: continue
 		state.clocks[f] = fmod(state.clocks[f],INTERVALS[f])
+		if growing.is_empty():
+			for id in INFO:
+				if not mature(id): growing[id] = family(id)
+		var chance: int = CHANCES[f]
 		for p in state.cells:
-			var id: int = int(state.cells[p])
-			if family(id) == f and not mature(id) and random(rng,1,CHANCES[f]) == 1: queue_growth(world,p)
+			if growing.get(int(state.cells[p]),-1) == f and rng.randi_range(1,chance) == 1: queue_growth(world,p)
+	# A growth check reads light, which can take milliseconds in a covered
+	# village farm. A column that loads a farm queues every crop in it; such a
+	# backlog is spread over frames, in order and at least one per update.
+	var started: int = Time.get_ticks_usec()
+	var backlog: bool = state.jobs.size() > 16
 	for i in mini(8,state.jobs.size()):
+		if backlog and i > 0 and Time.get_ticks_usec()-started >= 4000: break
 		var job: Dictionary = state.jobs.pop_front()
 		if state.pending.get(job.pos,-1) != job.serial: continue
 		state.pending.erase(job.pos)

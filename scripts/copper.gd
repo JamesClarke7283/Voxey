@@ -208,6 +208,10 @@ static func placed_wax(game: Node3D, p: Vector3i, slot: Dictionary) -> void:
 
 # --- runtime index ----------------------------------------------------------
 
+# Whether p is in this module's index, without creating the index.
+static func tracks(world: VoxelWorld, p: Vector3i) -> bool:
+	return world.has_meta("copper") and runtime(world).cells.has(p)
+
 static func runtime(world: VoxelWorld) -> Dictionary:
 	if not world.has_meta("copper"):
 		var rng := RandomNumberGenerator.new(); rng.seed = world.seed_value+9500
