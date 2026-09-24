@@ -182,3 +182,25 @@ The first table was measured headless, on a world after 1.5 km of travel. The se
 | Average frame on that route | 31.9 ms | 26.7–28.1 ms |
 
 The timings vary by about 30% between runs on this laptop. Each row compares runs made back to back. On the shorter `tests/survival_streaming_benchmark.gd` route the change is within that noise (40–43 FPS), since a fresh world has few stations and little flowing lava. Raw results are under `streaming_lag_2026_09_24.third_pass` in the [raw measurements](performance-measurements.json). All nine suites passed: 7,411 checks.
+
+### Fourth pass: creature draw calls
+
+With the scripts trimmed, drawing had become the largest single cost. On this machine a draw call costs about 15 µs of main-thread time. Every creature box was its own mesh with its own material, about seventeen per creature, and each was drawn again for the shadow map. Twenty creatures in view cost over 200 draw calls.
+
+- **Merged creature meshes.** After a creature's model is built, the boxes under each joint are merged into one mesh. All of a creature's merged meshes share one material over an atlas of its skins. Each skin sits in an 18×18 cell framed by the texels of its opposite edges, so nearest filtering reads the same texels a repeating skin would. Merged meshes and atlases are cached and shared by creatures built alike. Boxes that code may change later are not merged: any referenced from another variable, such as wool, pumpkin faces and golem cracks; any with children, metadata or a customised material, such as glowing eyes; and every box of a shulker.
+- **Clouds.** The 24 cloud boxes are one mesh.
+- **Smaller savings.** A creeper writes its tint only when it changes. The spawner update normalizes its station without rewriting unchanged fields.
+
+A render of all 64 creature kinds, standing and mid-stride with a damage tint, is otherwise pixel-identical to the previous build. It differs in 55–77 of 1.44 million pixels, in one-pixel seams where two boxes meet. Their 865 boxes become 325 meshes. `box_count` records how many boxes a model was built from; three checks used the number of parts for that.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| 32 farm animals around the player, FPS (`tests/mob_crowd_benchmark.gd passive`) | 36.9–40.6 | 41.7–43.6 |
+| … draw calls | 413–448 | 245–261 |
+| 32 hostile mobs at night, FPS (`… hostile`) | 30.9 | 37.9–39.0 |
+| … draw calls | 792–798 | 410–441 |
+| Rendered survival route, FPS | 41.9–45.7 | 46.3–47.6 |
+| … 95th percentile | 44.7–49.7 ms | 39.5–41.1 ms |
+| … frames over 50 ms | 40–61 | 26–27 |
+
+Building a creature takes about 0.7 ms longer, because of the merge. Raw results are under `streaming_lag_2026_09_24.fourth_pass` in the [raw measurements](performance-measurements.json). All nine suites passed: 7,411 checks.

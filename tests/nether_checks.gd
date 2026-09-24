@@ -186,7 +186,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 		var mob: Creature = game.spawn_creature(kind,game.player.position+Vector3(3,0,0))
 		mob.set_physics_process(false)
 		mob.animate(0.1)
-		suite.check(mob.parts.size() >= 10 and (mob.head != null or kind == "magma_cube"),kind+" has a detailed model")
+		suite.check(mob.box_count >= 10 and (mob.head != null or kind == "magma_cube"),kind+" has a detailed model")
 		mob.free()
 	suite.check(Creature.KINDS.cow.drops[1][1] >= 1,"cows guarantee at least one leather drop")
 	for path in ["user://nether_check.json","user://nether_check.json.bak"]:

@@ -223,7 +223,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	eye.queue_free()
 	for kind in ["ghast","blaze","enderman","ender_dragon","end_crystal","slime","shulker"]:
 		var mob: Creature = game.spawn_creature(kind,Vector3(14,50,25)); mob.set_physics_process(false)
-		suite.check(mob.parts.size() >= 3 and mob.health == Creature.KINDS[kind].health,"recognizable procedural model and stats: "+kind)
+		suite.check(mob.box_count >= 3 and mob.health == Creature.KINDS[kind].health,"recognizable procedural model and stats: "+kind)
 		mob.queue_free()
 	var fireball: MagicProjectile = game.adventure.projectile("ghast",Vector3(0,52,25),Vector3.RIGHT*10)
 	fireball.deflect(Vector3.LEFT)

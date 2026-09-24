@@ -211,15 +211,17 @@ func _setup_environment() -> void:
 	var cloud_mat := StandardMaterial3D.new()
 	cloud_mat.albedo_color = Color("e6ead6")
 	cloud_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	# One mesh for the whole layer, so the clouds cost one draw call.
+	var layer := SurfaceTool.new()
 	for i in 24:
-		var instance := MeshInstance3D.new()
 		var box := BoxMesh.new()
 		box.size = Vector3(rng.randf_range(9,24),1.2,rng.randf_range(5,12))
-		instance.mesh = box
-		instance.position = Vector3(rng.randf_range(-150,150),rng.randf_range(64,72),rng.randf_range(-150,150))
-		instance.material_override = cloud_mat
-		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		clouds.add_child(instance)
+		layer.append_from(box,0,Transform3D(Basis(),Vector3(rng.randf_range(-150,150),rng.randf_range(64,72),rng.randf_range(-150,150))))
+	var instance := MeshInstance3D.new()
+	instance.mesh = layer.commit()
+	instance.material_override = cloud_mat
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	clouds.add_child(instance)
 
 func _setup_menu_camera() -> void:
 	menu_camera = Camera3D.new()
@@ -833,7 +835,7 @@ func _warm_creature_art() -> void:
 		var mob: Creature = _creature_class(kind)
 		mob.game = self; mob.kind = kind
 		mob.model = Node3D.new(); mob.add_child(mob.model)
-		mob._build_model()
+		mob._build_model(); mob.merge_parts()
 		mob.free()
 
 # The script class that plays a creature kind, as spawn_creature chooses it.
