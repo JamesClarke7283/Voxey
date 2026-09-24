@@ -218,7 +218,7 @@ func _ready() -> void:
 	_build_model()
 	Farming.initialize(self)
 	Farming.register(self)
-	merge_parts()
+	if merges_when_ready(): merge_parts()
 
 func _build_model() -> void:
 	# A guardian is a spiked water orb with a single eye, so it takes its own
@@ -589,6 +589,9 @@ static var skin_atlases: Dictionary = {}
 static var merged_meshes: Dictionary = {}
 # Per script, the variables other than `parts` that can refer to a box.
 static var box_references: Dictionary = {}
+
+func merges_when_ready() -> bool:
+	return true
 
 func merge_parts() -> void:
 	if kind == "shulker": return

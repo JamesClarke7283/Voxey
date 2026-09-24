@@ -27,6 +27,11 @@ func bind(person: Dictionary) -> void:
 		var saved: Dictionary = person.effects[effect]
 		PotionEffects.apply(self,effect,float(saved.get("duration",0)),int(saved.get("level",1)))
 
+# Every village mob is bound as soon as it is added, and binding rebuilds the
+# model and merges it then.
+func merges_when_ready() -> bool:
+	return false
+
 func rebuild() -> void:
 	for child in model.get_children(): child.queue_free()
 	parts.clear(); colors.clear(); box_count = 0; legs.clear(); arms.clear(); crack_parts.clear(); _build_model(); merge_parts()

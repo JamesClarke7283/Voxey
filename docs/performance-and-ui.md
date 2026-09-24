@@ -204,3 +204,28 @@ A render of all 64 creature kinds, standing and mid-stride with a damage tint, i
 | … frames over 50 ms | 40–61 | 26–27 |
 
 Building a creature takes about 0.7 ms longer, because of the merge. Raw results are under `streaming_lag_2026_09_24.fourth_pass` in the [raw measurements](performance-measurements.json). All nine suites passed: 7,411 checks.
+
+### Fifth pass: column loads, and what was ruled out
+
+The worst remaining frames were column loads (12–28 ms each while travelling) and the physics ticks that catch up after a slow frame.
+
+- **Leaves on load.** Every generated leaf is a special cell. Each one went through the whole registration loop, which tests about thirty hook flags and calls snow registration. A plain leaf now skips straight to a batch, registered after the loop in the same order. Snow registration runs only for snow or cells already indexed as snow, the only cases where it does anything.
+- **Villagers.** A village mob is bound as soon as it is added, and binding rebuilds its model. The merge at the first build is skipped, since that model is discarded.
+- **Phantoms.** They fly their own path and stepped on every physics tick. They now merge ticks like other mobs.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| Peak of the special-cell loop in one column load, rendered route | 15–24 ms | 8–13 ms |
+| Apply 24 generated columns (x 33–38, z −2 to 1), total of 3 runs | 182–220 ms | 166–191 ms |
+| Spawn a villager, including binding | 3.1 ms | 2.4 ms |
+
+The rendered survival route is unchanged within noise (46–47 FPS), since few of its column loads are forest.
+
+These were measured and not adopted:
+
+- **Skipping unchanged sky colours.** The sky material is rewritten every frame. Skipping the writes made no difference to render or GPU time with this renderer.
+- **Stepping mobs beyond the fog less often.** Only mobs between the fog and the unload distance would gain. There were too few to measure.
+- **A packed lamp loop in block light.** Block-light queries were not measurably faster, and the results were identical, so the simpler code was kept.
+- **A separate render thread.** `rendering/driver/threads/thread_model = 2` crashes with the Compatibility renderer.
+
+The remaining costs on this machine are mob simulation (about 4.5 ms per frame on the rendered route), the budgeted world systems (about 2 ms) and drawing (about 4 ms of CPU and 7 ms of GPU time, of which the sun's two shadow cascades take about 3 ms). Reducing the shadows would change how the game looks, so they are left as they are. All nine suites passed: 7,411 checks.

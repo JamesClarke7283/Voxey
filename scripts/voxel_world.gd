@@ -427,15 +427,23 @@ func _apply_column(result: Dictionary) -> void:
 				for zz in range((q.z-7) >> 3,((q.z+7) >> 3)+1):
 					for yy in range((q.y-7) >> 3,((q.y+7) >> 3)+1):
 						for xx in range((q.x-7) >> 3,((q.x+7) >> 3)+1): edit_zone[Vector3i(xx,yy,zz)] = true
+	# A forest column has thousands of leaves: they are registered together after
+	# this loop, and snow registration is skipped where it would do nothing.
+	var snow_cells: Dictionary = SnowCover.state(self).cells if not special.is_empty() else {}
+	var leaf_cells: Array = []; var leaf_checks: Array = []
 	for p in special:
 		var id: int = node_at(p)
 		var hooks: int = load_hooks(id)
+		# A plain leaf needs nothing else from this loop.
+		if hooks == HOOK_LEAVES and not snow_cells.has(p) and not carts.has(p):
+			leaf_cells.append(p); leaf_checks.append(not edit_zone.is_empty() and edit_zone.has(Vector3i(p.x >> 3,p.y >> 3,p.z >> 3)))
+			continue
 		if hooks & HOOK_CIRCUIT: circuits.register(p,id)
 		if hooks & HOOK_LEGACY_DOOR: legacy_doors[p] = true
 		if hooks & HOOK_INPUT: input_updates[p] = true
-		SnowCover.registered(self,p,id)
+		if id == SnowCover.BASE or snow_cells.has(p): SnowCover.registered(self,p,id)
 		var touched: bool = not edit_zone.is_empty() and edit_zone.has(Vector3i(p.x >> 3,p.y >> 3,p.z >> 3))
-		if hooks & HOOK_LEAVES: WoodTypes.scan(self,p,id,touched)
+		if hooks & HOOK_LEAVES: leaf_cells.append(p); leaf_checks.append(touched)
 		if hooks & HOOK_AMETHYST: Amethyst.registered(self,p,id)
 		# Powder cells are swept for water contact, so a saved column must be
 		# tracked again on load.
@@ -495,6 +503,7 @@ func _apply_column(result: Dictionary) -> void:
 		if hooks & HOOK_PICKLE: SeaPickles.registered(self,p,id)
 		if hooks & HOOK_KELP: Kelp.registered(self,p,id)
 		if hooks & HOOK_BEACON: Beacons.registered(self,p,id)
+	WoodTypes.scan_loaded(self,leaf_cells,leaf_checks)
 	# A structure's own residents spawn once, at the marker block it reports. The
 	# markers are ordinary blocks (a chest or a cauldron), so they are not in the
 	# `special` index and must be read from each structure's own map.

@@ -1128,6 +1128,147 @@
         }
       },
       "checks": "7,411 passed in nine suites"
+    },
+    "fifth_pass": {
+      "note": "Before is commit cfff90e, measured back to back.",
+      "special_loop_peak_ms": {
+        "before": [
+          23.9,
+          14.7
+        ],
+        "after": [
+          8.3,
+          12.5,
+          8.0
+        ]
+      },
+      "apply_24_columns_ms": {
+        "columns": "x 33..38, z -2..1, seed 8675309, 2012 leaves",
+        "before": [
+          {
+            "median": 8.89,
+            "max": 27.08,
+            "total": 219.6
+          },
+          {
+            "median": 6.79,
+            "max": 18.23,
+            "total": 196.0
+          },
+          {
+            "median": 7.63,
+            "max": 17.68,
+            "total": 181.9
+          },
+          {
+            "median": 7.64,
+            "max": 17.17,
+            "total": 204.6
+          },
+          {
+            "median": 6.42,
+            "max": 16.96,
+            "total": 182.5
+          },
+          {
+            "median": 6.69,
+            "max": 24.5,
+            "total": 194.9
+          }
+        ],
+        "after": [
+          {
+            "median": 6.02,
+            "max": 16.81,
+            "total": 186.7
+          },
+          {
+            "median": 5.45,
+            "max": 16.01,
+            "total": 168.6
+          },
+          {
+            "median": 7.06,
+            "max": 15.21,
+            "total": 179.2
+          },
+          {
+            "median": 6.44,
+            "max": 16.47,
+            "total": 190.8
+          },
+          {
+            "median": 6.15,
+            "max": 17.64,
+            "total": 173.4
+          },
+          {
+            "median": 4.86,
+            "max": 15.49,
+            "total": 165.6
+          }
+        ]
+      },
+      "villager_spawn_ms": {
+        "before": 3.11,
+        "after": 2.44
+      },
+      "survival_streaming_benchmark": {
+        "before": [
+          {
+            "avg_fps": 48.3,
+            "p95": 39.5
+          },
+          {
+            "avg_fps": 47.4,
+            "p95": 39.5
+          }
+        ],
+        "after": [
+          {
+            "avg_fps": 46.4,
+            "p95": 41.7
+          },
+          {
+            "avg_fps": 46.9,
+            "p95": 39.9
+          }
+        ]
+      },
+      "ruled_out": {
+        "sky_material_writes": {
+          "with_writes": {
+            "avg_fps": 48.14,
+            "render_gpu_ms": 7.28
+          },
+          "without": [
+            {
+              "avg_fps": 46.65,
+              "render_gpu_ms": 7.36
+            },
+            {
+              "avg_fps": 47.06,
+              "render_gpu_ms": 7.4
+            }
+          ]
+        },
+        "hidden_mob_stepping_physics_ms": {
+          "with": [
+            4.58,
+            4.81
+          ],
+          "without": [
+            4.53,
+            4.75
+          ]
+        },
+        "separate_render_thread": "crashes with gl_compatibility (Godot 4.7.2)"
+      },
+      "sun_shadows_gpu_ms": {
+        "with": 9.36,
+        "without": 6.16
+      },
+      "checks": "7,411 passed in nine suites"
     }
   }
 }

@@ -70,6 +70,10 @@ func _physics_process(delta: float) -> void:
 	if get_meta("raid",false) and position.distance_to(game.player.position) > 85: return
 	if kind != "phantom": super._physics_process(delta); return
 	if not game.playing() or is_queued_for_deletion(): return
+	# A phantom steps as other mobs do: once per rendered frame, and again only
+	# once a thirtieth of a second has built up.
+	delta = _engine_step(delta)
+	if delta < 0.0: return
 	# A phantom flies its own path, so it has to run the shared weather rules
 	# explicitly — exactly as the flying branch does. Without this it would keep its
 	# own daylight burn but miss the water and freezing rules entirely.
