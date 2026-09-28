@@ -220,14 +220,16 @@ const TRADER_KIND := {
 # Merge into `Creature.KINDS`. The source's llama is `hp_min = 15`/`hp_max = 30`
 # rolled by `generate_hp_max` (15 + 0..8 + 0..9); Voxey's table holds one float, so
 # the floor is used. `collisionbox = {-0.45,0,-0.45,0.45,1.87,0.45}` gives half
-# the width, as Voxey measures it. `movement_speed = 3.5` against the villager's
-# 10.0 is 0.35 of a villager, i.e. 0.4 at Voxey's 1.15 walk, rounded to 0.45. Its
-# drops are the source's `leather 0..2`. The voice is empty because Voxey
-# synthesises its sounds and has no llama sample; an unknown name would be silent
-# anyway, and `Creature` voices the villager the same way.
+# the width, as Voxey measures it. A llama is a horse in the source, so its
+# `movement_speed = 3.5` is scaled like the horse's (an average 4.5 walks at 1.4),
+# giving 1.1, the same as the wild llama. Its drops are the source's
+# `leather 0..2`. The voice is empty because Voxey synthesises its sounds and has
+# no llama sample; an unknown name would be silent anyway, and `Creature` voices
+# the villager the same way. It spits back when struck rather than fleeing
+# (`Llamas`).
 const LLAMA_KIND := {
-	"hostile":false,"health":15.0,"speed":0.45,"width":0.45,"height":1.87,"damage":0,
-	"drops":[[Nodes.LEATHER,0,2]],"voice":"","pitch":1.0,"xp":1,
+	"hostile":false,"health":15.0,"speed":1.1,"width":0.45,"height":1.87,"damage":0,
+	"drops":[[Nodes.LEATHER,0,2]],"voice":"","pitch":1.0,"xp":1,"xp_max":3,"runaway":false,
 }
 
 # --- the record --------------------------------------------------------------
@@ -505,12 +507,10 @@ static func restore(game: Node3D) -> void:
 
 # A llama is a horse with a longer neck and taller ears and no mane, plus the
 # trader's carpet. `RuralAnimal` is the host because it is where Voxey already
-# routes its quadruped land animals (`game.gd:787`) and every branch it adds is
-# gated on `kind == "horse"` or `kind == "rabbit"`, so a `trader_llama` passes
-# through it untouched — `die`'s saddle and armour drops are dead code because
-# nothing ever sets them, and its `hit` multiplier is 1.0 while `horse_armor` is
-# false. Riding, taming and the wolf it would spit at are left out: Voxey has no
-# wolf kind at all (`Creature.KINDS`) and no projectile for llama spit.
+# routes its quadruped land animals. Its strength, coat, spit, wolf targeting and
+# caravans are the wild llama's (`Llamas`); a trader llama with its trader is a
+# caravan head, as the source's `is_leashed` says. Taming and riding it are left
+# out: the wild llama carries those, and a trader llama leaves with its trader.
 class LlamaMob extends RuralAnimal:
 	var trader_id: int = 0
 	var owner_node: Node3D = null
@@ -519,27 +519,16 @@ class LlamaMob extends RuralAnimal:
 	var life_timer: float = 0.0
 	var following: bool = false
 
+	# `trader_llama` is `table.merge (llama, ...)`: it rolls a llama's strength and
+	# coat, and spits and leads caravans like one (`Llamas`).
+	func _ready() -> void:
+		if game != null and game.world != null: Llamas.initialize(self,Llamas.rng_for(game.world))
+		super._ready()
+
+	# The llama's body in its rolled coat, with the trader's blanket and pack, which
+	# the source's `llama_decor_wandering_trader` texture layer draws.
 	func _build_model() -> void:
-		var coat := Color("a97f57")
-		var dark := Color("8a6644")
-		_box(Vector3(0,1.0,0.1),Vector3(0.62,0.6,1.05),coat,"fur")
-		_box(Vector3(0,1.42,-0.34),Vector3(0.3,0.72,0.34),dark,"fur")
-		head = _joint(Vector3(0,1.8,-0.44),"Head")
-		_box(Vector3(0,-0.06,-0.13),Vector3(0.34,0.4,0.5),coat,"fur",head)
-		_box(Vector3(0,-0.14,-0.36),Vector3(0.3,0.24,0.2),Color("cbb08a"),"fur",head)
-		for side in [-1,1]:
-			_box(Vector3(side*0.1,0.26,0.02),Vector3(0.08,0.3,0.1),dark,"fur",head)
-			_box(Vector3(side*0.14,0.06,-0.2),Vector3(0.045,0.06,0.03),Color("2b2a26"),"",head)
-			for z in [-0.36,0.44]:
-				var leg := _joint(Vector3(side*0.22,0.8,z),"Hip")
-				_box(Vector3(0,-0.34,0),Vector3(0.16,0.68,0.19),dark,"fur",leg)
-				_box(Vector3(0,-0.74,-0.015),Vector3(0.18,0.14,0.22),Color("3a3833"),"",leg)
-				legs.append(leg)
-		_box(Vector3(0,0.82,0.72),Vector3(0.14,0.66,0.13),dark,"fur")
-		# The trader's carpet and the chest it would carry, which the source's
-		# `llama_decor_wandering_trader` texture layer draws.
-		_box(Vector3(0,1.34,0.06),Vector3(0.66,0.12,0.72),Color("3d5fa8"),"cloth")
-		_box(Vector3(0,1.05,-0.12),Vector3(0.5,0.42,0.5),Color( "6d4f34"),"cloth")
+		Llamas.build(self)
 
 	func _physics_process(delta: float) -> void:
 		if not game.playing(): return

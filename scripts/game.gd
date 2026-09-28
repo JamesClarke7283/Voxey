@@ -1010,6 +1010,10 @@ func _spawn_creature() -> void:
 	if not hostile and dimension == "overworld" and randf() < Wolves.spawn_share(biome) and Wolves.spawn_allowed(world,Vector3i(pos.floor())):
 		Wolves.spawn_pack(self,pos,Wolves.rng_for(world))
 		return
+	# `llama_spawner`: packs of four to six in the highlands, which stand for the hills.
+	if not hostile and dimension == "overworld" and randf() < Llamas.spawn_share(biome) and not world.intersects(pos,0.5,1.9) and not Fluids.liquid(world.node_at(Vector3i(pos.floor())+Vector3i.DOWN)):
+		Llamas.spawn_pack(self,pos,Llamas.rng_for(world))
+		return
 	# `polar_bear_spawner`: weight 1 beside the cold biome's other animals.
 	if not hostile and dimension == "overworld" and randf() < PolarBears.spawn_share() and PolarBears.spawn_allowed(world,Vector3i(pos.floor())):
 		PolarBears.spawn_pack(self,pos,RandomNumberGenerator.new())

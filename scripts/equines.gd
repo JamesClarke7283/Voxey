@@ -41,6 +41,10 @@ extends RefCounted
 # * Spawning (1365-1411): horses in packs of two to six in the plains at weight
 #   5, donkeys alone at weight 1 in the meadow. Voxey's meadow stands for both.
 #
+# The llama (`Llamas`) is `table.merge (horse, ...)` in the source and joins the
+# family here: its own food, a temper cap of 30, a chest sized by its strength,
+# a carpet for a saddle, and no steering.
+#
 # Recorded deviations. Voxey keeps its fixed-name `trust` field as the tamed
 # flag, three meaning tamed, so existing saves and leads keep working. Ride speed
 # and jump are the source's statistics scaled so that an average horse keeps
@@ -52,7 +56,8 @@ const DONKEY = "donkey"
 const MULE = "mule"
 const SKELETON = "skeleton_horse"
 const ZOMBIE = "zombie_horse"
-const KINDS = [HORSE,DONKEY,MULE,SKELETON,ZOMBIE]
+const LLAMA = "llama"
+const KINDS = [HORSE,DONKEY,MULE,SKELETON,ZOMBIE,LLAMA]
 const UNDEAD_KINDS = [SKELETON,ZOMBIE]
 const TAMED_TRUST = 3
 const MAX_TEMPER = 120
@@ -88,6 +93,12 @@ const DATA = {
 	11567:{"name":"Diamond horse armor","color":"5fd6cf","stack":1,"family":"horse_armor"},
 }
 const CHEST_SLOTS = 15
+# `follow`: a golden carrot or golden apple leads a horse, donkey or mule, and a
+# hay bale a llama, from within the source's `follow_distance` of six to its
+# `stop_distance` of two.
+const FOLLOW = {HORSE:[VillageContent.GOLDEN_CARROT,Nodes.GOLDEN_APPLE],DONKEY:[VillageContent.GOLDEN_CARROT,Nodes.GOLDEN_APPLE],MULE:[VillageContent.GOLDEN_CARROT,Nodes.GOLDEN_APPLE],LLAMA:Llamas.FOLLOW}
+const FOLLOW_DISTANCE = 6.0
+const STOP_DISTANCE = 2.0
 const DONKEY_SPEED = 3.5
 const DONKEY_JUMP = 10.0
 const SKELETON_SPEED = 4.0
@@ -110,9 +121,15 @@ const MEADOW_ANIMALS = 40
 
 static func is_equine(kind: String) -> bool: return KINDS.has(kind)
 static func is_undead(kind: String) -> bool: return UNDEAD_KINDS.has(kind)
-static func carries_chest(kind: String) -> bool: return kind == DONKEY or kind == MULE
+static func carries_chest(kind: String) -> bool: return kind == DONKEY or kind == MULE or kind == LLAMA
 static func wears_armor(kind: String) -> bool: return kind in [HORSE,SKELETON,ZOMBIE]
-static func breeds(kind: String) -> bool: return kind == HORSE or kind == DONKEY
+static func breeds(kind: String) -> bool: return kind == HORSE or kind == DONKEY or kind == LLAMA
+static func max_temper(kind: String) -> int: return Llamas.MAX_TEMPER if kind == LLAMA else MAX_TEMPER
+static func food_table(kind: String) -> Dictionary: return Llamas.FOOD if kind == LLAMA else FOOD
+static func chest_slots(mob: Node3D) -> int: return Llamas.chest_slots(mob) if mob.kind == LLAMA else CHEST_SLOTS
+# `should_drive`: a llama never answers the reins, and a horse only when tamed and
+# saddled.
+static func drivable(mob: Node3D) -> bool: return mob.kind != LLAMA and tamed(mob) and mob.saddled
 static func tamed(mob: Node3D) -> bool: return int(mob.trust) >= TAMED_TRUST
 static func temper(mob: Node3D) -> int: return int(mob.get_meta("temper",0))
 
@@ -153,6 +170,7 @@ static func initialize(mob: Node3D, rng: RandomNumberGenerator) -> void:
 	var hp: float = 30.0 if is_undead(mob.kind) else roll_health(rng)
 	mob.set_meta("max_health",hp); mob.health = hp
 	if mob.kind in [HORSE,SKELETON,ZOMBIE]: mob.set_meta("jump",roll_jump(rng))
+	if mob.kind == LLAMA: Llamas.initialize(mob,rng)
 	if mob.kind == HORSE:
 		mob.set_meta("speed",roll_speed(rng))
 		mob.set_meta("horse_base",BASES[rng.randi_range(0,BASES.size()-1)])
@@ -161,14 +179,15 @@ static func initialize(mob: Node3D, rng: RandomNumberGenerator) -> void:
 # --- taming, food and equipment -----------------------------------------------------
 
 static func feed(game: Node3D, mob: Node3D, id: int) -> bool:
-	if not FOOD.has(id) or is_undead(mob.kind): return false
-	var entry: Array = FOOD[id]
+	var foods: Dictionary = food_table(mob.kind)
+	if not foods.has(id) or is_undead(mob.kind): return false
+	var entry: Array = foods[id]
 	var used: bool = false
 	if mob.health < max_health(mob): mob.health = minf(max_health(mob),mob.health+float(entry[0])); used = true
 	if mob.growth_remaining > 0.0 and int(entry[1]) > 0:
 		mob.growth_remaining = maxf(0.01,mob.growth_remaining-float(entry[1])*TICK); used = true
-	if mob.growth_remaining <= 0.0 and temper(mob) < MAX_TEMPER:
-		mob.set_meta("temper",mini(MAX_TEMPER,temper(mob)+int(entry[2]))); used = true
+	if mob.growth_remaining <= 0.0 and temper(mob) < max_temper(mob.kind):
+		mob.set_meta("temper",mini(max_temper(mob.kind),temper(mob)+int(entry[2]))); used = true
 	if bool(entry[3]) and mob.growth_remaining <= 0.0 and tamed(mob) and breeds(mob.kind) and mob.love_time <= 0.0 and mob.breed_cooldown <= 0.0:
 		mob.love_time = LOVE_TIME; used = true
 	if used:
@@ -209,8 +228,11 @@ static func chest(mob: Node3D) -> Array:
 static func add_chest(mob: Node3D) -> bool:
 	if not carries_chest(mob.kind) or mob.has_meta("equine_chest") or not tamed(mob): return false
 	var slots: Array = []
-	for i in CHEST_SLOTS: slots.append({"id":0,"count":0,"wear":0})
+	for i in chest_slots(mob): slots.append({"id":0,"count":0,"wear":0})
 	mob.set_meta("equine_chest",slots)
+	if mob.kind == LLAMA:
+		Llamas.draw_chest(mob)
+		return true
 	var bag: MeshInstance3D = mob._box(Vector3(0,1.0,0.35),Vector3(0.8,0.36,0.3),Color("7a5431"),"wood")
 	bag.set_meta("equine_chest_box",true)
 	return true
@@ -221,7 +243,7 @@ static func open_chest(game: Node3D, mob: Node3D) -> bool:
 	game.hud.return_cursor()
 	game.state = "inventory"; game.world.active = false; Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if is_instance_valid(game.controls): game.controls.hide_all()
-	game.hud.show_inventory("chest",{"kind":mob.kind,"label":"%s · %d slots" % [mob.kind.capitalize(),CHEST_SLOTS],"slots":slots})
+	game.hud.show_inventory("chest",{"kind":mob.kind,"label":"%s · %d slots" % [mob.kind.capitalize(),slots.size()],"slots":slots})
 	return true
 
 # The whole right-click, in `horse:on_rightclick`'s order. Returns true when used.
@@ -230,17 +252,20 @@ static func use(game: Node3D, mob: Node3D) -> bool:
 	var id: int = int(held.id) if held.count > 0 else 0
 	var creative: bool = game.gamemode == "creative"
 	var sneaking: bool = Signs.sneaking(game)
-	if mob.growth_remaining > 0.0 and not FOOD.has(id): return true
+	var foods: Dictionary = food_table(mob.kind)
+	if mob.growth_remaining > 0.0 and not foods.has(id): return true
 	# A tamed donkey or mule takes a chest, and a sneaking click opens it.
 	if carries_chest(mob.kind) and tamed(mob):
 		if id == Nodes.CHEST and add_chest(mob):
 			if not creative: game.inventory.consume_selected()
 			return true
 		if sneaking and open_chest(game,mob): return true
-	if FOOD.has(id):
+	if foods.has(id):
 		feed(game,mob,id)
 		return true
-	if tamed(mob) and mob.growth_remaining <= 0.0:
+	# A llama's saddle slot takes a carpet instead (`llama:is_saddle_item`).
+	if Llamas.decorate(game,mob,id): return true
+	if tamed(mob) and mob.growth_remaining <= 0.0 and mob.kind != LLAMA:
 		if id == Nodes.SADDLE and not mob.saddled:
 			mob.equip_saddle()
 			if not creative: game.inventory.consume_selected()
@@ -267,7 +292,7 @@ static func use(game: Node3D, mob: Node3D) -> bool:
 	if game.boats.ridden(): game.toast("Leave the boat before mounting."); return true
 	game.survival.mount = mob
 	mob.set_meta("evaluating",not tamed(mob))
-	if tamed(mob): game.toast("Mounted. Move to ride, Space to jump, Ctrl to dismount.")
+	if tamed(mob): game.toast("Mounted. A llama cannot be steered; Ctrl to dismount." if mob.kind == LLAMA else "Mounted. Move to ride, Space to jump, Ctrl to dismount.")
 	return true
 
 static func unsaddle(mob: Node3D) -> void:
@@ -280,14 +305,14 @@ static func unsaddle(mob: Node3D) -> void:
 static func evaluate(game: Node3D, mob: Node3D, delta: float, rng: RandomNumberGenerator) -> String:
 	if tamed(mob) or game.survival.mount != mob: return ""
 	if rng.randi_range(1,Bats.scale_chance(EVALUATE_TICKS,delta)) != 1: return ""
-	if rng.randi_range(1,MAX_TEMPER) <= temper(mob)+1:
+	if rng.randi_range(1,max_temper(mob.kind)) <= temper(mob)+1:
 		mob.trust = TAMED_TRUST
 		mob.set_meta("owner",game.player_id)
 		mob.remove_meta("evaluating")
 		game.puff(mob.center()+Vector3.UP*0.6,Color("ef7c8f"),8,1.0)
-		game.toast("The horse accepts you as its rider.")
+		game.toast("The %s accepts you as its rider." % mob.kind.replace("_"," "))
 		return "tamed"
-	mob.set_meta("temper",mini(MAX_TEMPER,temper(mob)+BUCK_TEMPER))
+	mob.set_meta("temper",mini(max_temper(mob.kind),temper(mob)+BUCK_TEMPER))
 	game.survival.mount = null
 	game.player.position = mob.position+Vector3(1,0.4,0)
 	game.player.velocity = Vector3(0,5,0)
@@ -299,6 +324,7 @@ static func evaluate(game: Node3D, mob: Node3D, delta: float, rng: RandomNumberG
 static func mate_kind(a: String, b: String) -> String:
 	if a == HORSE and b == HORSE: return HORSE
 	if a == DONKEY and b == DONKEY: return DONKEY
+	if a == LLAMA and b == LLAMA: return LLAMA
 	if (a == HORSE and b == DONKEY) or (a == DONKEY and b == HORSE): return MULE
 	return ""
 
@@ -333,6 +359,7 @@ static func breed_step(game: Node3D, mob: Node3D, delta: float) -> Node3D:
 static func make_foal(game: Node3D, a: Node3D, b: Node3D, rng: RandomNumberGenerator) -> Node3D:
 	var kind: String = mate_kind(a.kind,b.kind)
 	if kind.is_empty(): return null
+	if kind == LLAMA: return Llamas.make_cria(game,a,b,rng)
 	var foal: Node3D = game.spawn_creature(kind,a.position)
 	if foal == null: return null
 	var hp: float = child_value(max_health(a),max_health(b),15.0,32.0,rng)
@@ -360,7 +387,7 @@ static func snapshot(mob: Node3D) -> Dictionary:
 	return {"max_health":max_health(mob),"speed":optional(mob,"speed"),"jump":optional(mob,"jump"),
 		"base":mob.get_meta("horse_base",""),"markings":mob.get_meta("horse_markings",""),"temper":temper(mob),
 		"armor":armor_id(mob),"chest":slots if mob.has_meta("equine_chest") else null,"trap":optional(mob,"trap_age"),
-		"growth":mob.growth_remaining,"owner":mob.get_meta("owner","")}
+		"growth":mob.growth_remaining,"owner":mob.get_meta("owner",""),"llama":Llamas.snapshot(mob) if mob.kind == LLAMA else null}
 
 static func restore(mob: Node3D, entry: Variant) -> void:
 	if not entry is Dictionary or entry.is_empty(): return
@@ -369,7 +396,11 @@ static func restore(mob: Node3D, entry: Variant) -> void:
 	for key in ["speed","jump"]:
 		var value: Variant = entry.get(key)
 		if (value is float or value is int) and is_finite(float(value)) and float(value) > 0.0: mob.set_meta(key,float(value))
-	mob.set_meta("temper",clampi(int(entry.get("temper",0)),0,MAX_TEMPER))
+	mob.set_meta("temper",clampi(int(entry.get("temper",0)),0,max_temper(mob.kind)))
+	# The strength sizes the chest, so it is restored first.
+	if mob.kind == LLAMA and entry.get("llama") is Dictionary:
+		var saved: Dictionary = entry.llama
+		mob.set_meta("llama_strength",clampi(int(saved.get("strength",1)),1,Llamas.STRENGTH_MAX))
 	if not str(entry.get("owner","")).is_empty(): mob.set_meta("owner",str(entry.owner))
 	var base: String = str(entry.get("base",""))
 	if BASES.has(base): set_coat(mob,base,str(entry.get("markings","")) if MARKINGS.has(str(entry.get("markings",""))) else "")
@@ -387,6 +418,7 @@ static func restore(mob: Node3D, entry: Variant) -> void:
 	var growth: Variant = entry.get("growth")
 	if (growth is float or growth is int) and float(growth) > 0.0:
 		mob.growth_remaining = minf(float(growth),GROW_TIME); Farming.resize(mob)
+	if mob.kind == LLAMA: Llamas.restore(mob,entry.get("llama"))
 
 # --- the skeleton trap ---------------------------------------------------------------------
 
@@ -479,6 +511,7 @@ static func palette(mob: Node3D) -> Dictionary:
 	return {"coat":coat,"dark":coat.darkened(0.25),"muzzle":coat.lightened(0.3),"mane":coat.darkened(0.55)}
 
 static func build(mob: Node3D) -> void:
+	if mob.kind == LLAMA: Llamas.build(mob); return
 	var pal: Dictionary = palette(mob)
 	var markings: String = str(mob.get_meta("horse_markings","")) if mob.kind == HORSE else ""
 	var scale: float = 0.86 if mob.kind == DONKEY else (0.94 if mob.kind == MULE else 1.0)
@@ -520,6 +553,25 @@ static func draw_saddle(mob: Node3D) -> void:
 	for side in [-1,1]:
 		var strap: MeshInstance3D = mob._box(Vector3(side*0.35,1.06,0.17)*scale,Vector3(0.06,0.5,0.16)*scale,Color("c5ad78"),"")
 		strap.set_meta("equine_saddle",true)
+
+# `check_following`: an animal walks after a player holding its lure, from within
+# six until it is within two. INF when it is not following.
+static func follow_direction(game: Node3D, mob: Node3D) -> Vector3:
+	if mob.scared > 0 or game.leads.attached(mob) or game.survival.mount == mob: return Vector3.INF
+	var held: Dictionary = game.inventory.held()
+	if held.count <= 0 or not FOLLOW.get(mob.kind,[]).has(int(held.id)): return Vector3.INF
+	var distance: float = mob.position.distance_to(game.player.position)
+	if distance > FOLLOW_DISTANCE or not mob._sees_player(): return Vector3.INF
+	if distance <= STOP_DISTANCE: return Vector3.ZERO
+	return ((game.player.position-mob.position)*Vector3(1,0,1)).normalized()
+
+# An animal carrying a rider it does not answer to keeps pacing, as the source's
+# AI does with a driver aboard: a new heading every few seconds.
+static func ridden_wander(mob: Node3D, delta: float) -> void:
+	mob.think -= delta
+	if mob.think > 0.0: return
+	mob.think = randf_range(1.5,4.0)
+	mob.direction = Vector3(randf_range(-1,1),0,randf_range(-1,1)).normalized() if randf() > 0.35 else Vector3.ZERO
 
 static func rng_for(world: VoxelWorld) -> RandomNumberGenerator:
 	if not world.has_meta("equines_rng"):

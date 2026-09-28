@@ -581,7 +581,7 @@ func ride_step(delta: float, input: Vector3) -> void:
 		game.player.position = horse.position+Vector3(1,0.1,0); mount = null; return
 	# `horse:should_drive`: only a tamed, saddled horse answers the reins. An
 	# untamed one wanders while it decides whether to throw its rider.
-	var drivable: bool = not Equines.is_equine(horse.kind) or Equines.tamed(horse) and horse.saddled
+	var drivable: bool = not Equines.is_equine(horse.kind) or Equines.drivable(horse)
 	var direction: Vector3 = game.player.global_basis*input.normalized() if drivable else horse.direction
 	var top: float = Equines.ride_speed(horse) if Equines.is_equine(horse.kind) else 8.0
 	if not drivable: top = float(horse.info().speed)

@@ -47,6 +47,8 @@ func _build_model() -> void:
 func _physics_process(delta: float) -> void:
 	if game.playing() and game.leads.sleep_if_unloaded(self): return
 	if Equines.is_equine(kind) and (trust > 0 or not custom_name.is_empty()) and position.distance_to(game.player.position) > 85: return
+	# A llama's caravan, retaliation and spit (`Llamas.step`).
+	if Llamas.is_llama(kind) and game.playing(): Llamas.step(game,self,delta)
 	if Equines.is_equine(kind) and game.playing():
 		Equines.trap_step(game,self,delta)
 		if is_queued_for_deletion(): return
@@ -58,6 +60,7 @@ func _physics_process(delta: float) -> void:
 		animate(delta,true)
 		# `horse_maybe_tame`: an untamed horse decides whether to keep its rider.
 		if Equines.is_equine(kind) and not Equines.tamed(self): Equines.evaluate(game,self,delta,Equines.rng_for(game.world))
+		if Equines.is_equine(kind) and not Equines.drivable(self): Equines.ridden_wander(self,delta)
 		return
 	if kind == "rabbit" and grounded and leap_cooldown <= 0:
 		velocity.y = 4.2; leap_cooldown = 1.1
@@ -77,6 +80,7 @@ func equip_horse_armor() -> void:
 	_box(Vector3(0,1.1,0.02),Vector3(0.69,0.53,1.02),Color("76563e"),"cloth")
 
 func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> void:
+	if Llamas.is_llama(kind): Llamas.struck(game,self,from)
 	# Horse armour sets the share of fleshy damage that lands.
 	if Equines.is_equine(kind): super.hit(damage*(Equines.armor_factor(self) if reason not in Creature.BYPASSES_ARMOR else 1.0),from,reason); return
 	super.hit(damage*0.7 if horse_armor else damage,from,reason)
@@ -85,6 +89,7 @@ func die() -> void:
 	if saddled: game.spawn_drop(center(),Nodes.SADDLE)
 	if Equines.is_equine(kind):
 		if Equines.armor_id(self) != 0: game.spawn_drop(center(),Equines.armor_id(self))
+		if Llamas.carpet(self) != 0: game.spawn_drop(center(),Llamas.carpet(self))
 		if has_meta("equine_chest"):
 			game.spawn_drop(center(),Nodes.CHEST)
 			for slot in Equines.chest(self):

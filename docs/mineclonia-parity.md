@@ -94,6 +94,20 @@ closes the three undead variants and the systems they depend on.
     the lethal cookie.
 
   See [companions](companions-source.md).
+- **Llamas** ([`llamas.gd`](../scripts/llamas.gd), checks `llama`):
+  - the wild llama joins the horse family, with its own food and a temper cap
+    of 30;
+  - strength and coats, with chests sized by strength and carpet decor;
+  - hay-bale breeding;
+  - spit at attackers and untamed wolves, and wolves' fear of llamas;
+  - caravans behind a leashed llama or a trader's;
+  - highland packs.
+
+  Horses, donkeys and mules now also follow a player holding a golden carrot or
+  golden apple. See [llamas](llamas-source.md).
+- **Still open from the survey.** The mooshroom needs a mushroom-fields biome and
+  the ocelot a jungle, and Voxey has neither. The illusioner has no natural
+  spawner in the source, so it is recorded rather than ported.
 
 ## 2026-09-21 batch: hazards, experience, item entities and block behaviour
 
@@ -497,9 +511,9 @@ by regression checks:
   75. The trader's record is served through the same `VillageLife.record` lookup a
   villager uses, so the existing trading panel displays and performs its trades
   unchanged. The escort is hosted on `RuralAnimal`, which is where Voxey keeps its
-  quadrupeds. The source's llama taming, riding and spit are omitted: the trader llama
-  is explicitly untameable in the reference, and Voxey has neither a wolf to spit at
-  nor a llama-spit projectile.
+  quadrupeds. The trader llama is untameable while its trader lives, as in the
+  reference. Its spit, wolf targeting and caravans arrived with the wild llama
+  ([llamas](llamas-source.md)).
 - **The remaining raid roles** ([`raid_mobs.gd`](../scripts/raid_mobs.gd)): the
   **ravager** (100 health, 12 damage, the source's 0.75 knockback resistance and 1.5
   attack knockback, a guaranteed saddle drop and never a captain) and the **vex**

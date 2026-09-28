@@ -21,7 +21,10 @@ const KINDS = {
 	# `can_despawn`: the source's default is false and both leave on their own
 	# twenty-minute timer, which `WanderingTraders` owns.
 	"wandering_trader":{"hostile":false,"health":20.0,"speed":1.6,"width":0.28,"height":1.95,"damage":0,"drops":[],"voice":"","pitch":1.0,"xp":0},
-	"trader_llama":{"hostile":false,"health":15.0,"speed":0.45,"width":0.45,"height":1.87,"damage":0,"drops":[[Nodes.LEATHER,0,2]],"voice":"","pitch":1.0,"xp":1},
+	"trader_llama":{"hostile":false,"health":15.0,"speed":1.1,"width":0.45,"height":1.87,"damage":0,"drops":[[Nodes.LEATHER,0,2]],"voice":"","pitch":1.0,"xp":1,"xp_max":3,"runaway":false},
+	# `mobs_mc:llama` (`Llamas`): the horse family's spitting pack animal. A struck
+	# llama spits back instead of fleeing, so it does not take the passive runaway.
+	"llama":{"hostile":false,"health":15.0,"speed":1.1,"width":0.45,"height":1.87,"damage":0,"drops":[[Nodes.LEATHER,0,2]],"voice":"","pitch":1.0,"xp":1,"xp_max":3,"runaway":false},
 	"snow_golem":{"hostile":false,"health":4.0,"speed":2.0,"width":0.35,"height":1.89,"damage":0,"drops":[[Nodes.SNOWBALL,0,15]],"voice":"","pitch":1.0,"armor":{"fleshy":100,"water_vulnerable":100}},
 	"iron_golem":{"hostile":false,"health":100.0,"speed":2.5,"width":0.7,"height":2.69,"damage":15,"drops":[],"voice":"","pitch":1.0},
 	"shulker": {"hostile":true,"health":30.0,"speed":0.0,"width":0.5,"height":1.0,"damage":4,"drops":[[Nodes.SHULKER_SHELL,1,2]],"voice":"","pitch":0.9,"xp":5},
@@ -32,7 +35,7 @@ const KINDS = {
 	"bat": {"hostile":false,"health":6.0,"speed":0.0,"width":0.25,"height":0.89,"damage":0,"drops":[],"voice":"","pitch":1.7,"can_despawn":true,"runaway":false,"xp":0},
 	"endermite": {"hostile":true,"health":8.0,"speed":2.2,"width":0.2,"height":0.3,"damage":2,"drops":[],"voice":"spider","pitch":1.9,"reach":1,"xp":3,"armor":{"fleshy":100,"arthropod":100}},
 	# `mobs_mc:wolf`: tamed with a bone, driven by `Wolves`.
-	"wolf": {"hostile":false,"health":8.0,"speed":2.9,"width":0.3,"height":0.85,"damage":4,"drops":[],"voice":"","pitch":1.2,"reach":2,"xp":1,"xp_max":3,"runaway":false,"leaps":true},
+	"wolf": {"hostile":false,"health":8.0,"speed":2.9,"width":0.3,"height":0.85,"damage":4,"drops":[],"voice":"","pitch":1.2,"reach":2,"xp":1,"xp_max":3,"runaway":false,"leaps":true,"runaway_from":["llama","trader_llama"],"runaway_range":16.0},
 	# `mobs_mc:strider`, `mobs_mc:hoglin` and `mobs_mc:zoglin` (`Striders`,
 	# `Hoglins`). The zoglin is `table.merge (hoglin, ...)` without a `drops`
 	# field, so it keeps the hoglin's porkchops and leather.
@@ -907,13 +910,16 @@ func nearest_villager() -> Node3D:
 
 # The nearest mob of a `runaway_from` kind within the source's
 # `runaway_view_range` of six, or INF when there is none.
-func runaway_threat(kinds: Array) -> Vector3:
+func runaway_threat(kinds: Array, view_range: float = 6.0) -> Vector3:
 	var best: Vector3 = Vector3.INF
-	var best_distance: float = 6.0
+	var best_distance: float = view_range
 	for mob in game.creatures.get_children():
 		if mob == self or mob.is_queued_for_deletion() or not kinds.has(mob.kind): continue
 		var d: float = position.distance_to(mob.position)
-		if d < best_distance: best = mob.position; best_distance = d
+		if d >= best_distance: continue
+		# A wolf runs from a llama only when the llama's strength wins the roll.
+		if Llamas.is_llama(mob.kind) and not Llamas.frightens(self,mob,Llamas.rng_for(game.world)): continue
+		best = mob.position; best_distance = d
 	return best
 
 func center() -> Vector3:
@@ -1040,7 +1046,7 @@ func _physics_process(delta: float) -> void:
 	# keeps away from a nearby player without being provoked first.
 	elif data.get("flees",false) and distance < AquaticMobs.FLEE_RANGE and distance > 0.1: direction = -toward
 	elif not data.get("runaway_from",[]).is_empty():
-		var threat: Vector3 = runaway_threat(data.runaway_from)
+		var threat: Vector3 = runaway_threat(data.runaway_from,float(data.get("runaway_range",6.0)))
 		if not is_inf(threat.x): direction = ((position-threat)*Vector3(1,0,1)).normalized()
 	var farm_direction: Vector3 = Vector3.INF
 	if game.leads.player_attached(self): direction = toward if distance > 2.5 else Vector3.ZERO
@@ -1061,6 +1067,12 @@ func _physics_process(delta: float) -> void:
 	elif Dolphins.is_dolphin(kind) and not chasing and farm_direction == Vector3.INF and scared <= 0:
 		var swim: Vector3 = Dolphins.direction(game,self)
 		if swim != Vector3.INF: direction = swim
+	elif Llamas.is_llama(kind) and farm_direction == Vector3.INF and game.survival.mount != self and not game.leads.player_attached(self):
+		var llama_heading: Vector3 = Llamas.direction(game,self)
+		if llama_heading != Vector3.INF: direction = llama_heading
+	elif Equines.is_equine(kind) and farm_direction == Vector3.INF:
+		var lure: Vector3 = Equines.follow_direction(game,self)
+		if lure != Vector3.INF: direction = lure
 	elif Striders.is_strider(kind) and farm_direction == Vector3.INF and scared <= 0 and not game.leads.attached(self):
 		var to_lava: Vector3 = Striders.direction(self)
 		if to_lava != Vector3.INF: direction = to_lava
