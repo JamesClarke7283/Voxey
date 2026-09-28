@@ -101,7 +101,9 @@ func _physics_process(delta: float) -> void:
 					if from_player and not hits_player: Golems.attacked(mob,game.player)
 					elif shooter_id != 0 and is_instance_id_valid(shooter_id): Golems.attacked(mob,instance_from_id(shooter_id))
 					mob.hit(damage,position-velocity)
-					if from_player and not hits_player: Wolves.record_player_struck(game,mob)
+					if from_player and not hits_player:
+						Wolves.record_player_struck(game,mob)
+						if is_instance_valid(mob): mob.set_meta("player_struck",true)
 					Jukeboxes.arrow_killed(mob,shooter_kind,was_alive)
 					# `sniper_duel`: a player's arrow killing a skeleton from at least
 					# fifty blocks away.

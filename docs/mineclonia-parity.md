@@ -65,6 +65,15 @@ closes the three undead variants and the systems they depend on.
   - the zoglin's attack on every mob but creepers.
 
   See [Nether fauna](nether-fauna-source.md).
+- **Dolphins and axolotls** ([dolphins](../scripts/dolphins.gd),
+  [axolotls](../scripts/axolotls.gd), checks `water_fauna`):
+  - the dolphin's air, drying, Dolphin's Grace (now a real ×1.6 swim speed),
+    boat escort, treasure leading and breaching;
+  - the axolotl's seven colours, playing dead, hunting with its cooldown and the
+    player's reward, bucket breeding, the new bucket of axolotl and The Cutest
+    Predator.
+
+  See [water fauna](water-fauna-source.md).
 
 ## 2026-09-21 batch: hazards, experience, item entities and block behaviour
 

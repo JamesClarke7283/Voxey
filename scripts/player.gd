@@ -215,6 +215,8 @@ func _physics_process(delta: float) -> void:
 	underwater = Fluids.contains(game.world,camera.global_position,Nodes.WATER)
 	speed *= PotionEffects.speed(self)*SweetBerryThorns.slow(game.world.node_at(Vector3i(position.floor()))).x
 	if wet: speed *= lerpf(0.55,1.0,minf(3,Enchantments.worn(self,"Depth Strider"))/3.0)
+	# `dolphin_grace`: movement speed ×1.6 while in a liquid.
+	if wet and PotionEffects.level(self,"dolphins_grace") > 0: speed *= 1.6
 	if game.world.node_at(Vector3i((position-Vector3.UP*0.1).floor())) == Nodes.SOUL_SAND: speed *= 1.0+Enchantments.worn(self,"Soul Speed")*0.12 if Enchantments.worn(self,"Soul Speed") > 0 else 0.5
 	# Ladders: holding forward (or jump) against a ladder climbs; sneaking holds still.
 	var body_cell: Vector3i = Vector3i(position.floor())
@@ -434,6 +436,7 @@ func _process(delta: float) -> void:
 						game.puff(mob.center(),Color("bc7a57"),15,0.6)
 						game.sound_at("crit",mob.center())
 					mob.hit(damage,position)
+					mob.set_meta("player_struck",true)
 					Wolves.record_player_struck(game,mob)
 					Hunger.exhaust(self,Hunger.ATTACK)
 					mob.knock *= 1+Inventory.enchantment(game.inventory.held(),"Knockback")*0.6

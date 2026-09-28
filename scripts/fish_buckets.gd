@@ -109,6 +109,7 @@ const BUCKETS = {
 	"salmon":SALMON_BUCKET,
 	"tropical_fish":TROPICAL_FISH_BUCKET,
 	"pufferfish":PUFFERFISH_BUCKET,
+	"axolotl":Axolotls.BUCKET,
 }
 
 # Registered by the parent into `VillageContent.DATA`; `stack_max = 1` and the
@@ -171,6 +172,7 @@ static func place(game: Node3D, target: Dictionary) -> bool:
 	# The source's `props.persistent = true`: a released fish is not distance
 	# culled, which the parent's gate reads off this meta.
 	mob.set_meta("persistent",true)
+	if Axolotls.is_axolotl(kind): Axolotls.released(mob,held)
 	var label: String = release_name(held)
 	if not label.is_empty():
 		mob.custom_name = label

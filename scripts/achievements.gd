@@ -9,6 +9,7 @@ extends RefCounted
 const DEFINITIONS = [
 	{"id":"bee_our_guest","title":"Bee Our Guest","description":"Collect honey with a bottle while a campfire smokes the hive.","goal":0,"xp":0},
 	{"id":"total_beelocation","title":"Total Beelocation","description":"Use Silk Touch to recover a bee nest.","goal":0,"xp":0},
+	{"id":"cutest_predator","title":"The Cutest Predator","description":"Catch an axolotl with a bucket.","goal":0,"xp":0},
 	{"id":"bullseye","title":"Bullseye","description":"Hit a target bullseye from at least 30 blocks away.","goal":0,"xp":0},
 	{"id":"first_log","title":"Timber!","description":"Gather your first oak log.","goal":0},
 	{"id":"craft_planks","title":"Joiner","description":"Craft oak planks.","goal":0},

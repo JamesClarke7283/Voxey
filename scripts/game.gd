@@ -970,6 +970,8 @@ func _spawn_creature() -> void:
 	if dimension == "overworld":
 		if not underground and randf() < 0.035: spawn_creature("pillager",pos); return
 		if not underground and daylight < 0.3 and day_number() >= 3 and randf() < 0.12: spawn_creature("phantom",pos+Vector3.UP*10); return
+		# `axolotl_spawner`: lush-cave water over clay (or Voxey's moss), its own cap.
+		if underground and randf() < 0.2 and not Axolotls.spawn_pack(self,pos,Axolotls.rng_for_colour()).is_empty(): return
 		if underground and randf() < 0.12: spawn_creature("breeze" if pos.y < -40 else "silverfish",pos); return
 		if not underground and pos.y <= TerrainGenerator.SEA+3 and randf() < 0.2: spawn_creature("turtle",pos); return
 		# Guardians live in open ocean: a submerged spawn cell away from shore.
@@ -977,6 +979,12 @@ func _spawn_creature() -> void:
 			var depth: int = TerrainGenerator.SEA-pos.y
 			if depth >= 6 and Fluids.water(world.node_at(Vector3i(pos.floor()))):
 				spawn_creature("guardian_elder" if randf() < 0.08 else "guardian",pos)
+				return
+		# `dolphin_spawner`: weight 1 of the ocean's water creatures, in pods of one
+		# or two, in deep water.
+		if not underground and randf() < 0.14*Dolphins.spawn_share():
+			if Fluids.water(world.node_at(Vector3i(pos.floor()))) and TerrainGenerator.SEA-pos.y >= 4:
+				for i in randi_range(1,2): spawn_creature(Dolphins.KIND,pos+Vector3(randf_range(-1,1),0,randf_range(-1,1)))
 				return
 		# Fish and squid live in shallow and deep water alike, so any submerged
 		# cell will do. The source's own `spawn_in_water` rule is the check here.

@@ -16,7 +16,10 @@ const FOODS = {
 	# wolf interaction; the entry makes wolves persistent breeders.
 	"wolf":[],
 	# `strider:on_rightclick` and `hoglin:on_rightclick`.
-	"strider":[CrimsonPlants.WARPED_FUNGUS],"hoglin":[CrimsonPlants.CRIMSON_FUNGUS]
+	"strider":[CrimsonPlants.WARPED_FUNGUS],"hoglin":[CrimsonPlants.CRIMSON_FUNGUS],
+	# `axolotl.follow`: a bucket of tropical fish, which `Axolotls.feed` trades for
+	# a water bucket.
+	"axolotl":[FishBuckets.TROPICAL_FISH_BUCKET]
 }
 # `feed_tame (clicker, nil, ...)`: a strider's fungus breeds and grows it but
 # never heals it. A hoglin has no `follow` list, so it does not trail a player
@@ -53,7 +56,8 @@ static func state(mob: Creature) -> Dictionary:
 		"health":mob.health,"custom_name":mob.custom_name,"growth":mob.growth_remaining,"love":mob.love_time,"cooldown":mob.breed_cooldown,
 		"sheared":mob.sheared,"sheep_color":mob.sheep_color,"grazing":mob.grazing,"graze_consumed":mob.graze_consumed,"wool_timer":mob.wool_timer,"egg_timer":mob.egg_timer,"effects":PotionEffects.snapshot(mob),
 		"slime_size":mob.slime_size if mob is ExpeditionCreature and mob.kind == "slime" else 0,"crystal_key":mob.crystal_key if mob is ExpeditionCreature else "",
-		"saddled":mob.saddled if mob is RuralAnimal else false,"wolf":Wolves.snapshot(mob) if Wolves.is_wolf(mob.kind) else {}}
+		"saddled":mob.saddled if mob is RuralAnimal else false,"persistent":mob.has_meta("persistent"),
+		"axolotl_colour":Axolotls.colour(mob) if Axolotls.is_axolotl(mob.kind) else "","wolf":Wolves.snapshot(mob) if Wolves.is_wolf(mob.kind) else {}}
 
 static func remember(mob: Creature) -> void:
 	if not managed(mob) or mob.is_queued_for_deletion() or mob.health <= 0: return
@@ -80,6 +84,8 @@ static func restore_state(mob: Creature, entry: Dictionary) -> void:
 	if mob is ExpeditionCreature:
 		mob.crystal_key = str(entry.get("crystal_key",""))
 		if mob.kind == "slime": mob.set_slime_size(clampi(int(number(entry.get("slime_size"),2,4)),1,4))
+	if bool(entry.get("persistent",false)): mob.set_meta("persistent",true)
+	if Axolotls.is_axolotl(mob.kind) and Axolotls.COLOURS.has(str(entry.get("axolotl_colour",""))): Axolotls.set_colour(mob,str(entry.axolotl_colour))
 	# A tamed wolf's maximum is forty, so its record is read before its health.
 	if Wolves.is_wolf(mob.kind): Wolves.restore(mob,entry.get("wolf",{}))
 	var cap: float = Wolves.max_health(mob) if Wolves.is_wolf(mob.kind) else mob.info().health
@@ -137,6 +143,10 @@ static func update_world(game: Node3D, delta: float = 1.0) -> void:
 static func sleep_if_unloaded(mob: Creature) -> bool:
 	if not managed(mob): return false
 	if mob.game.world.loaded_at(mob.position) and mob.position.distance_to(mob.game.player.position) <= 90: return false
+	# A kind the source lets despawn (the axolotl) goes rather than sleeps, unless
+	# it was bred, bucketed or named, which the source marks `persistent`.
+	if mob.info().get("can_despawn",false) and not mob.has_meta("persistent") and mob.custom_name.is_empty():
+		forget(mob); mob.queue_free(); return true
 	remember(mob)
 	mob.game.leads.hibernate(mob)
 	mob.queue_free()
@@ -145,6 +155,7 @@ static func sleep_if_unloaded(mob: Creature) -> bool:
 static func use(game: Node3D, mob: Creature) -> bool:
 	if mob == null or not supports(mob.kind) or mob.is_queued_for_deletion() or mob.health <= 0: return false
 	if Wolves.is_wolf(mob.kind): return Wolves.use(game,mob)
+	if Axolotls.is_axolotl(mob.kind): return Axolotls.feed(game,mob)
 	var held: Dictionary = game.inventory.held()
 	if held.count <= 0: return false
 	if mob.kind == "sheep" and VillageContent.DATA.get(held.id,{}).get("family","") == "dye":
@@ -216,6 +227,8 @@ static func tick(mob: Creature, delta: float) -> void:
 		parent.love_time = 0; parent.breed_cooldown = COOLDOWN; parent.farm_mate = ""; parent.mate_time = 0
 	var child: Creature = mob.game.spawn_creature(mob.kind,mob.position)
 	child.growth_remaining = GROW_TIME; resize(child)
+	# `spawn_child` marks the young persistent.
+	child.set_meta("persistent",true)
 	if Wolves.is_wolf(mob.kind): Wolves.on_breed(mob,mate,child,RandomNumberGenerator.new())
 	if mob.kind == "sheep": set_color(child,offspring_color(mob.sheep_color,mate.sheep_color))
 	XpOrbs.throw_xp(mob.game,child.center(),randi_range(1,7))

@@ -34,6 +34,9 @@ const KINDS = {
 	"strider": {"hostile":false,"health":20.0,"speed":1.0,"width":0.45,"height":1.69,"damage":0,"drops":[],"voice":"","pitch":0.8,"xp":9,"water_sensitive":true,"floats":false,"armor":{"fleshy":90,"water_vulnerable":90}},
 	"hoglin": {"hostile":true,"health":40.0,"speed":2.4,"width":0.6,"height":1.4,"damage":6,"drops":[],"voice":"pig","pitch":0.5,"reach":3,"xp":9,"floats":false,"runaway":false,"armor":{"fleshy":90}},
 	"zoglin": {"hostile":true,"health":40.0,"speed":2.4,"width":0.6,"height":1.4,"damage":6,"drops":[],"voice":"zombie","pitch":0.5,"reach":3,"xp":9,"floats":false,"runaway":false,"armor":{"undead":90,"fleshy":90}},
+	# `mobs_mc:dolphin` and `mobs_mc:axolotl` (`Dolphins`, `Axolotls`).
+	"dolphin": {"hostile":false,"health":10.0,"speed":4.0,"width":0.45,"height":0.6,"damage":2.5,"drops":[[VillageContent.RAW_COD,0,1]],"voice":"","pitch":1.4,"swims":true,"floats":false,"reach":2,"xp":1,"xp_max":3,"runaway":false},
+	"axolotl": {"hostile":false,"health":14.0,"speed":1.5,"width":0.375,"height":0.42,"damage":2,"drops":[],"voice":"","pitch":1.6,"swims":true,"floats":false,"reach":2,"xp":1,"xp_max":7,"can_despawn":true,"runaway":true},
 	"polar_bear": {"hostile":false,"health":30.0,"speed":2.4,"width":0.7,"height":1.4,"damage":6,"drops":[],"voice":"","pitch":0.6,"reach":2,"xp":1,"xp_max":3,"runaway":false,"can_freeze":false},
 	"ghast": {"hostile":true,"health":10.0,"speed":2.0,"width":1.6,"height":4.0,"damage":6,"drops":[[Nodes.GHAST_TEAR,1,2],[Nodes.GUNPOWDER,1,3]],"voice":"","pitch":0.6,"xp":5},
 	"blaze": {"hostile":true,"health":20.0,"speed":2.4,"width":0.35,"height":1.8,"damage":4,"drops":[[Nodes.BLAZE_ROD,1,2]],"voice":"","pitch":0.8,"water_sensitive":true,"xp":10,"armor":{"fleshy":100,"snowball_vulnerable":100,"water_vulnerable":100}},
@@ -479,6 +482,10 @@ func _build_model() -> void:
 			Striders.build(self)
 		"hoglin","zoglin":
 			Hoglins.build(self)
+		"dolphin":
+			Dolphins.build(self)
+		"axolotl":
+			Axolotls.build(self)
 	# Small anatomical details sharpen the hostile silhouettes.
 	if kind in ["piglin","piglin_brute"]:
 		for part in parts:
@@ -945,6 +952,8 @@ func aggressive() -> bool:
 	# A wolf goes for the player only while it is wild and angry.
 	if Wolves.is_wolf(kind): return Wolves.aggressive(game,self)
 	if Hoglins.is_family(kind): return Hoglins.aggressive(game,self)
+	# A dolphin fights back once struck; an axolotl never hunts the player.
+	if Dolphins.is_dolphin(kind): return Dolphins.aggressive(game,self)
 	if not hostile or game.gamemode == "creative" or (not provoked and PotionEffects.level(game.player,"invisibility") > 0 and position.distance_to(game.player.position) > 2+game.player.armor_points()*0.35): return false
 	if info().get("neutral_by_day",false) and game.daylight >= 0.5 and not provoked: return false
 	# The source's `_neutral_to_players`: a zombified piglin ignores players until
@@ -1023,13 +1032,14 @@ func _physics_process(delta: float) -> void:
 	# readily as for the player, and takes whichever is nearer. Without this a
 	# zombie never lands the killing blow that infects a villager, so the infection
 	# rule below could never fire.
-	if (data.get("hunts_villagers",false) or not data.get("hunts",[]).is_empty() or Wolves.is_wolf(kind) or Hoglins.is_family(kind)) and not (scared > 0 and not hostile):
+	if (data.get("hunts_villagers",false) or not data.get("hunts",[]).is_empty() or Wolves.is_wolf(kind) or Hoglins.is_family(kind) or Axolotls.is_axolotl(kind)) and not (scared > 0 and not hostile):
 		prey_timer -= delta
 		if prey_timer <= 0 or prey_choice != null and (not is_instance_valid(prey_choice) or prey_choice.is_queued_for_deletion()):
 			prey_timer = 0.25
 			# A wolf's targets follow its owner rules (`Wolves.target`).
 			if Wolves.is_wolf(kind): prey_choice = Wolves.target(game,self)
 			elif Hoglins.is_family(kind): prey_choice = Hoglins.target(game,self)
+			elif Axolotls.is_axolotl(kind): prey_choice = Axolotls.target(game,self)
 			else: prey_choice = nearest_villager()
 		var prey: Node3D = prey_choice
 		if prey != null:
@@ -1062,6 +1072,11 @@ func _physics_process(delta: float) -> void:
 	if Hoglins.is_family(kind):
 		var away: Vector3 = Hoglins.direction(self)
 		if away != Vector3.INF: direction = away; chasing = false
+	elif Axolotls.is_axolotl(kind) and Axolotls.playing_dead(self):
+		direction = Vector3.ZERO; chasing = false
+	elif Dolphins.is_dolphin(kind) and not chasing and farm_direction == Vector3.INF and scared <= 0:
+		var swim: Vector3 = Dolphins.direction(game,self)
+		if swim != Vector3.INF: direction = swim
 	elif Striders.is_strider(kind) and farm_direction == Vector3.INF and scared <= 0 and not game.leads.attached(self):
 		var to_lava: Vector3 = Striders.direction(self)
 		if to_lava != Vector3.INF: direction = to_lava
@@ -1107,10 +1122,13 @@ func _physics_process(delta: float) -> void:
 	if data.get("flies",false) and kind == "wither":
 		var want: float = game.player.position.y+4.0
 		velocity.y = clampf((want-position.y)*0.8,-3.0,3.0)
-	elif data.get("swims",false) and Fluids.water(game.world.node_at(Vector3i(position.floor()))):
+	elif data.get("swims",false) and Fluids.water(game.world.node_at(Vector3i(position.floor()))) and not has_meta("dolphin_leaping"):
 		velocity.y = knock.y*0.2
 		if chasing and (distance > Guardians.MIN_ATTACK_DISTANCE or not Guardians.is_guardian(kind)):
 			velocity.y = clampf((game.player.position.y-position.y)*0.5,-2.0,2.0)
+		if Dolphins.is_dolphin(kind) and not chasing:
+			var rise: float = Dolphins.lift(game,self)
+			if not is_nan(rise): velocity.y = rise
 	elif data.get("floats",true) and submerged():
 		# The source gives almost every mob `floats = 1` by default, so a land mob
 		# that walks into deep water **bobs up** instead of sinking to the bottom. It
@@ -1173,6 +1191,8 @@ func _physics_process(delta: float) -> void:
 				swing = Hoglins.attack_damage(self,Hoglins.rng_for(game.world))
 			if on_prey:
 				prey_target.hit(maxf(0,swing*PotionEffects.melee(self)),position)
+				# An axolotl's kill starts its cooldown and may reward the player.
+				if Axolotls.is_axolotl(kind) and (not is_instance_valid(prey_target) or prey_target.health <= 0): Axolotls.killed(game,self,prey_target)
 				if Hoglins.is_family(kind) and not Hoglins.baby(self) and is_instance_valid(prey_target): prey_target.knock += Hoglins.toss(position,prey_target.position,0.0,false,Hoglins.rng_for(game.world))
 				Creature.deal_effect(game,self,prey_target)
 			else:
@@ -1225,6 +1245,12 @@ func _physics_process(delta: float) -> void:
 	if PolarBears.is_bear(kind): PolarBears.tick(self,delta,chasing,distance)
 	if Wolves.is_wolf(kind): Wolves.step(game,self,delta)
 	if Striders.is_strider(kind): Striders.step(game,self,delta)
+	if Dolphins.is_dolphin(kind):
+		Dolphins.step(game,self,delta,Dolphins.rng_for(game.world))
+		if is_queued_for_deletion(): return
+	if Axolotls.is_axolotl(kind):
+		Axolotls.step(game,self,delta)
+		if is_queued_for_deletion(): return
 	if Hoglins.is_family(kind):
 		Hoglins.sense(game,self,delta)
 		Hoglins.tick_retreat(game,self,delta)
@@ -1320,6 +1346,7 @@ func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> voi
 		for group in bonuses:
 			scaled += float(bonuses[group])*(armor_factor(group) if armor_applies else 1.0)
 		bonuses.clear()
+	if Axolotls.is_axolotl(kind): Axolotls.on_hurt(game,self,scaled*PotionEffects.resistance(self),reason not in BYPASSES_ARMOR,Hoglins.rng_for(game.world))
 	health -= scaled*PotionEffects.resistance(self)
 	provoked = true
 	hurt_flash = 0.2
@@ -1328,6 +1355,8 @@ func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> voi
 	# when struck rather than only ever advancing. A passive mob flees by default,
 	# which is what makes a cow run from a player who hits it.
 	if info().get("runaway", not hostile): scared = 5
+	# A struck dolphin calls its pod; a struck axolotl may play dead.
+	if Dolphins.is_dolphin(kind): Dolphins.struck(game,self,GuardianAuras.attacker_at(game,from,self))
 	# A struck hoglin calls its kin, or retreats from outnumbering piglins.
 	if Hoglins.is_family(kind): Hoglins.struck(game,self,GuardianAuras.attacker_at(game,from,self),from,Hoglins.rng_for(game.world))
 	# A struck wolf remembers its attacker and calls the pack (`Wolves.struck`).

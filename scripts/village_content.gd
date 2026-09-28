@@ -880,6 +880,7 @@ const DATA = {
 	11560:{"name":"Bucket of salmon","color":"c98a72","stack":1,"family":"fish_bucket"},
 	11561:{"name":"Bucket of pufferfish","color":"d9b04a","stack":1,"family":"fish_bucket"},
 	11562:{"name":"Bucket of tropical fish","color":"d97a3a","stack":1,"family":"fish_bucket"},
+	11563:{"name":"Bucket of axolotl","color":"e8a0b8","stack":1,"family":"fish_bucket"},
 	810:{"name":"Empty map","color":"dbcea5","stack":64},
 	811:{"name":"Map","color":"c6ca9b","stack":1},
 	812:{"name":"Globe banner pattern","color":"e5d5a8","stack":1},

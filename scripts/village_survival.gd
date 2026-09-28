@@ -50,7 +50,13 @@ func use() -> bool:
 	if NameTags.use(game,mob): return true
 	# `mcl_buckets`' capture: a water bucket right-clicked on a fish scoops it up
 	# alive, carrying its name into the bucket's metadata.
+	# The axolotl's bucket keeps its colour as well as its name.
+	if Axolotls.capture(game,mob):
+		game.achievements.award("cutest_predator")
+		return true
 	if FishBuckets.capture(game,mob): return true
+	# `dolphin:on_rightclick`: a fish sends it looking for treasure.
+	if mob != null and Dolphins.is_dolphin(mob.kind) and Dolphins.feed(game,mob): return true
 	if Golems.use(game,mob): return true
 	if Farming.use(game,mob): return true
 	if held == Nodes.COMPASS and not target.is_empty() and target.id == Bastions.LODESTONE: return Lodestones.bind(game,target.pos)
