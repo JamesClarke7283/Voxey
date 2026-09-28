@@ -63,7 +63,7 @@ const SPAWNER = Dungeons.SPAWNER
 const CART = Rails.CHEST_CART
 # Voxey has no chain block; iron bars serve as the hanging equivalent.
 const CHAIN = Nodes.IRON_BARS
-const SPAWNER_MOB = "spider"
+const SPAWNER_MOB = "cave_spider"
 
 # Direction names and their facing index, used for the torch wall mountings.
 const NORTH = 0

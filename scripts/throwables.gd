@@ -7,15 +7,23 @@ const SPEED = 22.0
 const GRAVITY = 10.4
 const DRAG = 3.0
 
-static func supports(id: int) -> bool: return id in [Nodes.EGG,Nodes.SNOWBALL]
+static func supports(id: int) -> bool: return id in [Nodes.EGG,Nodes.SNOWBALL,WindCharge.ID]
+
+# The wind charge is thrown harder and flies **flat**: `mcl_charges` sets `velocity =
+# 30` and an acceleration of zero, where `mcl_throwing` uses 22 with gravity. It also
+# removes itself after three seconds if it has hit nothing.
+static func speed_for(id: int) -> float: return WindCharge.SPEED if id == WindCharge.ID else SPEED
+static func gravity_for(id: int) -> float: return 0.0 if id == WindCharge.ID else GRAVITY
+static func drag_for(id: int) -> float: return 0.0 if id == WindCharge.ID else DRAG
+static func lifetime_for(id: int) -> float: return WindCharge.LIFETIME if id == WindCharge.ID else 30.0
 
 static func launch(game: Node3D, id: int, origin: Vector3, direction: Vector3, thrower: Node3D = null) -> ThrownItem:
 	if not supports(id) or direction.length_squared() < 0.000001: return null
 	var shot := ThrownItem.new()
 	var aim: Vector3 = direction.normalized()
 	shot.game = game; shot.item_id = id; shot.position = origin; shot.thrower = thrower
-	shot.velocity = aim*SPEED
-	shot.acceleration = Vector3(-aim.x*DRAG,-GRAVITY,-aim.z*DRAG)
+	shot.velocity = aim*speed_for(id)
+	shot.acceleration = Vector3(-aim.x*drag_for(id),-gravity_for(id),-aim.z*drag_for(id))
 	game.entities.add_child(shot)
 	game.sound_at("arrow",origin,1.4)
 	return shot

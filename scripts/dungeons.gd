@@ -6,7 +6,7 @@ const SPAWNER = 7300
 const REGION = 32
 const HEIGHT = 4
 const DATA = {SPAWNER:{"name":"Mob spawner","block":true,"shape":"spawner","color":"495563","hardness":5.0,"tool":0,"hidden":true,"blast_resistance":5.0}}
-const MOBS = ["zombie","zombie","spider","skeleton"]
+const MOBS = ["zombie","zombie","spider","skeleton","cave_spider"]
 const SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]
 # Zero IDs keep unavailable source entries' weight, never redistribute it.
 # item, weight, minimum, maximum. Book is enchanted when selected.
@@ -244,7 +244,7 @@ static func changed(world: VoxelWorld, p: Vector3i, old_id: int, id: int) -> voi
 	if old_id == SPAWNER and id != SPAWNER:
 		remove_runtime(world,p); world.stations.erase(VoxelWorld.station_key(p))
 		var game: Node = world.get_parent()
-		if game != null and game.has_method("spawn_creature"): game.experience += randi_range(15,43)
+		if game != null and game.has_method("spawn_creature"): XpOrbs.throw_xp(game,Vector3(p)+Vector3.ONE*0.5,randi_range(15,43))
 	elif id == SPAWNER: registered(world,p)
 
 static func allowed(world: VoxelWorld, p: Vector3i, kind: String, rng: RandomNumberGenerator) -> bool:

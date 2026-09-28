@@ -2,6 +2,8 @@ class_name VillageItemArt
 extends RefCounted
 
 static func draw(img: Image, id: int, base: Color) -> void:
+	# `mcl_mobitems`' two steering sticks: a rod with their own lure on the end.
+	if PigRiding.is_steering_item(id): PigRiding.draw(img,id,base); return
 	if id == CropFarming.POISONOUS_POTATO: CropFarming.draw(img,id); return
 	if id == Spyglass.ID: Spyglass.draw(img); return
 	if id == Amethyst.SHARD: Amethyst.draw(img,id); return

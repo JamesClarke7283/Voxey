@@ -713,6 +713,10 @@ func _slot_click(index: int, is_station: bool, right: bool, is_grid: bool = fals
 	var source: Array = game.player.armor_slots if is_armor else (game.inventory.grid if is_grid else (station_data.slots if is_station else game.inventory.slots))
 	if index < 0 or index >= source.size(): return
 	var slot: Dictionary = source[index]
+	# `mcl_furnaces.give_xp`: withdrawing from a furnace's output pays the experience
+	# its smelts accumulated. The source pays the whole stored count on any take, so
+	# only the before/after count of the output slot matters.
+	var smelted_before: int = int(slot.get("count",0)) if is_station and station == "furnace" and index == 2 else -1
 	if is_armor and game.gamemode != "creative" and Inventory.enchantment(slot,"Curse of Binding") > 0: game.toast("Curse of Binding prevents removing this armor."); return
 	if not is_station and not is_grid and not is_armor and index == game.survival.open_pouch_index: return
 	if not is_station and not is_grid and not is_armor and index >= Inventory.BASE_SLOTS and PortableStorage.contains_kind(cursor,false): game.toast("Pouches cannot contain other pouches."); return
@@ -772,6 +776,10 @@ func _slot_click(index: int, is_station: bool, right: bool, is_grid: bool = fals
 		slot.id=cursor.id; slot.count=cursor.count; slot.wear=cursor.wear
 		cursor=temp
 	game.sound("equip" if is_armor else "click")
+	# `mcl_furnaces.give_xp`: on any take from the output slot, the furnace's whole
+	# stored experience is credited to the player who took it (`init.lua`:221,228).
+	if smelted_before >= 0 and int(station_data.slots[2].count) < smelted_before:
+		FurnaceRules.payout(game,station_data,game.player.position+Vector3.UP)
 	game.inventory.changed.emit()
 
 func return_cursor() -> void:
@@ -804,6 +812,9 @@ func refresh_slots() -> void:
 func _update_icon(icon: ItemIcon, slot: Dictionary, selected_value: bool) -> void:
 	icon.enchanted = not slot.get("data",{}).get("enchantments",{}).is_empty() and slot.id != 0
 	icon.item_id=slot.id; icon.count=slot.count; icon.wear=slot.wear; icon.selected=selected_value
+	# `mcl_armor`'s leather tint is per item, so the icon has to read it from the
+	# slot rather than from the item id.
+	icon.tint = CauldronWash.color_of(slot) if CauldronWash.is_leather_armor(slot.id) else Color.WHITE
 	if icon.get_parent() is Button:
 		var description: String = str(slot.get("data",{}).get("custom_name",Nodes.title(slot.id))) if slot.id else "Empty slot"
 		for enchant in slot.get("data",{}).get("enchantments",{}): description += "\n%s %d" % [enchant,slot.data.enchantments[enchant]]
@@ -811,6 +822,8 @@ func _update_icon(icon: ItemIcon, slot: Dictionary, selected_value: bool) -> voi
 		if PotionCatalog.ITEMS.has(slot.id): description += "\n"+PotionCatalog.description(slot.id)
 		if slot.id == Spyglass.ID: description += "\nHold right-click or Z to zoom. Touch: hold Use."
 		if slot.id == FruitCrops.CARVED: description += "\nEquip in the helmet slot to avoid provoking Endermen with your gaze."
+		if CauldronWash.is_leather_armor(slot.id) and slot.get("data",{}).has("color"):
+			description += "\nDyed: %s"%CauldronWash.color_of(slot).to_html(false)
 		if slot.get("data",{}).has("title"): description += "\n"+str(slot.data.title)
 		icon.get_parent().tooltip_text = description
 
@@ -820,7 +833,10 @@ func show_death() -> void:
 	_dim()
 	var panel := _panel(layer,_panel_rect(Vector2(500,300)))
 	_label(panel,"THE WILDERNESS REMEMBERS",Vector2(32,26),12,ACCENT)
-	_label(panel,"A new beginning.",Vector2(32,53),32)
+	# `mcl_death_messages`: the screen names how the player died, which the source
+	# builds from its own reason table. `DeathMessages.message` falls back to a
+	# generic line for a reason the table does not cover.
+	_label(panel,DeathMessages.message(game.death_reason),Vector2(32,53),32)
 	var recovery: Dictionary = game.world.adventure_state.get("last_recovery",{})
 	var message: String = "Your items are saved for a recovery chest."
 	if not recovery.is_empty():
@@ -938,6 +954,9 @@ func _draw() -> void:
 			if player.mining>0:
 				draw_rect(Rect2(center+Vector2(-24,20),Vector2(48,3)),Color(0,0,0,0.4))
 				draw_rect(Rect2(center+Vector2(-24,20),Vector2(48*player.mining,3)),ACCENT)
+		# `mcl_bossbars`: one shared bar list, fed by whichever system owns a boss,
+		# drawn under the crosshair and above the status bar. It sits after the
+		# dragon block so the dragon's own richer display keeps its slot.
 		if game.dimension == "end" and not game.world.adventure_state.get("defeated",false) and Vector2(player.position.x,player.position.z).length() < 110:
 			var boss_width: float = minf(360,size.x*0.42)
 			var boss_health: float = float(game.world.adventure_state.get("dragon_health",200))
@@ -946,6 +965,14 @@ func _draw() -> void:
 			draw_rect(Rect2(center.x-boss_width/2,116,boss_width*clampf(boss_health/200,0,1),8),Color("b975d3"))
 			var remaining: int = 10-game.world.adventure_state.get("destroyed_crystals",[]).size()
 			draw_string(font,Vector2(center.x-boss_width/2,143),"%d / 10 healing crystals remain" % remaining,HORIZONTAL_ALIGNMENT_CENTER,boss_width,12,Color("c7b5cf"))
+		var boss_row: int = 163
+		for bar in BossBars.bars(game):
+			var width: float = minf(360,size.x*0.42)
+			var tint: Color = BossBars.color(str(bar.color))
+			draw_string(font,Vector2(center.x-width/2,boss_row),str(bar.text).to_upper(),HORIZONTAL_ALIGNMENT_CENTER,width,14,tint)
+			draw_rect(Rect2(center.x-width/2,boss_row+4,width,8),Color("2a2a33"))
+			draw_rect(Rect2(center.x-width/2,boss_row+4,width*float(bar.fraction),8),tint)
+			boss_row += 26
 		# Status bar shrinks on phones so the touch buttons stay clear.
 		var bar_scale: float = _hud_scale()
 		var bar_w: float = 536.0*bar_scale
@@ -970,9 +997,6 @@ func _draw() -> void:
 			if effect == "absorption": effect_text += " · %s HP"%str(snappedf(PotionEffects.absorption(player),0.5))
 			draw_string(font,Vector2(size.x-260,180+effect_row*19),effect_text,HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("e6c96b") if effect == "absorption" else Color("c9d9ab"))
 			effect_row += 1
-		if game.world.adventure_state.has("raid"):
-			var raid: Dictionary = game.world.adventure_state.raid
-			draw_string(font,Vector2(center.x-140,160),"RAID · Wave %d / 3 · %d pillagers"%[int(raid.wave),int(raid.get("alive",0))],HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color("e8aaa0"))
 		var selected_name: String = str(game.inventory.held().get("data",{}).get("custom_name",Nodes.title(game.inventory.held().id))) if game.inventory.held().id else "Empty hand"
 		var text_width: float = font.get_string_size(selected_name,HORIZONTAL_ALIGNMENT_LEFT,-1,16).x
 		draw_style_box(_drawn_style(Color(0.12,0.12,0.12,0.8)),Rect2(center.x-text_width/2-14,bar_y-32,text_width+28,32))

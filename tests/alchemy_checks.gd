@@ -1,5 +1,12 @@
 extends RefCounted
 
+# The experience a set of thrown orbs carries, which is what a kill leaves behind
+# before the player walks over it.
+static func thrown_xp(game: Node3D) -> int:
+	var total: int = 0
+	for orb in XpOrbs.orbs(game): total += int(orb.xp)
+	return total
+
 static func run(suite: SceneTree, game: Node3D) -> void:
 	var inv := Inventory.new()
 	suite.check(PotionCatalog.DEFINITIONS.size() == 27,"water and all 26 source potion types are registered")
@@ -440,13 +447,22 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	for dx in range(-2,3):
 		for dz in range(-2,3): game.world.set_node(Vector3i(xp_arena.x+dx,xp_arena.y-5,xp_arena.z+dz),Nodes.STONE)
 	game.resume()
+	# `mcl_mobs/physics.lua`:279 throws the reward as experience orbs at the corpse,
+	# so the check is what the orbs carry and that collecting them pays the total.
 	var doomed: Creature = game.spawn_creature("wither",Vector3(xp_arena)+Vector3(0.5,0.5,0.5))
 	if doomed != null:
 		doomed.set_physics_process(false)
+		XpOrbs.clear(game)
 		var xp_before: float = game.experience
+		var player_before: Vector3 = game.player.position
 		doomed.health = 0.5
 		doomed.hit(100.0)
-		suite.check(is_equal_approx(game.experience-xp_before,50.0),"killing a wither awards its fifty experience")
+		suite.check(thrown_xp(game) == 50,"killing a wither throws its fifty experience as orbs")
+		# Standing on the corpse collects them, so the reward reaches the player.
+		game.player.position = Vector3(xp_arena)+Vector3(0.5,0.5,0.5)
+		for i in 30: XpOrbs.update(game,0.05)
+		suite.check(is_equal_approx(game.experience-xp_before,50.0),"and collecting those orbs credits the fifty")
+		XpOrbs.clear(game); game.player.position = player_before
 	# A slime is the one mob whose reward is not a fixed number: the source registers
 	# three sizes worth four, two and one, and a big slime splits on death. Its award
 	# therefore comes from its size rather than the `xp` field.
@@ -455,23 +471,33 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 		if blob == null: continue
 		blob.set_slime_size(size)
 		blob.set_physics_process(false)
+		XpOrbs.clear(game)
 		var slime_before: float = game.experience
+		var slime_spot: Vector3 = game.player.position
 		blob.health = 0.5
 		blob.hit(100.0)
+		game.player.position = Vector3(xp_arena)+Vector3(0.5,0.5,0.5)
+		for i in 30: XpOrbs.update(game,0.05)
 		suite.check(is_equal_approx(game.experience-slime_before,float(size)),"a size-%d slime pays %d experience" % [size,size])
+		XpOrbs.clear(game); game.player.position = slime_spot
 		await suite.process_frame
 	# A kill pays once. The achievement a kill unlocked used to add its own default of
 	# two on top, so a zombie — whose achievement is the only one a kill fires — paid
 	# seven instead of five.
 	for i in 3: await suite.process_frame
+	XpOrbs.clear(game)
 	var single_before: float = game.experience
+	var zombie_spot: Vector3 = game.player.position
 	var one_zombie: Creature = game.spawn_creature("zombie",Vector3(xp_arena)+Vector3(0.5,0.5,0.5))
 	if one_zombie != null:
 		one_zombie.set_physics_process(false)
 		one_zombie.health = 0.5
 		one_zombie.hit(100.0)
 		for i in 3: await suite.process_frame
+		game.player.position = Vector3(xp_arena)+Vector3(0.5,0.5,0.5)
+		for i in 30: XpOrbs.update(game,0.05)
 		suite.check(is_equal_approx(game.experience-single_before,5.0),"a zombie pays its five experience exactly once, not again through its achievement")
+		XpOrbs.clear(game); game.player.position = zombie_spot
 	# --- the source's per-group armor ---------------------------------------
 	# `armor` is the percentage of a group's damage a mob *takes*, not a resistance, and
 	# a group the table omits deals nothing. So a zombie takes ninety percent of an

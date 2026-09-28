@@ -12,8 +12,8 @@ static var dial_game: Node3D = null
 
 static func texture(id: int) -> Texture2D:
 	# A clock or compass re-renders whenever its dial frame changes.
-	if id in [Nodes.CLOCK,Nodes.COMPASS]:
-		var frame: int = Dials.frame(dial_game,id) if dial_game != null else 0
+	if id in [Nodes.CLOCK,Nodes.COMPASS,RecoveryCompass.ID]:
+		var frame: int = (RecoveryCompass.frame(dial_game) if id == RecoveryCompass.ID else Dials.frame(dial_game,id)) if dial_game != null else 0
 		if dial_frames.get(id,-1) != frame or not textures.has(id):
 			dial_frames[id] = frame
 			textures.erase(id)
@@ -185,6 +185,8 @@ static func _build_dial(id: int, frame: int) -> Texture2D:
 	if id == Nodes.CLOCK:
 		# Noon is frame 0 in the source's table, so the second half is night.
 		Dials.draw_clock(img,frame,frame >= Dials.CLOCK_FRAMES/2)
+	elif id == RecoveryCompass.ID:
+		Dials.draw_compass(img,frame,dial_game == null or RecoveryCompass.pointing(dial_game))
 	else:
 		Dials.draw_compass(img,frame,dial_game == null or Dials.works(dial_game))
 	return ImageTexture.create_from_image(img)

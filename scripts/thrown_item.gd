@@ -15,7 +15,7 @@ func _ready() -> void:
 	rng.randomize()
 	var model := MeshInstance3D.new()
 	model.mesh = ItemArt.mesh(item_id); model.material_override = ItemArt.material(item_id)
-	model.scale = Vector3.ONE*(0.45 if item_id == Nodes.EGG else 0.5)
+	model.scale = Vector3.ONE*(0.45 if item_id == Nodes.EGG else (0.3 if item_id == WindCharge.ID else 0.5))
 	add_child(model)
 
 func overlaps(target: Node3D, point: Vector3) -> bool:
@@ -26,7 +26,7 @@ func overlaps(target: Node3D, point: Vector3) -> bool:
 func _physics_process(delta: float) -> void:
 	if not game.playing() or impacted or delta <= 0: return
 	age += delta
-	if age > 30: queue_free(); return
+	if age > Throwables.lifetime_for(item_id): queue_free(); return
 	var motion: Vector3 = velocity*delta+acceleration*delta*delta*0.5
 	velocity += acceleration*delta
 	var steps: int = maxi(1,ceili(motion.length()/0.06))
@@ -48,15 +48,22 @@ func _physics_process(delta: float) -> void:
 func impact(target: Node3D = null, block: bool = false) -> void:
 	if impacted: return
 	impacted = true
-	if target != null:
+	if item_id == WindCharge.ID:
+		# `mcl_charges`: the burst happens on **every** impact — a block, a mob or a
+		# player — and it is the burst, not the hit, that is the charge's purpose.
+		WindCharge.burst(game,position)
+		if target is Creature and is_instance_valid(thrower): Golems.attacked(target,thrower)
+		if target is Creature: target.hit(WindCharge.MOB_DAMAGE,position-velocity.normalized())
+		if block: WindCharge.hits_node(game,position,Vector3i(position.floor()))
+	elif target != null:
 		if target is Creature and is_instance_valid(thrower): Golems.attacked(target,thrower)
 		Throwables.strike(target,item_id,velocity)
 	elif block and item_id == Nodes.EGG: chicks = Throwables.hatch(game,position,Throwables.hatch_count(rng))
 	elif item_id == VillageContent.XP_BOTTLE:
 		# `HUD/mcl_experience/bottle.lua`: a broken bottle grants `random(3, 11)`
 		# experience. The player path already does this; a thrown one must too.
-		game.experience += randi_range(3,11)
+		XpOrbs.throw_xp(game,position,randi_range(3,11))
 		game.puff(position,Color("9ad964"),15)
-	game.puff(position,Nodes.color(item_id),20 if item_id == Nodes.SNOWBALL else 12,2)
+	if item_id != WindCharge.ID: game.puff(position,Nodes.color(item_id),20 if item_id == Nodes.SNOWBALL else 12,2)
 	game.sound_at("thud",position,1.5 if item_id == Nodes.SNOWBALL else 1.9)
 	queue_free()

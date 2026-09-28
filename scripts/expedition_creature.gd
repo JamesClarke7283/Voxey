@@ -237,7 +237,7 @@ func die() -> void:
 				var child: Creature = game.spawn_creature("slime",position+Vector3((i%2-0.5)*0.4,0.1,(i/2-0.5)*0.4))
 				child.set_slime_size(slime_size/2)
 		else: game.spawn_drop(center(),Nodes.SLIME_BALL,randi_range(1,2))
-		game.experience += slime_size; game.puff(center(),Color("8db65e"),10); queue_free(); return
+		XpOrbs.throw_xp(game,center(),slime_size); game.puff(center(),Color("8db65e"),10); queue_free(); return
 	if is_queued_for_deletion(): return
 	if kind == "end_crystal":
 		queue_free() # Mark first: nearby crystal explosions cannot re-enter death.

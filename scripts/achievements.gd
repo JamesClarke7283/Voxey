@@ -103,7 +103,7 @@ func award(id: String) -> bool:
 	# could pay twice — once for the mob's own `xp_min` and again for the achievement
 	# the kill unlocked.
 	var reward: int = int(definition.get("xp",0))
-	if reward > 0: game.experience += reward
+	if reward > 0: XpOrbs.throw_xp(game,game.player.position+Vector3.UP,reward)
 	return true
 
 ## Record progress toward a goal-based achievement. Awards at the goal.

@@ -117,7 +117,7 @@ func dragon_defeated() -> void:
 	game.world.adventure_state["defeated"] = true
 	game.world.adventure_state["won_before"] = true
 	game.world.adventure_state["dragon_health"] = 0
-	game.experience += 500 if first else 100
+	XpOrbs.throw_xp(game,Vector3(0,60,0),500 if first else 100)
 	# `free_the_end` on the first kill and `the_end_again` on a respawn.
 	game.achievements.award("free_the_end" if first else "the_end_again")
 	open_exit(); open_gateways()

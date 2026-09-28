@@ -24,7 +24,10 @@ extends RefCounted
 
 const ID = VillageContent.TOTEM
 const USES = 1
-# `out_of_world` is the only source reason that bypasses a totem.
+# `out_of_world` is the only source reason that bypasses a totem, and that flag now
+# lives in one place: `DeathMessages.flags` is the transcription of `mcl_damage`'s
+# own type table, so the totem reads it rather than keeping a second copy that could
+# drift. `void` is Voxey's name for the same reason, which `DeathMessages` aliases.
 const BYPASSING = ["out_of_world","void"]
 # The source's own effect set, in its own order and with its own durations.
 const REGEN_DURATION = 45.0
@@ -33,8 +36,11 @@ const ABSORPTION_DURATION = 5.0
 
 static func is_totem(id: int) -> bool: return id == ID
 
-# Whether a damage reason may be intercepted at all.
-static func bypasses(reason: String) -> bool: return BYPASSING.has(reason)
+# Whether a damage reason may be intercepted at all. The source's flag is
+# `bypasses_totem`, which `mcl_damage` sets for `out_of_world` alone.
+static func bypasses(reason: String) -> bool:
+	if DeathMessages.known(reason): return bool(DeathMessages.flags(reason).get("bypasses_totem",false))
+	return BYPASSING.has(reason)
 
 # `get_wielditem` plus the offhand fallback: the totem must be carried in either
 # hand. The offhand is a real slot now, so a totem can be held there while a

@@ -91,8 +91,14 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	for seed_value in 100:
 		rng.seed = seed_value
 		if Fishing.catch_result(rng,0).category == "fish": rng.seed = seed_value; break
+	XpOrbs.clear(game)
 	var result: Dictionary = Fishing.reel(game.survival,rng)
-	suite.check(not result.is_empty() and result.experience in range(1,7) and game.experience-experience == result.experience and game.inventory.held().wear == 1,"a successful catch rewards one to six XP and spends one rod use")
+	# `mcl_fishing/init.lua`:144 **throws** the catch's experience at the water
+	# rather than crediting it, so the reward is a set of orbs.
+	var thrown: int = 0
+	for orb in XpOrbs.orbs(game): thrown += int(orb.xp)
+	suite.check(not result.is_empty() and result.experience in range(1,7) and thrown == result.experience and game.inventory.held().wear == 1,"a successful catch rewards one to six XP as orbs and spends one rod use")
+	XpOrbs.clear(game)
 	suite.check(result.category == "fish" and game.achievements.is_unlocked("fishy_business"),"a fish-category catch awards Fishy Business without adding extra catch XP")
 	suite.check(game.inventory.count_item(result.stack.id) >= result.stack.count,"caught stacks enter the inventory with their source amounts")
 	cast(game,p); bite(game)

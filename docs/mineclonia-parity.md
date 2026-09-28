@@ -19,6 +19,271 @@ User overrides from this session are deliberate: any wool color crafts into four
 - Creatures and encounters: remaining mobs, full AI, breeding/taming, Wither, raids, structure inhabitants and bosses.
 - Player systems: hunger/saturation, achievements, maps, books, UI, weather and multiplayer/server behavior.
 
+## 2026-09-21 batch: hazards, experience, item entities and block behaviour
+
+A third parity batch closed the mechanics gaps found by a fresh four-way audit of
+the reference (`ITEMS/*`, `REDSTONE/*`, `CORE/*`, `ENVIRONMENT/*`, `PLAYER/*`,
+`HUD/*`, `ENTITIES/*`, `MAPGEN/*`). Every module is a dedicated file with its own
+regression checks, ported from the referenced Lua with the source line cited in
+the header.
+
+- **Player hazards** ([`hazards.gd`](../scripts/hazards.gd), checks `hazard`):
+  suffocation (`in_wall`) at the source's one point per half-second slow tick when
+  the head node is a full opaque cube, with powder snow's `disable_suffocation`
+  exemption and the swimmer's feet-node sampling; and the fall-damage modifier —
+  a trace along the fall direction that cancels the damage in water, an End
+  portal, a cobweb, a vine or powder snow, plus the one-point-per-level Jump Boost
+  subtraction. The void now honours `mcl_worlds.is_in_void`'s
+  `deadly_tolerance = 64` instead of damaging five nodes below the floor.
+  Source: `PLAYER/mcl_player/init.lua`:153-213, `CORE/mcl_damage/init.lua`.
+- **Experience orbs** ([`xp_orbs.gd`](../scripts/xp_orbs.gd), checks `xp_orb`): a
+  real orb entity with the source's throw velocity, gravity, 300-second life,
+  7.25-block magnet, `size_to_xp` ladder and slippery-node slide, drawn as an
+  emissive sphere with the orb and level-up sounds. Every award the source routes
+  through `throw_xp` now throws: mob deaths, breeding, fishing, the spawner, the
+  sculk catalyst, the ore `group:xp`, the bottle o' enchanting, the grindstone,
+  the dragon and the villager trade. Dying drops the whole balance unless
+  `keepInventory`. Source: `HUD/mcl_experience/{orb,init,bottle}.lua`.
+- **Ore experience is the source's own table** ([`nodes.gd`](../scripts/nodes.gd)
+  `ore_xp`): coal 1, diamond 4, emerald 6, lapis 6, redstone 7, nether quartz 3,
+  nether gold 1, ancient debris 0 — and iron, gold and copper ore carry no `xp`
+  group at all, so they pay nothing. Voxey paid a flat 1 for every deep ore, which
+  overpaid iron and underpaid diamond and emerald. Source:
+  `ENTITIES/mcl_item_entity/init.lua`:216-220.
+- **Item entities** ([`item_physics.gd`](../scripts/item_physics.gd), checks
+  `hazard`): stack merging within 0.8 that resets the survivor's age, cactus
+  destruction, water floating and flow carrying, ejection from a solid opaque
+  cell through the nearest free side (the source's `cxcz` order) or upward, and
+  offhand-first pickup so a full backpack no longer blocks a pickup the second
+  hand could take. Source: `ENTITIES/mcl_item_entity/init.lua`:289-305, 596-651,
+  715-830.
+- **Falling-node damage** ([`falling_damage.gd`](../scripts/falling_damage.gd) plus
+  [`falling_node.gd`](../scripts/falling_node.gd)): `(way - 1) * 2` clamped to
+  0..40 against everything within radius 1, a helmet reducing it to three quarters
+  and taking wear, dropped items destroyed, and the anvil's own `5 * distance`
+  percent self-damage. The anvil now carries the source's `falling_node` and
+  `crush_after_fall` groups, so an unsupported anvil falls and crushes what it
+  lands on instead of dropping as an item. `Anvils.falling_damage` was dead code
+  before this; it is now the live ladder. Source:
+  `ENTITIES/mcl_falling_nodes/init.lua`:9-57,188; `ITEMS/mcl_anvils/init.lua`:376-386.
+- **Redstone ore lit state** ([`redstone_ore.gd`](../scripts/redstone_ore.gd),
+  checks `redstone_ore`): two hidden lit nodes at `light_source = 9`, lit by a
+  punch or a walk-over, restarted by every later touch and reverted after the
+  source's `redstone_timer = 68.28`. Source: `ITEMS/mcl_core/nodes_base.lua`:71-149,
+  `ITEMS/mcl_deepslate/deepslate.lua`:57-68.
+- **Piglin anger** ([`piglin_anger.gd`](../scripts/piglin_anger.gd)): opening a
+  chest or barrel near a piglin provokes every piglin in sight within sixteen
+  nodes, and breaking a `piglin_protected` node (both gold ores, nether gold, a
+  gilded block) provokes them with no sight test. Source:
+  `ENTITIES/mobs_mc/piglin.lua`:516-541, `ITEMS/mcl_barrels/init.lua`:64,
+  `ITEMS/mcl_chests/init.lua`:273.
+- **Grindstone repair** ([`grindstone_repair.gd`](../scripts/grindstone_repair.gd),
+  checks `grindstone_repair`): two identical damaged pieces combine with the
+  source's 5 percent bonus on the second term (so input order is observable),
+  curses transfer from both inputs, ordinary enchantments drop, and the
+  disenchantment pays `random(7,13) * level` per non-curse enchantment as orbs.
+  Voxey previously disenchanted one item for a flat three. Source:
+  `ITEMS/mcl_grindstone/init.lua`:66-77,127-151,282-283.
+- **Leather dyeing and cauldron washing** ([`cauldron_wash.gd`](../scripts/cauldron_wash.gd),
+  checks `cauldron_wash`): a shapeless leather-plus-dye recipe whose second dye
+  **averages** channel-wise as `calculate_color` does, the tint stored per item,
+  rendered through a new icon tint and described in the tooltip; a water cauldron
+  then strips the dye for one level, and an emblazoned banner loses its topmost
+  layer the same way. Source: `ITEMS/mcl_armor/leather.lua`:17-45,85-130;
+  `ITEMS/mcl_banners/init.lua`.
+- **Sweet berry thorns** ([`sweet_berry_thorns.gd`](../scripts/sweet_berry_thorns.gd),
+  checks `sweet_berry`): a grown bush deals the source's 0.5 to any **moving**
+  occupant and slows every stage by its per-axis `0.8/0.75/0.8`, on the
+  half-second cadence. Source: `ITEMS/mcl_farming/sweet_berry.lua`:16-20,120-143.
+- **Fish buckets** ([`fish_buckets.gd`](../scripts/fish_buckets.gd), checks
+  `fish_bucket`): salmon, pufferfish and tropical fish buckets beside the existing
+  cod, each releasing the **live** mob with its stored name as a nametag and
+  replacing the cell with water (no water in the Nether), plus capture with a
+  water bucket. The old cod path placed water and dropped a raw cod item, so a
+  bucketed fish could never be released alive. A released fish is marked
+  persistent, and the despawn rule and the creature snapshot both honour that.
+  Source: `ITEMS/mcl_buckets/fishbuckets.lua`.
+- **Witch self-buff potions** ([`witch_potions.gd`](../scripts/witch_potions.gd),
+  checks `witch_potion`): the source's potion table and conditions — water
+  breathing while the head is in fluid, fire resistance while burning, healing
+  when hurt, swiftness while chasing at range — with the equip-and-hold window and
+  per-witch timers. Source: `ENTITIES/mobs_mc/witch.lua`:109-195,291-313.
+- **Spider climbing and the cave spider** ([`spider_climb.gd`](../scripts/spider_climb.gd),
+  checks `spider_climb`): `always_climb` wall climbing with its ceiling stop, the
+  1-in-100 skeleton jockey (the observable result, since Voxey has no generic mob
+  mount), and a smaller cave spider whose bite poisons for the source's
+  easy/normal/hard 7/15 seconds with spider-kind immunity. Mineshaft corridors now
+  spawn the cave spider. Source: `ENTITIES/mobs_mc/spider.lua`:101,129-199,350-364.
+- **Bonus chest** ([`bonus_chest.gd`](../scripts/bonus_chest.gd), checks
+  `bonus_chest`): a new survival world starts with the source's fourteen-stack
+  weighted chest and four torches beside the spawn. The cherry-sapling entry is
+  dropped rather than zero-idded, because every entry in that group weighs one and
+  a zero id would silently lose a stack. Source:
+  `PLAYER/mcl_bonus_chest/init.lua`:12-160.
+- **Pig riding** ([`pig_riding.gd`](../scripts/pig_riding.gd), checks `pig_riding`):
+  the carrot-on-a-stick and warped-fungus-on-a-stick items with their recipes and
+  wear, saddling and shearing a pig, mounting a saddled pig, and the source's
+  `mount.lua` drive — the rider's level gaze, `movement_speed * drive_bonus` and
+  the timed `hog_boost` window. A saddled pig survives a reload through the
+  farming registry. Two recorded deviations: both sticks carry the carrot stick's
+  26 uses rather than the source's 26/100 pair, and a carrot, potato or beetroot
+  in hand is eaten by the pig rather than mounting it, because `Farming.use`
+  consumed the click before this branch existed.
+- **The wither's skull** ([`wither_skulls.gd`](../scripts/wither_skulls.gd) and
+  [`wither_skull.gd`](../scripts/wither_skull.gd), checks `wither_skull`): the
+  recorded 'no skull projectile' gap is closed. Every fourth skull is the source's
+  slower strong variant, a hit deals its eight as `wither_skull` **and** explodes
+  with radius one, Hard adds withering level two for ten seconds, a survivor is
+  knocked along the skull's horizontal heading, a kill heals the shooter five and
+  leaves a wither rose on the nearest soil, and the boss's separate charge hits
+  everything within three nodes for fifteen. Two source quirks are ported as
+  written: the impact order is withering → damage → blast, and the kill test
+  subtracts the eight a second time (`l.health - 8 <= 0` read after the damage), so
+  a victim the blast actually finished still reports the kill. See
+  [the wither](wither-source.md).
+- **Death messages** ([`death_messages.gd`](../scripts/death_messages.gd), checks
+  `death_message`): the source's 31-strong reason table with its killer and item
+  variants, plus `mcl_damage`'s per-type flag table as the single source of truth —
+  `Totems.bypasses` now reads `bypasses_totem` from it rather than keeping a second
+  copy. The audit records four real divergences rather than papering over them:
+  Voxey's `bypass_armor` also skips the totem, so every armor-bypassing cause
+  bypasses a totem while the source sets that flag for `out_of_world` alone;
+  Voxey's default cause does not bypass armor while the source's `generic` does;
+  Voxey's magic is armor-reduced while the source's is not; and the source marks
+  `hot_floor` as fire where Voxey does not. One deliberate departure: the source's
+  last-resort message is a **translation key**, which a project with no translator
+  would print as `mcl_death_messages.messages.arrow The player` on the death screen.
+  Every cause Voxey actually passes now resolves to prose, and a check asserts it.
+  See [death messages](death-messages-source.md).
+- **The recovery compass** ([`recovery_compass.gd`](../scripts/recovery_compass.gd),
+  checks `recovery_compass`): the source's second compass, which points at the
+  player's last death rather than the spawn. Its dial reuses the existing compass
+  renderer and the bearing maths the plain compass already had, reads the death
+  position Voxey already records for its recovery chest, spins when there is
+  nothing to point at or no death recorded, and refuses a malformed record. The
+  source's recipe — eight echo shards around a compass — is registered exactly as
+  written, so the item becomes reachable the moment the ancient hermitage (the echo
+  shard's only source) lands; no invented route is given in the meantime, which is
+  the same treatment `Sculk` records for the shard. See [dials](dials-source.md).
+- **The wind charge** ([`wind_charge.gd`](../scripts/wind_charge.gd), checks
+  `wind_charge`): the source's throwable burst that **moves things without breaking
+  blocks**. It flies flat at 30 nodes/s with no gravity where an egg arcs at 22, is
+  removed after three seconds if it hits nothing, and on any impact bursts a radius
+  of 4 — pushing a mob by `normalise(direction) × 12` plus its old velocity plus
+  jitter (clamped to 250) and a player by `float_random(1.8, 2.0) / max(1, distance)
+  × 4`, which is why a point-blank burst is the strongest. It deals the source's six
+  damage to a mob and **zero** to a player, rings a bell, breaks a chorus flower (a
+  living one outright, a dead one into a living one) and shatters a decorated pot
+  into four bricks. Its recipe is the reference's own: one breeze rod makes four
+  charges. The source's breeze itself is still a `FIXME` in the checkout, so a
+  dropped breeze rod is currently the only route to the item.
+- **Village iron golem summoning** ([`village_golems.gd`](../scripts/village_golems.gd),
+  checks `village_golem`): a village in the reference **grows its own defender**
+  rather than only being given one at generation. A villager asks for a golem when
+  it has slept within 1200 game seconds and has not seen one within 30; a panicking
+  villager needs three villagers in range and an ordinary one five, counted
+  *including the asker* because the source's sensor sweeps an area rather than
+  listing neighbours; the placement searches the source's 17×11×17 box for a solid
+  or water cell with a solid block beneath and a 2×3×2 clearance above, shuffles the
+  candidates and drops a water-surface golem one node lower; and a successful summon
+  stamps **every** requester, which is what makes the 30-second cooldown village-wide.
+  Both of the source's request sites are wired — the panic branch and the
+  **gossip-on-trade** branch — and the trade also now copies reputations to villagers
+  within ten blocks with the source's `transfer_decay` of 20, so curing or angering
+  one villager moves the whole village's opinion. Voxey does not track individual bed
+  use, so the sleep stamp comes from the day cycle instead: passing a night marks
+  every resident as rested, which is the same information the source keeps from its
+  bed interactions. See [village golems](village-golems-source.md).
+- **Bed sleep** ([`bed_sleep.gd`](../scripts/bed_sleep.gd), checks `bed_sleep`):
+  `mcl_beds`' own eligibility and night-skipping, replacing three behaviours that
+  were wrong rather than merely absent. Sleep is allowed at **night or in a
+  thunderstorm** — night being the source's `tod*24000 > 18541 or < 5458` — where
+  Voxey gated on a flat `daylight > 0.4`; monsters block it within **eight** blocks
+  plus a separate `|dy| <= 5` gate, where Voxey used twelve with no vertical test;
+  and waking advances to the source's **tod 0.25**, where Voxey's `+1.22` (= 0.22 of
+  the next day, 5280 ticks) landed back inside the night band and so never delivered
+  morning at all. Sleeping now also clears the weather, restores the spawn before the
+  eligibility test as the source does, and exempts the kinds the source marks
+  `does_not_prevent_sleep` (shulker, slime, magma cube, ghast) with a zombified piglin
+  exempt only until provoked. See [bed sleep](bed-sleep-source.md).
+- **Glow ink** ([`glow_ink.gd`](../scripts/glow_ink.gd) plus
+  [`frames.gd`](../scripts/frames.gd), checks `glow_ink`): the sac finally has its
+  consumer. On a **sign** it turns black text grey and marks the text glowing, as
+  `mcl_signs` does; on an **item frame** it advances the frame along the source's four
+  registered forms — plain, glow, invisible, invisible glow — one sac each, since
+  Voxey keeps one frame node and a form is saved state rather than a node. A frame's
+  item now spins to its saved rotation, a glow form is self-lit with its own material
+  so one glowing frame does not light every item of that id, and a comparator beside a
+  frame reads that rotation, as the source's `measure_item_frames` does. See
+  [item frames](glow-ink-source.md).
+- **Supported-node drops** ([`supported_nodes.gd`](../scripts/supported_nodes.gd),
+  checks `supported_node`): the `supported_node` group from the source's
+  `check_single_for_falling` override, which Voxey had only for flowers, tall grass
+  and signs. A **carpet left hanging** was reachable in ordinary play — removing the
+  block beneath one used to leave it floating. The test is the node below's `airlike`
+  **drawtype**, which in Luanti is a rendering property shared only by the nodes that
+  draw nothing, *not* a solidity test: a carpet resting on a flower, a water cell, a
+  snow layer or another carpet is supported and stays, and only a genuinely empty cell
+  drops it. An unloaded support never drops a saved node.
+- **Boss bars** ([`boss_bars.gd`](../scripts/boss_bars.gd), checks `hazard`): the
+  source's shared bar list, so a summoned wither finally has a health readout and
+  a raid draws a bar instead of a text line. Bars are rebuilt from live state,
+  dynamic bars use the 80-node range, and the raid bar names the wave. Source:
+  `HUD/mcl_bossbars/init.lua`:53-119, `ENTITIES/mobs_mc/wither.lua`:370,
+  `ENVIRONMENT/mcl_raids/init.lua`:209-256.
+
+### Review corrections in this batch
+
+- **Experience awards had to move, not just multiply.** Converting an award from
+  `game.experience += n` to a thrown orb changes the *observable* contract: the
+  balance no longer moves until the player walks over the orbs. Every existing
+  check that pinned a direct credit was rewritten to assert the orb total and then
+  the collection, never re-pinned to the new text (`alchemy_checks`,
+  `fishing_checks`, `farming_checks`, `dungeon_checks`, `grindstone_repair_checks`).
+- **The void's boundary was wrong in both directions.** The old check asserted
+  damage five nodes below the floor; the source tolerates 64. The check now asserts
+  the tolerance boundary *and* damages past it, and records that the shallow cells
+  are bedrock, so suffocation applies there while the void does not.
+- **Two bugs the new checks caught before they shipped.** `ItemPhysics.floats`
+  sampled the cell at `+0.1` and so missed a resting item's own cell; it now reads
+  the item's floor cell and its neighbour above. `push_direction` invented its own
+  axis order; it is now the source's `cxcz` transcribed, including its
+  positive-side-first rule for a coordinate below the cell centre.
+- **Two real cross-test defects the batch exposed, both fixed.** The new
+  offhand-first pickup left a torch in the second hand, which made Voxey's
+  offhand-placement fallback fire on a *seed* in the main hand and swallow the
+  planting click. The source reaches that helper from exactly two places — the
+  empty hand's `on_place` and `mcl_tools.on_tool_place` — so it now fires only for
+  an empty main hand or a tool, and it no longer places over a crop click.
+  Separately, three existing check files mutated the player's world stance or the
+  world node itself without restoring it (`offhand_checks` reloaded the world and
+  left it processing, `firework_checks` flew the player to Y100 and left the
+  elytra on, `pig_riding_checks` aimed from a camera transform an earlier group
+  had left behind). Those are now captured and restored, and the pig fixture
+  follows the suite's existing convention of setting the player's rotation, camera
+  pitch and camera height before aiming.
+- **A concurrent-suite artifact, not a regression.** Failures seen when several
+  suites ran as parallel background jobs (`crop_farming` after `piston`, three
+  `test_survival` checks) do not reproduce in foreground runs: the same pairs pass
+  211/0 and 528/0. Suites must be run sequentially; the batch's numbers above are
+  from sequential runs.
+
+### Verification
+
+All nine suites pass with no failures and no script errors: **7,947 checks** —
+5,741 lifecycle, 856 village, 528 survival, 253 systems, 237 alchemy, 149
+building, 71 parity, 64 polish, 48 environment. The batch's own groups are
+`hazard` (54), `xp_orb` (54), `fish_bucket` (61), `bonus_chest` (23),
+`grindstone_repair` (46), `witch_potion` (67), `sweet_berry` (32),
+`cauldron_wash` (55), `spider_climb` (61), `redstone_ore` (32) and
+`pig_riding` (57).
+
+**Suites must be run one at a time.** Running several as parallel background
+jobs starves the game loop, and the affected checks are input-timing sensitive:
+the crop-planting and pig-mounting checks fail under contention and pass when the
+same pairs run alone. The numbers above are from a sequential run of the nine
+suites.
+
 ## 2026-09-19 batch: content families and mechanics gaps
 
 A second parity batch closed the largest inspected content gaps and several
@@ -242,7 +507,7 @@ The 2026-09-17 structures, second-hand and aquatic batch passed all nine isolate
 - [Buttons and pressure plates](redstone-inputs-source.md): eight button and ten plate materials, all six button faces, source timing, physical-object sensing, weighted outputs, directional power, projectile activation, support/fluid/piston rules and old-save migration. Remaining wood families and the documented source stone-arrow callback anomaly remain outside this implementation.
 - [Note blocks](note-blocks-source.md): 25 notes, all sixteen musical instruments, base-material selection, air-above gating, hand/punch/redstone input, conduction, original audio and saved tuning. Source mob-head playback remains open. [Packed ice, blue ice and bone blocks](dense-materials-source.md) supply their missing material recipes, harvesting, orientation and movement; fossils, icebergs and climate simulation remain open.
 - [Jukeboxes and music discs](jukebox-source.md): all eight registered recordings, source recipes, insertion/ejection, comparator strengths, audio controls, persistent named discs and skeleton-arrow creeper drops. [Dungeons and spawners](dungeons-source.md) add deterministic cave rooms, weighted loot, source disc acquisition, bounded spawning and persistent timers. Missing source loot materials, administrative spawner editing and exact source terrain remain open.
-- [Doors](doors-source.md): paired halves, all six classic woods and iron, mirrored hinges, thin open/closed collision, power from either half, one-item breaks and old-save migration. [Trapdoors](trapdoors-source.md) now cover the same seven materials and 112 states. Remaining woods and wind charges remain open.
+- [Doors](doors-source.md): paired halves, all six classic woods and iron, mirrored hinges, thin open/closed collision, power from either half, one-item breaks and old-save migration. [Trapdoors](trapdoors-source.md) now cover the same seven materials and 112 states. Remaining woods remain open; the **wind charge** is implemented.
 - [Boats and chest boats](boats-source.md): independently placed hulls, source steering, passengers, 27-slot cargo, damage, dispensers, explosions and persistence across streaming/saves/dimensions. All six classic woods have material-specific recipes; rafts, remaining wood families and source multiplayer integration remain open.
 - [Renewable classic trees](wood-source.md): six species, source tree schematics, logs/axes/bark, saplings and giant growth, leaf drops/decay, persistent player leaves and mixed-wood recipes. Remaining species, source biome layouts and further wooden devices remain open.
 - [Oak signs](signs-source.md): wall/standing placement, text entry, dyes, opt-in later editing, support and piston metadata preservation. Other sign woods and glow-ink acquisition remain open.
@@ -279,10 +544,10 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `lightning` | Unreviewed |
 | `mcl_aliases` | Unreviewed |
 | `mcl_dye` | Unreviewed |
-| `mcl_itemframes_compat` | Unreviewed |
+| `mcl_itemframes_compat` | N/A — the compat shim only re-exposes the frame API; the behaviour lives in `mcl_itemframes`, implemented above |
 | `mcl_mobs_compat` | Unreviewed |
 | `mcl_playerinfo` | Unreviewed |
-| `mcl_signs_compat` | Unreviewed |
+| `mcl_signs_compat` | N/A — the compat shim re-exports sign helpers; the behaviour lives in `mcl_signs`, reviewed below |
 | `mcl_vl_entities_purge` | Unreviewed |
 | `_mcl_autogroup` | Unreviewed |
 | `controls` | Unreviewed |
@@ -298,25 +563,25 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_loot` | Unreviewed |
 | `mcl_sounds` | Unreviewed |
 | `mcl_util` | Unreviewed |
-| `mcl_walkover` | Unreviewed |
+| `mcl_walkover` | Implemented — the stand/feet/head node contact hooks: redstone-ore reactivation, pressure plates, the Nether portal ignite-under-foot rule, the wither rose's contact withering, and frost walker's frosted ice |
 | `mcl_worlds` | Partial — see world and Nether comparison |
 | `tga_encoder` | Unreviewed |
 | `mcl_attachments` | Unreviewed |
 | `mcl_boats` | Partial — persistent hulls, chest cargo, passengers and source controls; see boats |
 | `mcl_burning` | Partial — burning as a timed effect on players and mobs, the source’s ten `_fire_resistant` mob kinds, `_water_sensitive` water and rain damage, the `floats` rule by which most mobs bob up in water while six kinds sink, `can_despawn` so a piglin, shulker, villager, evoker or wither is never removed for distance, each mob’s own melee `reach`, the `runaway` flee-on-hit rule that a creeper declares, each mob’s own `xp_min` value, and the per-group `armor` table on the melee path. See [fire](fire-source.md) |
-| `mcl_charges` | Unreviewed |
+| `mcl_charges` | Implemented — the wind charge as a throwable: source speed, flat flight, three-second self-removal, radius-4 burst with its two velocity forms, six mob damage and zero player damage, and the bell/chorus-flower/decorated-pot responses. See [wind charge](wind-charge-source.md) |
 | `mcl_dripping` | Implemented — the source’s three-cell rule, water dripping through leaves as well as stone, lava from stone only, separate 60.3 s and 110.1 s clocks, the one-in-ten chance, particles and sound. See [dripstone](dripstones-source.md) |
 | `mcl_entity_invs` | Unreviewed |
 | `mcl_falling_nodes` | Unreviewed |
-| `mcl_item_entity` | Partial — see world and Nether comparison |
+| `mcl_item_entity` | Implemented for its item behaviours — stack merging, cactus destruction, water floating and flow carrying, ejection from a solid cell, offhand-first pickup and the `group:xp` ore payout. Fishing hooking and reeling remain open. See [experience orbs](xp-orbs-source.md) |
 | `mcl_minecarts` | Partial — seven rail nodes with engine shape resolution, redstone powered/detector/activator behaviour, five cart variants and source movement and persistence; mineshaft generation lives in `mcl_levelgen` |
 | `mcl_mobs` | Partial — five farm species breed and persist; see animal farming |
 | `mcl_paintings` | Implemented — the source’s twenty-six motives from 1x1 to 4x4, biggest-fit placement of the largest motive that fits with the source’s random tie-break, horizontal-wall requirement, per-cell occupancy so paintings never overlap, punch-to-drop with the motive preserved on the item, persistence in the world’s adventure state across saves/streaming/dimensions, and original procedural art per motive. See [the paintings batch](paintings-source.md) |
-| `mcl_wither_spawning` | Partial — the seven-cell soul-sand T ritual in both orientations, the 600-health boss with difficulty scaling, its invulnerable opening phase, armoured arrow-immune second phase, flight and guaranteed nether star; the skull now has its own survival route through wither skeletons, but there is no skull projectile, block destruction, skeleton release, boss bar or wither aura |
+| `mcl_wither_spawning` | Partial — the seven-cell soul-sand T ritual in both orientations, the 600-health boss with difficulty scaling, its invulnerable opening phase, armoured arrow-immune second phase, flight, guaranteed nether star, a **skull projectile** with its strong variant, blast, withering, knockback, kill heal and wither rose, and a boss bar. Still open: block destruction, skeleton release and the wither aura |
 | `mobs_mc` | Partial — constructed iron/snow golems and earlier mobs; source AI remains adapted |
 | `mcl_lightning` | Partial — thunder, striking the nearest rod, charging a creeper, the pig-to-zombified-piglin and villager-to-witch conversions, fire at the strike cell, and copper de-oxidation. See [heads](heads-source.md) |
 | `mcl_moon` | Partial — eight phases and brightness; no per-world seed offset |
-| `mcl_raids` | Unreviewed |
+| `mcl_raids` | Partial — wave composition, victory rewards and a raid boss bar; captains, patrols and the ominous banner remain open. See [hazards](hazards-source.md) |
 | `mcl_void_damage` | Implemented — four health every half second below the world, at the source's rate. The branch sits ahead of the unloaded-terrain guard, since the void is below the loaded world and a guard there would make it unreachable. See [player damage](player-damage-source.md) |
 | `mcl_weather` | Partial — authoritative three-state machine, rain/snow/thunder effects, lightning strikes, moon phases; particles and mob conversions open |
 | `mcl_zombie_sieges` | Unreviewed |
@@ -332,10 +597,10 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `hudbars` | Unreviewed |
 | `mcl_achievements` | Unreviewed |
 | `mcl_base_textures` | Unreviewed |
-| `mcl_bossbars` | Unreviewed |
+| `mcl_bossbars` | Implemented — one shared bar list fed by live boss and raid state, so a summoned wither has a health bar and a raid draws one. See [hazards](hazards-source.md) |
 | `mcl_credits` | Unreviewed |
-| `mcl_death_messages` | Unreviewed |
-| `mcl_experience` | Unreviewed |
+| `mcl_death_messages` | Implemented — all 31 source messages with killer and item variants, the flag table as the single source of truth, and an audit recording four real divergences. See [death messages](death-messages-source.md) |
+| `mcl_experience` | Implemented — thrown experience orbs with the source's ladder, 300 s life, 7.25-block magnet and slippery slide; every award the source orbifies now throws, and dying drops the balance unless `keepInventory`. See [experience orbs](xp-orbs-source.md) |
 | `mcl_formspec` | Unreviewed |
 | `mcl_formspec_prepend` | Unreviewed |
 | `mcl_game_meta` | Unreviewed |
@@ -365,13 +630,13 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_target` | Partial — scored arrow/trident pulses plus egg/snowball full-strength hits |
 | `mcl_amethyst` | Partial — natural geodes, growth, crystals and materials; seeded noise/light adapters documented |
 | `mcl_anvils` | Partial — item naming and existing repair/enchantment adaptation; see naming |
-| `mcl_armor` | Partial — see world and Nether comparison |
+| `mcl_armor` | Partial — leather dyeing with the source's channel averaging, an icon tint and cauldron washing; armour statistics and trims remain as recorded. See [leather dyeing](cauldron-wash-source.md) | — see world and Nether comparison |
 | `mcl_armor_stand` | Partial — four armor slots, placement, removal, rotation, drops and saved pieces; no hand slots |
 | `mcl_bamboo` | Partial — the stalk with its per-stalk height, light gate and two thicknesses, the bamboo item, the scaffolding recipe, bone-meal growth, and natural groves whose stalks are five to sixteen tall with leaf forms at the tip. See [bamboo](bamboo-source.md) |
 | `mcl_banners` | Partial — all 42 source patterns with their exact dye grids and signature items, the ordered layer list, the six-layer limit, banner combining and per-layer icons; no loom UI, no cauldron washing |
 | `mcl_barrels` | Unreviewed |
 | `mcl_beacons` | Partial — four-layer pyramid power, the effect/power table, the source range formula, second effect at maximum power, beam length and glass tinting, and the source recipe; the nether star now comes from [the wither](wither-source.md), but there is no formspec and no rendered beam column |
-| `mcl_beds` | Unreviewed |
+| `mcl_beds` | Implemented — the source's night window, thunderstorm allowance, eight-block monster scan with its separate vertical gate, the `does_not_prevent_sleep` and `prevents_sleep_when_hostile` exemptions, `skip_night` to tod 0.25, and the weather clear on waking. See [bed sleep](bed-sleep-source.md) |
 | `mcl_beehives` | Partial — natural nests, production, harvesting, dispensers and saved state; source has no bee entities |
 | `mcl_bells` | Unreviewed |
 | `mcl_blackstone` | Partial — see world and Nether comparison |
@@ -391,15 +656,15 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_clock` | Partial — 64-frame time-of-day dial, dimension-gated spinning and the source recipe; frames are drawn procedurally rather than shipped as textures |
 | `mcl_cocoas` | Unreviewed |
 | `mcl_colorblocks` | Unreviewed |
-| `mcl_compass` | Partial — 32-frame spawn-pointing dial, dimension gating, lodging compass and lodestone supported; frames drawn procedurally |
+| `mcl_compass` | Partial — 32-frame spawn-pointing dial, dimension gating, lodging compass and lodestone supported, plus the **recovery compass** with its death-pointing dial, spin-when-idle rule and source recipe; frames drawn procedurally |
 | `mcl_composters` | Partial — probabilities, maturation, crafting and automation; see composters |
 | `mcl_conduits` | Complete for its source rules — water/frame/power activation, conduit power in water, hostile damage and the full prismarine family. Every material now has a survival route: the heart of the sea and crystals from buried treasure, and the shards from guardians |
 | `mcl_copper` | Partial — four-stage oxidation, waxing/scraping, bulbs, rods, doors, trapdoors and cut copper shapes; soul lanterns and chains now present; copper-coloured lanterns and chains, bars, torch and ore processing open |
-| `mcl_core` | Partial — grass spread/decay, eight top-snow layers, ice harvesting, compressed ice and oriented bone blocks; other core behaviors need further review |
+| `mcl_core` | Partial — the lit redstone ore state machine is implemented (68.28 s timer, light 9, punch and walk-over activation). See [redstone ore](redstone-ore-source.md) | — grass spread/decay, eight top-snow layers, ice harvesting, compressed ice and oriented bone blocks; other core behaviors need further review |
 | `mcl_crafting_table` | Unreviewed |
 | `mcl_crimson` | Unreviewed |
 | `mcl_deepslate` | Partial — see world and Nether comparison |
-| `mcl_doors` | Partial — six wood/iron paired doors and trapdoors; remaining woods/wind charges open |
+| `mcl_doors` | Partial — six wood/iron paired doors and trapdoors; remaining woods open. The wind charge that doors register `_on_wind_charge_hit` for is implemented in [wind charge](../scripts/wind_charge.gd) |
 | `mcl_dripstone` | Unreviewed |
 | `mcl_dyes` | Unreviewed |
 | `mcl_enchanting` | Unreviewed |
@@ -413,11 +678,11 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_flowerpots` | Partial — source whitelist categories, contents in saved state, drops pot and plant; species Voxey lacks are open |
 | `mcl_flowers` | Partial — poppy, dandelion and oxeye daisy acquisition/propagation; other species open |
 | `mcl_furnaces` | Unreviewed |
-| `mcl_grindstone` | Unreviewed |
+| `mcl_grindstone` | Implemented — the two-item 5% repair combine with curse transfer, per-level disenchantment XP and the source's wear arithmetic. See [grindstone repair](grindstone-source.md) |
 | `mcl_heads` | Partial — seven heads in floor/wall/ceiling placements sharing one item, source drop rule via lightning-charged creepers; worn mob-range effect not applied |
 | `mcl_honey` | Partial — bottles, crafting returns, blocks, fall cushioning and piston adhesion; honeycomb now waxes copper |
 | `mcl_hoppers` | Unreviewed |
-| `mcl_itemframes` | Unreviewed |
+| `mcl_itemframes` | Implemented — the four frame forms as saved state with the glow-ink recipe as their route, the framed item's saved rotation, the spinning and self-lit display, and the comparator's rotation read. See [item frames](glow-ink-source.md) |
 | `mcl_jukebox` | Partial — eight source recordings, survival acquisition and saved discs; streaming audio adaptation documented |
 | `mcl_lanterns` | Partial — iron and soul lanterns plus chains; floor/ceiling variants, animated flames and the copper-coloured lanterns and chains remain open. See [soul lanterns and chains](lanterns-source.md) |
 | `mcl_lectern` | Unreviewed |
@@ -442,7 +707,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_raw_ores` | Unreviewed |
 | `mcl_sculk` | Unreviewed |
 | `mcl_shields` | Partial — the source's 180 degree frontal arc, blockable type table, held raised state, damage-ceiling wear and the real [second hand](offhand-source.md); no axe disable and no projectile deflection |
-| `mcl_signs` | Partial — oak text/dye/placement/save loop; more woods/glow ink open |
+| `mcl_signs` | Partial — oak text/dye/placement/save loop, and the **glow ink sac** turning a sign's text grey and glowing; more woods open |
 | `mcl_smithing_table` | Unreviewed |
 | `mcl_smoker` | Unreviewed |
 | `mcl_sponges` | Partial — source absorption volume, wet/dry states, Nether and furnace drying, bucket replacement; no survival acquisition |
@@ -456,7 +721,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_tools` | Partial — see world and Nether comparison |
 | `mcl_torches` | Unreviewed |
 | `guardian` | Implemented — the source's charged laser, three-block minimum, aquatic movement, full chance-weighted drop table including the elder's guaranteed wet sponge, the **elder's mining-fatigue aura** and the **guardian's thorns**; no rendered beam or apparition. See [guardian auras](guardian-auras-source.md) |
-| `mcl_totems` | Partial — lethal-damage interception at exactly one health, effects cleared then regeneration/fire-resistance/absorption applied, breath restored, the void bypass rule, creative non-consumption and the [second hand](offhand-source.md); no mob use and no survival acquisition |
+| `mcl_totems` | Partial — the `bypasses_totem` flag now comes from the death-message table rather than a local copy. — lethal-damage interception at exactly one health, effects cleared then regeneration/fire-resistance/absorption applied, breath restored, the void bypass rule, creative non-consumption and the [second hand](offhand-source.md); no mob use and no survival acquisition |
 | `mcl_trees` | Partial — six renewable classic species, schematics, bark/stripping and leaf lifecycle; see trees |
 | `mcl_trial_spawners` | Unreviewed |
 | `mcl_tridents` | Unreviewed |
@@ -479,20 +744,20 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_structures` | Partial — ocean ruins, shipwrecks, desert temples, ruined portals, jungle temples, pillager outposts, igloos, witch huts, ocean monuments and woodland cabins, including the per-structure suspicious-node tables that are the only survival source of pottery sherds, the buried-treasure chest that makes a wreck a second heart-of-the-sea route, the portal degradation that supplies obsidian and crying obsidian, the jungle temple's trapped-chest-and-dispenser trap, the outpost's raiding party, the igloo's cure puzzle, the witch hut's witch and cat, the monument's guardian garrison and the cabin's evoker that drops the totem of undying; the ancient hermitage is open, and layouts are generated rather than loaded from schematics |
 | `ice spikes` | Implemented — the source's two spike sizes as cones of packed ice on snowy ground, placed only in the cold biome. See [ice spikes](ice-spikes-source.md) |
 | `mcl_terrain_features` | Partial — dripstone stalactites, stalagmites and columns with the source's taper and length rolls; lakes, springs, basalt columns and fallen trees remain open. See [dripstone formations](dripstones-source.md) |
-| `mcl_villages` | Unreviewed |
+| `mcl_villages` | Partial — the `mobs_mc` villager behaviour: professions with their own job sites, trades, restocking, XP and levels, breeding with beds, reputation with the source's gossip transfer on trades and cures, panic, and **iron golem summoning** on both of the source's request paths. See [village golems](village-golems-source.md) |
 | `tsm_railcorridors` | Unreviewed |
 | `findbiome` | Unreviewed |
 | `mcl_commands` | Unreviewed |
 | `mcl_privs` | Unreviewed |
 | `mcl_temp_helper_recipes` | Unreviewed |
 | `mcl_wip` | Unreviewed |
-| `mcl_bonus_chest` | Unreviewed |
+| `mcl_bonus_chest` | Implemented — the source's fourteen-stack weighted chest and four torches in a new survival world. See [hazards](hazards-source.md) |
 | `mcl_criticals` | Unreviewed |
 | `mcl_death_drop` | Unreviewed |
 | `mcl_gamemode` | Unreviewed |
 | `mcl_hunger` | Partial — eating, saturation, exhaustion, regeneration and food effects; see hunger source comparison |
 | `mcl_meshhand` | Unreviewed |
-| `mcl_player` | Unreviewed |
+| `mcl_player` | Implemented — suffocation (`in_wall`) on the source's slow step and the fall-damage modifier (forgiving nodes, Jump Boost). See [hazards](hazards-source.md) |
 | `mcl_serverplayer` | Unreviewed |
 | `mcl_skins` | Unreviewed |
 | `mcl_spawn` | Unreviewed |

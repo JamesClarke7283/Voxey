@@ -32,3 +32,24 @@ These recipes were absent from Voxey before this work, even though both items ex
 - The source writes the current frame into each stack's item metadata (`inventory_image` / `wield_image`) and updates it per player per globalstep. Voxey's icon cache keys on the frame instead, which reaches the same visible result without writing per-stack metadata.
 - The source's `mcl_serverplayer` entity-step path, which re-sends the wield item to clients every five seconds, has no equivalent in a single-process engine.
 - The recovery compass and the several `clock_<n>` legacy aliases are not registered; Voxey has no death-recovery compass system and no legacy clock nodes to migrate.
+
+## The recovery compass
+
+`mcl_compass/init.lua`:205-229 registers a *second* compass beside the spawn one.
+It points at the player's **last death location**, which the source keeps in the
+player's own `mcl_compass:recovery_pos` metadata, and `update_recovery_compass`
+(`:121-135`) leaves the needle spinning when either the record is missing or the
+target is not in the player's own realm.
+
+`scripts/recovery_compass.gd` adds it. Voxey already stores where a death's recovery
+chest landed in `adventure_state.last_recovery`, which is the same point, so no
+second record was needed. The dial reuses `Dials`' existing bearing maths, which was
+extracted so both compasses share one implementation, and the item draws through the
+same renderer the plain compass already used.
+
+The recipe is the source's own — eight echo shards around an ordinary compass — and
+is registered as written even though the echo shard has no acquisition route in
+Voxey yet. Its only source in the checkout is the ancient hermitage's chest
+(`MAPGEN/mcl_structures/ancient_hermitage.lua`:39, weight 3 for one to three
+shards), and Voxey does not generate that structure. The gap is recorded in the
+module and in the parity ledger rather than filled with an invented route.

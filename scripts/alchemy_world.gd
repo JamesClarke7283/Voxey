@@ -8,7 +8,7 @@ static func snapshot(game: Node3D) -> void:
 		var effects: Dictionary = {}
 		for name in PotionEffects.NAMES:
 			if mob.has_meta("effect_"+name): effects[name] = {"duration":mob.get_meta("effect_"+name),"level":PotionEffects.level(mob,name)}
-		saved.append({"kind":mob.kind,"position":[mob.position.x,mob.position.y,mob.position.z],"health":mob.health,"effects":effects,"raid":mob.get_meta("raid",false),"custom_name":mob.custom_name})
+		saved.append({"kind":mob.kind,"position":[mob.position.x,mob.position.y,mob.position.z],"health":mob.health,"effects":effects,"raid":mob.get_meta("raid",false),"custom_name":mob.custom_name,"persistent":mob.get_meta("persistent",false)})
 	game.world.adventure_state["alchemy_creatures"] = saved
 
 static func restore(game: Node3D) -> void:
@@ -23,6 +23,7 @@ static func restore(game: Node3D) -> void:
 		mob.health = clampf(record.get("health",mob.health),0,mob.info().health)
 		mob.custom_name = NameTags.bounded(str(record.get("custom_name","")),30); NameTags.refresh(mob)
 		if record.get("raid",false): mob.set_meta("raid",true)
+		if record.get("persistent",false): mob.set_meta("persistent",true)
 		for effect in record.get("effects",{}):
 			var data: Dictionary = record.effects[effect]
 			PotionEffects.apply(mob,effect,float(data.get("duration",0)),int(data.get("level",1)))

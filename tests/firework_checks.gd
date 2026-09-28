@@ -32,6 +32,16 @@ static func run(t: SceneTree, game: Node3D) -> void:
 
 	# --- use rules ---------------------------------------------------------
 	var player = game.player
+	# This check flies the player to a fixed altitude and swaps the chest slot, and
+	# every later fixture in the suite builds its own platform at a known height and
+	# aims from the player's own stance. Capture what is mutated so it can be put
+	# back — a stale altitude and a leftover elytra are what a later group would
+	# otherwise inherit.
+	var saved_position: Vector3 = player.position
+	var saved_rotation: Vector3 = player.rotation
+	var saved_camera: Vector3 = player.camera.rotation
+	var saved_camera_y: float = player.camera.position.y
+	var saved_chest: Dictionary = player.armor_slots[1].duplicate(true)
 	player.armor_slots[1] = {"id":0,"count":0,"wear":0}
 	game.inventory.restore([]); game.inventory.add_item(VillageContent.ROCKET_3,4); game.inventory.selected = 0
 	# Without wings the rocket is refused and the item is kept.
@@ -95,3 +105,15 @@ static func run(t: SceneTree, game: Node3D) -> void:
 			if art.get_pixel(x,y).a > 0.0: pixels += 1
 	t.check(pixels > 0,"a firework rocket draws a non-empty icon")
 	t.check(Nodes.color(VillageContent.ROCKET_1) != Nodes.color(Nodes.GUNPOWDER),"the rocket has its own item colour")
+
+	# Put the player back where this check found them.
+	player.position = saved_position
+	player.rotation = saved_rotation
+	player.camera.rotation = saved_camera
+	player.camera.position.y = saved_camera_y
+	player.camera.global_position = saved_position+Vector3.UP*saved_camera_y
+	player.armor_slots[1] = saved_chest
+	player.gliding = false; player.rocketing = 0.0
+	player.velocity = Vector3.ZERO
+	player.force_update_transform()
+	player.camera.force_update_transform()

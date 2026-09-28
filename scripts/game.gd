@@ -83,6 +83,9 @@ var screenshot_path: String = ""
 var saves
 var active_world_id: String = ""
 var world_name: String = "New world"
+# `mcl_death_messages`: the reason the player last died, so the death screen can
+# name it. `player.hurt` passes its own `cause` through `die`.
+var death_reason: String = "generic"
 var gamemode: String = "survival"
 # Difficulty 0..2, which the source scales boss health and damage by.
 var difficulty: int = 1
@@ -255,6 +258,7 @@ func _process(delta: float) -> void:
 		boats.update(delta)
 		Farming.update_world(self,delta)
 		Golems.update(self,delta)
+		SpiderClimb.update(self,delta)
 		adventure.update(delta)
 		villages.update(delta)
 		survival.update(delta)
@@ -500,6 +504,11 @@ func _finish_loading() -> void:
 		player.position=spawn_point
 		player.rotation.y=0.3
 		player.camera.rotation.x=-0.12
+		# `mcl_bonus_chest`'s `register_on_newplayer`: a new survival world starts
+		# with a stocked chest and four torches beside the spawn. `offer` performs the
+		# gamemode check, a once-per-world flag and the site search itself, so it is a
+		# no-op on a reload.
+		BonusChest.offer(self,player.position)
 	for p in world.edits:
 		if Torches.is_torch(world.edits[p]) or world.edits[p] in [Nodes.GLOWSTONE,Nodes.SHROOMLIGHT]: add_torch(p)
 	player.velocity=Vector3.ZERO
@@ -666,12 +675,15 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 		# The remaining stalk resumes growing even when harvested from wild cane.
 		if world.node_at(p+Vector3i.DOWN) == Nodes.SUGAR_CANE: world.growth[p+Vector3i.DOWN] = 0.0
 	if gamemode!="creative" and Nodes.harvestable(id,tool):
+		# `mobs_mc`'s `register_on_dignode`: breaking a gold-bearing node angers every
+		# piglin within sixteen nodes, with no line-of-sight test.
+		PiglinAnger.on_protected_broken(self,id)
 		var enchanted_drops: Array = Enchantments.harvest(id,inventory.held())
 		# A sculk break is its own contract: nothing by hand, the vein to shears,
 		# sculk and the catalyst to Silk Touch, and stored experience on the break.
 		if Sculk.is_sculk(id):
 			for entry in Sculk.harvest(id,inventory.held()): spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
-			experience += Sculk.harvest_xp(world,p,id,inventory.held())
+			XpOrbs.throw_xp(self,Vector3(p)+Vector3.ONE*0.5,Sculk.harvest_xp(world,p,id,inventory.held()))
 		elif CropFarming.is_crop(id) or FruitCrops.harvestable(id) or Amethyst.is_amethyst(id):
 			for entry in enchanted_drops: spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
 		elif WoodTypes.is_leaves(id):
@@ -696,8 +708,10 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 			# a tuft usually yields nothing.
 			if randf() < 1.0/8.0: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.SEEDS)
 		elif id in [Nodes.LAPIS_ORE,Nodes.DEEP_LAPIS_ORE]: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.LAPIS,randi_range(4,9))
-		elif id in [Nodes.REDSTONE_ORE,Nodes.DEEP_REDSTONE_ORE]:
-			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.REDSTONE_WIRE,randi_range(4,5)); experience += 2
+		elif id in [Nodes.REDSTONE_ORE,Nodes.DEEP_REDSTONE_ORE,RedstoneOre.LIT,RedstoneOre.DEEP_LIT]:
+			# The redstone branch pays its own experience below, so it must not fall
+			# through to the generic ore payout as well.
+			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.REDSTONE_WIRE,randi_range(4,5))
 		elif id == Nodes.CLAY: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.CLAY_BALL,4)
 		elif id == Nodes.SNOW_BLOCK: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.SNOW_BALL_ALIAS,4)
 		elif SeaPickles.is_pickle(id):
@@ -713,7 +727,11 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 			# rather than dropping a single raw item.
 			for entry in RawOres.harvest(id,inventory.held()): spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
 		elif id!=Nodes.GLASS: spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.drop(id),1,0,Copper.drop_metadata(world,p))
-		if Inventory.enchantment(inventory.held(),"Silk Touch") == 0 and (Nodes.DEEP_ORES.has(id) or id in [Nodes.COAL_ORE,Nodes.IRON_ORE,Nodes.DIAMOND_ORE,Nodes.LAPIS_ORE,Nodes.NETHER_QUARTZ_ORE]): experience += 1
+		# `mcl_item_entity`:216-220: a mined node pays its own `group:xp`, which
+		# is the source's per-ore value. Iron, gold and copper ore do not carry
+		# the group, so they pay nothing.
+		if Inventory.enchantment(inventory.held(),"Silk Touch") == 0 and Nodes.ore_xp(id) > 0:
+			XpOrbs.throw_xp(self,Vector3(p)+Vector3.ONE*0.5,Nodes.ore_xp(id))
 		if WoodTypes.is_log(id): achievements.award("first_log")
 		if id in [Netherite.ANCIENT_DEBRIS]: achievements.award("hidden_in_the_depths")
 		if id == Nodes.OBSIDIAN: achievements.award("obsidian_challenge")
@@ -851,7 +869,7 @@ func spawn_creature(kind: String, pos: Vector3, farm_key: String = "") -> Creatu
 	if kind == "snow_golem": return Golems.spawn(self,kind,pos)
 	if kind in Creature.ALCHEMY_KINDS:
 		var mob := AlchemyCreature.new(); mob.game = self; mob.kind = kind; mob.position = pos; creatures.add_child(mob); return mob
-	if kind in ["rabbit","horse"]:
+	if kind in ["rabbit","horse","pig"]:
 		var animal := RuralAnimal.new(); animal.game = self; animal.kind = kind; animal.position = pos; animal.farm_id = farm_key; creatures.add_child(animal); return animal
 	if kind == "wandering_trader":
 		# The trader brings its own llama escort, so the escort is never spawned
@@ -980,17 +998,16 @@ func sleep_at(p: Vector3i) -> void:
 			return
 		toast("Beds only set your spawn in the Overworld.")
 		return
-	spawn_point=_safe_spawn(Vector3(p)+Vector3(1,0,0))
+	# `mcl_beds/functions.lua` owns the eligibility, the clock jump and the weather
+	# clear; the toast, the save and the achievement stay here because they are this
+	# game's own calls.
+	var reason: String = BedSleep.try_sleep(self,p)
+	if not reason.is_empty(): toast(reason); return
 	if gamemode != "creative": achievements.award("sweet_dreams")
-	if daylight>0.4: toast("Spawn set. Come back at night to sleep."); return
-	for mob in creatures.get_children():
-		if mob.hostile and mob.position.distance_to(player.position)<12: toast("There are wanderers nearby. Find safety first."); return
-	day_time=floorf(day_time)+1.22
-	player.health=minf(20,player.health+4)
 	toast("A new day. Your spawn is set here.")
 	save_game()
 
-func die() -> void:
+func die(reason: String = "generic") -> void:
 	if state == "dead": return
 	# `mcl_sculk` spreads from a catalyst near where the player died, and stores
 	# experience in the new blocks. It is the module's only driver.
@@ -999,11 +1016,19 @@ func die() -> void:
 	Fishing.cancel(survival)
 	PotionEffects.died(player)
 	api.emit_player_died()
-	if not game_rules.keepInventory: DeathRecovery.leave(self)
+	if not game_rules.keepInventory:
+		DeathRecovery.leave(self)
+		# `mcl_experience`'s `register_on_dieplayer`: all experience is thrown at the
+		# death point as orbs and the player's total goes to zero, unless
+		# `mcl_keepInventory` is set. Without this a death cost nothing but items.
+		if experience > 0.0:
+			XpOrbs.throw_xp(self,player.position+Vector3.UP,floori(experience))
+			experience = 0
 	if is_instance_valid(controls): controls.hide_all()
 	state="dead"
 	world.active=false
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
+	death_reason = reason
 	hud.show_death()
 	save_game()
 
@@ -1310,7 +1335,9 @@ func _setup_sounds() -> void:
 		"totem":0.5,"wither":1.0,"wither_shoot":0.4,"crit":0.14,"piston_extend":0.35,"piston_retract":0.35,
 		# These call sites existed without a length entry, so their samples were
 		# never built and every play was a silent no-op.
-		"drip":0.25,"fuse":1.6,"rocket":1.2,"splash":0.3,"portal":0.6,"guardian":0.5}
+		"drip":0.25,"fuse":1.6,"rocket":1.2,"splash":0.3,"portal":0.6,"guardian":0.5,
+		# `mcl_experience`: the orb pickup chime and the level-up flourish.
+		"orb":0.15,"levelup":0.4}
 	for kind in lengths:
 		var duration: float = lengths[kind]
 		var sample := AudioStreamWAV.new()
@@ -1393,6 +1420,14 @@ func _setup_sounds() -> void:
 				"splash": value=bright*0.8+sin(t*TAU*300.0)*0.2; envelope=minf(t*50.0,1.0)*pow(1.0-progress,1.6)
 				"portal": value=sin(t*TAU*(200.0+t*120.0))*0.35+rumble*1.2; envelope=minf(t*6.0,1.0)*pow(1.0-progress,1.1)
 				"guardian": value=sin(t*TAU*(90.0-t*30.0))*0.45+filtered*0.3; envelope=minf(t*14.0,1.0)*pow(1.0-progress,1.3)
+				# `mcl_experience`: a bright rising ping per orb, and a two-note
+				# flourish when the level rises.
+				"orb": value=sin(t*TAU*(1000.0+t*2200.0))*0.4; envelope=minf(t*70.0,1.0)*pow(1.0-progress,2.2)
+				"levelup":
+					var note: float=660.0 if t<0.16 else 990.0
+					var local: float=fmod(t,0.16)
+					value=sin(t*TAU*note)*0.4+sin(t*TAU*note*2.0)*0.15
+					envelope=minf(local*50.0,1.0)*pow(1.0-local/0.16,1.4)
 				"thud": value=sin(t*TAU*70.0)*0.6+filtered*0.3; envelope=pow(1.0-progress,2.5)
 			data.encode_s16(i*2,int(clampf(value*envelope,-1.0,1.0)*26000))
 		sample.data=data

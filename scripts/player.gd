@@ -45,6 +45,14 @@ var void_clock: float = 0.0
 # Source `VOID_DAMAGE` / `VOID_DAMAGE_FREQ`: four health every half second.
 const VOID_DAMAGE = 4.0
 const VOID_INTERVAL = 0.5
+# `mcl_worlds.is_in_void`: the deadly part of a gap starts `deadly_tolerance = 64`
+# nodes in, so a player who clips the floor has room to climb back out.
+const VOID_TOLERANCE = 64.0
+# `mcl_player.register_globalstep_slow` runs on a 0.5 s slow step and deals one
+# point of `in_wall` damage per tick while the head node is a full opaque cube.
+var suffocation_clock: float = 0.0
+const SUFFOCATION_INTERVAL = 0.5
+const SUFFOCATION_DAMAGE = 1.0
 var riptide_time: float = 0.0
 var survival_timer: float = 0.0
 var walked: float = 0.0
@@ -133,8 +141,11 @@ func _physics_process(delta: float) -> void:
 	#
 	# The source deals the void's rate rather than a killing blow: four health every
 	# half second (`VOID_DAMAGE`/`VOID_DAMAGE_FREQ` in `mcl_void_damage`), which
-	# gives a player who falls in a couple of seconds to climb back out.
-	if position.y < game.world.generator.min_y()-5:
+	# gives a player who falls in a couple of seconds to climb back out. The damage
+	# starts `deadly_tolerance = 64` nodes into the gap (`mcl_worlds.is_in_void`),
+	# not immediately below the floor, so clipping through the bottom of the world
+	# is survivable.
+	if position.y < float(game.world.generator.min_y())-VOID_TOLERANCE:
 		void_clock += delta
 		if void_clock >= VOID_INTERVAL:
 			void_clock = 0.0
@@ -155,10 +166,26 @@ func _physics_process(delta: float) -> void:
 	Hunger.update(self,delta)
 	# Source `register_globalstep_slow`: a magma block burns whoever stands on it.
 	Magma.step(game)
+	# `mcl_core`'s `_on_object_over`: stepping on a redstone ore lights it too, and
+	# the source runs this every step rather than on the slow tick.
+	RedstoneOre.activate(game.world,Vector3i((position-Vector3.UP*0.1).floor()))
 	# And powder snow freezes whoever is inside it, which the source runs on the
 	# same slow step.
 	var freeze: float = PowderSnow.step(game.world,self)
 	if freeze > 0.0: hurt(freeze,true,Vector3.INF,"freeze")
+	# Source `register_globalstep_slow`: the head node (the feet node while
+	# swimming or crawling) being a full opaque cube suffocates the player for one
+	# point per half second. This is the rule that makes a gravel collapse or a
+	# piston-sealed pocket dangerous rather than merely inconvenient.
+	suffocation_clock += delta
+	if suffocation_clock >= SUFFOCATION_INTERVAL:
+		suffocation_clock = 0.0
+		if game.gamemode != "creative":
+			Hazards.suffocate(game.world,self,underwater or crouching)
+		# `mcl_farming/sweet_berry.lua`: a grown bush hurts a **moving** player, and
+		# the source tests the actor's velocity rather than its input. On the same
+		# half-second cadence the source's thorny check uses.
+		SweetBerryThorns.step(game,self,velocity.length_squared() > 0.0025)
 	if game.boats.ridden(): game.boats.drive(delta,direction); return
 	if is_instance_valid(game.survival.mount): game.survival.ride_step(delta,direction); return
 	var crouch: bool = Input.is_physical_key_pressed(KEY_CTRL) or (pad != null and pad.sneak_held)
@@ -186,7 +213,7 @@ func _physics_process(delta: float) -> void:
 		underwater=Fluids.contains(game.world,camera.global_position,Nodes.WATER)
 		return
 	underwater = Fluids.contains(game.world,camera.global_position,Nodes.WATER)
-	speed *= PotionEffects.speed(self)
+	speed *= PotionEffects.speed(self)*SweetBerryThorns.slow(game.world.node_at(Vector3i(position.floor()))).x
 	if wet: speed *= lerpf(0.55,1.0,minf(3,Enchantments.worn(self,"Depth Strider"))/3.0)
 	if game.world.node_at(Vector3i((position-Vector3.UP*0.1).floor())) == Nodes.SOUL_SAND: speed *= 1.0+Enchantments.worn(self,"Soul Speed")*0.12 if Enchantments.worn(self,"Soul Speed") > 0 else 0.5
 	# Ladders: holding forward (or jump) against a ladder climbs; sneaking holds still.
@@ -318,7 +345,14 @@ func _move(motion: Vector3, crouch: bool, on_ladder: bool = false) -> void:
 			if axis == 1 and part.y < 0:
 				grounded = true
 				if velocity.y < -12 and not on_ladder:
-					hurt(floorf((-velocity.y-11)*0.9)*Beehives.fall_multiplier(game.world.node_at(Vector3i((position-Vector3.UP*0.035).floor()))),true,Vector3.INF,"fall")
+					# `mcl_player`'s fall-damage modifier: a trace from the landing
+					# point cancels the damage in water, an End portal, a cobweb, a
+					# vine or powder snow, and the Jump Boost (`leaping`) effect
+					# subtracts one point per level. Honey keeps its existing
+					# multiplier, which the source applies in the same ladder.
+					var contact: Vector3i = Vector3i((position-Vector3.UP*0.035).floor())
+					var raw: float = floorf((-velocity.y-11)*0.9)*Beehives.fall_multiplier(game.world.node_at(contact))
+					hurt(Hazards.fall_damage(game.world,position-Vector3.UP*0.035,velocity,raw,PotionEffects.level(self,"leaping")),true,Vector3.INF,"fall")
 					game.achievements.award("sniper_hurt")
 			velocity[axis] = 0.0
 			part[axis] = 0.0
@@ -425,6 +459,8 @@ func mine(delta: float) -> void:
 		mining_tool = held
 		dig_timer = 0
 		NoteBlocks.punch(game,target)
+		# `mcl_core`'s `on_punch`: a redstone ore lights up when it is punched.
+		RedstoneOre.activate(game.world,target.pos)
 	var duration: float = 0.12 if game.gamemode=="creative" else Nodes.break_time(target.id,held)
 	if game.gamemode != "creative" and Nodes.tool_kind(held) == Nodes.preferred_tool(target.id): duration /= 1.0+Inventory.enchantment(game.inventory.held(),"Efficiency")*0.4
 	if underwater and Enchantments.worn(self,"Aqua Affinity") == 0: duration *= 5.0
@@ -728,6 +764,9 @@ func use() -> void:
 			else: game.toast("Build a 4 × 5 obsidian frame with a 2 × 3 opening.")
 			return
 		if id in [Nodes.WORKBENCH,Nodes.FURNACE,Nodes.CHEST]:
+			# `mobs_mc.enrage_piglins(player, true)`: opening a container in the
+			# Nether provokes every piglin in sight, which is the source's own rule.
+			if id == Nodes.CHEST: PiglinAnger.on_container_opened(game)
 			game.open_inventory({Nodes.WORKBENCH:"table",Nodes.FURNACE:"furnace",Nodes.CHEST:"chest"}[id],p)
 			return
 		if id in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.BED]:
@@ -800,10 +839,15 @@ func use() -> void:
 	if Barriers.try_place(game,place_target): return
 	if BuildingShapes.try_place(game,place_target): return
 	# The source's `mcl_offhand.place`: a torch in the second hand is placed when the
-	# main hand cannot, which is the only `offhand_placeable` group in the game.
+	# main hand cannot, which is the only `offhand_placeable` group in the game. The
+	# source reaches that helper from exactly two places — the **empty hand's**
+	# `on_place` override and `mcl_tools.on_tool_place` — so it fires for an empty
+	# main hand or a tool, and never for an ordinary item such as a seed. Firing it
+	# for any non-placeable item let a leftover torch in the second hand swallow a
+	# crop-planting click.
 	var place_id: int = held
 	var from_offhand: bool = false
-	if not Nodes.placeable(place_id) and Torches.is_torch(offhand_id()):
+	if not Nodes.placeable(place_id) and (place_id == Nodes.AIR or Nodes.is_tool_id(place_id)) and Torches.is_torch(offhand_id()):
 		place_id = offhand_id()
 		from_offhand = true
 		held = place_id
@@ -939,7 +983,7 @@ func hurt(amount: float, bypass_armor: bool = false, source: Vector3 = Vector3.I
 	game.hud.flash = 0.45
 	game.sound("hurt")
 	game.api.emit_player_hurt(damage,"" if is_inf(source.x) else str(source.round()))
-	if health <= 0: game.die()
+	if health <= 0: game.die(cause)
 
 func _make_hand(id: int) -> void:
 	hand_id = id

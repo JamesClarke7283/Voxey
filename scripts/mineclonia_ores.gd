@@ -70,9 +70,53 @@ static func _clusters(gen: TerrainGenerator, index: int, rule: Dictionary, cy: i
 	gen.ore_cluster_cache[key] = buckets
 	return buckets
 
+# Source scatter rules carry a biome filter, and two families name biomes Voxey's
+# generator **cannot produce**: `Mesa*` (the source's badlands, one gold rule) and
+# `DripstoneCave*` (a *cave* biome, nine copper rules). `TerrainGenerator.biome`
+# classifies the surface and returns only `Sunwash desert`, `Frostpine highlands`,
+# `Swamp`, `Willow shores` and `Oakwood meadow`, so those ten rules never place.
+# That is the faithful outcome rather than a bug to paper over: Voxey's caves have
+# no biome identity, so enabling the dripstone-hosted copper everywhere would be the
+# source's *badlands* and *surface* distributions leaking into every cave, and
+# Voxey has no badlands at all. The set is named here so a reader sees the gap
+# instead of an unreachable string comparison, and `unrepresentable` is asserted by
+# the parity checks.
+#
+# `ExtremeHills*` maps onto Frostpine highlands because that is Voxey's mountain
+# analogue, which is the same kind of substitution `WoodTypes.natural_species`
+# already makes for the tree families.
+const UNREPRESENTABLE = ["Mesa","DripstoneCave"]
+
 static func biome_matches(name: String, biomes: Array) -> bool:
 	if biomes.is_empty(): return true
-	if str(biomes[0]).begins_with("ExtremeHills"): return name == "Frostpine highlands"
-	if str(biomes[0]).begins_with("Mesa"): return name == "Badlands"
-	if str(biomes[0]).begins_with("Dripstone"): return name == "Dripstone caves"
+	var first: String = str(biomes[0])
+	if first.begins_with("ExtremeHills"): return name == "Frostpine highlands"
+	for prefix in UNREPRESENTABLE:
+		if first.begins_with(prefix): return false
 	return biomes.has(name)
+
+# The source rules a caller can never see fire, so the gap is inspectable rather
+# than invisible. Returns the rule dictionaries.
+static func unrepresentable() -> Array:
+	var result: Array = []
+	for rule in MinecloniaOreRules.DATA:
+		var biomes: Array = rule.biomes
+		if biomes.is_empty(): continue
+		for prefix in UNREPRESENTABLE:
+			if str(biomes[0]).begins_with(prefix): result.append(rule); break
+	return result
+
+# The source rules whose band lies **entirely above** Voxey's Overworld ceiling
+# (`TerrainGenerator.HEIGHT`, 64). Fifteen are affected: every high emerald band
+# (48..415), seven iron bands (64..271) and four coal bands (64..256). Each family
+# still generates from its lower bands, so no ore is unobtainable — but the
+# source's mountain distribution above Y64 has nowhere to exist in Voxey's world,
+# which is the same height difference `docs/mineclonia-world-source.md` records.
+# Named here so the truncation is visible; the count is asserted by the parity
+# checks so a future height change cannot silently leave it stale.
+static func above_ceiling(gen: TerrainGenerator) -> Array:
+	var result: Array = []
+	for rule in MinecloniaOreRules.DATA:
+		if rule.dimension != gen.dimension: continue
+		if rule.min > gen.terrain_ceiling()-1: result.append(rule)
+	return result

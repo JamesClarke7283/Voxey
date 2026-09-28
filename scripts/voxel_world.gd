@@ -90,6 +90,7 @@ func configure(seed_number: int, atlas: Texture2D, dimension_name: String = "ove
 	Beacons.reset(self)
 	Sponges.reset(self)
 	Concrete.reset(self)
+	RedstoneOre.reset(self)
 	EndMud.reset(self)
 	LushCaveExtra.reset(self)
 	PaleOak.reset(self)
@@ -200,6 +201,11 @@ func _process(delta: float) -> void:
 		Corals.update(self,delta)
 		SeaPickles.update(self,delta)
 		Concrete.update(self,delta)
+		RedstoneOre.update(self,delta)
+		# `mcl_experience`'s orbs need the game (they award into `game.experience`),
+		# so the world reaches for its parent rather than the module reaching back.
+		var orb_owner: Node = get_parent()
+		if orb_owner != null and orb_owner.has_method("playing"): XpOrbs.update(orb_owner,delta)
 		EndMud.update(self,delta)
 		LushCaveExtra.update(self,delta)
 		var siege_owner: Node = get_parent()
@@ -337,9 +343,10 @@ const HOOK_PICKLE = 1 << 19
 const HOOK_KELP = 1 << 20
 const HOOK_BEACON = 1 << 21
 const HOOK_LEAVES = 1 << 22
+const HOOK_LIT_ORE = 1 << 23
 # Registrations the worker's `special` index does not cover; an edit carrying
 # one is always registered when its column loads.
-const UNINDEXED_HOOKS = HOOK_LEGACY_DOOR|HOOK_POWDER|HOOK_CHORUS|HOOK_CONDUIT|HOOK_CORAL|HOOK_PICKLE|HOOK_KELP|HOOK_BEACON
+const UNINDEXED_HOOKS = HOOK_LEGACY_DOOR|HOOK_LIT_ORE|HOOK_POWDER|HOOK_CHORUS|HOOK_CONDUIT|HOOK_CORAL|HOOK_PICKLE|HOOK_KELP|HOOK_BEACON
 static var hook_memo: Dictionary = {}
 
 static func load_hooks(id: int) -> int:
@@ -369,6 +376,7 @@ static func load_hooks(id: int) -> int:
 	if Kelp.is_kelp(id): hooks |= HOOK_KELP
 	if Beacons.is_beacon(id): hooks |= HOOK_BEACON
 	if WoodTypes.is_leaves(id): hooks |= HOOK_LEAVES
+	if RedstoneOre.is_lit(id): hooks |= HOOK_LIT_ORE
 	hook_memo[id] = hooks
 	return hooks
 
@@ -448,6 +456,8 @@ func _apply_column(result: Dictionary) -> void:
 		# Powder cells are swept for water contact, so a saved column must be
 		# tracked again on load.
 		if hooks & HOOK_POWDER: Concrete.placed_powder(self,p,id)
+		# A saved lit redstone ore owns a revert timer that has to be restarted.
+		if hooks & HOOK_LIT_ORE: RedstoneOre.registered(self,p,id)
 		if hooks & HOOK_CHORUS: EndMud.registered(self,p)
 		if hooks & HOOK_HIVE: Beehives.registered(self,p)
 		if hooks & HOOK_SOIL: Farmland.registered(self,p,id)
@@ -570,6 +580,8 @@ func _apply_column(result: Dictionary) -> void:
 		# Powder cells are swept for water contact, so a saved column must be
 		# tracked again on load.
 		if hooks & HOOK_POWDER: Concrete.placed_powder(self,p,id)
+		# A saved lit redstone ore owns a revert timer that has to be restarted.
+		if hooks & HOOK_LIT_ORE: RedstoneOre.registered(self,p,id)
 		if hooks & HOOK_CHORUS: EndMud.registered(self,p)
 		if hooks & HOOK_HIVE: Beehives.registered(self,p)
 		if hooks & HOOK_SOIL: Farmland.registered(self,p,id)
@@ -672,6 +684,7 @@ func _unload(c: Vector2i) -> void:
 	Copper.unload(self,c)
 	Sponges.unload(self,c)
 	Concrete.unload(self,c)
+	RedstoneOre.unload(self,c)
 	EndMud.unload(self,c)
 	LushCaveExtra.unload(self,c)
 	PaleOak.unload(self,c)
@@ -775,6 +788,8 @@ func set_node(p: Vector3i, id: int) -> bool:
 	if not gated or (own|_near(p)) & NEAR_CROP: CropFarming.changed(self,p,old_id,id)
 	if not gated or (own|_near(p)) & NEAR_STEM: FruitCrops.changed(self,p,old_id,id)
 	if not gated or change_bits(id) & OWN_AMETHYST or _near(p) & NEAR_CRYSTAL or Amethyst.tracks(self,p): Amethyst.changed(self,p,old_id,id)
+	# `supported_node`: a carpet left over air drops.
+	if SupportedNodes.is_supported(id) or SupportedNodes.is_supported(node_at(p+Vector3i.UP)): SupportedNodes.changed(self,p)
 	if change_bits(id) & OWN_POWDER or Concrete.tracks(self,p): Concrete.changed(self,p,old_id,id)
 	EndMud.changed(self,p,old_id,id)
 	PaleOak.changed(self,p,old_id,id)
@@ -1096,6 +1111,9 @@ func _simulate() -> void:
 			if input.count <= 0: input.id = 0
 			output.id = recipe
 			output.count += 1
+			# `mcl_furnaces/init.lua`:407 stores one point of experience beside the
+			# output, paid out when the output is taken (`give_xp`, :99-111).
+			s["xp"] = int(s.get("xp",0))+FurnaceRules.XP_PER_SMELT
 			# `delicious_fish`: the source's award for cooking a fish.
 			if recipe in [VillageContent.COOKED_COD,VillageContent.COOKED_SALMON]:
 				var fish_owner: Node = get_parent()

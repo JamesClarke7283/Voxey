@@ -147,6 +147,14 @@ func _init() -> void:
 	PortableStorage.recipes(self)
 	Campfires.recipes(self)
 	Fishing.recipes(self)
+	# `mcl_armor`'s leather dyeing: one leather piece plus one dye, shapeless, with
+	# the source's channel-wise averaging for a second dye.
+	for entry in CauldronWash.recipe_entries(): _shapeless(entry[0],entry[1],entry[2],entry[3])
+	# `mcl_mobitems`: the two steering sticks, a fishing rod plus their lure.
+	for entry in PigRiding.recipe_entries(): _recipe(entry[0],entry[1],entry[2],entry[3],2)
+	# `mcl_compass`: the recovery compass is eight echo shards around a compass.
+	for entry in RecoveryCompass.recipe_entries(): _recipe(entry[0],entry[1],entry[2],entry[3],3,"table")
+	for entry in WindCharge.recipe_entries(): _recipe(entry[0],entry[1],entry[2],entry[3],1,"table")
 
 func _shapeless(label: String, id: int, count: int, ingredients: Array) -> void:
 	_recipe(label,id,count,ingredients,2)
@@ -361,6 +369,9 @@ func craft(index: int, station: String) -> bool:
 static func craft_output_data(id: int, ingredients: Array) -> Dictionary:
 	if id == VillageContent.SUSPICIOUS_STEW: return FoodFeatures.craft_data(ingredients)
 	if id == VillageContent.FILLED_MAP: return ExplorationMaps.craft_output_data(ingredients)
+	# A dyed leather piece is the same armour id with a colour, so the craft output has
+	# to carry that metadata; `apply_craft` returns {} for every other recipe.
+	if CauldronWash.is_leather_armor(id): return CauldronWash.apply_craft(ingredients).get("data",{})
 	return PortableStorage.output_data(id,ingredients) if PortableStorage.is_shulker(id) else Pouches.output_data(id,ingredients)
 
 static func craft_replacement(id: int) -> int:
@@ -386,6 +397,17 @@ static func clean_slot(slot, allow_pouches: bool = true, allow_shulkers: bool = 
 		# `mcl_enchanting:pwp`: the anvil's prior-work penalty. Without it the cost
 		# resets to zero the first time an item is reloaded.
 		if raw.has("pwp"): metadata["pwp"] = maxi(0,int(raw.pwp))
+		# `mcl_armor.mcl_armor:color`: a dyed leather piece's tint. It is a
+		# per-item colour rather than a per-material one, so it must travel with the
+		# stack or a chest transfer would bleach it.
+		if raw.has("color"): metadata["color"] = clampi(int(raw.color),0,0xffffff)
+		# `mcl_buckets`' fish buckets carry the caught mob's name, so the name has to
+		# survive the item moving between slots and a save.
+		if raw.get("name") is String and not raw.name.is_empty(): metadata["name"] = NameTags.bounded(str(raw.name),30)
+		# `mcl_books`' generation counter: a copy of a copy is refused at
+		# generation 2, which needs the number to survive a save.
+		if id == Nodes.WRITTEN_BOOK and raw.has("generation"):
+			metadata["generation"] = clampi(int(raw.generation),0,3)
 		# An armor trim is two metadata keys; without this they are dropped the
 		# first time the piece moves between slots.
 		if raw.get("trim_overlay") is String and not str(raw.trim_overlay).is_empty():

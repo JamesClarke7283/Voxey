@@ -59,12 +59,36 @@ static func frame(game: Node3D, id: int) -> int:
 # A compass points from the player to the world spawn, quantised to 32 frames.
 # The source measures that bearing in the horizontal plane.
 static func compass_frame(game: Node3D) -> int:
+	return bearing(game,Vector3(game.spawn_point))
+
+# `mcl_compass`'s `recovery_compass`: it points at the player's **last death
+# location** rather than the spawn, which the source stores in the player's own
+# metadata (`mcl_compass:recovery_pos`). Voxey already records where the recovery
+# chest landed in `adventure_state.last_recovery`, which is the same point, so the
+# dial reads that. With no death recorded the source leaves the needle spinning,
+# which is `recovering()` here.
+static func recovering(game: Node3D) -> bool:
+	return not recovery_position(game).is_empty()
+
+static func recovery_position(game: Node3D) -> Dictionary:
+	var entry: Variant = game.world.adventure_state.get("last_recovery",{})
+	if not entry is Dictionary or not entry.get("position") is Array or entry.position.size() != 3: return {}
+	for value in entry.position:
+		if not (value is int or value is float) or not is_finite(float(value)): return {}
+	return entry
+
+static func recovery_frame(game: Node3D) -> int:
+	var entry: Dictionary = recovery_position(game)
+	if entry.is_empty(): return posmod(spinning,COMPASS_FRAMES)
+	return bearing(game,Vector3(entry.position[0],entry.position[1],entry.position[2]))
+
+# The shared bearing maths: the source's `get_compass_angle` quantised to the 32
+# compass frames. Frame 0 points south in its first image, and the angle is
+# clockwise from north so the needle sweeps the way a real compass does.
+static func bearing(game: Node3D, to: Vector3) -> int:
 	var from: Vector3 = game.player.position
-	var to: Vector3 = Vector3(game.spawn_point)
 	var delta: Vector2 = Vector2(to.x-from.x,to.z-from.z)
 	if delta.length_squared() < 0.0001: return 0
-	# Frame 0 points south in the source's first image; the angle is clockwise
-	# from north so the needle sweeps the way a real compass does.
 	var angle: float = atan2(delta.x,-delta.y)
 	return posmod(roundi((angle/TAU)*COMPASS_FRAMES),COMPASS_FRAMES)
 

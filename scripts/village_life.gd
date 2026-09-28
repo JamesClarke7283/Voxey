@@ -23,7 +23,10 @@ func record(key: String) -> Dictionary:
 	return state().people.get(key,{})
 
 func make_record(key: String, profession: String, p: Vector3, workplace: Vector3i, home: Vector3i, center: Vector3i) -> Dictionary:
-	var result: Dictionary = {"key":key,"profession":profession,"xp":0,"level":1,"offers":[],"position":[p.x,p.y,p.z],"job":[workplace.x,workplace.y,workplace.z],"bed":[home.x,home.y,home.z],"center":[center.x,center.y,center.z],"health":20.0,"dead":false,"reputation":0,"reputations":{},"restocks":2,"restock_time":-1.0,"restock_day":game.day_number(),"food":0,"age":0.0,"breed_time":0.0}
+	# `slept_at` and `saw_golem_at` are the source's `_last_slept_gmt` and
+	# `_last_golem_gmt`, which gate a villager's request for an iron golem
+	# (`villager.lua`:3423-3429). `golem_timer` is its own five-second check timer.
+	var result: Dictionary = {"key":key,"profession":profession,"xp":0,"level":1,"offers":[],"position":[p.x,p.y,p.z],"job":[workplace.x,workplace.y,workplace.z],"bed":[home.x,home.y,home.z],"center":[center.x,center.y,center.z],"health":20.0,"dead":false,"reputation":0,"reputations":{},"restocks":2,"restock_time":-1.0,"restock_day":game.day_number(),"food":0,"age":0.0,"breed_time":0.0,"slept_at":0.0,"saw_golem_at":0.0,"golem_timer":0.0}
 	var rng := RandomNumberGenerator.new(); rng.seed = (str(game.world.generator.world_seed)+key).hash()
 	for template in VillageTrades.DATA.get(profession,[]):
 		var offer: Dictionary = template.duplicate(true)
@@ -58,6 +61,13 @@ static func vec(value: Array) -> Vector3:
 func update(delta: float) -> void:
 	state().clock += delta
 	alarm = maxf(0,alarm-delta)
+	# `villager.lua`: `_last_slept_gmt` is set when a villager uses a bed, and it is
+	# what lets one ask for an iron golem. Voxey does not track individual bed use, so
+	# the whole village is stamped when it passes a night — the same information, from
+	# the day cycle the rest of this module already reads.
+	if state().get("day",0) != game.day_number():
+		state()["day"] = game.day_number()
+		VillageGolems.mark_slept(game,"")
 	timer -= delta
 	if timer > 0: return
 	timer = 0.5
@@ -84,6 +94,10 @@ func update(delta: float) -> void:
 				if Boats.is_passenger(live[key]): continue
 				game.leads.hibernate(live[key]); live[key].queue_free(); continue
 			if person.profession != "golem":
+				# `villager.lua`: a villager that has slept recently and has not seen a
+				# golem lately asks its neighbours for one every five seconds — three
+				# of them while the village is panicking, five otherwise.
+				VillageGolems.step(game,live[key],VillageGolems.hostile_near(game,live[key].position),0.5)
 				work(person,live[key],0.5)
 		elif pos.distance_to(game.player.position) < 70 and game.world.loaded_at(pos):
 			var mob := VillageMob.new(); mob.game = game; mob.kind = "iron_golem" if person.profession == "golem" else "villager"
@@ -159,14 +173,25 @@ func transaction(person: Dictionary, offer: Dictionary, commit: bool = false) ->
 		if not trial.remove_item(cost[0],cost[1]): return "You need more "+Nodes.title(cost[0]).to_lower()+"."
 	if trial.add_item(offer.give[0],offer.give[1],0,offer.data) > 0: return "Make room in your inventory first."
 	if commit:
+		# `villager.lua`:2565-2573 — a trade is what triggers the villager's **gossip**,
+		# which copies its reputations to nearby villagers, and that same moment is
+		# where the source's ordinary (non-panicking) golem request fires, asking for
+		# five villagers rather than three.
+		VillageGolems.gossip(game,person,game.player.position)
 		var previous_level: int = person.level
+		# `mobs_mc/villager.lua`:402 throws the trade's experience at the villager, so
+		# the orb has to land where the trade happened. The resident is looked up by
+		# its person key because this path only carries the record.
+		var at: Vector3 = game.player.position+Vector3.UP
+		for other in game.creatures.get_children():
+			if other is VillageMob and not other.is_queued_for_deletion() and other.person_key == person.key: at = other.center(); break
 		game.inventory.slots = trial.slots
 		offer.uses += 1; person.xp += offer.xp
 		if not person.has("reputations"): person.reputations = {}
 		person.reputations[game.player_id] = mini(25,reputation(person)+2)
-		game.experience += randi_range(4,6)
+		XpOrbs.throw_xp(game,at,randi_range(4,6))
 		while int(person.level) < 5 and int(person.xp) >= VillageContent.LEVELS[int(person.level)]:
-			person.level += 1; game.experience += 5; person.health = minf(20,person.health+4)
+			person.level += 1; XpOrbs.throw_xp(game,at,5); person.health = minf(20,person.health+4)
 		if int(person.level) > previous_level:
 			for mob in game.creatures.get_children():
 				if mob is VillageMob and mob.person_key == person.key and not mob.is_queued_for_deletion(): mob.health = person.health; mob.rebuild()

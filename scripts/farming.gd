@@ -42,7 +42,8 @@ static func state(mob: Creature) -> Dictionary:
 	return {"kind":mob.kind,"farm_id":mob.farm_id,"position":[mob.position.x,mob.position.y,mob.position.z],"yaw":mob.model.rotation.y,
 		"health":mob.health,"custom_name":mob.custom_name,"growth":mob.growth_remaining,"love":mob.love_time,"cooldown":mob.breed_cooldown,
 		"sheared":mob.sheared,"sheep_color":mob.sheep_color,"grazing":mob.grazing,"graze_consumed":mob.graze_consumed,"wool_timer":mob.wool_timer,"egg_timer":mob.egg_timer,"effects":PotionEffects.snapshot(mob),
-		"slime_size":mob.slime_size if mob is ExpeditionCreature and mob.kind == "slime" else 0,"crystal_key":mob.crystal_key if mob is ExpeditionCreature else ""}
+		"slime_size":mob.slime_size if mob is ExpeditionCreature and mob.kind == "slime" else 0,"crystal_key":mob.crystal_key if mob is ExpeditionCreature else "",
+		"saddled":mob.saddled if mob is RuralAnimal else false}
 
 static func remember(mob: Creature) -> void:
 	if not managed(mob) or mob.is_queued_for_deletion() or mob.health <= 0: return
@@ -75,6 +76,8 @@ static func restore_state(mob: Creature, entry: Dictionary) -> void:
 	mob.love_time = number(entry.get("love"),0,LOVE_TIME) if supports(mob.kind) else 0
 	mob.breed_cooldown = number(entry.get("cooldown"),0,COOLDOWN) if supports(mob.kind) else 0
 	if mob.growth_remaining > 0: mob.love_time = 0; mob.breed_cooldown = 0
+	# `pig.lua`:245-252 re-equips the saddle on load.
+	if mob is RuralAnimal and mob.kind == "pig" and bool(entry.get("saddled",false)): PigRiding.equip_saddle(mob)
 	mob.sheared = bool(entry.get("sheared",false)) and mob.kind == "sheep"
 	mob.wool_timer = number(entry.get("wool_timer"),100,160)
 	mob.egg_timer = number(entry.get("egg_timer"),randi_range(300,600),600)
@@ -144,11 +147,16 @@ static func use(game: Node3D, mob: Creature) -> bool:
 		mob.growth_remaining *= 0.9; consumed = true
 	elif mob.breed_cooldown <= 0 and mob.love_time <= 0:
 		mob.love_time = LOVE_TIME; consumed = true
-	if consumed:
-		if game.gamemode != "creative": game.inventory.consume_selected()
-		game.puff(mob.center(),Color("ef7c8f"),6,1.2)
-		game.sound("eat"); remember(mob)
-	else: game.toast("This animal is not hungry right now.")
+	if not consumed:
+		# The source's `feed_tame` returns **false** when it ate nothing, and
+		# `pig.lua`:162-170 relies on that: the click then falls through to the
+		# saddle/mount branches. Returning true here made a carrot in hand able to
+		# feed a pig but never to mount one.
+		game.toast("This animal is not hungry right now.")
+		return false
+	if game.gamemode != "creative": game.inventory.consume_selected()
+	game.puff(mob.center(),Color("ef7c8f"),6,1.2)
+	game.sound("eat"); remember(mob)
 	return true
 
 static func resize(mob: Creature) -> void:
@@ -195,7 +203,7 @@ static func tick(mob: Creature, delta: float) -> void:
 	var child: Creature = mob.game.spawn_creature(mob.kind,mob.position)
 	child.growth_remaining = GROW_TIME; resize(child)
 	if mob.kind == "sheep": set_color(child,offspring_color(mob.sheep_color,mate.sheep_color))
-	mob.game.experience += randi_range(1,7)
+	XpOrbs.throw_xp(mob.game,child.center(),randi_range(1,7))
 	mob.game.achievements.award("parrots_and_bats")
 	mob.game.puff(child.center(),Color("ef7c8f"),12,1.5)
 	remember(mob); remember(mate); remember(child)

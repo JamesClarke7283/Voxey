@@ -271,7 +271,7 @@ func step(dt: float = 0.1) -> void:
 					if world.node_at(p+side) in [Nodes.REPEATER,Nodes.COMPARATOR] and output(p+side,-side) > 0: locked = true
 				if id == Nodes.REPEATER and locked: s["locked"] = true; continue
 				s["locked"] = false
-				if id == Nodes.COMPARATOR and (world.node_at(p-d) in CONTAINERS or PortableStorage.is_shulker(world.node_at(p-d)) or world.node_at(p-d) in [Jukeboxes.ID,VillageContent.COMPOSTER,VillageContent.CAULDRON] or FoodFeatures.is_cake(world.node_at(p-d)) or Beehives.is_hive(world.node_at(p-d)) or Copper.is_bulb(world.node_at(p-d))): rear = container_signal(p-d)
+				if id == Nodes.COMPARATOR and (world.node_at(p-d) in CONTAINERS or PortableStorage.is_shulker(world.node_at(p-d)) or world.node_at(p-d) in [Jukeboxes.ID,VillageContent.COMPOSTER,VillageContent.CAULDRON] or FoodFeatures.is_cake(world.node_at(p-d)) or Beehives.is_hive(world.node_at(p-d)) or Copper.is_bulb(world.node_at(p-d)) or Frames.is_frame(world.node_at(p-d))): rear = container_signal(p-d)
 				var wanted: int = 15 if rear > 0 else 0
 				if id == Nodes.COMPARATOR: wanted = maxi(0,rear-side_level) if s.get("subtract",false) else (rear if rear >= side_level else 0)
 				if id == Nodes.REPEATER:
@@ -378,6 +378,9 @@ func container_signal(p: Vector3i) -> int:
 	if FoodFeatures.is_cake(world.node_at(p)): return FoodFeatures.slices(world.node_at(p))*2
 	if world.node_at(p) == VillageContent.CAULDRON: return Cauldrons.level(world.get_station(p,"cauldron"))
 	if world.node_at(p) == VillageContent.COMPOSTER: return Composters.level(world.get_station(p,"composter"))
+	# `mcl_comparators/init.lua`: a comparator reads a frame's **rotation**, not its
+	# contents, which is `measure_item_frames` rather than a container fullness.
+	if Frames.is_frame(world.node_at(p)): return Frames.comparator_signal(Frames.station(world,p))
 	var slots: Array = container(p)
 	if slots.is_empty(): return 0
 	var fullness: float = 0

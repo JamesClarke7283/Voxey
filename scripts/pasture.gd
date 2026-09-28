@@ -77,6 +77,8 @@ static func _id_emission(id: int) -> int:
 	if Sculk.light_level(id) > 0: return Sculk.light_level(id)
 	# A lit cave vine is a light source, which is what makes a lush cave visible.
 	if LushCaves.is_lit_vine(id): return LushCaves.LIT_LIGHT
+	# `mcl_core`: a lit redstone ore carries `light_source = 9`.
+	if RedstoneOre.light_level(id) > 0: return RedstoneOre.light_level(id)
 	if id == Bastions.CRYING_OBSIDIAN: return 10
 	if id == Nodes.NETHER_PORTAL: return 11
 	if id == Nodes.END_PORTAL: return 14

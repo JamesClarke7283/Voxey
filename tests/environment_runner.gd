@@ -65,13 +65,23 @@ func run() -> void:
 	# (`VOID_DAMAGE`/`VOID_DAMAGE_FREQ`), which gives a player who falls in time to
 	# climb back out. The check also pins that the branch is reachable at all: it
 	# sits below the loaded world, so a guard over unloaded terrain would skip it.
+	#
+	# `mcl_worlds.is_in_void` puts `deadly_tolerance = 64` between the floor and the
+	# first point of void damage, so ten nodes below the floor must not start the
+	# void clock. (Those cells are bedrock, so the source's own suffocation rule
+	# does apply there — the check is that the *void* has not begun.)
 	game.state = "playing"
 	game.gamemode = "survival"
 	game.player.health = 20.0; game.player.damage_cooldown = 0.0; game.player.void_clock = 0.0
-	var void_y: float = float(game.world.generator.min_y())-10.0
-	game.player.position = Vector3(8.5,void_y,8.5)
+	var shallow_y: float = float(game.world.generator.min_y())-10.0
+	game.player.position = Vector3(8.5,shallow_y,8.5)
 	game.player._physics_process(0.6)
-	check(is_equal_approx(game.player.health,20.0-game.player.VOID_DAMAGE),"falling into the void costs the source's four health on its first tick")
+	check(game.player.void_clock == 0.0,"ten nodes below the world is inside the source's 64-node void tolerance, so the void clock stays at zero")
+	var void_y: float = float(game.world.generator.min_y())-float(game.player.VOID_TOLERANCE)-1.0
+	game.player.position = Vector3(8.5,void_y,8.5)
+	game.player.health = 20.0; game.player.damage_cooldown = 0.0; game.player.void_clock = 0.0
+	game.player._physics_process(0.6)
+	check(is_equal_approx(game.player.health,20.0-game.player.VOID_DAMAGE),"falling past the tolerance costs the source's four health on its first tick")
 	game.player.damage_cooldown = 0.0
 	game.player._physics_process(0.6)
 	check(is_equal_approx(game.player.health,20.0-2.0*game.player.VOID_DAMAGE),"and again on the next tick, so the void is a rate rather than one killing blow")

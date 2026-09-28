@@ -633,6 +633,9 @@ static func armor_points(id: int) -> int:
 
 static func durability(id: int) -> int:
 	if Archaeology.is_brush(id): return Archaeology.BRUSH_USES
+	# `mcl_mobitems`: a steering stick is worth 26 uses (`pig.lua`:30's own
+	# `_mcl_toollike_wield` pair with 26 durability).
+	if PigRiding.is_steering_item(id): return PigRiding.durability(id)
 	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("durability",0)
 	if id == ELYTRA: return 433
 	if id == FLINT_AND_STEEL: return 65
@@ -753,9 +756,11 @@ static func uncached_transparent(id: int) -> bool:
 
 # Sand and gravel are Luanti-style falling nodes: they drop when unsupported.
 # Concrete powder carries the source's `falling_node` group too, so an unsupported
-# column comes down the same way.
+# column comes down the same way. The anvil carries it as well
+# (`mcl_anvils/init.lua`:386), and unlike the others it also has
+# `crush_after_fall`, which `FallingNode.land` honours.
 static func falls(id: int) -> bool:
-	return id in [SAND, GRAVEL, SNOW_BLOCK] or Archaeology.is_suspicious(id) or Concrete.is_powder(id)
+	return id in [SAND, GRAVEL, SNOW_BLOCK] or Archaeology.is_suspicious(id) or Concrete.is_powder(id) or FallingDamage.is_anvil(id)
 
 static func placeable(id: int) -> bool:
 	if NetherBlocks.is_soul_fire(id): return false
@@ -922,7 +927,7 @@ static func harvestable(id: int, tool: int) -> bool:
 	if id in [VillageContent.EMERALD_ORE,VillageContent.DEEP_EMERALD_ORE]: return tool_kind(tool) == 0 and tool_tier(tool) >= 2
 	if DEEP_ORES.has(id): return harvestable(DEEP_ORES[id],tool)
 	if id in [BEDROCK,END_FRAME,END_FRAME_EYE,END_PORTAL,END_GATEWAY,PISTON_HEAD]: return false
-	if id in [REDSTONE_ORE,DEEP_REDSTONE_ORE]: return tool_kind(tool) == 0 and tool_tier(tool) >= 2
+	if id in [REDSTONE_ORE,DEEP_REDSTONE_ORE,RedstoneOre.LIT,RedstoneOre.DEEP_LIT]: return tool_kind(tool) == 0 and tool_tier(tool) >= 2
 	if id == VINE: return tool == SHEARS
 	if preferred_tool(id) == 0:
 		if tool_kind(tool) != 0 and tool != SHEARS: return false
@@ -931,6 +936,22 @@ static func harvestable(id: int, tool: int) -> bool:
 		if id in [DIAMOND_ORE,GOLD_ORE,GOLD_NODE,DIAMOND_NODE]: return tool_tier(tool) >= 2
 		if id == OBSIDIAN: return tool_tier(tool) >= 3
 	return true
+
+# `mcl_item_entity/init.lua`:216-220 pays a mined node's `group:xp` as experience
+# orbs, and that group is the source's own per-ore value rather than a flat one:
+# coal 1, diamond 4, emerald 6, lapis 6, redstone 7 (lit and unlit alike) and nether
+# quartz 3, with nether gold 1 and ancient debris 0. Iron, gold and copper ore carry
+# **no** `xp` group at all, so mining them pays nothing — Voxey paid a flat 1 for
+# every deep ore, which overpaid iron and underpaid diamond and emerald.
+static func ore_xp(id: int) -> int:
+	if RedstoneOre.xp(id) > 0: return RedstoneOre.xp(id)
+	if id == COAL_ORE or id == DEEP_COAL_ORE: return 1
+	if id == DIAMOND_ORE or id == DEEP_DIAMOND_ORE: return 4
+	if id == LAPIS_ORE or id == DEEP_LAPIS_ORE: return 6
+	if id == NETHER_QUARTZ_ORE: return 3
+	if id == MinecloniaOres.NETHER_GOLD: return 1
+	if id == VillageContent.EMERALD_ORE or id == VillageContent.DEEP_EMERALD_ORE: return 6
+	return 0
 
 static func drop(id: int) -> int:
 	# A seagrass node drops nothing; only shears yield its item.
@@ -1018,6 +1039,7 @@ static func drop(id: int) -> int:
 	if id == VillageContent.WOODEN_DOOR_OPEN: return VillageContent.WOODEN_DOOR
 	if VillageContent.shape(id) == "crop": return VillageContent.crop_seed(id)
 	if DEEP_ORES.has(id): return drop(DEEP_ORES[id])
+	if RedstoneOre.is_lit(id): return drop(RedstoneOre.item(id))
 	if id in [REDSTONE_ORE,DEEP_REDSTONE_ORE]: return REDSTONE_WIRE
 	if id in [END_PORTAL,END_GATEWAY,END_FRAME,END_FRAME_EYE,PISTON_HEAD,BLAZE_SPAWNER]: return 0
 	if id == IRON_DOOR_OPEN: return IRON_DOOR
@@ -1107,6 +1129,9 @@ static func smelt_result(id: int) -> int:
 	return {NETHERRACK:NETHER_BRICK_ITEM,IRON_ORE:IRON,GOLD_ORE:GOLD,COPPER_ORE:COPPER,SAND:GLASS,COBBLE:STONE,RAW_MEAT:COOKED_MEAT,LOG:CHARCOAL,CLAY_BALL:BRICK_ITEM,CLAY:TERRACOTTA,COBBLED_DEEPSLATE:DEEPSLATE}.get(id,0)
 
 static func pick_item(id: int) -> int:
+	# A lit redstone ore is a hidden node, never an item: pick-block has to hand
+	# back the unlit ore the same way `drop` does.
+	if RedstoneOre.is_lit(id): return RedstoneOre.item(id)
 	if SeaPickles.is_pickle(id): return id
 	if Scaffolding.is_scaffolding(id): return Scaffolding.ID
 	if Heads.is_any(id): return Heads.item(id)

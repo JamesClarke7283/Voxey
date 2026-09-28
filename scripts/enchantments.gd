@@ -167,7 +167,7 @@ static func harvest(id: int, slot: Dictionary) -> Array:
 	if SnowCover.is_snow(id): return SnowCover.harvest(id,slot)
 	if BuildingShapes.is_shape(id): return [[BuildingShapes.item(id),BuildingShapes.count(id)]]
 	var silk: int = Inventory.enchantment(slot,"Silk Touch")
-	var ores: Array = [MinecloniaOres.NETHER_GOLD,Nodes.COAL_ORE,Nodes.DIAMOND_ORE,Nodes.LAPIS_ORE,Nodes.REDSTONE_ORE,Nodes.NETHER_QUARTZ_ORE,VillageContent.EMERALD_ORE,VillageContent.DEEP_EMERALD_ORE]+Nodes.DEEP_ORES.keys()
+	var ores: Array = [MinecloniaOres.NETHER_GOLD,Nodes.COAL_ORE,Nodes.DIAMOND_ORE,Nodes.LAPIS_ORE,Nodes.REDSTONE_ORE,RedstoneOre.LIT,RedstoneOre.DEEP_LIT,Nodes.NETHER_QUARTZ_ORE,VillageContent.EMERALD_ORE,VillageContent.DEEP_EMERALD_ORE]+Nodes.DEEP_ORES.keys()
 	if silk and GlassColors.is_stained(id): return [[id,1]]
 	if silk and (ores.has(id) or id in [Nodes.STONE,Nodes.DEEPSLATE,Nodes.GRASS,Nodes.GLASS,Nodes.ICE,Nodes.SNOW_BLOCK,Nodes.LEAVES,Nodes.BOOKSHELF,VillageContent.COBWEB]): return [[id,1]]
 	var fortune: int = Inventory.enchantment(slot,"Fortune")

@@ -75,6 +75,8 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	player.offhand_slot = {"id":VillageContent.SHIELD,"count":1,"wear":7}
 	game.gamemode = "survival"
 	var path: String = "user://offhand-check-"+str(OS.get_process_id())+".json"
+	var saved_position: Vector3 = player.position
+	var saved_state: String = game.state
 	t.check(game.save_game(path),"the world saves with a filled second hand")
 	var whole_save: Dictionary = game.read_save(path)
 	player.offhand_slot = {"id":0,"count":0,"wear":0}
@@ -83,3 +85,12 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	t.check(int(player.offhand_slot.wear) == 7,"the second hand's wear survives too")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	player.offhand_slot = {"id":0,"count":0,"wear":0}
+	# The reload leaves the session running: `load_world_data` drives the game back
+	# to "playing" and this check turned `set_process` on to let it finish. Both have
+	# to be put back, or every later group runs with a live world that streams
+	# columns — which unloads the high-altitude fixtures those groups build.
+	game.set_process(false)
+	game.pause(); game.world.active = false; game.world.set_process(false)
+	player.set_process(false); player.set_physics_process(false)
+	player.position = saved_position
+	game.state = saved_state

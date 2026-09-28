@@ -18,6 +18,11 @@ var enchanted: bool = false:
 		if enchanted != value: enchanted = value; queue_redraw()
 var show_slot: bool = true
 var number: String = ""
+# `mcl_armor`'s per-item leather tint. It multiplies the item's own artwork, which
+# is what the source's `inventory_image ^ [multiply:<colour>]` does.
+var tint: Color = Color.WHITE:
+	set(value):
+		if tint != value: tint = value; queue_redraw()
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -41,7 +46,7 @@ func _draw() -> void:
 			draw_polygon(points,PackedColorArray([face.shade]),uv,Art.atlas_texture)
 	elif RedstoneSensors.is_device(item_id) or item_id in Nodes.SMALL_CIRCUITS or item_id == Nodes.TORCH:
 		var extent: float = maxf(16,roundf(minf(size.x,size.y)*0.75/16.0)*16.0)
-		draw_texture_rect(ItemArt.texture(item_id),Rect2(center-Vector2.ONE*extent*0.5,Vector2.ONE*extent),false)
+		draw_texture_rect(ItemArt.texture(item_id),Rect2(center-Vector2.ONE*extent*0.5,Vector2.ONE*extent),false,tint)
 	elif Nodes.placeable(item_id) or item_id in [Nodes.WATER,Nodes.BEDROCK,Nodes.RIPE_WHEAT]:
 		if Art.atlas_texture == null: Art.make_atlas()
 		var s: float = scale_value
@@ -59,7 +64,7 @@ func _draw() -> void:
 	else:
 		var extent: float = roundf(minf(size.x,size.y)*0.72/16.0)*16.0
 		if extent < 16: extent = 16
-		draw_texture_rect(ItemArt.texture(item_id),Rect2((center-Vector2.ONE*extent*0.5).floor(),Vector2.ONE*extent),false)
+		draw_texture_rect(ItemArt.texture(item_id),Rect2((center-Vector2.ONE*extent*0.5).floor(),Vector2.ONE*extent),false,tint)
 	if enchanted:
 		draw_line(Vector2(7,7),Vector2(size.x-7,7),Color("bb81e8"),2)
 		draw_string(ThemeDB.fallback_font,Vector2(size.x-16,19),"✦",HORIZONTAL_ALIGNMENT_LEFT,-1,15,Color("dcb5ff"))

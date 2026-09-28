@@ -48,6 +48,9 @@ func use() -> bool:
 	var target: Dictionary = game.player.target
 	var mob: Creature = game.target_mob()
 	if NameTags.use(game,mob): return true
+	# `mcl_buckets`' capture: a water bucket right-clicked on a fish scoops it up
+	# alive, carrying its name into the bucket's metadata.
+	if FishBuckets.capture(game,mob): return true
 	if Golems.use(game,mob): return true
 	if Farming.use(game,mob): return true
 	if held == Nodes.COMPASS and not target.is_empty() and target.id == Bastions.LODESTONE: return Lodestones.bind(game,target.pos)
@@ -70,6 +73,22 @@ func use() -> bool:
 		if mob.saddled:
 			if game.boats.ridden(): game.toast("Leave the boat before mounting a horse."); return true
 			mount = mob; game.toast("Mounted. Move to ride, Space to jump, Ctrl to dismount."); return true
+	if mob is RuralAnimal and mob.kind == "pig" and PigRiding.mountable(mob):
+		# `pig.lua`:206-227 — the driver's own click with a steering item starts the
+		# boost and wears the stick; without one the click falls through to detach.
+		if mob == mount and PigRiding.use_stick(game): return true
+		if held == Nodes.SADDLE and not mob.saddled:
+			PigRiding.equip_saddle(mob); _consume(); return true
+		if held == Nodes.SHEARS and mob.saddled:
+			# `pig.lua`:191-204: the saddle drops beside the pig and the shears take
+			# the source's own `shearsy` wear.
+			PigRiding.unsaddle(mob); game.spawn_drop(mob.position,Nodes.SADDLE)
+			if game.gamemode != "creative": game.inventory.damage_tool()
+			return true
+		if mob == mount: mount = null; game.toast("Dismounted."); return true
+		if PigRiding.can_mount(mob,held):
+			if game.boats.ridden(): game.toast("Leave the boat before mounting a pig."); return true
+			mount = mob; game.toast("Mounted. Look where you want to go, Ctrl to dismount."); return true
 	if mob is VillageMob:
 		# A wandering trader opens the same trading panel as a villager.
 		if mob.kind == "villager" or mob.kind == "wandering_trader":
@@ -96,8 +115,17 @@ func use() -> bool:
 		game.toast("Hold Ctrl with a shield to block attacks from the front.")
 		return true
 	if held == VillageContent.XP_BOTTLE:
-		_consume(); game.experience += randi_range(3,11); game.puff(game.player.position+Vector3.UP,Color("9ad964"),15); return true
+		_consume(); XpOrbs.throw_xp(game,game.player.position+Vector3.UP,randi_range(3,11)); game.puff(game.player.position+Vector3.UP,Color("9ad964"),15); return true
 	if not target.is_empty() and target.id == VillageContent.CAULDRON and not Input.is_physical_key_pressed(KEY_CTRL):
+		# `mcl_armor`/`mcl_banners`: washing a dyed leather piece or stripping a
+		# banner's top layer runs **before** the liquid transaction, or a held piece
+		# of armour would be treated as a bottle or bucket instead. The station is
+		# fetched here so the wash can spend one level.
+		var cauldron: Dictionary = Cauldrons.station(game.world,target.pos)
+		if CauldronWash.wash(game,target.pos,cauldron,game.inventory.held()):
+			game.inventory.changed.emit()
+			game.toast("Washed clean.")
+			return true
 		return Cauldrons.use(game,target.pos)
 	if PotionCatalog.is_bottle(held):
 		if PotionCatalog.ITEMS[held].form == "drink":
@@ -123,10 +151,10 @@ func use() -> bool:
 	var p: Vector3i = target.pos; var id: int = target.id
 	if held == VillageContent.GLASS_BOTTLE and Fluids.water(id):
 		_consume(); give(VillageContent.WATER_BOTTLE,1); return true
-	if held == VillageContent.COD_BUCKET and target.normal == Vector3i.UP:
-		var at: Vector3i = SnowCover.placement(game.world,target).pos
-		if game.world.set_node(at,Nodes.WATER): _consume(); give(Nodes.BUCKET,1); game.spawn_drop(Vector3(at)+Vector3.UP*0.4,VillageContent.RAW_COD,1)
-		return true
+	# `mcl_buckets`' fish buckets: using one against a replaceable cell releases the
+	# **live** fish it carries and returns an empty bucket. The old path placed water
+	# and dropped a raw cod item, so a bucketed fish could never be released alive.
+	if FishBuckets.is_fish_bucket(held) and FishBuckets.place(game,target): return true
 	if held == VillageContent.COCOA_BEANS and WoodTypes.canonical(id) == WoodTypes.log_id(3) and target.normal.y == 0 and game.world.node_at(p+target.normal) == Nodes.AIR:
 		game.world.set_node(p+target.normal,VillageContent.COCOA_POD); _consume(); return true
 	if held == VillageContent.KELP and id == Nodes.WATER and game.world.node_at(p+Vector3i.DOWN) != Nodes.AIR:
@@ -156,6 +184,11 @@ func use() -> bool:
 		if VillageContent.DATA.get(advanced,{}).get("crop","") == VillageContent.DATA[id].get("crop","") and VillageContent.crop_seed(id) != VillageContent.NETHER_WART_ITEM:
 			game.world.set_node(p,advanced); _consume()
 		return true
+	# `mcl_itemframes`: a glow ink sac clicked onto a frame changes its form rather
+	# than being placed, so this test precedes the take path. `GlowInk.apply` refuses
+	# anything that is not a frame or a sign, and a sign never reaches here because
+	# `Signs.use` already returned.
+	if GlowInk.is_glow_ink(held) and GlowInk.apply(game,{"id":id,"pos":p,"distance":0.0}): return true
 	if id == VillageContent.ITEM_FRAME:
 		frame_item(p); return true
 	# Emblazoning a banner with a dye appends a layer, and a banner used on an
@@ -185,7 +218,7 @@ func use() -> bool:
 		if VillageContent.is_bed(id): game.sleep_at(p); return true
 		if id in [VillageContent.WOODEN_DOOR,VillageContent.WOODEN_DOOR_OPEN]: toggle_door(p); return true
 		if id == VillageContent.BREWING_STAND: game.open_inventory("brewing",p); return true
-		if id in [VillageContent.BARREL,VillageContent.RECOVERY_CHEST]: game.open_inventory("chest",p); return true
+		if id in [VillageContent.BARREL,VillageContent.RECOVERY_CHEST]: PiglinAnger.on_container_opened(game); game.open_inventory("chest",p); return true
 		if TrappedChests.is_trapped(id):
 			# Its signal lasts as long as the screen is open, so the close path must
 			# know which chest it was.
@@ -418,22 +451,41 @@ func equipment_work(index: int, device: int) -> bool:
 	return worked
 
 func _damage_anvil() -> void:
-	var level: int = [VillageContent.ANVIL,11446,11447].find(game.world.node_at(workstation_pos))
-	if level < 0: return
+	damage_anvil(workstation_pos)
+
+# `mcl_anvils.damage_anvil`: one level per call, and the third destroys the anvil
+# and returns it as a drop. Split out of the workstation path so a falling anvil
+# can damage itself through `FallingDamage.anvil_self_damage`.
+func damage_anvil(p: Vector3i) -> bool:
+	var level: int = [VillageContent.ANVIL,11446,11447].find(game.world.node_at(p))
+	if level < 0: return false
 	var next: int = Anvils.use_damage(level)
-	if next < 0: return
+	if next < 0: return false
 	if next >= Anvils.MAX_DAMAGE:
-		if game.world.set_node(workstation_pos,Nodes.AIR):
+		if game.world.set_node(p,Nodes.AIR):
 			game.sound("break"); game.toast("The anvil breaks apart.")
-			if game.gamemode != "creative": game.spawn_drop(Vector3(workstation_pos)+Vector3.ONE*0.5,VillageContent.ANVIL,1)
-		game.resume(); return
-	game.world.set_node(workstation_pos,[VillageContent.ANVIL,11446,11447][next])
+			if game.gamemode != "creative": game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,VillageContent.ANVIL,1)
+		if game.state == "workstation": game.resume()
+		return true
+	game.world.set_node(p,[VillageContent.ANVIL,11446,11447][next])
 	game.sound("dig")
+	return false
 
 func _equipment_work(index: int, device: int) -> bool:
 	var slot: Dictionary = game.inventory.slots[index]
 	if slot.id == 0: return false
 	if device == VillageContent.GRINDSTONE:
+		# `mcl_grindstone/init.lua`:127-151: two damaged pieces of the same item
+		# combine with a 5 percent durability bonus and transfer any curse, so the
+		# repair half runs **before** the enchantment test — a pair with no
+		# enchantments must still repair. The screen shows one item at a time, so the
+		# partner is whatever else is carried.
+		for partner_index in game.inventory.slots.size():
+			if partner_index == index: continue
+			if GrindstoneRepair.use(game,slot,game.inventory.slots[partner_index]): return true
+		# `calculate_xp` (`:66-77`) pays `random(7,13) * level` per non-curse
+		# enchantment, read before the enchantments are erased.
+		var xp: int = GrindstoneRepair.xp_for(slot)
 		if slot.get("data",{}).get("enchantments",{}).is_empty(): game.toast("This item has no enchantments."); return false
 		var kept: Dictionary = {}
 		for enchant in slot.data.enchantments:
@@ -443,7 +495,10 @@ func _equipment_work(index: int, device: int) -> bool:
 		else: slot.data.enchantments = kept
 		if slot.id == VillageContent.ENCHANTED_BOOK and kept.is_empty(): slot.id = Nodes.BOOK
 		if slot.data.is_empty(): slot.erase("data")
-		game.experience += 3; game.inventory.changed.emit(); return true
+		# `mcl_grindstone/init.lua`:282-283 throws the disenchantment's experience at
+		# the grindstone, so a remote grindstone still pays the player who used it.
+		if xp > 0: XpOrbs.throw_xp(game,Vector3(workstation_pos)+Vector3.ONE*0.5,xp)
+		game.inventory.changed.emit(); return true
 	if device == VillageContent.SMITHING_TABLE:
 		# `mcl_smithing_table`: a template plus a trim material trims a piece of
 		# armor, and re-applying the same overlay and material is refused.
@@ -510,6 +565,15 @@ func ammunition() -> int:
 
 func ride_step(delta: float, input: Vector3) -> void:
 	if not is_instance_valid(mount): mount = null; return
+	# `mcl_mobs`' `mount.lua`: a pig is driven by its rider's gaze rather than by the
+	# movement input, and holding a carrot on a stick adds the source's timed boost.
+	if mount.kind == "pig":
+		if Input.is_physical_key_pressed(KEY_CTRL):
+			game.player.position = mount.position+Vector3(1,0.1,0); mount = null; return
+		PigRiding.steer(game,mount,delta,-game.player.camera.global_basis.z)
+		game.player.position = mount.position+Vector3.UP*1.1
+		game.player.velocity = Vector3.ZERO
+		return
 	var horse: RuralAnimal = mount
 	if Input.is_physical_key_pressed(KEY_CTRL):
 		game.player.position = horse.position+Vector3(1,0.1,0); mount = null; return
@@ -526,6 +590,12 @@ func ride_step(delta: float, input: Vector3) -> void:
 	game.player.velocity = Vector3.ZERO
 
 func frame_item(p: Vector3i) -> void:
+	# `mcl_itemframes/init.lua`:130-135 — a filled frame turns its item rather than
+	# handing it over, and the source is explicit that the rotation wins. Voxey's
+	# existing click takes the item out, which is the more useful default, so the turn
+	# is on sneak instead; breaking the frame still returns both the frame and its
+	# contents either way.
+	if Signs.sneaking(game) and Frames.rotate(game,p): return
 	var station: Dictionary = game.world.get_station(p,"frame")
 	var stored: Dictionary = station.slots[0]
 	if stored.id == VillageContent.FILLED_MAP: game.maps.ensure(stored)
@@ -569,6 +639,9 @@ func refresh_displays() -> void:
 		elif station.kind == "cauldron" and game.world.node_at(p) == VillageContent.CAULDRON:
 			mesh.free(); mesh = Cauldrons.fill_model(station); mesh.position += Vector3(p)
 		elif station.kind == "frame" and station.slots[0].id != 0 and game.world.node_at(p) == VillageContent.ITEM_FRAME:
+			# `mcl_itemframes/init.lua`: the framed item is a spinning entity whose
+			# rotation is saved state, and a glow-ink form is self-lit.
+			var frame_state: Dictionary = Frames.station(game.world,p)
 			var id: int = station.slots[0].id
 			if id == VillageContent.FILLED_MAP:
 				mesh.free(); mesh = game.maps.frame_model(station.slots[0]); mesh.position = Vector3(p)+Vector3(0.5,0.5,-0.025)
@@ -577,6 +650,7 @@ func refresh_displays() -> void:
 				mesh.material_override = game.node_material if Nodes.placeable(id) else ItemArt.material(id)
 				mesh.scale = Vector3.ONE*0.4; mesh.position = Vector3(p)+Vector3(0.5,0.5,-0.02)
 				if Nodes.placeable(id): mesh.position -= Vector3.ONE*0.2
+			Frames.apply_display(mesh,id,frame_state)
 		elif station.kind == "banner" and station.get("globe",false) and VillageContent.DATA.get(game.world.node_at(p),{}).get("family","") == "banner":
 			var sphere := SphereMesh.new(); sphere.radius = 0.16; sphere.height = 0.32; mesh.mesh = sphere
 			var mat := StandardMaterial3D.new(); mat.albedo_color = Color("d7cf82"); mesh.material_override = mat; mesh.position = Vector3(p)+Vector3(0.5,0.72,0.43)

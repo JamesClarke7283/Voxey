@@ -109,8 +109,8 @@ static func apply_dye(world: VoxelWorld, p: Vector3i, color: String) -> bool:
 	if not is_sign(world.node_at(p)) or not DYE_COLORS.has(color): return false
 	station(world,p)["color"] = DYE_COLORS[color]; refresh(world); return true
 
-# Source glow affects the text sprite, not neighboring light. No glow-ink item
-# exists in Voxey yet, so gameplay does not call this helper without acquisition.
+# Source glow affects the text sprite, not neighboring light. `Signs.use` applies
+# it when a glow ink sac is held (`mcl_signs/init.lua`:487-497).
 static func apply_glow(world: VoxelWorld, p: Vector3i) -> bool:
 	if not is_sign(world.node_at(p)): return false
 	var state: Dictionary = station(world,p)
@@ -123,6 +123,10 @@ static func sneaking(game: Node3D) -> bool:
 
 static func use(game: Node3D, target: Dictionary) -> bool:
 	if target.is_empty() or not is_sign(int(target.get("id",0))) or game.target_mob() != null: return false
+	# `mcl_signs/init.lua`:487-497 — a glow ink sac makes the sign's text glow. The
+	# branch sits above the dye test so the sac is never mistaken for a dye, and below
+	# the sign guard above so it only runs on an actual sign click.
+	if GlowInk.is_glow_ink(game.inventory.held().id) and GlowInk.apply(game,target): return true
 	var definition: Dictionary = VillageContent.DATA.get(int(game.inventory.held().id),{})
 	if definition.get("family","") == "dye" and apply_dye(game.world,target.pos,str(definition.get("dye",""))):
 		if game.gamemode != "creative": game.inventory.consume_selected()

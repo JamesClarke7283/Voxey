@@ -200,10 +200,16 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	t.check(Dungeons.runtime(game.world).cells.size() == 1 and data.remaining == remaining,"repeated load registration restores one doll and never resets the spawner timer")
 	for animal in creatures(game): animal.queue_free()
 	await t.process_frame
-	var xp: int = game.experience; game.break_node(p,Dungeons.SPAWNER,Nodes.TOOLS+5)
-	t.check(game.world.node_at(p) == Nodes.AIR and not Dungeons.runtime(game.world).cells.has(p) and not game.world.stations.has(VoxelWorld.station_key(p)) and game.experience-xp >= 15 and game.experience-xp <= 43,"actual mining removes the spawner and grants the source15..43 XP once")
+	var xp: int = game.experience; XpOrbs.clear(game)
+	game.break_node(p,Dungeons.SPAWNER,Nodes.TOOLS+5)
+	# `mcl_mobspawners/init.lua`:291 **throws** the spawner's experience at the block,
+	# so the reward arrives as orbs rather than a direct credit.
+	var spawner_xp: int = 0
+	for orb in XpOrbs.orbs(game): spawner_xp += int(orb.xp)
+	t.check(game.world.node_at(p) == Nodes.AIR and not Dungeons.runtime(game.world).cells.has(p) and not game.world.stations.has(VoxelWorld.station_key(p)) and spawner_xp >= 15 and spawner_xp <= 43,"actual mining removes the spawner and throws the source's 15..43 XP once")
+	XpOrbs.clear(game)
 	Dungeons.changed(game.world,p,Nodes.AIR,Nodes.AIR)
-	t.check(game.experience-xp <= 43,"ordinary repeated cleanup does not duplicate spawner mining XP")
+	t.check(game.experience == xp and XpOrbs.orb_count(game) == 0,"ordinary repeated cleanup does not duplicate spawner mining XP")
 	# Persist an active species and countdown through the actual game loader.
 	game.world.set_node(p,Dungeons.SPAWNER); data = Dungeons.station(game.world,p); data.mob = "skeleton"; data.remaining = 17.25
 	game.player.position = Vector3(8.5,700.01,12.5)

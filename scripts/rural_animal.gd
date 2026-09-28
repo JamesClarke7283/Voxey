@@ -6,6 +6,10 @@ var saddled: bool = false
 var horse_armor: bool = false
 
 func _build_model() -> void:
+	# Only the rabbit and the horse have their own bodies here; a pig keeps the
+	# shared quadruped model rather than being drawn as a horse.
+	if kind not in ["rabbit","horse"]:
+		super._build_model(); return
 	if kind == "rabbit":
 		_box(Vector3(0,0.32,0.08),Vector3(0.34,0.4,0.48),Color("ae987c"),"fur")
 		head = _joint(Vector3(0,0.42,-0.24),"Head")

@@ -38,11 +38,16 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	suite.check(feed(game,a,Nodes.GRAIN) == 4 and a.love_time == Farming.LOVE_TIME,"right-click wheat enters cow love mode and consumes one item")
 	suite.check(feed(game,a,Nodes.GRAIN) == 5 and a.love_time == Farming.LOVE_TIME,"feeding a cow already in love does not waste wheat")
 	suite.check(feed(game,b,Nodes.GRAIN) == 4 and b.love_time > 0,"a second cow accepts wheat through the live interaction path")
+	XpOrbs.clear(game)
 	var birth_xp: int = game.experience
 	for i in 4: Farming.tick(a,1); Farming.tick(b,1)
 	var calves: Array = babies(game,"cow")
 	suite.check(calves.size() == 1 and a.love_time == 0 and b.love_time == 0,"a pair in love creates exactly one calf after the source mating interval")
-	suite.check(game.experience-birth_xp >= 1 and game.experience-birth_xp <= 7,"breeding awards the source one-to-seven XP without an extra achievement XP bonus")
+	# `mcl_mobs/breeding.lua`:212 throws the birth's experience at the calf.
+	var born_orbs: int = 0
+	for orb in XpOrbs.orbs(game): born_orbs += int(orb.xp)
+	suite.check(born_orbs >= 1 and born_orbs <= 7 and game.experience == birth_xp,"breeding awards the source one-to-seven XP as orbs, with no extra credit through the achievement")
+	XpOrbs.clear(game)
 	suite.check(game.achievements.unlocked.has("parrots_and_bats"),"successfully breeding animals unlocks the husbandry achievement")
 	suite.check(a.breed_cooldown > 298 and b.breed_cooldown > 298,"both parents receive a five-minute breeding cooldown")
 	for i in 10: Farming.tick(a,0.1); Farming.tick(b,0.1)

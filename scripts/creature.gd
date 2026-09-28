@@ -62,6 +62,17 @@ const KINDS = {
 	"cat": {"hostile":false,"health":10.0,"speed":1.5,"width":0.3,"height":0.7,"damage":0,"drops":[],"voice":"cat","pitch":1.6,"xp":1},
 	"skeleton": {"hostile":true,"health":20.0,"speed":2.4,"width":0.28,"height":1.8,"damage":2,"drops":[[Nodes.BONE,0,2]],"voice":"skeleton","pitch":1.1,"burns":true,"ranged":true,"floats":false,"reach":2,"xp":6,"armor":{"undead":100,"fleshy":100}},
 	"spider": {"hostile":true,"health":16.0,"speed":3.2,"width":0.5,"height":0.8,"damage":2,"drops":[[Nodes.STRING,0,2],[VillageContent.SPIDER_EYE,0,1]],"voice":"spider","pitch":1.0,"neutral_by_day":true,"leaps":true,"reach":2,"xp":5,"armor":{"fleshy":100,"arthropod":100}},
+	# The source's cave spider: `table.merge (spider, ...)` with `hp_min = 12`,
+	# `hp_max = 12` and a `collisionbox` of 0.35 half-width by 0.47 tall, half the
+	# spider's own 0.7 (spider.lua:331-357). It inherits the spider's damage,
+	# drops, `always_climb` and `neutral_by_day`, raises the voice's `base_pitch`
+	# to 1.25, and carries the poison `dealt_effect` this row flags as
+	# `poisonous`. Its `speed` is unchanged because the source overrides no
+	# `movement_speed` — only the animation's `walk_speed`, which Voxey draws
+	# from the leg swing rather than the table. The box is the spider's own scaled
+	# by the source's ratio to it (0.35/0.7 wide, 0.47/0.9 tall), so it stays
+	# strictly smaller on Voxey's axis-aligned body.
+	"cave_spider": {"hostile":true,"health":12.0,"speed":3.2,"width":0.25,"height":0.42,"damage":2,"drops":[[Nodes.STRING,0,2],[VillageContent.SPIDER_EYE,0,1]],"voice":"spider","pitch":1.25,"neutral_by_day":true,"leaps":true,"reach":2,"xp":5,"poisonous":true,"armor":{"fleshy":100,"arthropod":100}},
 	"creeper": {"hostile":true,"health":20.0,"speed":2.0,"width":0.28,"height":1.6,"damage":0,"drops":[[Nodes.GUNPOWDER,0,2]],"voice":"","pitch":1.0,"explodes":true,"reach":3,"runaway":true,"xp":5},
 	"guardian": {"hostile":true,"health":30.0,"speed":2.0,"width":0.85,"height":0.85,"damage":6,"drops":[],"voice":"","pitch":0.7,"swims":true,"ranged":true,"xp":10},
 	# The source's aquatic creatures. Their drops carry chance denominators the
@@ -132,6 +143,12 @@ var provoked: bool = false
 # mob as `check_timer("rain_damage", 0.5)`.
 var water_clock: float = 0.0
 const WEATHER_INTERVAL: float = 0.5
+# `mcl_farming/sweet_berry.lua`: the thorn check runs on the source's 0.5 s
+# globalstep, so it gets its own accumulator beside the weather clock.
+var berry_clock: float = 0.0
+# `mobs_mc/wither.lua`'s `ws.skulls_fired`, which decides when the fourth skull is
+# the strong variant.
+var skulls_fired: int = 0
 # Powder-snow freezing: the source slows a mob to a standstill over seven seconds,
 # then damages it every two while it stays in. A wither skeleton is the one mob that
 # opts out, through `can_freeze = false`.
@@ -364,7 +381,7 @@ func _build_model() -> void:
 				var limb := _box(Vector3(0,(i-2)*0.135,-0.12+absf(i-2)*0.045),Vector3(0.045,0.17,0.045),Color("8b603b"),"wood",bow)
 				limb.rotation.x = (i-2)*0.22
 			_box(Vector3(0,0,-0.005),Vector3(0.012,0.56,0.012),Color("d5cdb1"),"",bow)
-		"spider":
+		"spider","cave_spider":
 			_box(Vector3(0,0.52,0.28),Vector3(0.72,0.46,0.78),Color("383039"),"shell")
 			_box(Vector3(0,0.49,-0.24),Vector3(0.48,0.32,0.4),Color("4b3a3d"),"shell")
 			head = _joint(Vector3(0,0.47,-0.55),"Head")
@@ -429,10 +446,17 @@ func _build_model() -> void:
 		_box(Vector3(0,1.13,-0.16),Vector3(0.055,0.38,0.055),Color("d5d3bf"),"bone")
 		for side in [-1,1]:
 			_box(Vector3(side*0.15,0.075,-0.16),Vector3(0.07,0.06,0.055),Color("c0c0ad"),"bone",head)
-	elif kind == "spider":
+	elif kind in ["spider","cave_spider"]:
 		for side in [-1,1]:
 			_box(Vector3(side*0.065,0.0,-0.19),Vector3(0.045,0.045,0.02),Color("f35a32"),"",head)
 			_box(Vector3(side*0.21,0.76,0.3),Vector3(0.16,0.025,0.4),Color("745151"),"shell")
+		# The source's cave spider is the spider's body in its own teal skin at
+		# `visual_size = {x=0.55, y=0.5}` (`spider.lua`:333-343).
+		if kind == "cave_spider":
+			model.scale = Vector3(0.55,0.5,0.55)
+			for part in parts:
+				if not part.material_override.emission_enabled:
+					part.material_override.albedo_texture = CreatureArt.texture("shell",Color("0c424e"))
 	elif kind == "creeper":
 		for y in [0.6,0.8,1.0]:
 			_box(Vector3(0,y,0.18),Vector3(0.08,0.13,0.035),Color("334e32"),"moss")
@@ -705,9 +729,9 @@ func animate(delta: float, chasing: bool = false) -> void:
 	var moving: bool = direction.length() > 0.1
 	gait = move_toward(gait,1.0 if moving else 0.0,delta*5.0)
 	for i in legs.size():
-		var phase: float = (i/2+i%2)*PI if legs.size() == 4 or kind == "spider" else i*PI
+		var phase: float = (i/2+i%2)*PI if legs.size() == 4 or kind in ["spider","cave_spider"] else i*PI
 		var swing: float = sin(life*8+phase)*0.4*gait
-		if kind == "spider":
+		if kind in ["spider","cave_spider"]:
 			legs[i].rotation.y = float(legs[i].get_meta("rest_y",0.0))+swing*0.5
 			legs[i].rotation.z = sin(life*8+phase+PI/2)*0.1*gait
 		else: legs[i].rotation.x = swing
@@ -884,7 +908,7 @@ func _physics_process(delta: float) -> void:
 	# piglin, a shulker, a villager, an evoker or the wither is *never* removed for
 	# distance. Everything else despawns once it is well out of sight, which is what
 	# keeps a night's spawns from accumulating.
-	if distance > 90 and data.get("can_despawn",false): queue_free(); return
+	if distance > 90 and data.get("can_despawn",false) and not has_meta("persistent"): queue_free(); return
 	# A mob that may not despawn still stops simulating when it is far away, so a
 	# distant piglin costs nothing while it waits.
 	if distance > 220: return
@@ -938,7 +962,7 @@ func _physics_process(delta: float) -> void:
 	if Farming.graze(self,delta,scared <= 0 and not game.leads.attached(self) and farm_direction == Vector3.INF): direction = Vector3.ZERO
 	# A frozen mob is slowed in proportion to how long it has been in the snow, which
 	# is the source's `-1.0 * t / 7.0` factor: a full seven seconds stops it dead.
-	var speed: float = data.speed*PotionEffects.speed(self)*(1.0-frozen_for/FREEZE_SECONDS)
+	var speed: float = data.speed*PotionEffects.speed(self)*(1.0-frozen_for/FREEZE_SECONDS)*SweetBerryThorns.slow(game.world.node_at(Vector3i(position.floor()))).x
 	if not hostile and scared > 0: speed = 3.0
 	if data.get("explodes",false):
 		if chasing and distance < 3.2:
@@ -991,6 +1015,10 @@ func _physics_process(delta: float) -> void:
 		velocity.y = clampf(depth*2.0,-1.6,2.4)
 	else:
 		velocity.y = maxf(-25,velocity.y-22*delta)
+		# A spider walks up the obstruction it is pressing into, which is the
+		# source's `always_climb` (`spider.lua`:101 read at `physics.lua`:1176-1189).
+		# It runs after the gravity step, so the lift is the net rise.
+		SpiderClimb.climb(self,delta)
 	if data.get("glides",false) and velocity.y < -1.6: velocity.y = -1.6
 	# Move in a local first: every assignment to `position` pushes a transform
 	# update through each part of the model.
@@ -1043,16 +1071,33 @@ func _physics_process(delta: float) -> void:
 			var forward: Vector3 = -model.global_basis.z
 			var origin: Vector3 = bow_hand.global_position+forward*0.15 if bow_hand != null else position+Vector3.UP*1.45+forward*0.4
 			var pitch: float = (player_pos.y+1.1-origin.y)/maxf(1.0,Vector2(player_pos.x-origin.x,player_pos.z-origin.z).length())
-			var aim: Vector3 = (forward+Vector3.UP*pitch).normalized()*15+Vector3.UP*distance*0.22
-			var arrow: Arrow = game.spawn_arrow(origin,aim)
-			arrow.shooter_kind = kind; arrow.shooter_id = get_instance_id()
+			# `mobs_mc/wither.lua`: the boss's ranged attack is its **skull**, not an
+			# arrow — every fourth is the slower strong variant, and the skull carries
+			# the direct damage and a radius-one blast instead of an arrow's hit.
+			if kind == "wither":
+				skulls_fired += 1
+				var skull: WitherSkull = WitherSkulls.fire(game,self,origin,(forward+Vector3.UP*pitch).normalized()*15+Vector3.UP*distance*0.22,skulls_fired)
+				if skull != null: game.sound_at("wither_shoot",origin)
+			else:
+				var aim: Vector3 = (forward+Vector3.UP*pitch).normalized()*15+Vector3.UP*distance*0.22
+				var arrow: Arrow = game.spawn_arrow(origin,aim)
+				arrow.shooter_kind = kind; arrow.shooter_id = get_instance_id()
 	# A curing zombie villager advances its cure and shakes while it does.
 	ZombieVillagers.update(game,self,delta)
+	# `mcl_mobs`' witch drinks her own potions: water breathing while drowning, fire
+	# resistance while burning, healing when hurt and swiftness while chasing.
+	if Witches.is_witch(kind): WitchPotions.step(game,self,delta)
 	# An elder guardian fatigues nearby players on its own sixty-second cycle,
 	# which is the source's own aura.
 	if Guardians.is_elder(kind): GuardianAuras.aura_step(game,self,delta)
 	# The weather rules live in one place so a flying mob can run them too.
 	if not weather_step(delta): return
+	# `mcl_farming/sweet_berry.lua`: a grown bush hurts and slows whatever walks
+	# through it, on the source's half-second cadence.
+	berry_clock += delta
+	if berry_clock >= SweetBerryThorns.INTERVAL:
+		berry_clock = 0.0
+		SweetBerryThorns.step(game,self,Vector2(velocity.x,velocity.z).length() > 0.05)
 	# A hostile mob that survives daylight out of sight despawns, which the source
 	# does in its own step rather than as part of the burning rule.
 	if hostile and custom_name.is_empty() and not Farming.managed(self) and not data.get("burns",false) and game.daylight > 0.8 and distance > 32 and randf() < delta*0.05:
@@ -1217,8 +1262,9 @@ func die() -> void:
 	# The source gives each mob its own `xp_min`/`xp_max`, and the spread is wide: a
 	# wither is worth fifty, a blaze ten, a zombie five and a cow one. Voxey awarded a
 	# flat two for any hostile mob and one for anything else, so a wither and a zombie
-	# were worth the same.
-	if growth_remaining <= 0: game.experience += xp_reward()
+	# were worth the same. The reward is thrown as orbs at the corpse, as
+	# `mcl_mobs/physics.lua`:279 does.
+	if growth_remaining <= 0 and xp_reward() > 0: XpOrbs.throw_xp(game,center(),xp_reward())
 	game.sound_at("mob_hurt",position,info().pitch*0.7)
 	game.puff(center(),colors[0] if not colors.is_empty() else Color.WHITE,12)
 	queue_free()

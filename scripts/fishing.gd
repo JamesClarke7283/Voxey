@@ -166,7 +166,7 @@ static func reel(survival: RefCounted, rng: RandomNumberGenerator) -> Dictionary
 		if game.inventory.capacity(stack.id,stack.wear,stack.get("data",{})) >= stack.count:
 			overflow = game.inventory.add_item(stack.id,stack.count,stack.wear,stack.get("data",{}))
 		if overflow > 0: game.spawn_drop(game.player.position+Vector3.UP,stack.id,overflow,stack.wear,stack.get("data",{}))
-		game.experience += result.experience
+		XpOrbs.throw_xp(game,game.player.position+Vector3.UP,result.experience)
 		if result.category == "fish": game.achievements.award("fishy_business")
 		uses = 1
 		game.toast("Caught %s%s!"%[Nodes.title(stack.id).to_lower()," × %d"%stack.count if stack.count > 1 else ""])
