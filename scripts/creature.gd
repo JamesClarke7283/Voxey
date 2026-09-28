@@ -10,7 +10,12 @@ const KINDS = {
 	"breeze":{"hostile":true,"health":30.0,"speed":2.8,"width":0.35,"height":1.6,"damage":4,"drops":[[VillageContent.BREEZE_ROD,1,2]],"voice":"","pitch":1.1,"leaps":true,"xp":6},
 	"pillager":{"hostile":true,"health":24.0,"speed":2.2,"width":0.3,"height":1.95,"damage":4,"drops":[[VillageContent.EMERALD,0,2],[VillageContent.CROSSBOW,0,1]],"voice":"","pitch":0.9,"ranged":true,"xp":6,"armor":{"fleshy":100}},
 	"rabbit":{"hostile":false,"health":3.0,"speed":1.3,"width":0.22,"height":0.95,"damage":0,"drops":[[VillageContent.RAW_RABBIT,1,1],[VillageContent.RABBIT_HIDE,1,1],[VillageContent.RABBIT_FOOT,0,1]],"voice":"","pitch":1.5},
-	"horse":{"hostile":false,"health":30.0,"speed":1.4,"width":0.4,"height":2.2,"damage":0,"drops":[[Nodes.LEATHER,1,2]],"voice":"","pitch":1.0},
+	# The horse family (`Equines`): each rolls its own health, speed and jump.
+	"horse":{"hostile":false,"health":30.0,"speed":1.4,"width":0.4,"height":2.2,"damage":0,"drops":[[Nodes.LEATHER,0,2]],"voice":"","pitch":1.0,"xp":1,"xp_max":3},
+	"donkey":{"hostile":false,"health":30.0,"speed":1.2,"width":0.35,"height":1.9,"damage":0,"drops":[[Nodes.LEATHER,0,2]],"voice":"","pitch":1.1,"xp":1,"xp_max":3},
+	"mule":{"hostile":false,"health":30.0,"speed":1.3,"width":0.38,"height":2.05,"damage":0,"drops":[[Nodes.LEATHER,0,2]],"voice":"","pitch":1.15,"xp":1,"xp_max":3},
+	"skeleton_horse":{"hostile":false,"health":30.0,"speed":1.3,"width":0.4,"height":2.2,"damage":0,"drops":[[Nodes.BONE,0,2]],"voice":"skeleton","pitch":0.95,"xp":1,"xp_max":3,"floats":false,"armor":{"undead":100,"fleshy":100}},
+	"zombie_horse":{"hostile":false,"health":30.0,"speed":1.3,"width":0.4,"height":2.2,"damage":0,"drops":[[Nodes.ROTTEN_FLESH,0,2]],"voice":"zombie","pitch":0.5,"xp":1,"xp_max":3,"floats":false,"armor":{"undead":100,"fleshy":100}},
 	"villager":{"hostile":false,"health":20.0,"speed":1.2,"width":0.28,"height":1.95,"damage":0,"drops":[],"voice":"","pitch":1.0},
 	# `mobs_mc:wandering_trader` and its llama escort. Neither carries
 	# `can_despawn`: the source's default is false and both leave on their own
@@ -116,7 +121,8 @@ const KINDS = {
 # persists. One list, so spawning and saving cannot drift apart: a kind added
 # here is saved and restored automatically.
 const ALCHEMY_KINDS = ["silverfish","turtle","phantom","breeze","pillager","cod","salmon","pufferfish","tropical_fish","squid","glow_squid"]
-const PASSIVE = ["sheep","cow","pig","chicken","rabbit","horse","parrot"]
+# Horses and donkeys spawn only as meadow herds (`Equines.spawn_herd`).
+const PASSIVE = ["sheep","cow","pig","chicken","rabbit","parrot"]
 const HOSTILE = ["zombie","zombie","skeleton","spider","creeper","enderman"]
 
 var game: Node3D

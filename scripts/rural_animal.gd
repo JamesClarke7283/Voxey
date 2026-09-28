@@ -5,9 +5,17 @@ var trust: int = 0
 var saddled: bool = false
 var horse_armor: bool = false
 
+func _ready() -> void:
+	# `horse:on_spawn`: each horse rolls its own statistics and coat before its
+	# body is built, so the coat is drawn once.
+	if Equines.is_equine(kind) and game != null and game.world != null: Equines.initialize(self,Equines.rng_for(game.world))
+	super._ready()
+	if Equines.is_equine(kind): health = Equines.max_health(self)
+
 func _build_model() -> void:
-	# Only the rabbit and the horse have their own bodies here; a pig keeps the
-	# shared quadruped model rather than being drawn as a horse.
+	# The horse family draws its own bodies (`Equines.build`); a pig keeps the
+	# shared quadruped model.
+	if Equines.is_equine(kind): Equines.build(self); return
 	if kind not in ["rabbit","horse"]:
 		super._build_model(); return
 	if kind == "rabbit":
@@ -38,26 +46,49 @@ func _build_model() -> void:
 
 func _physics_process(delta: float) -> void:
 	if game.playing() and game.leads.sleep_if_unloaded(self): return
-	if kind == "horse" and (trust > 0 or not custom_name.is_empty()) and position.distance_to(game.player.position) > 85: return
-	if game.survival.mount == self: animate(delta,true); return
+	if Equines.is_equine(kind) and (trust > 0 or not custom_name.is_empty()) and position.distance_to(game.player.position) > 85: return
+	if Equines.is_equine(kind) and game.playing():
+		Equines.trap_step(game,self,delta)
+		if is_queued_for_deletion(): return
+		Equines.breed_step(game,self,delta)
+		if growth_remaining > 0.0:
+			growth_remaining = maxf(0.0,growth_remaining-delta)
+			if growth_remaining == 0.0: Farming.resize(self)
+	if game.survival.mount == self:
+		animate(delta,true)
+		# `horse_maybe_tame`: an untamed horse decides whether to keep its rider.
+		if Equines.is_equine(kind) and not Equines.tamed(self): Equines.evaluate(game,self,delta,Equines.rng_for(game.world))
+		return
 	if kind == "rabbit" and grounded and leap_cooldown <= 0:
 		velocity.y = 4.2; leap_cooldown = 1.1
 	super._physics_process(delta)
 
 func equip_saddle() -> void:
+	if Equines.is_equine(kind):
+		saddled = true; Equines.draw_saddle(self); return
 	saddled = true
 	_box(Vector3(0,1.37,0.17),Vector3(0.66,0.12,0.56),Color("784c34"),"cloth")
 	for side in [-1,1]: _box(Vector3(side*0.35,1.06,0.17),Vector3(0.06,0.5,0.16),Color("c5ad78"),"")
 
 func equip_horse_armor() -> void:
+	# The legacy flag is leather horse armour.
+	if Equines.is_equine(kind): Equines.equip_armor(self,VillageContent.LEATHER_HORSE_ARMOR); return
 	horse_armor = true
 	_box(Vector3(0,1.1,0.02),Vector3(0.69,0.53,1.02),Color("76563e"),"cloth")
 
 func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> void:
+	# Horse armour sets the share of fleshy damage that lands.
+	if Equines.is_equine(kind): super.hit(damage*(Equines.armor_factor(self) if reason not in Creature.BYPASSES_ARMOR else 1.0),from,reason); return
 	super.hit(damage*0.7 if horse_armor else damage,from,reason)
 
 func die() -> void:
 	if saddled: game.spawn_drop(center(),Nodes.SADDLE)
-	if horse_armor: game.spawn_drop(center(),VillageContent.LEATHER_HORSE_ARMOR)
+	if Equines.is_equine(kind):
+		if Equines.armor_id(self) != 0: game.spawn_drop(center(),Equines.armor_id(self))
+		if has_meta("equine_chest"):
+			game.spawn_drop(center(),Nodes.CHEST)
+			for slot in Equines.chest(self):
+				if int(slot.get("count",0)) > 0: game.spawn_drop(center(),int(slot.id),int(slot.count),int(slot.get("wear",0)),slot.get("data",{}))
+	elif horse_armor: game.spawn_drop(center(),VillageContent.LEATHER_HORSE_ARMOR)
 	if game.survival.mount == self: game.survival.mount = null
 	super.die()

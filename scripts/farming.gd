@@ -30,11 +30,12 @@ const NO_FOLLOW = ["hoglin"]
 static func supports(kind: String) -> bool: return FOODS.has(kind)
 
 static func saved_kind(kind: String, custom_name: String) -> bool:
-	return supports(kind) or not custom_name.is_empty() and kind not in ["horse","ender_dragon","end_crystal","villager","iron_golem","snow_golem","piglin","piglin_brute","silverfish","turtle","phantom","breeze","pillager"] and Creature.KINDS.has(kind)
+	return supports(kind) or not custom_name.is_empty() and not Equines.is_equine(kind) and kind not in ["horse","ender_dragon","end_crystal","villager","iron_golem","snow_golem","piglin","piglin_brute","silverfish","turtle","phantom","breeze","pillager"] and Creature.KINDS.has(kind)
 
 static func managed(mob: Creature) -> bool:
 	if supports(mob.kind): return true
-	return not mob.custom_name.is_empty() and mob.kind not in ["horse","ender_dragon","end_crystal","snow_golem"] and not (mob is VillageMob or mob is NetherResident or mob is AlchemyCreature)
+	# The horse family is saved by `VillageSurvival.animal_snapshot` instead.
+	return not mob.custom_name.is_empty() and not Equines.is_equine(mob.kind) and mob.kind not in ["horse","ender_dragon","end_crystal","snow_golem"] and not (mob is VillageMob or mob is NetherResident or mob is AlchemyCreature)
 
 static func records(game: Node3D) -> Dictionary:
 	if not game.world.adventure_state.get("farm_animals") is Dictionary: game.world.adventure_state["farm_animals"] = {}

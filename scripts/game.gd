@@ -862,7 +862,7 @@ func _warm_creature_art() -> void:
 static func _creature_class(kind: String) -> Creature:
 	if kind == Bats.KIND: return Bats.Mob.new()
 	if kind in Creature.ALCHEMY_KINDS: return AlchemyCreature.new()
-	if kind in ["rabbit","horse",Striders.KIND]: return RuralAnimal.new()
+	if kind in ["rabbit",Striders.KIND] or Equines.is_equine(kind): return RuralAnimal.new()
 	if kind in ["villager","iron_golem"]: return VillageMob.new()
 	if kind in ["ghast","blaze","slime","enderman","end_crystal","ender_dragon","shulker"]: return ExpeditionCreature.new()
 	if kind in ["piglin","piglin_brute"]: return NetherResident.new()
@@ -876,7 +876,7 @@ func spawn_creature(kind: String, pos: Vector3, farm_key: String = "") -> Creatu
 		return bat
 	if kind in Creature.ALCHEMY_KINDS:
 		var mob := AlchemyCreature.new(); mob.game = self; mob.kind = kind; mob.position = pos; creatures.add_child(mob); return mob
-	if kind in ["rabbit","horse","pig",Striders.KIND]:
+	if kind in ["rabbit","pig",Striders.KIND] or Equines.is_equine(kind):
 		var animal := RuralAnimal.new(); animal.game = self; animal.kind = kind; animal.position = pos; animal.farm_id = farm_key; creatures.add_child(animal); return animal
 	if kind == "wandering_trader":
 		# The trader brings its own llama escort, so the escort is never spawned
@@ -999,6 +999,10 @@ func _spawn_creature() -> void:
 	var pool: Array = ["enderman"] if dimension == "end" else (["piglin","magma_cube","enderman","wither_skeleton","blaze"] if dimension == "nether" else (Creature.HOSTILE if hostile else Creature.PASSIVE))
 	var biome: String = world.generator.biome(int(pos.x),int(pos.z))
 	if not hostile and "desert" in biome and randf() < 0.6: return
+	# `horse_spawner` and `donkey_spawner_meadow`: herds in the meadow.
+	if not hostile and dimension == "overworld" and randf() < Equines.spawn_share(biome) and not world.intersects(pos,0.5,2.2):
+		Equines.spawn_herd(self,pos,Equines.rng_for(world))
+		return
 	# `wolf_spawner_taiga` and `wolf_spawner_forest`: packs of four beside the farm
 	# animals of the same biomes.
 	if not hostile and dimension == "overworld" and randf() < Wolves.spawn_share(biome) and Wolves.spawn_allowed(world,Vector3i(pos.floor())):

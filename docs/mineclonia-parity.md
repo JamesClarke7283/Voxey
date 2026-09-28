@@ -74,6 +74,17 @@ closes the three undead variants and the systems they depend on.
     Predator.
 
   See [water fauna](water-fauna-source.md).
+- **The horse family** ([`equines.gd`](../scripts/equines.gd), checks `equine`):
+  - per-horse rolled health, speed, jump and coat;
+  - temper taming by riding, with the source's food table;
+  - charged jumps;
+  - copper, iron, gold and diamond horse armour (new items, in dungeon chests);
+  - donkey and mule chests;
+  - horse, donkey and mule breeding;
+  - the lightning skeleton trap, and skeleton and zombie horses;
+  - meadow herds.
+
+  See [horses](equines-source.md).
 
 ## 2026-09-21 batch: hazards, experience, item entities and block behaviour
 

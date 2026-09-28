@@ -10,7 +10,10 @@ const MOBS = ["zombie","zombie","spider","skeleton","cave_spider"]
 const SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]
 # Zero IDs keep unavailable source entries' weight, never redistribute it.
 # item, weight, minimum, maximum. Book is enchanted when selected.
-const TREASURE = [[1200,20,1,1],[Nodes.LEATHER,20,1,5],[Jukeboxes.DISC_13,15,1,1],[Jukeboxes.FAR,15,1,1],[Jukeboxes.CHIRP,3,1,1],[0,15,1,1],[0,15,1,1],[Nodes.GOLDEN_APPLE,15,1,1],[VillageContent.ENCHANTED_BOOK,10,1,1],[0,10,1,1],[0,5,1,1],[0,2,1,1]]
+# The horse armour entries are the source's copper, iron, gold and diamond at
+# 15, 15, 10 and 5 (`Equines`); the last empty entry is the enchanted golden
+# apple, which Voxey does not have.
+const TREASURE = [[1200,20,1,1],[Nodes.LEATHER,20,1,5],[Jukeboxes.DISC_13,15,1,1],[Jukeboxes.FAR,15,1,1],[Jukeboxes.CHIRP,3,1,1],[Equines.COPPER_ARMOR,15,1,1],[Equines.IRON_ARMOR,15,1,1],[Nodes.GOLDEN_APPLE,15,1,1],[VillageContent.ENCHANTED_BOOK,10,1,1],[Equines.GOLD_ARMOR,10,1,1],[Equines.DIAMOND_ARMOR,5,1,1],[0,2,1,1]]
 const SUPPLIES = [[Nodes.GRAIN,20,1,4],[Nodes.BREAD,20,1,1],[Nodes.COAL,15,1,4],[Nodes.REDSTONE_WIRE,15,1,4],[VillageContent.BEETROOT_SEEDS,10,2,4],[FruitCrops.MELON_SEEDS,10,2,4],[FruitCrops.PUMPKIN_SEEDS,10,2,4],[Nodes.IRON,10,1,4],[Nodes.BUCKET,10,1,1],[Nodes.GOLD,5,1,4]]
 const REMAINS = [[Nodes.BONE,10,1,8],[Nodes.GUNPOWDER,10,1,8],[Nodes.ROTTEN_FLESH,10,1,8],[Nodes.STRING,10,1,8]]
 

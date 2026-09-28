@@ -139,7 +139,7 @@ func record(link: Dictionary) -> Dictionary:
 	if not is_instance_valid(link.mob) or link.mob.is_queued_for_deletion(): return {}
 	var mob: Creature = link.mob
 	if mob is NetherResident: mob.ensure_record(); mob.store_record()
-	var saved: Dictionary = {"kind":mob.kind,"farm_id":mob.farm_id,"custom_name":mob.custom_name,"position":[mob.position.x,mob.position.y,mob.position.z],"health":mob.health,"effects":PotionEffects.snapshot(mob),"slime_size":mob.slime_size if mob is ExpeditionCreature and mob.kind == "slime" else 0,"wool_timer":mob.wool_timer,"raid":mob.get_meta("raid",false),"person":mob.person_key if mob is VillageMob else "","sheared":mob.sheared,"sheep_color":mob.sheep_color,"grazing":mob.grazing,"graze_consumed":mob.graze_consumed,"trust":mob.trust if mob is RuralAnimal else 0,"saddled":mob.saddled if mob is RuralAnimal else false,"horse_armor":mob.horse_armor if mob is RuralAnimal else false}
+	var saved: Dictionary = {"kind":mob.kind,"farm_id":mob.farm_id,"custom_name":mob.custom_name,"position":[mob.position.x,mob.position.y,mob.position.z],"health":mob.health,"effects":PotionEffects.snapshot(mob),"slime_size":mob.slime_size if mob is ExpeditionCreature and mob.kind == "slime" else 0,"wool_timer":mob.wool_timer,"raid":mob.get_meta("raid",false),"person":mob.person_key if mob is VillageMob else "","sheared":mob.sheared,"sheep_color":mob.sheep_color,"grazing":mob.grazing,"graze_consumed":mob.graze_consumed,"trust":mob.trust if mob is RuralAnimal else 0,"saddled":mob.saddled if mob is RuralAnimal else false,"horse_armor":mob.horse_armor if mob is RuralAnimal else false,"equine":Equines.snapshot(mob) if mob is RuralAnimal and Equines.is_equine(mob.kind) else {}}
 	if mob is SnowGolem: mob.store_record(); saved["golem"] = mob.golem_key
 	if mob is NetherResident: saved["resident"] = mob.resident_key
 	if mob is ExpeditionCreature: saved["crystal_key"] = mob.crystal_key
@@ -188,6 +188,7 @@ func _restore_mob(entry: Dictionary) -> Creature:
 	if mob is RuralAnimal:
 		mob.trust = int(entry.get("trust",0))
 		if entry.get("saddled",false) and not mob.saddled: mob.equip_saddle()
+		if mob is RuralAnimal and Equines.is_equine(mob.kind): Equines.restore(mob,entry.get("equine",{}))
 		if entry.get("horse_armor",false) and not mob.horse_armor: mob.equip_horse_armor()
 	Farming.remember(mob)
 	return mob

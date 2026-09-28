@@ -298,7 +298,10 @@ static func strike(world: VoxelWorld, rng: RandomNumberGenerator, at: Vector3 = 
 	# Source sets fire at the strike cell when it is air and not over a liquid.
 	var above: Vector3i = cell+Vector3i.UP
 	if not Fluids.liquid(world.node_at(cell)) and world.node_at(above) == Nodes.AIR:
-		Fire.ignite(world,above)
+		# `mcl_lightning`: a strike onto open air spawns a skeleton-horse trap at
+		# `regional difficulty × 0.01`, and otherwise lights a fire. A trap's own
+		# strike never spawns another.
+		if world.has_meta("trap_strike") or Equines.strike(game,above,rng) == null: Fire.ignite(world,above)
 	# Copper de-oxidation, matching the source's unreachable affected_by_lightning
 	# scan over cut copper stairs and slabs.
 	for x in range(-5,6):

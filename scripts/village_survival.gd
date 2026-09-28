@@ -68,17 +68,11 @@ func use() -> bool:
 		if game.leads.attached(mob): game.leads.detach(mob)
 		else: game.leads.attach(mob)
 		return true
-	if mob is RuralAnimal and mob.kind == "horse":
-		if held in [Nodes.GRAIN,VillageContent.CARROT,Nodes.APPLE]:
-			mob.trust = mini(3,mob.trust+1); _consume(); game.puff(mob.center(),Color("de8b8f"),10); game.toast("Horse tamed." if mob.trust >= 3 else "The horse is learning to trust you."); return true
-		if held == Nodes.SADDLE and not mob.saddled:
-			if mob.trust < 3: game.toast("Feed this horse three times to tame it first."); return true
-			mob.equip_saddle(); _consume(); return true
-		if held == VillageContent.LEATHER_HORSE_ARMOR and not mob.horse_armor:
-			mob.equip_horse_armor(); _consume(); return true
-		if mob.saddled:
-			if game.boats.ridden(): game.toast("Leave the boat before mounting a horse."); return true
-			mount = mob; game.toast("Mounted. Move to ride, Space to jump, Ctrl to dismount."); return true
+	# The horse family's taming, food, saddle, armour, chest and mounting
+	# (`Equines.use`). Riding one already mounted dismounts.
+	if mob is RuralAnimal and Equines.is_equine(mob.kind):
+		if mob == mount: mount = null; game.toast("Dismounted."); return true
+		return Equines.use(game,mob)
 	if mob is RuralAnimal and mob.kind in ["pig",Striders.KIND] and PigRiding.mountable(mob):
 		# `pig.lua`:206-227 — the driver's own click with a steering item starts the
 		# boost and wears the stick; without one the click falls through to detach.
@@ -583,15 +577,29 @@ func ride_step(delta: float, input: Vector3) -> void:
 	var horse: RuralAnimal = mount
 	if Input.is_physical_key_pressed(KEY_CTRL):
 		game.player.position = horse.position+Vector3(1,0.1,0); mount = null; return
-	var direction: Vector3 = game.player.global_basis*input.normalized()
-	horse.velocity.x = direction.x*8; horse.velocity.z = direction.z*8
+	# `horse:should_drive`: only a tamed, saddled horse answers the reins. An
+	# untamed one wanders while it decides whether to throw its rider.
+	var drivable: bool = not Equines.is_equine(horse.kind) or Equines.tamed(horse) and horse.saddled
+	var direction: Vector3 = game.player.global_basis*input.normalized() if drivable else horse.direction
+	var top: float = Equines.ride_speed(horse) if Equines.is_equine(horse.kind) else 8.0
+	if not drivable: top = float(horse.info().speed)
+	horse.velocity.x = direction.x*top; horse.velocity.z = direction.z*top
 	horse.velocity.y -= 22*delta
-	if Input.is_physical_key_pressed(KEY_SPACE) and game.world.intersects(horse.position-Vector3.UP*0.05,horse.width,horse.height): horse.velocity.y = 9.5
+	var on_ground: bool = game.world.intersects(horse.position-Vector3.UP*0.05,horse.width,horse.height)
+	if drivable and Equines.is_equine(horse.kind):
+		# `post_apply_driver_input`: holding jump charges it, and letting go on the
+		# ground leaps by the charged share of this horse's own jump strength.
+		if Input.is_physical_key_pressed(KEY_SPACE): horse.set_meta("jump_charge",float(horse.get_meta("jump_charge",0.0))+delta)
+		elif float(horse.get_meta("jump_charge",0.0)) > 0.0:
+			if on_ground: horse.velocity.y = Equines.jump_scale(float(horse.get_meta("jump_charge")))*Equines.jump_velocity(horse)
+			horse.set_meta("jump_charge",0.0)
+	elif Input.is_physical_key_pressed(KEY_SPACE) and on_ground: horse.velocity.y = 9.5
 	for axis in [0,2,1]:
 		var next: Vector3 = horse.position; next[axis] += horse.velocity[axis]*delta
 		if not game.world.intersects(next,horse.width,horse.height): horse.position = next
 		elif axis == 1: horse.velocity.y = 0
-	horse.model.rotation.y = game.player.rotation.y
+	if drivable: horse.model.rotation.y = game.player.rotation.y
+	elif direction.length() > 0.1: horse.model.rotation.y = atan2(-direction.x,-direction.z)
 	game.player.position = horse.position+Vector3.UP*1.1
 	game.player.velocity = Vector3.ZERO
 
@@ -666,18 +674,20 @@ func refresh_displays() -> void:
 func animal_snapshot() -> Array:
 	var result: Array = []
 	for animal in game.creatures.get_children():
-		if animal is RuralAnimal and animal.kind == "horse" and not animal.is_queued_for_deletion() and not game.leads.attached(animal) and not Boats.is_passenger(animal):
-			result.append({"kind":animal.kind,"position":[animal.position.x,animal.position.y,animal.position.z],"health":animal.health,"custom_name":animal.custom_name,"trust":animal.trust,"saddled":animal.saddled,"horse_armor":animal.horse_armor})
+		if animal is RuralAnimal and Equines.is_equine(animal.kind) and not animal.is_queued_for_deletion() and not game.leads.attached(animal) and not Boats.is_passenger(animal):
+			result.append({"kind":animal.kind,"position":[animal.position.x,animal.position.y,animal.position.z],"health":animal.health,"custom_name":animal.custom_name,"trust":animal.trust,"saddled":animal.saddled,"horse_armor":animal.horse_armor,"equine":Equines.snapshot(animal)})
 	return result
 
 func restore_animals(saved: Array) -> void:
 	for entry in saved:
-		if entry.get("kind","") not in ["rabbit","horse"]: continue
+		if entry.get("kind","") != "rabbit" and not Equines.is_equine(str(entry.get("kind",""))): continue
 		var animal: Creature = game.spawn_creature(entry.kind,VillageLife.vec(entry.position))
-		animal.health = entry.get("health",animal.health); animal.trust = entry.get("trust",0)
+		animal.trust = entry.get("trust",0)
+		if Equines.is_equine(animal.kind): Equines.restore(animal,entry.get("equine",{}))
+		animal.health = entry.get("health",animal.health)
 		animal.custom_name = NameTags.bounded(str(entry.get("custom_name","")),30); NameTags.refresh(animal)
 		if entry.get("saddled",false): animal.equip_saddle()
-		if entry.get("horse_armor",false): animal.equip_horse_armor()
+		if entry.get("horse_armor",false) and not (entry.get("equine",{}) is Dictionary and int(entry.get("equine",{}).get("armor",0)) != 0): animal.equip_horse_armor()
 
 func restore_effects(value: Variant) -> void:
 	PotionEffects.clear(game.player)
