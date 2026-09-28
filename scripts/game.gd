@@ -1363,6 +1363,8 @@ func load_world_data(data: Dictionary) -> void:
 
 func _exit_tree() -> void:
 	finish_background_save()
+	# Every worker task must be collected before the engine shuts down.
+	maps.finish_jobs()
 
 func _notification(what: int) -> void:
 	if what==NOTIFICATION_WM_CLOSE_REQUEST:

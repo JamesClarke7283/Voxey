@@ -65,6 +65,17 @@ func reset() -> void:
 	records.clear(); textures.clear(); sources.clear(); builds.clear(); next_id = 0; view_id = ""
 	if is_instance_valid(held_panel): held_panel.queue_free()
 
+# Collects every map task still with the worker pool. Each task holds a lambda
+# from this script, and Godot frees an uncollected task only when the engine
+# shuts down, after GDScript itself is gone: releasing the lambda then crashes the
+# process. The game calls this as it leaves the tree. A column survey or an image
+# encode is short, so the wait is brief.
+func finish_jobs() -> void:
+	for old in retired: WorkerThreadPool.wait_for_task_completion(old.task)
+	retired.clear()
+	if not job.is_empty(): WorkerThreadPool.wait_for_task_completion(job.task)
+	job = {}
+
 func snapshot() -> Dictionary:
 	return {"version":1,"next_id":next_id,"records":records.duplicate(true)}
 

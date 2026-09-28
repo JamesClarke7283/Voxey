@@ -56,6 +56,22 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	suite.check(old_id != newer_map.data.map.id and old_map.data.map.min == [0,640,0],"new maps receive unique IDs and fixed aligned regional bounds")
 	suite.check(not maps.records[old_id].edits.is_empty() and maps.records[old_id].png.is_empty(),"map creation captures edits and queues generation without synchronous sampling")
 	var pending: Dictionary = JSON.parse_string(JSON.stringify(maps.snapshot()))
+	# A survey left with the worker pool would be freed only at engine shutdown,
+	# after GDScript is gone, and crash the process. The game's own exit hook
+	# collects any survey a world change retired, and the one in flight; the
+	# worker's filled-in result shows each was waited for.
+	maps.update()
+	var retiring: Dictionary = maps.job
+	maps.reset()
+	var retired_one: bool = maps.retired.size() == 1 and maps.job.is_empty()
+	maps.restore(pending)
+	game._exit_tree()
+	var drained: bool = maps.retired.is_empty() and retiring.get("result",{}).has("index")
+	maps.update()
+	var live: Dictionary = maps.job
+	game._exit_tree()
+	suite.check(retired_one and drained,"leaving the tree collects a map survey retired by a world change")
+	suite.check(not live.is_empty() and live.get("result",{}).has("index") and maps.job.is_empty(),"leaving the tree collects the map survey still in flight")
 	game.world.set_node(p,Nodes.DIAMOND_BLOCK)
 	maps.restore(pending)
 	maps.update()
