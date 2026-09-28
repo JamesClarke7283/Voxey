@@ -19,6 +19,37 @@ User overrides from this session are deliberate: any wool color crafts into four
 - Creatures and encounters: remaining mobs, full AI, breeding/taming, Wither, raids, structure inhabitants and bosses.
 - Player systems: hunger/saturation, achievements, maps, books, UI, weather and multiplayer/server behavior.
 
+## 2026-09-28 batch: the missing mob roster, part one
+
+A survey of `ENTITIES/mobs_mc/init.lua` against `Creature.KINDS` found sixteen
+loaded source mobs with no Voxey body: husk, stray, drowned, wolf, bat, dolphin,
+axolotl, mooshroom, llama, ocelot, polar bear, strider, hoglin/zoglin, endermite,
+illusioner, and the donkey/mule/skeleton-horse/zombie-horse family. This batch
+closes the three undead variants and the systems they depend on.
+
+- **Husk, drowned and stray** ([`undead_variants.gd`](../scripts/undead_variants.gd),
+  checks `undead_variant`): the desert and cold spawn variants, the drowned's
+  aquatic spawn and equipment, the trident throw, and daytime targeting. It also
+  ports the zombie → drowned, husk → zombie and skeleton → stray conversions and
+  the source's full zombie/skeleton drop tables. See
+  [the variants](undead-variants-source.md).
+- **Regional difficulty** ([`regional_difficulty.gd`](../scripts/regional_difficulty.gd)):
+  `mcl_worlds`' per-chunk inhabited time, saved with the world, plus the
+  regional and special difficulty that the husk's hunger bite reads.
+- **`dealt_effect`**: one hook for a mob's landed melee hit. It made the cave
+  spider's poison live; before this it was covered by checks but never reached
+  from a real bite.
+- **Bats, endermites and polar bears** ([bats](../scripts/bats.gd),
+  [endermites](../scripts/endermites.gd), [polar bears](../scripts/polar_bears.gd),
+  checks `cave_fauna`):
+  - the bat's flight, hanging, dark-cave spawning and separate ambient cap;
+  - the ender pearl's one-in-ten endermite, and endermen hunting it through a
+    new `hunts` list;
+  - the polar bear's cub defence, cub alert, rearing, cod/salmon drops and
+    cold-biome packs with a cub.
+
+  See [cave fauna](cave-fauna-source.md).
+
 ## 2026-09-21 batch: hazards, experience, item entities and block behaviour
 
 A third parity batch closed the mechanics gaps found by a fresh four-way audit of

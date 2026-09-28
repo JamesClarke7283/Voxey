@@ -97,7 +97,10 @@ func impact(at: Vector3) -> void:
 		var destination: Vector3 = safe_destination(at)
 		if not is_inf(destination.x):
 			game.puff(game.player.position+Vector3.UP,Color("a875d8"),16)
+			var origin: Vector3 = game.player.position
 			game.teleport(destination)
+			# One pearl in ten leaves an endermite where the thrower stood.
+			Endermites.after_pearl(game,origin,RandomNumberGenerator.new())
 			game.player.hurt(5,true)
 			game.puff(destination+Vector3.UP,Color("a875d8"),16)
 		else: game.toast("The pearl found no safe landing space.")

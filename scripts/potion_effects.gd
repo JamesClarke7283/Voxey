@@ -2,7 +2,7 @@ class_name PotionEffects
 extends RefCounted
 
 const NAMES = ["poison","regeneration","strength","weakness","water_breathing","fire_resistance","invisibility","night_vision","swiftness","slowness","leaping","withering","slow_falling","resistance","luck","bad_luck","bad_omen","infested","oozing","weaving","wind_charged","burning","hero_of_village","hunger","saturation","absorption","nausea","conduit_power","dolphins_grace","turtle_master","fatigue"]
-const UNDEAD = ["zombie","skeleton","phantom"]
+const UNDEAD = ["zombie","skeleton","phantom","husk","drowned","stray"]
 
 static func level(target: Node3D, effect: String) -> int:
 	var active: bool = target.game.survival.effects.has(effect) if target is VoxeyPlayer else target.has_meta("effect_"+effect)

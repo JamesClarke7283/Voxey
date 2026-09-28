@@ -259,6 +259,7 @@ func _process(delta: float) -> void:
 		Farming.update_world(self,delta)
 		Golems.update(self,delta)
 		SpiderClimb.update(self,delta)
+		RegionalDifficulty.tick(self,delta)
 		adventure.update(delta)
 		villages.update(delta)
 		survival.update(delta)
@@ -406,6 +407,7 @@ func start_new(seed_text: String, display_name: String = "New world", mode: Stri
 	active_world_id = existing_id if not existing_id.is_empty() else saves.create_world(world_name,seed_number,mode)
 	if active_world_id.is_empty(): toast("Couldn't create the world. Check your saves folder."); return
 	maps.reset()
+	RegionalDifficulty.restore(self,{})
 	gamemode = mode if mode in ["survival","creative"] else "survival"
 	pending_save = {}
 	dimension = "overworld"
@@ -858,6 +860,7 @@ func _warm_creature_art() -> void:
 
 # The script class that plays a creature kind, as spawn_creature chooses it.
 static func _creature_class(kind: String) -> Creature:
+	if kind == Bats.KIND: return Bats.Mob.new()
 	if kind in Creature.ALCHEMY_KINDS: return AlchemyCreature.new()
 	if kind in ["rabbit","horse"]: return RuralAnimal.new()
 	if kind in ["villager","iron_golem"]: return VillageMob.new()
@@ -867,6 +870,10 @@ static func _creature_class(kind: String) -> Creature:
 
 func spawn_creature(kind: String, pos: Vector3, farm_key: String = "") -> Creature:
 	if kind == "snow_golem": return Golems.spawn(self,kind,pos)
+	if kind == Bats.KIND:
+		var bat := Bats.Mob.new(); bat.game = self; bat.kind = kind; bat.position = pos; bat.farm_id = farm_key
+		creatures.add_child(bat)
+		return bat
 	if kind in Creature.ALCHEMY_KINDS:
 		var mob := AlchemyCreature.new(); mob.game = self; mob.kind = kind; mob.position = pos; creatures.add_child(mob); return mob
 	if kind in ["rabbit","horse","pig"]:
@@ -926,7 +933,8 @@ func _spawn_creature() -> void:
 	# natural spawning permanently.
 	var normal_count: int = 0
 	for mob in creatures.get_children():
-		if mob.kind in ["end_crystal","ender_dragon","villager","iron_golem"]: continue
+		# Bats are the separate `ambient` category with their own cap.
+		if mob.kind in ["end_crystal","ender_dragon","villager","iron_golem",Bats.KIND]: continue
 		if mob.position.distance_to(player.position) > 128: continue
 		normal_count += 1
 	if normal_count >= 12: return
@@ -939,10 +947,19 @@ func _spawn_creature() -> void:
 	var angle: float=randf()*TAU
 	var pos: Vector3=player.position+Vector3(cos(angle),0,sin(angle))*randf_range(14,32)
 	if not world.loaded_at(pos): return
+	# `drowned_spawner`: a night-time ocean column can spawn a drowned in its deep
+	# water, which the surface search below would otherwise step over.
+	if hostile and dimension == "overworld" and not underground:
+		var deep: Vector3i = UndeadVariants.drowned_cell(world,pos,UndeadVariants.rng_for(world))
+		if deep != Vector3i.MAX and Vector3(deep).distance_to(player.position) >= 10:
+			spawn_creature("drowned",Vector3(deep)+Vector3(0.5,0.05,0.5))
+			return
 	pos = world.cave_spawn(pos) if underground or dimension == "nether" else _safe_spawn(pos)
 	if is_inf(pos.x): return
 	if pos.distance_to(player.position)<10: return
 	if SlimeSpawns.try_spawn(self,pos): return
+	# `bat_spawner`: a dark cave cell below sea level with no view of the sky.
+	if underground and dimension == "overworld" and randf() < 0.25 and not Bats.spawn_pack(self,pos,Bats.rng_for(world)).is_empty(): return
 	if dimension == "overworld":
 		if not underground and randf() < 0.035: spawn_creature("pillager",pos); return
 		if not underground and daylight < 0.3 and day_number() >= 3 and randf() < 0.12: spawn_creature("phantom",pos+Vector3.UP*10); return
@@ -967,7 +984,15 @@ func _spawn_creature() -> void:
 	var pool: Array = ["enderman"] if dimension == "end" else (["piglin","magma_cube","enderman","wither_skeleton","blaze"] if dimension == "nether" else (Creature.HOSTILE if hostile else Creature.PASSIVE))
 	var biome: String = world.generator.biome(int(pos.x),int(pos.z))
 	if not hostile and "desert" in biome and randf() < 0.6: return
-	spawn_creature(pool[randi()%pool.size()],pos)
+	# `polar_bear_spawner`: weight 1 beside the cold biome's other animals.
+	if not hostile and dimension == "overworld" and randf() < PolarBears.spawn_share() and PolarBears.spawn_allowed(world,Vector3i(pos.floor())):
+		PolarBears.spawn_pack(self,pos,RandomNumberGenerator.new())
+		return
+	var picked: String = pool[randi()%pool.size()]
+	# The husk and the stray are the desert's and the cold's outdoor zombie and
+	# skeleton (`UndeadVariants.biome_variant`).
+	if dimension == "overworld": picked = UndeadVariants.biome_variant(picked,biome,Weather.outdoor(world,Vector3i(pos.floor())),randf())
+	spawn_creature(picked,pos)
 
 func add_torch(p: Vector3i) -> void:
 	if torch_lights.has(p): return
@@ -1129,6 +1154,7 @@ func save_game(path: String = "", background: bool = false) -> bool:
 	else: dimension_states[dimension] = snapshot
 	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":snapshot.get("edits",[]),"growth":snapshot.growth,"stations":snapshot.stations,"block_states":snapshot.block_states,"adventure":snapshot.adventure,"inventory":inventory.slots.slice(0,Inventory.BASE_SLOTS),"pouches":inventory.pouch_slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"homes":player_homes.duplicate(true),"gamerules":game_rules.duplicate(),"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"nutrition":Hunger.snapshot(player),"ender_storage":ender_storage.duplicate(true),"effects":survival.effect_snapshot(),"armor":player.armor_slots,"offhand":player.offhand_slot,"time":day_time,"experience":experience,"journal":journal_step,"drops":snapshot.drops,"arrows":snapshot.arrows,"leads":snapshot.leads,"animals":snapshot.animals,"dimension":dimension,"dimensions":dimensions,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
 	data["maps"] = maps.snapshot()
+	data["inhabited"] = RegionalDifficulty.snapshot(self)
 	if background:
 		var keys: Array = snapshot.edit_keys
 		var values: Array = snapshot.edit_values
@@ -1265,6 +1291,7 @@ func load_world_data(data: Dictionary) -> void:
 	world.block_states=data.get("block_states",dimension_states.get(dimension,{}).get("block_states",{})).duplicate(true)
 	world.adventure_state=data.get("adventure",dimension_states.get(dimension,{}).get("adventure",{})).duplicate(true)
 	maps.restore(data.get("maps",{}))
+	RegionalDifficulty.restore(self,data.get("inhabited",{}))
 	_clean_station_storage()
 	inventory.restore(data.inventory,data.get("pouches",[]))
 	for i in 9:

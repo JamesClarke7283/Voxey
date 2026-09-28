@@ -20,7 +20,13 @@ const KINDS = {
 	"snow_golem":{"hostile":false,"health":4.0,"speed":2.0,"width":0.35,"height":1.89,"damage":0,"drops":[[Nodes.SNOWBALL,0,15]],"voice":"","pitch":1.0,"armor":{"fleshy":100,"water_vulnerable":100}},
 	"iron_golem":{"hostile":false,"health":100.0,"speed":2.5,"width":0.7,"height":2.69,"damage":15,"drops":[],"voice":"","pitch":1.0},
 	"shulker": {"hostile":true,"health":30.0,"speed":0.0,"width":0.5,"height":1.0,"damage":4,"drops":[[Nodes.SHULKER_SHELL,1,2]],"voice":"","pitch":0.9,"xp":5},
-	"enderman": {"hostile":true,"health":40.0,"speed":3.6,"width":0.3,"height":2.9,"damage":5,"drops":[[Nodes.ENDER_PEARL,1,2]],"voice":"","pitch":0.6,"water_sensitive":true,"can_despawn":true,"reach":3,"xp":5,"armor":{"fleshy":100,"water_vulnerable":100}},
+	"enderman": {"hostile":true,"health":40.0,"speed":3.6,"width":0.3,"height":2.9,"damage":5,"drops":[[Nodes.ENDER_PEARL,1,2]],"voice":"","pitch":0.6,"water_sensitive":true,"can_despawn":true,"reach":3,"xp":5,"hunts":["endermite"],"armor":{"fleshy":100,"water_vulnerable":100}},
+	# `mobs_mc:bat`, `mobs_mc:endermite` and `mobs_mc:polar_bear`. The bat flies by
+	# its own rules in `Bats`; the endermite comes only from ender pearls; the bear
+	# is neutral until a cub is threatened (`PolarBears`).
+	"bat": {"hostile":false,"health":6.0,"speed":0.0,"width":0.25,"height":0.89,"damage":0,"drops":[],"voice":"","pitch":1.7,"can_despawn":true,"runaway":false,"xp":0},
+	"endermite": {"hostile":true,"health":8.0,"speed":2.2,"width":0.2,"height":0.3,"damage":2,"drops":[],"voice":"spider","pitch":1.9,"reach":1,"xp":3,"armor":{"fleshy":100,"arthropod":100}},
+	"polar_bear": {"hostile":false,"health":30.0,"speed":2.4,"width":0.7,"height":1.4,"damage":6,"drops":[],"voice":"","pitch":0.6,"reach":2,"xp":1,"xp_max":3,"runaway":false,"can_freeze":false},
 	"ghast": {"hostile":true,"health":10.0,"speed":2.0,"width":1.6,"height":4.0,"damage":6,"drops":[[Nodes.GHAST_TEAR,1,2],[Nodes.GUNPOWDER,1,3]],"voice":"","pitch":0.6,"xp":5},
 	"blaze": {"hostile":true,"health":20.0,"speed":2.4,"width":0.35,"height":1.8,"damage":4,"drops":[[Nodes.BLAZE_ROD,1,2]],"voice":"","pitch":0.8,"water_sensitive":true,"xp":10,"armor":{"fleshy":100,"snowball_vulnerable":100,"water_vulnerable":100}},
 	# A slime's reward is its own size, which the source splits three ways: a big slime
@@ -47,6 +53,12 @@ const KINDS = {
 	"zombie": {"hostile":true,"health":20.0,"speed":2.1,"width":0.28,"height":1.8,"damage":3,"drops":[[Nodes.ROTTEN_FLESH,0,2]],"voice":"zombie","pitch":0.9,"burns":true,"hunts_villagers":true,"floats":false,"reach":2,"xp":5,"armor":{"undead":90,"fleshy":90}},
 	# The source's zombie villager: a zombie in every respect except that a golden
 	# apple can cure it back into a villager. Its drops match the zombie's.
+	# The source's husk, `table.merge (zombie, ...)` with `ignited_by_sunlight =
+	# false`, `drops_common` and a hunger `dealt_effect`; and the drowned, the
+	# zombie's swimming form with its own drops and equipment. Both are rolled and
+	# driven by `UndeadVariants`.
+	"husk": {"hostile":true,"health":20.0,"speed":2.1,"width":0.28,"height":1.8,"damage":3,"drops":[],"voice":"zombie","pitch":0.8,"burns":false,"hunts_villagers":true,"floats":false,"reach":2,"xp":5,"armor":{"undead":90,"fleshy":90}},
+	"drowned": {"hostile":true,"health":20.0,"speed":2.1,"width":0.28,"height":1.8,"damage":3,"drops":[],"voice":"zombie","pitch":0.75,"burns":true,"swims":true,"hunts_villagers":true,"floats":false,"reach":2,"xp":5,"armor":{"undead":90,"fleshy":90}},
 	"zombie_villager": {"hostile":true,"health":20.0,"speed":2.1,"width":0.3,"height":1.95,"damage":3,"drops":[[Nodes.ROTTEN_FLESH,0,2]],"voice":"zombie","pitch":0.9,"burns":true,"hunts_villagers":true,"floats":false,"reach":2,"xp":5},
 	# The source's witch: a ranged attacker whose drops are rolled by `Witches`,
 	# because their chance denominators cannot be expressed in this table.
@@ -60,7 +72,9 @@ const KINDS = {
 	"evoker": {"hostile":true,"health":24.0,"speed":1.6,"width":0.4,"height":1.95,"damage":0,"drops":[],"voice":"zombie","pitch":0.7,"xp":6,"armor":{"fleshy":100}},
 	# The source's cat, which the witch hut spawns in black.
 	"cat": {"hostile":false,"health":10.0,"speed":1.5,"width":0.3,"height":0.7,"damage":0,"drops":[],"voice":"cat","pitch":1.6,"xp":1},
-	"skeleton": {"hostile":true,"health":20.0,"speed":2.4,"width":0.28,"height":1.8,"damage":2,"drops":[[Nodes.BONE,0,2]],"voice":"skeleton","pitch":1.1,"burns":true,"ranged":true,"floats":false,"reach":2,"xp":6,"armor":{"undead":100,"fleshy":100}},
+	"skeleton": {"hostile":true,"health":20.0,"speed":2.4,"width":0.28,"height":1.8,"damage":2,"drops":[[Nodes.BONE,0,2]],"voice":"skeleton","pitch":1.1,"burns":true,"ranged":true,"floats":false,"reach":2,"xp":6,"can_freeze":false,"armor":{"undead":100,"fleshy":100}},
+	# The source's stray: the skeleton in the cold biomes, firing slowness arrows.
+	"stray": {"hostile":true,"health":20.0,"speed":2.4,"width":0.28,"height":1.8,"damage":2,"drops":[],"voice":"skeleton","pitch":1.0,"burns":true,"ranged":true,"floats":false,"reach":2,"xp":6,"can_freeze":false,"armor":{"undead":100,"fleshy":100}},
 	"spider": {"hostile":true,"health":16.0,"speed":3.2,"width":0.5,"height":0.8,"damage":2,"drops":[[Nodes.STRING,0,2],[VillageContent.SPIDER_EYE,0,1]],"voice":"spider","pitch":1.0,"neutral_by_day":true,"leaps":true,"reach":2,"xp":5,"armor":{"fleshy":100,"arthropod":100}},
 	# The source's cave spider: `table.merge (spider, ...)` with `hp_min = 12`,
 	# `hp_max = 12` and a `collisionbox` of 0.35 half-width by 0.47 tall, half the
@@ -232,6 +246,10 @@ func _ready() -> void:
 	ambient = randf_range(2.0,8.0)
 	model = Node3D.new()
 	add_child(model)
+	# `drowned:generate_default_equipment` runs once, when the mob first appears.
+	if kind == "drowned" and not has_meta("equipped") and game != null and game.world != null:
+		set_meta("equipped",true)
+		UndeadVariants.equip_drowned(self,UndeadVariants.rng_for(game.world))
 	_build_model()
 	Farming.initialize(self)
 	Farming.register(self)
@@ -327,52 +345,57 @@ func _build_model() -> void:
 				var leg := _joint(Vector3(side*0.12,0.6,0),"Hip")
 				_box(Vector3(0,-0.3,0),Vector3(0.17,0.6,0.19),Color("2b1d37"),"cloth",leg)
 				legs.append(leg)
-		"zombie","zombie_villager","piglin","piglin_brute","zombified_piglin":
+		"zombie","zombie_villager","piglin","piglin_brute","zombified_piglin","husk","drowned":
 			var rotted: bool = kind == "zombified_piglin"
-			_box(Vector3(0,1.08,0),Vector3(0.48,0.64,0.28),Color("3f6b52" if rotted else "416f72"),"cloth")
-			_box(Vector3(0,1.36,-0.145),Vector3(0.18,0.12,0.025),Color("6f8c62" if rotted else "7a8c55"),"skin")
+			# The husk and the drowned are the zombie's body in their own colours.
+			var pal: Dictionary = UndeadVariants.zombie_palette(kind)
+			var skin_color: Color = pal.get("skin",Color("7d9455" if rotted else "81935d"))
+			var shirt_color: Color = pal.get("shirt",Color("3f6b52" if rotted else "416f72"))
+			_box(Vector3(0,1.08,0),Vector3(0.48,0.64,0.28),shirt_color,"cloth")
+			_box(Vector3(0,1.36,-0.145),Vector3(0.18,0.12,0.025),pal.get("skin",Color("6f8c62" if rotted else "7a8c55")).darkened(0.08 if pal.has("skin") else 0.0),"skin")
 			head = _joint(Vector3(0,1.51,-0.015),"Head")
-			_box(Vector3(0,0.13,0),Vector3(0.43,0.43,0.42),Color("7d9455" if rotted else "81935d"),"skin",head)
-			_box(Vector3(0,0.31,0.015),Vector3(0.44,0.075,0.43),Color("44503a"),"skin",head)
+			_box(Vector3(0,0.13,0),Vector3(0.43,0.43,0.42),skin_color,"skin",head)
+			_box(Vector3(0,0.31,0.015),Vector3(0.44,0.075,0.43),pal.get("hair",Color("44503a")),"skin",head)
 			for side in [-1,1]:
-				_box(Vector3(side*0.105,0.16,-0.216),Vector3(0.105,0.055,0.018),Color("25362a"),"",head)
-				_box(Vector3(side*0.12,0.08,-0.218),Vector3(0.075,0.045,0.019),Color("64764b"),"skin",head)
+				_box(Vector3(side*0.105,0.16,-0.216),Vector3(0.105,0.055,0.018),pal.get("eye",Color("25362a")),"",head)
+				_box(Vector3(side*0.12,0.08,-0.218),Vector3(0.075,0.045,0.019),skin_color.darkened(0.2) if pal.has("skin") else Color("64764b"),"skin",head)
 				var arm := _joint(Vector3(side*0.335,1.31,0),"Arm")
-				_box(Vector3(0,-0.11,0),Vector3(0.18,0.25,0.22),Color("416f72"),"cloth",arm)
-				_box(Vector3(0,-0.39,0),Vector3(0.16,0.33,0.19),Color("7d9455" if rotted else "81935d"),"skin",arm)
+				_box(Vector3(0,-0.11,0),Vector3(0.18,0.25,0.22),pal.get("shirt",Color("416f72")),"cloth",arm)
+				_box(Vector3(0,-0.39,0),Vector3(0.16,0.33,0.19),skin_color,"skin",arm)
 				arm.rotation.x = 1.35
 				arms.append(arm)
 				var leg := _joint(Vector3(side*0.13,0.77,0),"Hip")
-				_box(Vector3(0,-0.33,0),Vector3(0.21,0.65,0.24),Color("465063"),"cloth",leg)
-				_box(Vector3(0,-0.69,-0.035),Vector3(0.22,0.14,0.3),Color("323d40"),"",leg)
+				_box(Vector3(0,-0.33,0),Vector3(0.21,0.65,0.24),pal.get("trousers",Color("465063")),"cloth",leg)
+				_box(Vector3(0,-0.69,-0.035),Vector3(0.22,0.14,0.3),pal.get("boots",Color("323d40")),"",leg)
 				legs.append(leg)
-			_box(Vector3(0,0.005,-0.22),Vector3(0.18,0.04,0.02),Color("39412d"),"",head)
+			_box(Vector3(0,0.005,-0.22),Vector3(0.18,0.04,0.02),pal.get("mouth",Color("39412d")),"",head)
 			_box(Vector3(0.04,0.012,-0.233),Vector3(0.045,0.027,0.015),Color("c4be8d"),"",head)
-		"skeleton":
-			_box(Vector3(0,1.08,0.035),Vector3(0.09,0.62,0.1),Color("b6b6a4"),"bone")
-			_box(Vector3(0,0.8,0),Vector3(0.34,0.12,0.2),Color("cfcebb"),"bone")
-			_box(Vector3(0,1.36,0),Vector3(0.43,0.09,0.15),Color("dddaca"),"bone")
+		"skeleton","stray":
+			# The stray is the skeleton's body, bleached to its frost colours.
+			_box(Vector3(0,1.08,0.035),Vector3(0.09,0.62,0.1),UndeadVariants.bone_tint(kind,Color("b6b6a4")),"bone")
+			_box(Vector3(0,0.8,0),Vector3(0.34,0.12,0.2),UndeadVariants.bone_tint(kind,Color("cfcebb")),"bone")
+			_box(Vector3(0,1.36,0),Vector3(0.43,0.09,0.15),UndeadVariants.bone_tint(kind,Color("dddaca")),"bone")
 			for y in [0.98,1.12,1.26]:
 				for side in [-1,1]:
-					_box(Vector3(side*0.105,y,-0.055),Vector3(0.17,0.06,0.18),Color("d5d3bf"),"bone")
+					_box(Vector3(side*0.105,y,-0.055),Vector3(0.17,0.06,0.18),UndeadVariants.bone_tint(kind,Color("d5d3bf")),"bone")
 			head = _joint(Vector3(0,1.48,0),"Head")
-			_box(Vector3(0,0.17,0.02),Vector3(0.4,0.36,0.36),Color("dddaca"),"bone",head)
+			_box(Vector3(0,0.17,0.02),Vector3(0.4,0.36,0.36),UndeadVariants.bone_tint(kind,Color("dddaca")),"bone",head)
 			for side in [-1,1]:
-				_box(Vector3(side*0.103,0.18,-0.17),Vector3(0.12,0.115,0.025),Color("363c39"),"",head)
-				_box(Vector3(side*0.103,0.257,-0.178),Vector3(0.15,0.04,0.028),Color("b7b7a5"),"bone",head)
+				_box(Vector3(side*0.103,0.18,-0.17),Vector3(0.12,0.115,0.025),UndeadVariants.bone_tint(kind,Color("363c39")),"",head)
+				_box(Vector3(side*0.103,0.257,-0.178),Vector3(0.15,0.04,0.028),UndeadVariants.bone_tint(kind,Color("b7b7a5")),"bone",head)
 				var leg := _joint(Vector3(side*0.115,0.76,0),"Hip")
-				_box(Vector3(0,-0.32,0),Vector3(0.095,0.64,0.11),Color("d5d3bf"),"bone",leg)
-				_box(Vector3(0,-0.35,-0.01),Vector3(0.12,0.09,0.13),Color("b8b9a8"),"bone",leg)
-				_box(Vector3(0,-0.71,-0.04),Vector3(0.13,0.09,0.23),Color("d5d3bf"),"bone",leg)
+				_box(Vector3(0,-0.32,0),Vector3(0.095,0.64,0.11),UndeadVariants.bone_tint(kind,Color("d5d3bf")),"bone",leg)
+				_box(Vector3(0,-0.35,-0.01),Vector3(0.12,0.09,0.13),UndeadVariants.bone_tint(kind,Color("b8b9a8")),"bone",leg)
+				_box(Vector3(0,-0.71,-0.04),Vector3(0.13,0.09,0.23),UndeadVariants.bone_tint(kind,Color("d5d3bf")),"bone",leg)
 				legs.append(leg)
 				var arm := _joint(Vector3(side*0.27,1.34,0),"Arm")
-				_box(Vector3(0,-0.29,0),Vector3(0.09,0.58,0.1),Color("d5d3bf"),"bone",arm)
+				_box(Vector3(0,-0.29,0),Vector3(0.09,0.58,0.1),UndeadVariants.bone_tint(kind,Color("d5d3bf")),"bone",arm)
 				arm.rotation.x = 1.3 if side == 1 else 0.7
 				arms.append(arm)
 			_box(Vector3(0,0.09,-0.175),Vector3(0.04,0.065,0.03),Color("4c5149"),"",head)
-			_box(Vector3(0,-0.035,-0.025),Vector3(0.3,0.055,0.29),Color("d5d3bf"),"bone",head)
+			_box(Vector3(0,-0.035,-0.025),Vector3(0.3,0.055,0.29),UndeadVariants.bone_tint(kind,Color("d5d3bf")),"bone",head)
 			for x in [-0.1,-0.035,0.035,0.1]:
-				_box(Vector3(x,0.01,-0.17),Vector3(0.045,0.055,0.025),Color("dddaca"),"bone",head)
+				_box(Vector3(x,0.01,-0.17),Vector3(0.045,0.055,0.025),UndeadVariants.bone_tint(kind,Color("dddaca")),"bone",head)
 			# Bow is attached to the hand and follows the aiming pose.
 			var bow := _joint(Vector3(0,-0.57,0),"Bow",arms[1])
 			bow.rotation.x = -1.3
@@ -425,6 +448,23 @@ func _build_model() -> void:
 			for side in [-1,1]: _box(Vector3(side*0.2,0.69,-0.431),Vector3(0.15,0.14,0.025),Color("ffca4b"))
 		"cow","pig","chicken","sheep","parrot","cat":
 			_build_animal()
+		"endermite":
+			# A short segmented purple-grey grub with small legs, drawn at the
+			# source's tiny scale.
+			for i in 4:
+				_box(Vector3(0,0.1+float(i%2)*0.02,-0.12+i*0.09),Vector3(0.2-absf(i-1.5)*0.03,0.14,0.09),Color("3b2f45").lerp(Color("5d4a6e"),float(i%2)*0.5),"shell")
+			head = _joint(Vector3(0,0.1,-0.2),"Head")
+			_box(Vector3(0,0,-0.03),Vector3(0.14,0.1,0.07),Color("2c2233"),"shell",head)
+			for side in [-1,1]:
+				var eye := _box(Vector3(side*0.035,0.02,-0.07),Vector3(0.025,0.025,0.01),Color("c070ff"),"",head)
+				eye.material_override.emission_enabled = true
+				eye.material_override.emission = Color("7a2fb0")
+				for z in [-0.1,0.02,0.14]:
+					var leg := _joint(Vector3(side*0.1,0.06,z),"Leg")
+					_box(Vector3(side*0.03,-0.03,0),Vector3(0.06,0.02,0.02),Color("2c2233"),"",leg)
+					legs.append(leg)
+		"polar_bear":
+			PolarBears.build(self)
 	# Small anatomical details sharpen the hostile silhouettes.
 	if kind in ["piglin","piglin_brute"]:
 		for part in parts:
@@ -442,8 +482,8 @@ func _build_model() -> void:
 	elif kind == "zombie":
 		_box(Vector3(0.15,1.02,-0.151),Vector3(0.075,0.2,0.025),Color("7b8950"),"skin")
 		_box(Vector3(-0.15,0.77,-0.15),Vector3(0.1,0.06,0.03),Color("344c55"),"cloth")
-	elif kind == "skeleton":
-		_box(Vector3(0,1.13,-0.16),Vector3(0.055,0.38,0.055),Color("d5d3bf"),"bone")
+	elif kind in ["skeleton","stray"]:
+		_box(Vector3(0,1.13,-0.16),Vector3(0.055,0.38,0.055),UndeadVariants.skeleton_palette(kind).get("bone",Color("d5d3bf")),"bone")
 		for side in [-1,1]:
 			_box(Vector3(side*0.15,0.075,-0.16),Vector3(0.07,0.06,0.055),Color("c0c0ad"),"bone",head)
 	elif kind in ["spider","cave_spider"]:
@@ -460,6 +500,7 @@ func _build_model() -> void:
 	elif kind == "creeper":
 		for y in [0.6,0.8,1.0]:
 			_box(Vector3(0,y,0.18),Vector3(0.08,0.13,0.035),Color("334e32"),"moss")
+	if UndeadVariants.is_variant(kind): UndeadVariants.dress(self)
 
 func _animal_leg(pos: Vector3, length: float, width_value: float, skin_color: Color, hoof: Color) -> void:
 	var leg := _joint(pos,"Hip")
@@ -791,6 +832,8 @@ static func group_for(reason: String) -> String:
 func xp_reward() -> int:
 	# The source's `xp_min` defaults to zero, so a mob that does not declare one is
 	# worth nothing. Voxey's old flat award was a guess rather than a reading.
+	# `xp_min` to `xp_max` where the source gives a range, as the polar bear's 1-3.
+	if info().has("xp_max"): return randi_range(int(info().get("xp",0)),int(info().xp_max))
 	return int(info().get("xp",0))
 
 # The source's `reach`, which defaults to three. `gap` is measured centre to centre,
@@ -811,7 +854,9 @@ func weather_step(delta: float) -> bool:
 	var data: Dictionary = info()
 	# An `ignited_by_sunlight` mob burns in daylight, which is the source's own name
 	# for the `burns` flag.
-	if data.get("burns",false) and not has_meta("effect_fire_resistance") and game.daylight > 0.8 and position.y > _surface_height():
+	# Water puts a burning mob out (`mcl_burning`), so a zombie or drowned under the
+	# surface does not burn however bright the day.
+	if data.get("burns",false) and not has_meta("effect_fire_resistance") and game.daylight > 0.8 and position.y > _surface_height() and not Fluids.water(game.world.node_at(Vector3i(position.floor()))) and not Fluids.water(game.world.node_at(Vector3i((position+Vector3.UP*height*0.9).floor()))):
 		health -= delta*0.8
 		if fmod(life,0.4) < delta: game.puff(center(),Color("f0a23a"),3)
 		if health <= 0: Farming.forget(self); queue_free(); return false
@@ -852,8 +897,13 @@ func weather_step(delta: float) -> bool:
 func nearest_villager() -> Node3D:
 	var best: Node3D = null
 	var best_distance: float = 16.0
+	# The source's `build_nearest_target_rule` for another mob kind: an enderman
+	# goes for an endermite the way a zombie goes for a villager.
+	var hunted: Array = info().get("hunts",[])
+	var villagers: bool = info().get("hunts_villagers",false)
 	for mob in game.creatures.get_children():
-		if not mob is VillageMob or mob.is_queued_for_deletion() or mob.kind != "villager": continue
+		if mob == self or mob.is_queued_for_deletion(): continue
+		if not ((villagers and mob is VillageMob and mob.kind == "villager") or hunted.has(mob.kind)): continue
 		var d: float = position.distance_to(mob.position)
 		if d >= best_distance: continue
 		if not _sees(mob.position+Vector3.UP*mob.height*0.6): continue
@@ -864,12 +914,28 @@ func center() -> Vector3:
 	return position+Vector3.UP*height*0.55
 
 func aggressive() -> bool:
+	# A polar bear is an animal that turns on a player near its cub, or after
+	# being struck (`PolarBears.aggressive`).
+	if PolarBears.is_bear(kind): return PolarBears.aggressive(game,self)
 	if not hostile or game.gamemode == "creative" or (not provoked and PotionEffects.level(game.player,"invisibility") > 0 and position.distance_to(game.player.position) > 2+game.player.armor_points()*0.35): return false
 	if info().get("neutral_by_day",false) and game.daylight >= 0.5 and not provoked: return false
 	# The source's `_neutral_to_players`: a zombified piglin ignores players until
 	# one strikes it, which is the whole point of it being neutral rather than hostile.
 	if info().get("neutral",false) and not provoked: return false
+	# `object_targetable_p`: a drowned only hunts a player in water by day.
+	if kind == "drowned" and not UndeadVariants.drowned_targets_player(game): return false
 	return true
+
+# The source's `dealt_effect`, applied when a melee hit lands: the cave spider's
+# poison and the husk's hunger (`combat.lua`:882-899).
+static func deal_effect(game_node: Node3D, mob: Node3D, victim: Node3D) -> void:
+	SpiderClimb.poison_on_hit(mob,victim)
+	UndeadVariants.deal_effect(game_node,mob,victim)
+
+# Whether the mob attacks from range now. A drowned is ranged only while it holds a
+# trident, which is the source's `reconfigure_attack_type`.
+func ranged() -> bool:
+	return bool(info().get("ranged",false)) or UndeadVariants.throws_trident(self)
 
 func _engine_step(delta: float) -> float:
 	if not Engine.is_in_physics_frame(): return delta
@@ -929,7 +995,7 @@ func _physics_process(delta: float) -> void:
 	# readily as for the player, and takes whichever is nearer. Without this a
 	# zombie never lands the killing blow that infects a villager, so the infection
 	# rule below could never fire.
-	if data.get("hunts_villagers",false) and not (scared > 0 and not hostile):
+	if (data.get("hunts_villagers",false) or not data.get("hunts",[]).is_empty()) and not (scared > 0 and not hostile):
 		prey_timer -= delta
 		if prey_timer <= 0 or prey_choice != null and (not is_instance_valid(prey_choice) or prey_choice.is_queued_for_deletion()):
 			prey_timer = 0.25
@@ -944,7 +1010,7 @@ func _physics_process(delta: float) -> void:
 				prey_target = prey
 	elif prey_target != null: prey_target = null
 	if chasing:
-		if data.get("ranged",false):
+		if ranged():
 			direction = -toward if distance < 5 else (toward if distance > 9 else Vector3.ZERO)
 		else: direction = toward
 	# A mob that has just been hit runs *away* from whoever hit it, which overrides the
@@ -975,7 +1041,7 @@ func _physics_process(delta: float) -> void:
 				queue_free()
 				return
 		elif fuse > 0: fuse = maxf(0,fuse-delta*2)
-	if chasing and data.get("ranged",false):
+	if chasing and ranged():
 		model.rotation.y = lerp_angle(model.rotation.y,atan2(-toward.x,-toward.z),delta*5)
 		# A guardian charges its laser for the source's delay, then fires; inside
 		# three blocks it paces instead of attacking, as `get_active_target` does.
@@ -1003,7 +1069,7 @@ func _physics_process(delta: float) -> void:
 		velocity.y = clampf((want-position.y)*0.8,-3.0,3.0)
 	elif data.get("swims",false) and Fluids.water(game.world.node_at(Vector3i(position.floor()))):
 		velocity.y = knock.y*0.2
-		if chasing and distance > Guardians.MIN_ATTACK_DISTANCE:
+		if chasing and (distance > Guardians.MIN_ATTACK_DISTANCE or not Guardians.is_guardian(kind)):
 			velocity.y = clampf((game.player.position.y-position.y)*0.5,-2.0,2.0)
 	elif data.get("floats",true) and submerged():
 		# The source gives almost every mob `floats = 1` by default, so a land mob
@@ -1057,16 +1123,27 @@ func _physics_process(delta: float) -> void:
 		# The source gives each mob its own `reach` (default three), so a wither swings
 		# five blocks out while a zombie needs to be within two. Voxey used one fixed
 		# value for every mob, which made a wither harmless at its own range.
-		if gap <= melee_reach() and attack_cooldown <= 0 and not data.get("ranged",false):
+		if gap <= melee_reach() and attack_cooldown <= 0 and not ranged():
 			attack_cooldown = 1.1
-			if on_prey: prey_target.hit(maxf(0,data.damage*PotionEffects.melee(self)),position)
-			else: game.player.hurt(maxf(0,data.damage*PotionEffects.melee(self)),false,position)
+			if on_prey:
+				prey_target.hit(maxf(0,data.damage*PotionEffects.melee(self)),position)
+				Creature.deal_effect(game,self,prey_target)
+			else:
+				var before_hit: float = game.player.health
+				game.player.hurt(maxf(0,data.damage*PotionEffects.melee(self)),false,position)
+				if game.player.health < before_hit: Creature.deal_effect(game,self,game.player)
 			if data.voice != "": game.sound_at(data.voice,position,data.pitch*1.15)
 		if data.get("leaps",false) and distance < 5 and distance > 1.5 and grounded and leap_cooldown <= 0:
 			leap_cooldown = 2.4
 			velocity.y = 6.0
 			knock = toward*4.5
-		if data.get("ranged",false) and distance < 15 and attack_cooldown <= 0 and _sees_player() and facing_player():
+		# `drowned:discharge_ranged`: a trident every two seconds inside ten nodes.
+		if UndeadVariants.throws_trident(self):
+			if distance < UndeadVariants.TRIDENT_RADIUS and attack_cooldown <= 0 and _sees_player() and facing_player():
+				attack_cooldown = UndeadVariants.TRIDENT_INTERVAL
+				UndeadVariants.throw_trident(game,self,player_pos+Vector3.UP*1.5)
+				game.sound_at("arrow",position,0.7)
+		elif ranged() and distance < 15 and attack_cooldown <= 0 and _sees_player() and facing_player():
 			attack_cooldown = 2.2
 			var forward: Vector3 = -model.global_basis.z
 			var origin: Vector3 = bow_hand.global_position+forward*0.15 if bow_hand != null else position+Vector3.UP*1.45+forward*0.4
@@ -1082,6 +1159,7 @@ func _physics_process(delta: float) -> void:
 				var aim: Vector3 = (forward+Vector3.UP*pitch).normalized()*15+Vector3.UP*distance*0.22
 				var arrow: Arrow = game.spawn_arrow(origin,aim)
 				arrow.shooter_kind = kind; arrow.shooter_id = get_instance_id()
+				arrow.item_id = UndeadVariants.arrow_item(kind)
 	# A curing zombie villager advances its cure and shakes while it does.
 	ZombieVillagers.update(game,self,delta)
 	# `mcl_mobs`' witch drinks her own potions: water breathing while drowning, fire
@@ -1090,6 +1168,10 @@ func _physics_process(delta: float) -> void:
 	# An elder guardian fatigues nearby players on its own sixty-second cycle,
 	# which is the source's own aura.
 	if Guardians.is_elder(kind): GuardianAuras.aura_step(game,self,delta)
+	# `zombie:step_conversion` and `skeleton:conversion_step`: a drowning zombie or
+	# husk and a freezing skeleton turn into their successor.
+	if UndeadVariants.conversion_step(game,self,delta) != null: return
+	if PolarBears.is_bear(kind): PolarBears.tick(self,delta,chasing,distance)
 	# The weather rules live in one place so a flying mob can run them too.
 	if not weather_step(delta): return
 	# `mcl_farming/sweet_berry.lua`: a grown bush hurts and slows whatever walks
@@ -1182,6 +1264,10 @@ func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> voi
 	# when struck rather than only ever advancing. A passive mob flees by default,
 	# which is what makes a cow run from a player who hits it.
 	if info().get("runaway", not hostile): scared = 5
+	# A polar bear cub flees, and its cry brings the adults within twenty nodes.
+	if PolarBears.is_bear(kind):
+		if PolarBears.cub(self): scared = 5
+		PolarBears.alert(game,self)
 	var away: Vector3 = ((position-from)*Vector3(1,0,1)).normalized()
 	knock = away*5.0
 	if grounded: velocity.y = 4.0
@@ -1209,7 +1295,7 @@ func die() -> void:
 	if kind == "zombie": game.achievements.award("kill_zombie")
 	# The source's Monster Hunter fires on any hostile kill, and Cow Tipper on
 	# collecting leather from a cow.
-	if kind in HOSTILE: game.achievements.award("monster_hunter")
+	if kind in HOSTILE or UndeadVariants.is_variant(kind): game.achievements.award("monster_hunter")
 	if kind == "blaze": game.achievements.award("into_fire")
 	if kind in ["cow","mooshroom"]: game.achievements.award("cow_tipper")
 	# Source `mob_head`: a head drops only when a charged creeper's explosion
@@ -1247,11 +1333,24 @@ func die() -> void:
 		var witch_rng := RandomNumberGenerator.new()
 		for entry in Witches.roll_drops(witch_rng,int(get_meta("looting",0))):
 			game.spawn_drop(center(),int(entry[0]),int(entry[1]))
+	# The zombie and skeleton families roll the source's own tables, with its rare
+	# entries and held items, through `UndeadVariants`.
+	if UndeadVariants.rolls_drops(kind) and growth_remaining <= 0:
+		var undead_rng := RandomNumberGenerator.new()
+		for entry in UndeadVariants.roll_drops(kind,undead_rng,int(get_meta("looting",0)),self):
+			var undead_item: int = int(entry[0])
+			if PotionEffects.level(self,"burning") > 0 and Nodes.food(Nodes.smelt_result(undead_item)) > 0: undead_item = Nodes.smelt_result(undead_item)
+			game.spawn_drop(center(),undead_item,int(entry[1]))
+	if PolarBears.is_bear(kind) and growth_remaining <= 0:
+		for entry in PolarBears.roll_drops(RandomNumberGenerator.new(),int(get_meta("looting",0))):
+			var fish: int = int(entry[0])
+			if PotionEffects.level(self,"burning") > 0 and Nodes.food(Nodes.smelt_result(fish)) > 0: fish = Nodes.smelt_result(fish)
+			game.spawn_drop(center(),fish,int(entry[1]))
 	if AquaticMobs.is_aquatic(kind) and growth_remaining <= 0:
 		var water_rng := RandomNumberGenerator.new()
 		for entry in AquaticMobs.roll_drops(kind,water_rng,int(get_meta("looting",0))):
 			game.spawn_drop(center(),int(entry[0]),int(entry[1]))
-	for entry in ([] if growth_remaining > 0 or Guardians.is_guardian(kind) or kind == "wither" or AquaticMobs.is_aquatic(kind) or Witches.is_witch(kind) or Illagers.is_illager(kind) else info().drops):
+	for entry in ([] if growth_remaining > 0 or Guardians.is_guardian(kind) or kind == "wither" or AquaticMobs.is_aquatic(kind) or Witches.is_witch(kind) or Illagers.is_illager(kind) or UndeadVariants.rolls_drops(kind) else info().drops):
 		var amount: int = randi_range(int(entry[1]),int(entry[2]))+randi_range(0,int(get_meta("looting",0)))
 		var item: int = int(entry[0])
 		if kind == "sheep" and item == Nodes.WOOL:

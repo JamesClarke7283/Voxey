@@ -18,8 +18,18 @@ var launch_point: Vector3 = Vector3.INF
 var hits_player: bool = false
 var shooter_kind: String = ""
 var shooter_id: int = 0
+# What a hit on the player deals. A mob's arrow is three; a drowned's thrown
+# trident is the source's eight.
+var player_damage: float = 3.0
 
 func _ready() -> void:
+	# A drowned's thrown trident flies as its own three-pronged shape.
+	if item_id == VillageContent.TRIDENT:
+		RedstoneArt.box(self,Vector3.ZERO,Vector3(0.04,0.04,1.1),Color("7c9590"))
+		for x in [-0.14,0,0.14]: RedstoneArt.box(self,Vector3(x,0,-0.7),Vector3(0.04,0.05,0.36),Color("79c0ba"))
+		RedstoneArt.box(self,Vector3(0,0,-0.55),Vector3(0.3,0.05,0.05),Color("79c0ba"))
+		_orient()
+		return
 	var shaft := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(0.05,0.05,0.55)
@@ -99,7 +109,7 @@ func _physics_process(delta: float) -> void:
 					mob.knock *= 1+punch*0.6
 					if hit_mobs.size() > piercing: queue_free(); return
 		if (not from_player or hits_player) and position.distance_to(game.player.position+Vector3.UP*0.9) < 0.65:
-			game.player.hurt(3,false,position-velocity,"projectile")
+			game.player.hurt(player_damage,false,position-velocity,"trident" if item_id == VillageContent.TRIDENT else "projectile")
 			PotionEffects.apply_item(game.player,item_id)
 			queue_free()
 			return
