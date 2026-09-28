@@ -28,6 +28,12 @@ const KINDS = {
 	"endermite": {"hostile":true,"health":8.0,"speed":2.2,"width":0.2,"height":0.3,"damage":2,"drops":[],"voice":"spider","pitch":1.9,"reach":1,"xp":3,"armor":{"fleshy":100,"arthropod":100}},
 	# `mobs_mc:wolf`: tamed with a bone, driven by `Wolves`.
 	"wolf": {"hostile":false,"health":8.0,"speed":2.9,"width":0.3,"height":0.85,"damage":4,"drops":[],"voice":"","pitch":1.2,"reach":2,"xp":1,"xp_max":3,"runaway":false,"leaps":true},
+	# `mobs_mc:strider`, `mobs_mc:hoglin` and `mobs_mc:zoglin` (`Striders`,
+	# `Hoglins`). The zoglin is `table.merge (hoglin, ...)` without a `drops`
+	# field, so it keeps the hoglin's porkchops and leather.
+	"strider": {"hostile":false,"health":20.0,"speed":1.0,"width":0.45,"height":1.69,"damage":0,"drops":[],"voice":"","pitch":0.8,"xp":9,"water_sensitive":true,"floats":false,"armor":{"fleshy":90,"water_vulnerable":90}},
+	"hoglin": {"hostile":true,"health":40.0,"speed":2.4,"width":0.6,"height":1.4,"damage":6,"drops":[],"voice":"pig","pitch":0.5,"reach":3,"xp":9,"floats":false,"runaway":false,"armor":{"fleshy":90}},
+	"zoglin": {"hostile":true,"health":40.0,"speed":2.4,"width":0.6,"height":1.4,"damage":6,"drops":[],"voice":"zombie","pitch":0.5,"reach":3,"xp":9,"floats":false,"runaway":false,"armor":{"undead":90,"fleshy":90}},
 	"polar_bear": {"hostile":false,"health":30.0,"speed":2.4,"width":0.7,"height":1.4,"damage":6,"drops":[],"voice":"","pitch":0.6,"reach":2,"xp":1,"xp_max":3,"runaway":false,"can_freeze":false},
 	"ghast": {"hostile":true,"health":10.0,"speed":2.0,"width":1.6,"height":4.0,"damage":6,"drops":[[Nodes.GHAST_TEAR,1,2],[Nodes.GUNPOWDER,1,3]],"voice":"","pitch":0.6,"xp":5},
 	"blaze": {"hostile":true,"health":20.0,"speed":2.4,"width":0.35,"height":1.8,"damage":4,"drops":[[Nodes.BLAZE_ROD,1,2]],"voice":"","pitch":0.8,"water_sensitive":true,"xp":10,"armor":{"fleshy":100,"snowball_vulnerable":100,"water_vulnerable":100}},
@@ -469,6 +475,10 @@ func _build_model() -> void:
 			PolarBears.build(self)
 		"wolf":
 			Wolves.build(self)
+		"strider":
+			Striders.build(self)
+		"hoglin","zoglin":
+			Hoglins.build(self)
 	# Small anatomical details sharpen the hostile silhouettes.
 	if kind in ["piglin","piglin_brute"]:
 		for part in parts:
@@ -934,6 +944,7 @@ func aggressive() -> bool:
 	if PolarBears.is_bear(kind): return PolarBears.aggressive(game,self)
 	# A wolf goes for the player only while it is wild and angry.
 	if Wolves.is_wolf(kind): return Wolves.aggressive(game,self)
+	if Hoglins.is_family(kind): return Hoglins.aggressive(game,self)
 	if not hostile or game.gamemode == "creative" or (not provoked and PotionEffects.level(game.player,"invisibility") > 0 and position.distance_to(game.player.position) > 2+game.player.armor_points()*0.35): return false
 	if info().get("neutral_by_day",false) and game.daylight >= 0.5 and not provoked: return false
 	# The source's `_neutral_to_players`: a zombified piglin ignores players until
@@ -1012,12 +1023,14 @@ func _physics_process(delta: float) -> void:
 	# readily as for the player, and takes whichever is nearer. Without this a
 	# zombie never lands the killing blow that infects a villager, so the infection
 	# rule below could never fire.
-	if (data.get("hunts_villagers",false) or not data.get("hunts",[]).is_empty() or Wolves.is_wolf(kind)) and not (scared > 0 and not hostile):
+	if (data.get("hunts_villagers",false) or not data.get("hunts",[]).is_empty() or Wolves.is_wolf(kind) or Hoglins.is_family(kind)) and not (scared > 0 and not hostile):
 		prey_timer -= delta
 		if prey_timer <= 0 or prey_choice != null and (not is_instance_valid(prey_choice) or prey_choice.is_queued_for_deletion()):
 			prey_timer = 0.25
 			# A wolf's targets follow its owner rules (`Wolves.target`).
-			prey_choice = Wolves.target(game,self) if Wolves.is_wolf(kind) else nearest_villager()
+			if Wolves.is_wolf(kind): prey_choice = Wolves.target(game,self)
+			elif Hoglins.is_family(kind): prey_choice = Hoglins.target(game,self)
+			else: prey_choice = nearest_villager()
 		var prey: Node3D = prey_choice
 		if prey != null:
 			var to_prey: Vector3 = ((prey.position-position)*Vector3(1,0,1)).normalized()
@@ -1046,10 +1059,16 @@ func _physics_process(delta: float) -> void:
 	elif Farming.supports(kind):
 		farm_direction = Farming.direction(self)
 		if farm_direction != Vector3.INF: direction = farm_direction
+	if Hoglins.is_family(kind):
+		var away: Vector3 = Hoglins.direction(self)
+		if away != Vector3.INF: direction = away; chasing = false
+	elif Striders.is_strider(kind) and farm_direction == Vector3.INF and scared <= 0 and not game.leads.attached(self):
+		var to_lava: Vector3 = Striders.direction(self)
+		if to_lava != Vector3.INF: direction = to_lava
 	if Farming.graze(self,delta,scared <= 0 and not game.leads.attached(self) and farm_direction == Vector3.INF): direction = Vector3.ZERO
 	# A frozen mob is slowed in proportion to how long it has been in the snow, which
 	# is the source's `-1.0 * t / 7.0` factor: a full seven seconds stops it dead.
-	var speed: float = data.speed*PotionEffects.speed(self)*(1.0-frozen_for/FREEZE_SECONDS)*SweetBerryThorns.slow(game.world.node_at(Vector3i(position.floor()))).x
+	var speed: float = data.speed*(Striders.speed_factor(self) if Striders.is_strider(kind) else 1.0)*PotionEffects.speed(self)*(1.0-frozen_for/FREEZE_SECONDS)*SweetBerryThorns.slow(game.world.node_at(Vector3i(position.floor()))).x
 	if not hostile and scared > 0: speed = 3.0
 	if data.get("explodes",false):
 		if chasing and distance < 3.2:
@@ -1135,7 +1154,9 @@ func _physics_process(delta: float) -> void:
 		model.scale = Vector3.ONE*(1.0+fuse*0.25)
 		_tint(Color.WHITE,0.7 if fuse > 0 and int(fuse*12)%2 == 0 else 0.0)
 	if hurt_flash > 0: _tint(Color("d8402f"),0.55)
-	elif tinted and not data.get("explodes",false): _tint(Color.WHITE,0.0)
+	elif not data.get("explodes",false):
+		var rest: Array = rest_tint()
+		if tinted or float(rest[1]) > 0.0: _tint(rest[0],rest[1])
 	if chasing and data.damage > 0:
 		# A hunt for a villager strikes the villager, not the player, so the victim
 		# is whichever target the chase settled on.
@@ -1146,12 +1167,18 @@ func _physics_process(delta: float) -> void:
 		# value for every mob, which made a wither harmless at its own range.
 		if gap <= melee_reach() and attack_cooldown <= 0 and not ranged():
 			attack_cooldown = 1.1
+			var swing: float = data.damage
+			if Hoglins.is_family(kind):
+				attack_cooldown = Hoglins.MELEE_INTERVAL*(Hoglins.BABY_MELEE_FACTOR if Hoglins.baby(self) else 1.0)
+				swing = Hoglins.attack_damage(self,Hoglins.rng_for(game.world))
 			if on_prey:
-				prey_target.hit(maxf(0,data.damage*PotionEffects.melee(self)),position)
+				prey_target.hit(maxf(0,swing*PotionEffects.melee(self)),position)
+				if Hoglins.is_family(kind) and not Hoglins.baby(self) and is_instance_valid(prey_target): prey_target.knock += Hoglins.toss(position,prey_target.position,0.0,false,Hoglins.rng_for(game.world))
 				Creature.deal_effect(game,self,prey_target)
 			else:
 				var before_hit: float = game.player.health
-				game.player.hurt(maxf(0,data.damage*PotionEffects.melee(self)),false,position)
+				game.player.hurt(maxf(0,swing*PotionEffects.melee(self)),false,position)
+				if Hoglins.is_family(kind) and not Hoglins.baby(self) and game.player.health < before_hit: game.player.velocity += Hoglins.toss(position,game.player.position,0.0,true,Hoglins.rng_for(game.world))
 				if game.player.health < before_hit:
 					Creature.deal_effect(game,self,game.player)
 					# A tamed wolf defends its owner against whatever hurt them.
@@ -1197,6 +1224,11 @@ func _physics_process(delta: float) -> void:
 	if UndeadVariants.conversion_step(game,self,delta) != null: return
 	if PolarBears.is_bear(kind): PolarBears.tick(self,delta,chasing,distance)
 	if Wolves.is_wolf(kind): Wolves.step(game,self,delta)
+	if Striders.is_strider(kind): Striders.step(game,self,delta)
+	if Hoglins.is_family(kind):
+		Hoglins.sense(game,self,delta)
+		Hoglins.tick_retreat(game,self,delta)
+		if Hoglins.conversion_step(game,self,delta) != null: return
 	# The weather rules live in one place so a flying mob can run them too.
 	if not weather_step(delta): return
 	# `mcl_farming/sweet_berry.lua`: a grown bush hurts and slows whatever walks
@@ -1229,6 +1261,13 @@ func _sees(point: Vector3) -> bool:
 	if to_point.length() < 0.01: return true
 	var hit: Dictionary = game.world.raycast(origin,to_point.normalized(),to_point.length())
 	return hit.is_empty() or hit.distance >= to_point.length()-0.35
+
+# The tint a mob returns to after a hurt flash: a cold strider's purple and a wet
+# wolf's darker coat.
+func rest_tint() -> Array:
+	if Striders.is_strider(kind) and Striders.aground(self): return [Color("5f5f9a"),0.6]
+	if Wolves.is_wolf(kind) and bool(get_meta("wolf_wet",false)): return [Color("3a3a3a"),0.35]
+	return [Color.WHITE,0.0]
 
 func _tint(color: Color, amount: float) -> void:
 	tinted = amount > 0
@@ -1289,6 +1328,8 @@ func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> voi
 	# when struck rather than only ever advancing. A passive mob flees by default,
 	# which is what makes a cow run from a player who hits it.
 	if info().get("runaway", not hostile): scared = 5
+	# A struck hoglin calls its kin, or retreats from outnumbering piglins.
+	if Hoglins.is_family(kind): Hoglins.struck(game,self,GuardianAuras.attacker_at(game,from,self),from,Hoglins.rng_for(game.world))
 	# A struck wolf remembers its attacker and calls the pack (`Wolves.struck`).
 	if Wolves.is_wolf(kind): Wolves.struck(game,self,from)
 	# A polar bear cub flees, and its cry brings the adults within twenty nodes.
@@ -1368,6 +1409,14 @@ func die() -> void:
 			var undead_item: int = int(entry[0])
 			if PotionEffects.level(self,"burning") > 0 and Nodes.food(Nodes.smelt_result(undead_item)) > 0: undead_item = Nodes.smelt_result(undead_item)
 			game.spawn_drop(center(),undead_item,int(entry[1]))
+	if Hoglins.is_family(kind) and growth_remaining <= 0:
+		for entry in Hoglins.roll_drops(RandomNumberGenerator.new(),int(get_meta("looting",0))):
+			var meat: int = int(entry[0])
+			if PotionEffects.level(self,"burning") > 0 and Nodes.food(Nodes.smelt_result(meat)) > 0: meat = Nodes.smelt_result(meat)
+			game.spawn_drop(center(),meat,int(entry[1]))
+	if Striders.is_strider(kind) and growth_remaining <= 0:
+		for entry in Striders.roll_drops(self is RuralAnimal and self.saddled,RandomNumberGenerator.new()):
+			game.spawn_drop(center(),int(entry[0]),int(entry[1]))
 	if PolarBears.is_bear(kind) and growth_remaining <= 0:
 		for entry in PolarBears.roll_drops(RandomNumberGenerator.new(),int(get_meta("looting",0))):
 			var fish: int = int(entry[0])

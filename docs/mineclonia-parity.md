@@ -53,6 +53,18 @@ closes the three undead variants and the systems they depend on.
   sitting, feeding and collar dyeing, the owner defence and support rules,
   following and teleporting, breeding with inherited coats, wetness, biome
   variants, persistence, and skeletons fleeing wolves. See [wolves](wolves-source.md).
+- **Striders, hoglins, zoglins and the Nether spawn tables**
+  ([striders](../scripts/striders.gd), [hoglins](../scripts/hoglins.gd),
+  [spawn tables](../scripts/nether_spawns.gd), checks `nether_fauna`):
+  - the source's per-biome and fortress spawn tables replace the flat Nether
+    pool, so blazes and wither skeletons now spawn only in fortresses;
+  - the strider's lava walking, cold state, lava search, saddle, stick-driven
+    riding and lava-immune rider;
+  - the hoglin's attack roll and toss, repellents, group fights and retreats,
+    crimson-fungus breeding and Overworld conversion;
+  - the zoglin's attack on every mob but creepers.
+
+  See [Nether fauna](nether-fauna-source.md).
 
 ## 2026-09-21 batch: hazards, experience, item entities and block behaviour
 

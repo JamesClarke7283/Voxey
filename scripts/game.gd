@@ -862,7 +862,7 @@ func _warm_creature_art() -> void:
 static func _creature_class(kind: String) -> Creature:
 	if kind == Bats.KIND: return Bats.Mob.new()
 	if kind in Creature.ALCHEMY_KINDS: return AlchemyCreature.new()
-	if kind in ["rabbit","horse"]: return RuralAnimal.new()
+	if kind in ["rabbit","horse",Striders.KIND]: return RuralAnimal.new()
 	if kind in ["villager","iron_golem"]: return VillageMob.new()
 	if kind in ["ghast","blaze","slime","enderman","end_crystal","ender_dragon","shulker"]: return ExpeditionCreature.new()
 	if kind in ["piglin","piglin_brute"]: return NetherResident.new()
@@ -876,7 +876,7 @@ func spawn_creature(kind: String, pos: Vector3, farm_key: String = "") -> Creatu
 		return bat
 	if kind in Creature.ALCHEMY_KINDS:
 		var mob := AlchemyCreature.new(); mob.game = self; mob.kind = kind; mob.position = pos; creatures.add_child(mob); return mob
-	if kind in ["rabbit","horse","pig"]:
+	if kind in ["rabbit","horse","pig",Striders.KIND]:
 		var animal := RuralAnimal.new(); animal.game = self; animal.kind = kind; animal.position = pos; animal.farm_id = farm_key; creatures.add_child(animal); return animal
 	if kind == "wandering_trader":
 		# The trader brings its own llama escort, so the escort is never spawned
@@ -938,9 +938,12 @@ func _spawn_creature() -> void:
 		if mob.position.distance_to(player.position) > 128: continue
 		normal_count += 1
 	if normal_count >= 12: return
-	if dimension == "nether" and randf() < 0.3:
-		var pos: Vector3 = player.position+Vector3(randf_range(-28,28),randf_range(8,16),randf_range(-28,28))
-		if world.loaded_at(pos) and not world.intersects(pos,1.6,4): spawn_creature("ghast",pos)
+	# The Nether's creature category: striders on lava, beside the monsters.
+	if dimension == "nether" and randf() < 0.25:
+		var striders: int = 0
+		for mob in creatures.get_children():
+			if Striders.is_strider(mob.kind) and mob.position.distance_to(player.position) <= 128: striders += 1
+		if striders < 10: Striders.spawn_pack(self,player.position+Vector3(randf_range(-24,24),0,randf_range(-24,24)),NetherSpawns.rng_for(world))
 		return
 	var underground: bool = dimension == "overworld" and player.position.y < world.generator.terrain_height(floori(player.position.x),floori(player.position.z))-6
 	var hostile: bool=daylight<0.35 or underground or dimension != "overworld"
@@ -958,6 +961,10 @@ func _spawn_creature() -> void:
 	if is_inf(pos.x): return
 	if pos.distance_to(player.position)<10: return
 	if SlimeSpawns.try_spawn(self,pos): return
+	# `NetherSpawns`: the source's per-biome and fortress tables.
+	if dimension == "nether":
+		NetherSpawns.spawn(self,pos,NetherSpawns.rng_for(world),12-normal_count)
+		return
 	# `bat_spawner`: a dark cave cell below sea level with no view of the sky.
 	if underground and dimension == "overworld" and randf() < 0.25 and not Bats.spawn_pack(self,pos,Bats.rng_for(world)).is_empty(): return
 	if dimension == "overworld":

@@ -73,7 +73,7 @@ func use() -> bool:
 		if mob.saddled:
 			if game.boats.ridden(): game.toast("Leave the boat before mounting a horse."); return true
 			mount = mob; game.toast("Mounted. Move to ride, Space to jump, Ctrl to dismount."); return true
-	if mob is RuralAnimal and mob.kind == "pig" and PigRiding.mountable(mob):
+	if mob is RuralAnimal and mob.kind in ["pig",Striders.KIND] and PigRiding.mountable(mob):
 		# `pig.lua`:206-227 — the driver's own click with a steering item starts the
 		# boost and wears the stick; without one the click falls through to detach.
 		if mob == mount and PigRiding.use_stick(game): return true
@@ -567,7 +567,7 @@ func ride_step(delta: float, input: Vector3) -> void:
 	if not is_instance_valid(mount): mount = null; return
 	# `mcl_mobs`' `mount.lua`: a pig is driven by its rider's gaze rather than by the
 	# movement input, and holding a carrot on a stick adds the source's timed boost.
-	if mount.kind == "pig":
+	if mount.kind in ["pig",Striders.KIND]:
 		if Input.is_physical_key_pressed(KEY_CTRL):
 			game.player.position = mount.position+Vector3(1,0.1,0); mount = null; return
 		PigRiding.steer(game,mount,delta,-game.player.camera.global_basis.z)

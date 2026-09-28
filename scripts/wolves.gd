@@ -385,27 +385,31 @@ static func build(mob: Node3D) -> void:
 # coat darkens; a tamed wolf's tail rises with its health (`get_tail_height`).
 static func refresh(mob: Node3D) -> void:
 	if mob.model == null: return
-	var wet: bool = bool(mob.get_meta("wolf_wet",false))
-	for part in mob.parts:
+	# `_tint` rebuilds every part from `colors`, so the collar's and eyes' colours
+	# are written there as well as to the material.
+	for i in mob.parts.size():
+		var part: Variant = mob.parts[i]
 		if not is_instance_valid(part): continue
+		var base: Variant = null
 		if part.has_meta("wolf_collar"):
 			part.visible = tamed(mob)
-			part.material_override.albedo_color = Color(collar(mob))
+			base = Color(collar(mob))
 		elif part.has_meta("wolf_eye"):
 			var red: bool = angry(mob)
-			part.material_override.albedo_color = Color("d02a1f") if red else Color.WHITE
+			base = Color("d02a1f") if red else Color.WHITE
 			part.material_override.emission_enabled = red
 			if red: part.material_override.emission = Color("7a120c")
+		if base != null and i < mob.colors.size() and mob.colors[i] != base:
+			mob.colors[i] = base
+			part.material_override.albedo_color = base
+			mob.tint_applied = []
 	mob.model.scale = Vector3.ONE*(0.5 if mob.growth_remaining > 0 else 1.0)
 	for child in mob.model.get_children():
 		if child.has_meta("wolf_tail"):
 			child.rotation.x = -(mob.health/TAME_HEALTH)*deg_to_rad(65.0) if tamed(mob) else -0.35
 	# Sitting lowers the hindquarters.
 	mob.model.rotation.x = -0.35 if sitting(mob) else 0.0
-	mob.set_meta("wolf_darkened",wet)
-	if wet != bool(mob.get_meta("wolf_wet_drawn",false)):
-		mob.set_meta("wolf_wet_drawn",wet)
-		mob._tint(Color("3a3a3a"),0.35 if wet else 0.0)
+	# A wet coat is drawn by `Creature.rest_tint`.
 
 # --- spawning --------------------------------------------------------------------
 

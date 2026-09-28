@@ -14,8 +14,15 @@ const FOODS = {
 	"rabbit":[VillageContent.CARROT,VillageContent.GOLDEN_CARROT],
 	# A wolf's foods and their heal live in `Wolves.FOOD`, which drives every
 	# wolf interaction; the entry makes wolves persistent breeders.
-	"wolf":[]
+	"wolf":[],
+	# `strider:on_rightclick` and `hoglin:on_rightclick`.
+	"strider":[CrimsonPlants.WARPED_FUNGUS],"hoglin":[CrimsonPlants.CRIMSON_FUNGUS]
 }
+# `feed_tame (clicker, nil, ...)`: a strider's fungus breeds and grows it but
+# never heals it. A hoglin has no `follow` list, so it does not trail a player
+# holding its food.
+const NO_HEAL = ["strider"]
+const NO_FOLLOW = ["hoglin"]
 
 static func supports(kind: String) -> bool: return FOODS.has(kind)
 
@@ -148,7 +155,7 @@ static func use(game: Node3D, mob: Creature) -> bool:
 		return true
 	if held.id not in FOODS[mob.kind]: return false
 	var consumed: bool = false
-	if mob.health < mob.info().health:
+	if mob.health < mob.info().health and not NO_HEAL.has(mob.kind):
 		mob.health = minf(mob.info().health,mob.health+4); consumed = true
 	elif mob.growth_remaining > 0:
 		mob.growth_remaining *= 0.9; consumed = true
@@ -225,7 +232,8 @@ static func direction(mob: Creature) -> Vector3:
 	if Wolves.is_wolf(mob.kind): return Wolves.direction(mob)
 	var game: Node3D = mob.game
 	var distance: float = mob.position.distance_to(game.player.position)
-	if game.inventory.held().id in FOODS[mob.kind] and game.inventory.held().count > 0 and distance < 10 and mob._sees_player():
+	var lure: bool = game.inventory.held().id in FOODS[mob.kind] or Striders.is_strider(mob.kind) and Striders.follows(int(game.inventory.held().id))
+	if lure and not NO_FOLLOW.has(mob.kind) and game.inventory.held().count > 0 and distance < 10 and mob._sees_player():
 		return Vector3.ZERO if distance < 2 else ((game.player.position-mob.position)*Vector3(1,0,1)).normalized()
 	if mob.growth_remaining > 0:
 		var closest: Creature

@@ -134,6 +134,12 @@ static func is_steering_item(id: int) -> bool: return id in [CARROT_ON_A_STICK,W
 # is the one item that drives the pig.
 static func drives_pig(id: int) -> bool: return id == CARROT_ON_A_STICK
 
+# The steer item of each ridden kind: the pig's carrot stick and the strider's
+# warped-fungus stick (`strider.lua:83 steer_item = "group:controls_strider"`).
+static func drives(mob: Creature, id: int) -> bool:
+	if mob != null and Striders.is_strider(mob.kind): return id == WARPED_FUNGUS_ON_A_STICK
+	return drives_pig(id)
+
 # `init.lua:466-495`: each output has two mirrored shaped recipes, a fishing rod
 # beside the carrot (or the warped fungus) on the other row. `matching_recipe`
 # already accepts a mirrored pattern (inventory.gd:493-496), so one entry per output
@@ -148,7 +154,7 @@ static func recipe_entries() -> Array:
 # --- the saddle ---------------------------------------------------------------
 
 static func is_pig(mob: Creature) -> bool:
-	return mob != null and is_instance_valid(mob) and not mob.is_queued_for_deletion() and mob.kind == "pig"
+	return mob != null and is_instance_valid(mob) and not mob.is_queued_for_deletion() and mob.kind in ["pig",Striders.KIND]
 
 # `pig.lua:171 if self.child then return end`: a baby is past every branch below it,
 # so it can be neither saddled nor ridden. `growth_remaining` is the project's own
@@ -179,7 +185,8 @@ static func equip_saddle(mob: Creature) -> bool:
 		var existing: Variant = mob.get_meta(SADDLE_PLATE)
 		if existing is MeshInstance3D and is_instance_valid(existing): existing.visible = true
 	else:
-		var plate: MeshInstance3D = mob._box(Vector3(0,0.80,0.06),Vector3(0.62,0.12,0.55),Color("784c34"),"cloth")
+		# The strider's saddle sits on top of its taller body.
+		var plate: MeshInstance3D = mob._box(Vector3(0,1.66 if Striders.is_strider(mob.kind) else 0.80,0.06),Vector3(0.62,0.12,0.55),Color("784c34"),"cloth")
 		for side in [-1,1]: mob._box(Vector3(side*0.33,0.62,0.06),Vector3(0.05,0.3,0.14),Color("c5ad78"),"",plate)
 		mob.set_meta(SADDLE_PLATE,plate)
 	return not already
@@ -241,7 +248,9 @@ static func advance_boost(mob: Creature, delta: float) -> void:
 # by the window. See the header for why the base is Voxey's own speed for the kind.
 static func drive_speed(mob: Creature) -> float:
 	var walk: float = float(Creature.KINDS.get(mob.kind,{}).get("speed",0.0))
-	return walk*DRIVE_BONUS*boost_factor(mob)
+	# A strider's `drive_bonus` is 0.55 in lava and 0.35 while cold.
+	var bonus: float = Striders.drive_bonus(mob) if Striders.is_strider(mob.kind) else DRIVE_BONUS
+	return walk*bonus*boost_factor(mob)
 
 # --- the stick ----------------------------------------------------------------
 
@@ -250,7 +259,7 @@ static func drive_speed(mob: Creature) -> float:
 # the player, and the player drives whatever `survival.mount` holds.
 static func can_drive(mob: Creature) -> bool:
 	if not mounted_pig(mob): return false
-	if not drives_pig(int(mob.game.inventory.held().id)): return false
+	if not drives(mob,int(mob.game.inventory.held().id)): return false
 	return int(mob.game.inventory.held().count) > 0
 
 # The pig the player is riding, or null. `survival.mount` is what `ride_step` reads,
@@ -270,7 +279,7 @@ static func use_stick(game: Node3D) -> bool:
 	var mob: Creature = mounted(game)
 	if mob == null: return false
 	var slot: Dictionary = game.inventory.held()
-	if int(slot.count) <= 0 or not drives_pig(int(slot.id)): return false
+	if int(slot.count) <= 0 or not drives(mob,int(slot.id)): return false
 	# "Refuses when broken": a stack at or past its span is not usable, however it
 	# got there.
 	if int(slot.wear) >= durability(int(slot.id)): return false
@@ -327,6 +336,8 @@ static func steer(game: Node3D, mob: Creature, delta: float, direction: Vector3)
 			# pressing into, at the shared creature step's own force.
 			mob.velocity.y = STEP_JUMP
 	if not grounded and world.intersects(mob.position-Vector3.UP*0.04,mob.width,0.5): grounded = true
+	# A driven strider still stands on lava.
+	if Striders.is_strider(mob.kind): Striders.float_on_lava(mob)
 	# mount.lua:230-237: the window runs down only while the pig is being driven.
 	advance_boost(mob,delta)
 

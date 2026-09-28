@@ -275,7 +275,7 @@ func _physics_process(delta: float) -> void:
 			if breath <= 0: hurt(2,true)
 		else: breath = minf(10,breath+3)
 		var feet: Vector3i = Vector3i(position.floor())
-		if not game.survival.effects.has("fire_resistance") and (Fluids.contains(game.world,position+Vector3.UP*0.1,Nodes.LAVA) or Fluids.contains(game.world,position+Vector3.UP,Nodes.LAVA)): hurt(4,true,Vector3.INF,"fire")
+		if not game.survival.effects.has("fire_resistance") and not Striders.rider_protected(game) and (Fluids.contains(game.world,position+Vector3.UP*0.1,Nodes.LAVA) or Fluids.contains(game.world,position+Vector3.UP,Nodes.LAVA)): hurt(4,true,Vector3.INF,"fire")
 		for d in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
 			if game.world.node_at(feet+d) == Nodes.CACTUS: hurt(1)
 		if Fire.is_fire(game.world.node_at(feet)) or Fire.is_fire(game.world.node_at(feet+Vector3i.UP)):
