@@ -49,6 +49,10 @@ closes the three undead variants and the systems they depend on.
     cold-biome packs with a cub.
 
   See [cave fauna](cave-fauna-source.md).
+- **Wolves** ([`wolves.gd`](../scripts/wolves.gd), checks `wolf`): bone taming,
+  sitting, feeding and collar dyeing, the owner defence and support rules,
+  following and teleporting, breeding with inherited coats, wetness, biome
+  variants, persistence, and skeletons fleeing wolves. See [wolves](wolves-source.md).
 
 ## 2026-09-21 batch: hazards, experience, item entities and block behaviour
 

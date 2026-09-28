@@ -984,6 +984,11 @@ func _spawn_creature() -> void:
 	var pool: Array = ["enderman"] if dimension == "end" else (["piglin","magma_cube","enderman","wither_skeleton","blaze"] if dimension == "nether" else (Creature.HOSTILE if hostile else Creature.PASSIVE))
 	var biome: String = world.generator.biome(int(pos.x),int(pos.z))
 	if not hostile and "desert" in biome and randf() < 0.6: return
+	# `wolf_spawner_taiga` and `wolf_spawner_forest`: packs of four beside the farm
+	# animals of the same biomes.
+	if not hostile and dimension == "overworld" and randf() < Wolves.spawn_share(biome) and Wolves.spawn_allowed(world,Vector3i(pos.floor())):
+		Wolves.spawn_pack(self,pos,Wolves.rng_for(world))
+		return
 	# `polar_bear_spawner`: weight 1 beside the cold biome's other animals.
 	if not hostile and dimension == "overworld" and randf() < PolarBears.spawn_share() and PolarBears.spawn_allowed(world,Vector3i(pos.floor())):
 		PolarBears.spawn_pack(self,pos,RandomNumberGenerator.new())

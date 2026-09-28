@@ -101,6 +101,7 @@ func _physics_process(delta: float) -> void:
 					if from_player and not hits_player: Golems.attacked(mob,game.player)
 					elif shooter_id != 0 and is_instance_id_valid(shooter_id): Golems.attacked(mob,instance_from_id(shooter_id))
 					mob.hit(damage,position-velocity)
+					if from_player and not hits_player: Wolves.record_player_struck(game,mob)
 					Jukeboxes.arrow_killed(mob,shooter_kind,was_alive)
 					# `sniper_duel`: a player's arrow killing a skeleton from at least
 					# fifty blocks away.
@@ -110,6 +111,7 @@ func _physics_process(delta: float) -> void:
 					if hit_mobs.size() > piercing: queue_free(); return
 		if (not from_player or hits_player) and position.distance_to(game.player.position+Vector3.UP*0.9) < 0.65:
 			game.player.hurt(player_damage,false,position-velocity,"trident" if item_id == VillageContent.TRIDENT else "projectile")
+			if shooter_id != 0 and is_instance_id_valid(shooter_id): Wolves.record_player_hurt(game,instance_from_id(shooter_id))
 			PotionEffects.apply_item(game.player,item_id)
 			queue_free()
 			return

@@ -434,6 +434,7 @@ func _process(delta: float) -> void:
 						game.puff(mob.center(),Color("bc7a57"),15,0.6)
 						game.sound_at("crit",mob.center())
 					mob.hit(damage,position)
+					Wolves.record_player_struck(game,mob)
 					Hunger.exhaust(self,Hunger.ATTACK)
 					mob.knock *= 1+Inventory.enchantment(game.inventory.held(),"Knockback")*0.6
 					if game.gamemode!="creative" and held != Nodes.SHEARS: game.inventory.damage_tool()

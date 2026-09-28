@@ -26,6 +26,8 @@ const KINDS = {
 	# is neutral until a cub is threatened (`PolarBears`).
 	"bat": {"hostile":false,"health":6.0,"speed":0.0,"width":0.25,"height":0.89,"damage":0,"drops":[],"voice":"","pitch":1.7,"can_despawn":true,"runaway":false,"xp":0},
 	"endermite": {"hostile":true,"health":8.0,"speed":2.2,"width":0.2,"height":0.3,"damage":2,"drops":[],"voice":"spider","pitch":1.9,"reach":1,"xp":3,"armor":{"fleshy":100,"arthropod":100}},
+	# `mobs_mc:wolf`: tamed with a bone, driven by `Wolves`.
+	"wolf": {"hostile":false,"health":8.0,"speed":2.9,"width":0.3,"height":0.85,"damage":4,"drops":[],"voice":"","pitch":1.2,"reach":2,"xp":1,"xp_max":3,"runaway":false,"leaps":true},
 	"polar_bear": {"hostile":false,"health":30.0,"speed":2.4,"width":0.7,"height":1.4,"damage":6,"drops":[],"voice":"","pitch":0.6,"reach":2,"xp":1,"xp_max":3,"runaway":false,"can_freeze":false},
 	"ghast": {"hostile":true,"health":10.0,"speed":2.0,"width":1.6,"height":4.0,"damage":6,"drops":[[Nodes.GHAST_TEAR,1,2],[Nodes.GUNPOWDER,1,3]],"voice":"","pitch":0.6,"xp":5},
 	"blaze": {"hostile":true,"health":20.0,"speed":2.4,"width":0.35,"height":1.8,"damage":4,"drops":[[Nodes.BLAZE_ROD,1,2]],"voice":"","pitch":0.8,"water_sensitive":true,"xp":10,"armor":{"fleshy":100,"snowball_vulnerable":100,"water_vulnerable":100}},
@@ -72,9 +74,9 @@ const KINDS = {
 	"evoker": {"hostile":true,"health":24.0,"speed":1.6,"width":0.4,"height":1.95,"damage":0,"drops":[],"voice":"zombie","pitch":0.7,"xp":6,"armor":{"fleshy":100}},
 	# The source's cat, which the witch hut spawns in black.
 	"cat": {"hostile":false,"health":10.0,"speed":1.5,"width":0.3,"height":0.7,"damage":0,"drops":[],"voice":"cat","pitch":1.6,"xp":1},
-	"skeleton": {"hostile":true,"health":20.0,"speed":2.4,"width":0.28,"height":1.8,"damage":2,"drops":[[Nodes.BONE,0,2]],"voice":"skeleton","pitch":1.1,"burns":true,"ranged":true,"floats":false,"reach":2,"xp":6,"can_freeze":false,"armor":{"undead":100,"fleshy":100}},
+	"skeleton": {"hostile":true,"health":20.0,"speed":2.4,"width":0.28,"height":1.8,"damage":2,"drops":[[Nodes.BONE,0,2]],"voice":"skeleton","pitch":1.1,"burns":true,"ranged":true,"floats":false,"reach":2,"xp":6,"can_freeze":false,"runaway_from":["wolf"],"armor":{"undead":100,"fleshy":100}},
 	# The source's stray: the skeleton in the cold biomes, firing slowness arrows.
-	"stray": {"hostile":true,"health":20.0,"speed":2.4,"width":0.28,"height":1.8,"damage":2,"drops":[],"voice":"skeleton","pitch":1.0,"burns":true,"ranged":true,"floats":false,"reach":2,"xp":6,"can_freeze":false,"armor":{"undead":100,"fleshy":100}},
+	"stray": {"hostile":true,"health":20.0,"speed":2.4,"width":0.28,"height":1.8,"damage":2,"drops":[],"voice":"skeleton","pitch":1.0,"burns":true,"ranged":true,"floats":false,"reach":2,"xp":6,"can_freeze":false,"runaway_from":["wolf"],"armor":{"undead":100,"fleshy":100}},
 	"spider": {"hostile":true,"health":16.0,"speed":3.2,"width":0.5,"height":0.8,"damage":2,"drops":[[Nodes.STRING,0,2],[VillageContent.SPIDER_EYE,0,1]],"voice":"spider","pitch":1.0,"neutral_by_day":true,"leaps":true,"reach":2,"xp":5,"armor":{"fleshy":100,"arthropod":100}},
 	# The source's cave spider: `table.merge (spider, ...)` with `hp_min = 12`,
 	# `hp_max = 12` and a `collisionbox` of 0.35 half-width by 0.47 tall, half the
@@ -465,6 +467,8 @@ func _build_model() -> void:
 					legs.append(leg)
 		"polar_bear":
 			PolarBears.build(self)
+		"wolf":
+			Wolves.build(self)
 	# Small anatomical details sharpen the hostile silhouettes.
 	if kind in ["piglin","piglin_brute"]:
 		for part in parts:
@@ -910,6 +914,17 @@ func nearest_villager() -> Node3D:
 		best = mob; best_distance = d
 	return best
 
+# The nearest mob of a `runaway_from` kind within the source's
+# `runaway_view_range` of six, or INF when there is none.
+func runaway_threat(kinds: Array) -> Vector3:
+	var best: Vector3 = Vector3.INF
+	var best_distance: float = 6.0
+	for mob in game.creatures.get_children():
+		if mob == self or mob.is_queued_for_deletion() or not kinds.has(mob.kind): continue
+		var d: float = position.distance_to(mob.position)
+		if d < best_distance: best = mob.position; best_distance = d
+	return best
+
 func center() -> Vector3:
 	return position+Vector3.UP*height*0.55
 
@@ -917,6 +932,8 @@ func aggressive() -> bool:
 	# A polar bear is an animal that turns on a player near its cub, or after
 	# being struck (`PolarBears.aggressive`).
 	if PolarBears.is_bear(kind): return PolarBears.aggressive(game,self)
+	# A wolf goes for the player only while it is wild and angry.
+	if Wolves.is_wolf(kind): return Wolves.aggressive(game,self)
 	if not hostile or game.gamemode == "creative" or (not provoked and PotionEffects.level(game.player,"invisibility") > 0 and position.distance_to(game.player.position) > 2+game.player.armor_points()*0.35): return false
 	if info().get("neutral_by_day",false) and game.daylight >= 0.5 and not provoked: return false
 	# The source's `_neutral_to_players`: a zombified piglin ignores players until
@@ -995,11 +1012,12 @@ func _physics_process(delta: float) -> void:
 	# readily as for the player, and takes whichever is nearer. Without this a
 	# zombie never lands the killing blow that infects a villager, so the infection
 	# rule below could never fire.
-	if (data.get("hunts_villagers",false) or not data.get("hunts",[]).is_empty()) and not (scared > 0 and not hostile):
+	if (data.get("hunts_villagers",false) or not data.get("hunts",[]).is_empty() or Wolves.is_wolf(kind)) and not (scared > 0 and not hostile):
 		prey_timer -= delta
 		if prey_timer <= 0 or prey_choice != null and (not is_instance_valid(prey_choice) or prey_choice.is_queued_for_deletion()):
 			prey_timer = 0.25
-			prey_choice = nearest_villager()
+			# A wolf's targets follow its owner rules (`Wolves.target`).
+			prey_choice = Wolves.target(game,self) if Wolves.is_wolf(kind) else nearest_villager()
 		var prey: Node3D = prey_choice
 		if prey != null:
 			var to_prey: Vector3 = ((prey.position-position)*Vector3(1,0,1)).normalized()
@@ -1020,6 +1038,9 @@ func _physics_process(delta: float) -> void:
 	# The source's `runaway_from = {"players"}` with `runaway_view_range = 8`: a fish
 	# keeps away from a nearby player without being provoked first.
 	elif data.get("flees",false) and distance < AquaticMobs.FLEE_RANGE and distance > 0.1: direction = -toward
+	elif not data.get("runaway_from",[]).is_empty():
+		var threat: Vector3 = runaway_threat(data.runaway_from)
+		if not is_inf(threat.x): direction = ((position-threat)*Vector3(1,0,1)).normalized()
 	var farm_direction: Vector3 = Vector3.INF
 	if game.leads.player_attached(self): direction = toward if distance > 2.5 else Vector3.ZERO
 	elif Farming.supports(kind):
@@ -1131,7 +1152,10 @@ func _physics_process(delta: float) -> void:
 			else:
 				var before_hit: float = game.player.health
 				game.player.hurt(maxf(0,data.damage*PotionEffects.melee(self)),false,position)
-				if game.player.health < before_hit: Creature.deal_effect(game,self,game.player)
+				if game.player.health < before_hit:
+					Creature.deal_effect(game,self,game.player)
+					# A tamed wolf defends its owner against whatever hurt them.
+					Wolves.record_player_hurt(game,self)
 			if data.voice != "": game.sound_at(data.voice,position,data.pitch*1.15)
 		if data.get("leaps",false) and distance < 5 and distance > 1.5 and grounded and leap_cooldown <= 0:
 			leap_cooldown = 2.4
@@ -1172,6 +1196,7 @@ func _physics_process(delta: float) -> void:
 	# husk and a freezing skeleton turn into their successor.
 	if UndeadVariants.conversion_step(game,self,delta) != null: return
 	if PolarBears.is_bear(kind): PolarBears.tick(self,delta,chasing,distance)
+	if Wolves.is_wolf(kind): Wolves.step(game,self,delta)
 	# The weather rules live in one place so a flying mob can run them too.
 	if not weather_step(delta): return
 	# `mcl_farming/sweet_berry.lua`: a grown bush hurts and slows whatever walks
@@ -1264,6 +1289,8 @@ func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> voi
 	# when struck rather than only ever advancing. A passive mob flees by default,
 	# which is what makes a cow run from a player who hits it.
 	if info().get("runaway", not hostile): scared = 5
+	# A struck wolf remembers its attacker and calls the pack (`Wolves.struck`).
+	if Wolves.is_wolf(kind): Wolves.struck(game,self,from)
 	# A polar bear cub flees, and its cry brings the adults within twenty nodes.
 	if PolarBears.is_bear(kind):
 		if PolarBears.cub(self): scared = 5

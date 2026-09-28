@@ -11,7 +11,10 @@ const FOODS = {
 	"cow":[Nodes.GRAIN],"sheep":[Nodes.GRAIN],
 	"pig":[VillageContent.CARROT,VillageContent.POTATO,VillageContent.BEETROOT],
 	"chicken":[Nodes.SEEDS,VillageContent.BEETROOT_SEEDS,FruitCrops.PUMPKIN_SEEDS,FruitCrops.MELON_SEEDS],
-	"rabbit":[VillageContent.CARROT,VillageContent.GOLDEN_CARROT]
+	"rabbit":[VillageContent.CARROT,VillageContent.GOLDEN_CARROT],
+	# A wolf's foods and their heal live in `Wolves.FOOD`, which drives every
+	# wolf interaction; the entry makes wolves persistent breeders.
+	"wolf":[]
 }
 
 static func supports(kind: String) -> bool: return FOODS.has(kind)
@@ -43,7 +46,7 @@ static func state(mob: Creature) -> Dictionary:
 		"health":mob.health,"custom_name":mob.custom_name,"growth":mob.growth_remaining,"love":mob.love_time,"cooldown":mob.breed_cooldown,
 		"sheared":mob.sheared,"sheep_color":mob.sheep_color,"grazing":mob.grazing,"graze_consumed":mob.graze_consumed,"wool_timer":mob.wool_timer,"egg_timer":mob.egg_timer,"effects":PotionEffects.snapshot(mob),
 		"slime_size":mob.slime_size if mob is ExpeditionCreature and mob.kind == "slime" else 0,"crystal_key":mob.crystal_key if mob is ExpeditionCreature else "",
-		"saddled":mob.saddled if mob is RuralAnimal else false}
+		"saddled":mob.saddled if mob is RuralAnimal else false,"wolf":Wolves.snapshot(mob) if Wolves.is_wolf(mob.kind) else {}}
 
 static func remember(mob: Creature) -> void:
 	if not managed(mob) or mob.is_queued_for_deletion() or mob.health <= 0: return
@@ -70,7 +73,10 @@ static func restore_state(mob: Creature, entry: Dictionary) -> void:
 	if mob is ExpeditionCreature:
 		mob.crystal_key = str(entry.get("crystal_key",""))
 		if mob.kind == "slime": mob.set_slime_size(clampi(int(number(entry.get("slime_size"),2,4)),1,4))
-	mob.health = number(entry.get("health"),mob.info().health,mob.info().health)
+	# A tamed wolf's maximum is forty, so its record is read before its health.
+	if Wolves.is_wolf(mob.kind): Wolves.restore(mob,entry.get("wolf",{}))
+	var cap: float = Wolves.max_health(mob) if Wolves.is_wolf(mob.kind) else mob.info().health
+	mob.health = number(entry.get("health"),cap,cap)
 	mob.custom_name = NameTags.bounded(str(entry.get("custom_name","")),30)
 	mob.growth_remaining = number(entry.get("growth"),0,GROW_TIME) if supports(mob.kind) else 0
 	mob.love_time = number(entry.get("love"),0,LOVE_TIME) if supports(mob.kind) else 0
@@ -131,6 +137,7 @@ static func sleep_if_unloaded(mob: Creature) -> bool:
 
 static func use(game: Node3D, mob: Creature) -> bool:
 	if mob == null or not supports(mob.kind) or mob.is_queued_for_deletion() or mob.health <= 0: return false
+	if Wolves.is_wolf(mob.kind): return Wolves.use(game,mob)
 	var held: Dictionary = game.inventory.held()
 	if held.count <= 0: return false
 	if mob.kind == "sheep" and VillageContent.DATA.get(held.id,{}).get("family","") == "dye":
@@ -182,7 +189,7 @@ static func tick(mob: Creature, delta: float) -> void:
 	if mob.love_time > 0 and floorf(mob.love_time) != floorf(maxf(0,mob.love_time-delta)):
 		mob.game.puff(mob.center()+Vector3.UP*0.2,Color("ef7c8f"),2,0.8)
 	mob.love_time = maxf(0,mob.love_time-delta)
-	if mob.growth_remaining > 0 or mob.love_time <= 0 or mob.breed_cooldown > 0:
+	if mob.growth_remaining > 0 or mob.love_time <= 0 or mob.breed_cooldown > 0 or Wolves.is_wolf(mob.kind) and (Wolves.sitting(mob) or not Wolves.tamed(mob)):
 		mob.farm_mate = ""; mob.mate_time = 0; return
 	var mate: Creature = active(mob.game,mob.farm_mate)
 	if mate == null or mate.kind != mob.kind or mate.love_time <= 0 or mate.growth_remaining > 0:
@@ -202,6 +209,7 @@ static func tick(mob: Creature, delta: float) -> void:
 		parent.love_time = 0; parent.breed_cooldown = COOLDOWN; parent.farm_mate = ""; parent.mate_time = 0
 	var child: Creature = mob.game.spawn_creature(mob.kind,mob.position)
 	child.growth_remaining = GROW_TIME; resize(child)
+	if Wolves.is_wolf(mob.kind): Wolves.on_breed(mob,mate,child,RandomNumberGenerator.new())
 	if mob.kind == "sheep": set_color(child,offspring_color(mob.sheep_color,mate.sheep_color))
 	XpOrbs.throw_xp(mob.game,child.center(),randi_range(1,7))
 	mob.game.achievements.award("parrots_and_bats")
@@ -213,6 +221,8 @@ static func direction(mob: Creature) -> Vector3:
 	var mate: Creature = active(mob.game,mob.farm_mate)
 	if mate != null:
 		return Vector3.ZERO if mob.position.distance_to(mate.position) < 1.5 else ((mate.position-mob.position)*Vector3(1,0,1)).normalized()
+	# A wolf sits, or walks back to its owner, instead of following food.
+	if Wolves.is_wolf(mob.kind): return Wolves.direction(mob)
 	var game: Node3D = mob.game
 	var distance: float = mob.position.distance_to(game.player.position)
 	if game.inventory.held().id in FOODS[mob.kind] and game.inventory.held().count > 0 and distance < 10 and mob._sees_player():
