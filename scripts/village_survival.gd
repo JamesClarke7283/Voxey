@@ -58,6 +58,8 @@ func use() -> bool:
 	# `dolphin:on_rightclick`: a fish sends it looking for treasure.
 	if mob != null and Dolphins.is_dolphin(mob.kind) and Dolphins.feed(game,mob): return true
 	if Golems.use(game,mob): return true
+	if mob != null and Cats.is_cat(mob.kind) and Cats.use(game,mob): return true
+	if mob != null and Parrots.is_parrot(mob.kind) and Parrots.use(game,mob): return true
 	if Farming.use(game,mob): return true
 	if held == Nodes.COMPASS and not target.is_empty() and target.id == Bastions.LODESTONE: return Lodestones.bind(game,target.pos)
 	if mob is NetherResident and held == Nodes.GOLD:

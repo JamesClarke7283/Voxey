@@ -65,7 +65,7 @@ const KINDS = {
 	"chicken": {"hostile":false,"health":4.0,"speed":1.0,"width":0.18,"height":0.65,"damage":0,"drops":[[VillageContent.RAW_CHICKEN,1,1],[Nodes.FEATHER,1,2]],"voice":"chicken","pitch":1.5,"glides":true,"xp":1},
 	# The source's parrot: six health, a feather or two, and a glider like the
 	# chicken. It is what perches in a pillager outpost.
-	"parrot": {"hostile":false,"health":6.0,"speed":1.1,"width":0.25,"height":0.9,"damage":0,"drops":[[Nodes.FEATHER,1,2]],"voice":"chicken","pitch":1.8,"glides":true,"xp":1},
+	"parrot": {"hostile":false,"health":6.0,"speed":1.1,"width":0.25,"height":0.9,"damage":0,"drops":[[Nodes.FEATHER,1,2]],"voice":"chicken","pitch":1.8,"glides":true,"xp":1,"xp_max":3},
 	"zombie": {"hostile":true,"health":20.0,"speed":2.1,"width":0.28,"height":1.8,"damage":3,"drops":[[Nodes.ROTTEN_FLESH,0,2]],"voice":"zombie","pitch":0.9,"burns":true,"hunts_villagers":true,"floats":false,"reach":2,"xp":5,"armor":{"undead":90,"fleshy":90}},
 	# The source's zombie villager: a zombie in every respect except that a golden
 	# apple can cure it back into a villager. Its drops match the zombie's.
@@ -87,7 +87,8 @@ const KINDS = {
 	"vex":{"hostile":true,"health":14.0,"speed":4.5,"width":0.2,"height":0.8,"damage":4,"drops":[],"voice":"zombie","pitch":1.35,"xp":6,"armor":{"fleshy":100}},
 	"evoker": {"hostile":true,"health":24.0,"speed":1.6,"width":0.4,"height":1.95,"damage":0,"drops":[],"voice":"zombie","pitch":0.7,"xp":6,"armor":{"fleshy":100}},
 	# The source's cat, which the witch hut spawns in black.
-	"cat": {"hostile":false,"health":10.0,"speed":1.5,"width":0.3,"height":0.7,"damage":0,"drops":[],"voice":"cat","pitch":1.6,"xp":1},
+	# `mobs_mc:cat` (`Cats`): tameable with fish; the witch hut's is all black.
+	"cat": {"hostile":false,"health":10.0,"speed":1.5,"width":0.3,"height":0.7,"damage":0,"drops":[[Nodes.STRING,0,2]],"voice":"cat","pitch":1.6,"xp":1,"xp_max":3,"can_despawn":true},
 	"skeleton": {"hostile":true,"health":20.0,"speed":2.4,"width":0.28,"height":1.8,"damage":2,"drops":[[Nodes.BONE,0,2]],"voice":"skeleton","pitch":1.1,"burns":true,"ranged":true,"floats":false,"reach":2,"xp":6,"can_freeze":false,"runaway_from":["wolf"],"armor":{"undead":100,"fleshy":100}},
 	# The source's stray: the skeleton in the cold biomes, firing slowness arrows.
 	"stray": {"hostile":true,"health":20.0,"speed":2.4,"width":0.28,"height":1.8,"damage":2,"drops":[],"voice":"skeleton","pitch":1.0,"burns":true,"ranged":true,"floats":false,"reach":2,"xp":6,"can_freeze":false,"runaway_from":["wolf"],"armor":{"undead":100,"fleshy":100}},
@@ -103,7 +104,7 @@ const KINDS = {
 	# by the source's ratio to it (0.35/0.7 wide, 0.47/0.9 tall), so it stays
 	# strictly smaller on Voxey's axis-aligned body.
 	"cave_spider": {"hostile":true,"health":12.0,"speed":3.2,"width":0.25,"height":0.42,"damage":2,"drops":[[Nodes.STRING,0,2],[VillageContent.SPIDER_EYE,0,1]],"voice":"spider","pitch":1.25,"neutral_by_day":true,"leaps":true,"reach":2,"xp":5,"poisonous":true,"armor":{"fleshy":100,"arthropod":100}},
-	"creeper": {"hostile":true,"health":20.0,"speed":2.0,"width":0.28,"height":1.6,"damage":0,"drops":[[Nodes.GUNPOWDER,0,2]],"voice":"","pitch":1.0,"explodes":true,"reach":3,"runaway":true,"xp":5},
+	"creeper": {"hostile":true,"health":20.0,"speed":2.0,"width":0.28,"height":1.6,"damage":0,"drops":[[Nodes.GUNPOWDER,0,2]],"voice":"","pitch":1.0,"explodes":true,"reach":3,"runaway":true,"runaway_from":["cat","ocelot"],"xp":5},
 	"guardian": {"hostile":true,"health":30.0,"speed":2.0,"width":0.85,"height":0.85,"damage":6,"drops":[],"voice":"","pitch":0.7,"swims":true,"ranged":true,"xp":10},
 	# The source's aquatic creatures. Their drops carry chance denominators the
 	# shared table cannot express, so they are rolled by AquaticMobs instead.
@@ -577,42 +578,9 @@ func _build_animal() -> void:
 			for part in [Vector3(0,0.6,0.6),Vector3(0.08,0.6,0.65),Vector3(0.08,0.68,0.65),Vector3(0.015,0.7,0.65)]:
 				_box(part,Vector3(0.08,0.06,0.06),Color("cf868a"),"pig")
 		"parrot":
-			# A perched bird: a red body with blue wing tips, a hooked grey beak and
-			# a fanned tail. The source's parrots are red with blue markings.
-			_box(Vector3(0,0.5,0.03),Vector3(0.26,0.3,0.38),Color("c0392b"),"feather")
-			head = _joint(Vector3(0,0.72,-0.16),"Head")
-			_box(Vector3(0,0.04,0),Vector3(0.21,0.22,0.2),Color("c94a35"),"feather",head)
-			# The hooked beak points down, which is what tells a parrot from a chicken.
-			_box(Vector3(0,0.03,-0.14),Vector3(0.1,0.1,0.09),Color("4a4a4a"),"",head)
-			_box(Vector3(0,-0.05,-0.15),Vector3(0.07,0.08,0.06),Color("3a3a3a"),"",head)
-			for side in [-1,1]:
-				_box(Vector3(side*0.1,0.08,-0.09),Vector3(0.045,0.045,0.02),Color("f2e9d8"),"",head)
-				_box(Vector3(side*0.055,0.07,-0.085),Vector3(0.02,0.02,0.012),Color("1c1c1c"),"",head)
-				var wing := _joint(Vector3(side*0.15,0.62,0.02),"Wing")
-				_box(Vector3(side*0.02,-0.08,0),Vector3(0.07,0.2,0.3),Color("2b6ca3"),"feather",wing)
-				arms.append(wing)
-				var leg := _joint(Vector3(side*0.07,0.36,0.01),"Hip")
-				_box(Vector3(0,-0.09,0),Vector3(0.04,0.18,0.04),Color("6f6f6f"),"",leg)
-				for toe in [-1,0,1]: _box(Vector3(toe*0.032,-0.19,-0.05),Vector3(0.024,0.03,0.12),Color("6f6f6f"),"",leg)
-				legs.append(leg)
-			for i in 3:
-				_box(Vector3((i-1)*0.06,0.42,0.3),Vector3(0.065,0.26,0.08),Color("8e44ad"),"feather")
+			Parrots.build(self)
 		"cat":
-			# A small quadruped with a raised tail and pointed ears. A cat spawned by
-			# a witch hut is all black, which the source sets explicitly.
-			_box(Vector3(0,0.3,0),Vector3(0.28,0.24,0.55),Color("2c2c2c"),"fur")
-			head = _joint(Vector3(0,0.42,-0.3),"Head")
-			_box(Vector3(0,0.02,0),Vector3(0.24,0.22,0.22),Color("2c2c2c"),"fur",head)
-			for side in [-1,1]:
-				# Pointed ears, which is what tells a cat from a small dog.
-				_box(Vector3(side*0.08,0.17,0.02),Vector3(0.07,0.09,0.05),Color("232323"),"fur",head)
-				_box(Vector3(side*0.07,0.02,-0.12),Vector3(0.045,0.035,0.02),Color("c9d16a"),"",head)
-				var leg := _joint(Vector3(side*0.09,0.18,-0.18),"Hip")
-				_box(Vector3(0,-0.09,0),Vector3(0.06,0.18,0.06),Color("2c2c2c"),"fur",leg)
-				legs.append(leg)
-			var tail := _joint(Vector3(0,0.36,0.28),"Tail")
-			tail.rotation.x = -0.9
-			_box(Vector3(0,0.1,0),Vector3(0.05,0.26,0.05),Color("232323"),"fur",tail)
+			Cats.build(self)
 		"chicken":
 			_box(Vector3(0,0.39,0.04),Vector3(0.34,0.32,0.46),Color("eeeadd"),"feather")
 			head = _joint(Vector3(0,0.58,-0.18),"Head")
@@ -999,6 +967,9 @@ func _physics_process(delta: float) -> void:
 	if not custom_name.is_empty() and not Farming.managed(self) and (not game.world.loaded_at(position) or position.distance_to(game.player.position) > 90): return
 	Farming.tick(self,delta)
 	life += delta
+	if Parrots.is_parrot(kind) and Parrots.step(game,self,delta,Wolves.rng_for(game.world)):
+		animate(delta)
+		return
 	attack_cooldown = maxf(0,attack_cooldown-delta)
 	leap_cooldown = maxf(0,leap_cooldown-delta)
 	scared = maxf(0,scared-delta)
@@ -1038,7 +1009,7 @@ func _physics_process(delta: float) -> void:
 	# readily as for the player, and takes whichever is nearer. Without this a
 	# zombie never lands the killing blow that infects a villager, so the infection
 	# rule below could never fire.
-	if (data.get("hunts_villagers",false) or not data.get("hunts",[]).is_empty() or Wolves.is_wolf(kind) or Hoglins.is_family(kind) or Axolotls.is_axolotl(kind)) and not (scared > 0 and not hostile):
+	if (data.get("hunts_villagers",false) or not data.get("hunts",[]).is_empty() or Wolves.is_wolf(kind) or Hoglins.is_family(kind) or Axolotls.is_axolotl(kind) or Cats.is_cat(kind)) and not (scared > 0 and not hostile):
 		prey_timer -= delta
 		if prey_timer <= 0 or prey_choice != null and (not is_instance_valid(prey_choice) or prey_choice.is_queued_for_deletion()):
 			prey_timer = 0.25
@@ -1046,6 +1017,7 @@ func _physics_process(delta: float) -> void:
 			if Wolves.is_wolf(kind): prey_choice = Wolves.target(game,self)
 			elif Hoglins.is_family(kind): prey_choice = Hoglins.target(game,self)
 			elif Axolotls.is_axolotl(kind): prey_choice = Axolotls.target(game,self)
+			elif Cats.is_cat(kind): prey_choice = Cats.target(game,self)
 			else: prey_choice = nearest_villager()
 		var prey: Node3D = prey_choice
 		if prey != null:
@@ -1078,6 +1050,12 @@ func _physics_process(delta: float) -> void:
 	if Hoglins.is_family(kind):
 		var away: Vector3 = Hoglins.direction(self)
 		if away != Vector3.INF: direction = away; chasing = false
+	elif Cats.is_cat(kind) and farm_direction == Vector3.INF and scared <= 0 and not chasing:
+		var cat_heading: Vector3 = Cats.direction(game,self)
+		if cat_heading != Vector3.INF: direction = cat_heading
+	elif Parrots.is_parrot(kind) and scared <= 0:
+		var parrot_heading: Vector3 = Parrots.direction(game,self)
+		if parrot_heading != Vector3.INF: direction = parrot_heading
 	elif Axolotls.is_axolotl(kind) and Axolotls.playing_dead(self):
 		direction = Vector3.ZERO; chasing = false
 	elif Dolphins.is_dolphin(kind) and not chasing and farm_direction == Vector3.INF and scared <= 0:
@@ -1251,6 +1229,9 @@ func _physics_process(delta: float) -> void:
 	if PolarBears.is_bear(kind): PolarBears.tick(self,delta,chasing,distance)
 	if Wolves.is_wolf(kind): Wolves.step(game,self,delta)
 	if Striders.is_strider(kind): Striders.step(game,self,delta)
+	if Cats.is_cat(kind):
+		Cats.step(game,self,delta)
+		Cats.breed_step(game,self,delta)
 	if Dolphins.is_dolphin(kind):
 		Dolphins.step(game,self,delta,Dolphins.rng_for(game.world))
 		if is_queued_for_deletion(): return

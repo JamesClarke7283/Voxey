@@ -288,6 +288,8 @@ func _process(delta: float) -> void:
 		# module's 60-second counter, so this is per frame, unlike the six-second
 		# natural-spawn cadence above.
 		WanderingTraders.update(self,delta)
+		# The source's sixty-second village cat spawner.
+		Cats.spawn_step(self,delta,Wolves.rng_for(world))
 		if autosave >= 45: autosave=0; save_game("",true); toast("World saved")
 		if spawn_timer > 6:
 			spawn_timer = 0
@@ -1052,6 +1054,8 @@ func sleep_at(p: Vector3i) -> void:
 	# game's own calls.
 	var reason: String = BedSleep.try_sleep(self,p)
 	if not reason.is_empty(): toast(reason); return
+	# `cat_sleep_with_owner`: tamed cats curl up on the bed and may leave a gift.
+	Cats.owner_slept(self,p,Wolves.rng_for(world))
 	if gamemode != "creative": achievements.award("sweet_dreams")
 	toast("A new day. Your spawn is set here.")
 	save_game()

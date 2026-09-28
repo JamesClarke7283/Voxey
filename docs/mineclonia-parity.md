@@ -85,6 +85,15 @@ closes the three undead variants and the systems they depend on.
   - meadow herds.
 
   See [horses](equines-source.md).
+- **Cats and parrots** ([cats](../scripts/cats.gd), [parrots](../scripts/parrots.gd),
+  checks `companion`):
+  - cats: fish taming, collars, following, resting spots, sleeping on the
+    owner's bed with dawn gifts, rabbit hunting, creepers' fear, village
+    spawning and breeding;
+  - parrots: seed taming, shoulder perching, jukebox dancing, mob imitation and
+    the lethal cookie.
+
+  See [companions](companions-source.md).
 
 ## 2026-09-21 batch: hazards, experience, item entities and block behaviour
 

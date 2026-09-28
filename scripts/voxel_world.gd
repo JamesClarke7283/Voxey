@@ -549,7 +549,8 @@ func _apply_column(result: Dictionary) -> void:
 		for kind in ["witch","cat"]:
 			var spot: Array = result.witches.residents[p].get(kind,[])
 			if spot.size() == 3:
-				get_parent().spawn_creature(kind,Vector3(float(spot[0])+0.5,float(spot[1])+0.1,float(spot[2])+0.5))
+				var resident: Node3D = get_parent().spawn_creature(kind,Vector3(float(spot[0])+0.5,float(spot[1])+0.1,float(spot[2])+0.5))
+				if resident != null and kind == "cat": Cats.set_coat(resident,Cats.ALL_BLACK)
 	for p in result.get("reactive",{}):
 		react_fluid(p)
 		Fire.track(self,p)
