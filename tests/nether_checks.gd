@@ -4,6 +4,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.pause()
 	var old_slots: Array = game.inventory.slots.duplicate(true)
 	var old_selected: int = game.inventory.selected
+	var old_offhand: Dictionary = game.player.offhand_slot.duplicate(true)
 	var old_position: Vector3 = game.player.position
 	var old_xp: float = game.experience
 	var old_mode: String = game.gamemode
@@ -19,6 +20,9 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.player.position = Vector3(p)+Vector3(0.5,0.01,0.5)
 	game.inventory.selected = 0
 	for slot in game.inventory.slots: slot.clear(); slot.merge({"id":Nodes.STONE,"count":64,"wear":0})
+	# `core.item_pickup` fills the second hand first, so a full inventory means a
+	# full offhand as well.
+	game.player.offhand_slot.clear(); game.player.offhand_slot.merge({"id":Nodes.STONE,"count":64,"wear":0})
 	game.spawn_drop(game.player.position+Vector3(1,0,0),Nodes.ARROW_ITEM,2)
 	var drop: ItemDrop = game.drops.get_children().back()
 	drop.set_physics_process(false); drop.age = 1; drop.velocity = Vector3.ZERO
@@ -192,5 +196,6 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	for path in ["user://nether_check.json","user://nether_check.json.bak"]:
 		if FileAccess.file_exists(path): DirAccess.remove_absolute(path)
 	game.inventory.slots = old_slots; game.inventory.selected = old_selected
+	game.player.offhand_slot.clear(); game.player.offhand_slot.merge(old_offhand)
 	game.player.position = old_position; game.experience = old_xp; game.gamemode = old_mode
 	game.pause()
