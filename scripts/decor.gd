@@ -31,6 +31,9 @@ const STAND = 10801
 # Source `registered_pots`, restricted to the plants Voxey has. Each entry maps a
 # source itemstring to the plant id Voxey uses.
 const ARMOR_PIECES = 4
+# The source stand also carries two hand slots, left and right of the four armour
+# pieces. A stand saved before they existed holds four entries and is padded.
+const STAND_SLOTS = ARMOR_PIECES+2
 const STAND_KEY = "armor_stand"
 
 static var icons: Dictionary = {}
@@ -73,7 +76,7 @@ static func is_stand(id: int) -> bool: return id == STAND
 static func worn(world: VoxelWorld, p: Vector3i) -> Array:
 	var raw: Variant = world.block_states.get(VoxelWorld.station_key(p),{}).get("stand_armor",[])
 	var result: Array = []
-	for i in ARMOR_PIECES:
+	for i in STAND_SLOTS:
 		result.append(Inventory.clean_slot(raw[i]) if raw is Array and i < raw.size() and raw[i] is Dictionary else {"id":0,"count":0,"wear":0})
 	return result
 
@@ -81,7 +84,7 @@ static func set_worn(world: VoxelWorld, p: Vector3i, list: Array) -> void:
 	var key: String = VoxelWorld.station_key(p)
 	var state: Dictionary = world.block_states.get(key,{})
 	var clean: Array = []
-	for i in ARMOR_PIECES: clean.append(Inventory.clean_slot(list[i]) if i < list.size() else {"id":0,"count":0,"wear":0})
+	for i in STAND_SLOTS: clean.append(Inventory.clean_slot(list[i]) if i < list.size() else {"id":0,"count":0,"wear":0})
 	state["stand_armor"] = clean
 	world.block_states[key] = state
 
@@ -90,7 +93,7 @@ static func set_worn(world: VoxelWorld, p: Vector3i, list: Array) -> void:
 # worn on the torso, which is where a held item visibly sits.
 static func slot_for(id: int) -> int:
 	if Nodes.is_armor(id) and id != Nodes.ELYTRA: return clampi(Nodes.armor_piece(id),0,ARMOR_PIECES-1)
-	return 1
+	return ARMOR_PIECES
 
 # --- interaction ------------------------------------------------------------
 
@@ -124,7 +127,7 @@ static func _use_stand(game: Node3D, p: Vector3i, held: int) -> bool:
 	var worn: Array = worn(game.world,p)
 	if held == 0:
 		# An empty hand removes the last-placed piece, matching source order.
-		for i in range(ARMOR_PIECES-1,-1,-1):
+		for i in range(STAND_SLOTS-1,-1,-1):
 			if worn[i].id == 0: continue
 			var piece: Dictionary = worn[i]
 			worn[i] = {"id":0,"count":0,"wear":0}

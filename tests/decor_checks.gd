@@ -82,7 +82,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	game.inventory.restore([]); game.inventory.add_item(Decor.STAND,1); game.inventory.selected = 0
 	Decor.try_place(game,target)
 	t.check(world.node_at(ground) == Decor.STAND and game.inventory.count_item(Decor.STAND) == 0,"placing an armor stand consumes one item")
-	t.check(Decor.worn(world,ground).size() == Decor.ARMOR_PIECES,"a stand exposes four armor slots, as source's metadata inventory does")
+	t.check(Decor.worn(world,ground).size() == 6 and Decor.STAND_SLOTS == 6,"a stand exposes four armor slots and the source's two hand slots")
 	# Each armor piece lands in its own slot.
 	for piece in 4:
 		var armor_id: int = Nodes.armor_id(1,piece)

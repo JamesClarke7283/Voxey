@@ -977,7 +977,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_amethyst` | Partial — natural geodes, growth, crystals and materials; seeded noise/light adapters documented |
 | `mcl_anvils` | Partial — item naming and existing repair/enchantment adaptation; see naming |
 | `mcl_armor` | Partial — leather dyeing with the source's channel averaging, an icon tint and cauldron washing; armour statistics and trims remain as recorded. See [leather dyeing](cauldron-wash-source.md) | — see world and Nether comparison |
-| `mcl_armor_stand` | Partial — four armor slots, placement, removal, rotation, drops and saved pieces; no hand slots |
+| `mcl_armor_stand` | Implemented — the four armour slots and the source's **two hand slots**, placement, removal, rotation, drops and saved pieces (`decor.gd`) |
 | `mcl_bamboo` | Partial — the stalk with its per-stalk height, light gate and two thicknesses, the bamboo item, the scaffolding recipe, bone-meal growth, and natural groves whose stalks are five to sixteen tall with leaf forms at the tip. See [bamboo](bamboo-source.md) |
 | `mcl_banners` | Partial — all 42 source patterns with their exact dye grids and signature items, the ordered layer list, the six-layer limit, banner combining and per-layer icons; no loom UI, no cauldron washing |
 | `mcl_barrels` | Implemented — a 27-slot container with the open path, hopper insertion and comparator reading; the open/closed node swap is collapsed to one id + station |
