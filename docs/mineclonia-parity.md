@@ -1053,7 +1053,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_raw_ores` | Implemented — raw ore drops and compression (`raw_ores.gd`, `nodes.gd`) |
 | `mcl_sculk` | Implemented — sculk/vein/catalyst with their exact drop rules, the death-driven spread, and the catalyst route through the ancient hermitage's chest; the source's own sculk *terrain* generation is commented out in the checkout and there is no Warden there either (`sculk.gd`) |
 | `mcl_shields` | Partial — the source's 180 degree frontal arc, blockable type table, held raised state, damage-ceiling wear, the real [second hand](offhand-source.md) and the axe disable (a vindicator's axe puts a raised shield down for five seconds); no projectile deflection |
-| `mcl_signs` | Implemented — the text/dye/placement/save loop and the **glow ink sac**, across all eleven wood species |
+| `mcl_signs` | Implemented — the text/dye/placement/save loop, the **glow ink sac** and the **hanging sign** in its ceiling, attached and wall placements, across all eleven wood species |
 | `mcl_smithing_table` | Implemented — netherite upgrades and armor trims (`village_survival.gd`, `armor_trims.gd`) |
 | `mcl_smoker` | Implemented — device gating in the furnace station (`voxel_world.gd`) |
 | `mcl_sponges` | Partial — source absorption volume, wet/dry states, Nether and furnace drying, bucket replacement; no survival acquisition |
@@ -1068,7 +1068,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_torches` | Implemented — floor and four wall placements, plus the copper torch family (`torches.gd`) |
 | `guardian` | Implemented — the source's charged laser, three-block minimum, aquatic movement, full chance-weighted drop table including the elder's guaranteed wet sponge, the **elder's mining-fatigue aura** and the **guardian's thorns**; no rendered beam or apparition. See [guardian auras](guardian-auras-source.md) |
 | `mcl_totems` | Partial — the `bypasses_totem` flag now comes from the death-message table rather than a local copy. — lethal-damage interception at exactly one health, effects cleared then regeneration/fire-resistance/absorption applied, breath restored, the void bypass rule, creative non-consumption and the [second hand](offhand-source.md); no mob use and no survival acquisition |
-| `mcl_trees` | Implemented — all eleven source species (the six classics plus cherry, mangrove, pale oak, crimson and warped), their schematics, bark/stripping, leaf lifecycle, per-species signs, doors, trapdoors, fences, buttons and plates. Bamboo stalks have their own module. Hanging signs remain open. See [trees](wood-source.md) |
+| `mcl_trees` | Implemented — all eleven source species (the six classics plus cherry, mangrove, pale oak, crimson and warped), their schematics, bark/stripping, leaf lifecycle, per-species signs and hanging signs, doors, trapdoors, fences, buttons and plates. Bamboo stalks have their own module. See [trees](wood-source.md) |
 | `mcl_trial_spawners` | Partial — absent; needs the trial-chamber structure (`archaeology.gd` records it) |
 | `mcl_tridents` | Implemented — the trident projectile, Loyalty/Channeling/Riptide (`trident_projectile.gd`, `undead_variants.gd`) |
 | `mcl_vaults` | Partial — absent; needs the trial-chamber structure (`archaeology.gd` records it) |
