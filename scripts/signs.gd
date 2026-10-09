@@ -5,8 +5,13 @@ extends RefCounted
 # See docs/signs-source.md and docs/licenses/Mineclonia-signs-MIT.txt.
 # Original procedural geometry and native text; no source models/font textures.
 const OAK = 6600
+# The later species each own a 20-id block: four wall facings, then sixteen standing
+# facings. The classic block keeps its own layout so the ids never shift.
+static var BASES = [6600]
 const STANDING = OAK+4
-const END = STANDING+16
+
+static func register_base(base: int) -> void:
+	if not BASES.has(base): BASES.append(base)
 const DEFAULT_COLOR = "#000000"
 const NEWLINES = [10,11,12,133,8232,8233]
 const WHITESPACE = [9,32,5760,8192,8193,8194,8195,8196,8197,8198,8200,8201,8202,8287,12288]
@@ -18,21 +23,35 @@ static var supported_characters: Dictionary = {}
 static var icons: Dictionary = {}
 static var text_font: SystemFont
 
-static func is_sign(id: int) -> bool: return id >= OAK and id < END
-static func item(_id: int) -> int: return OAK
-static func wall(id: int) -> bool: return id < STANDING
-static func facing(id: int) -> int: return id-OAK if wall(id) else id-STANDING
+static func base(id: int) -> int:
+	for base_id in BASES:
+		if id >= base_id and id < base_id+20: return base_id
+	return 0
+static func is_sign(id: int) -> bool: return base(id) != 0
+static func item(id: int) -> int: return base(id) if is_sign(id) else OAK
+static func wall(id: int) -> bool: return is_sign(id) and id-base(id) < 4
+static func facing(id: int) -> int: return (id-base(id)) if wall(id) else (id-base(id)-4)
 static func yaw(id: int) -> float: return facing(id)*(PI/2.0 if wall(id) else TAU/16.0)
-static func material(_id: int) -> int: return Nodes.PLANKS
+static func title(id: int) -> String:
+	var kind: int = maxi(0,BASES.find(base(id)))
+	return "Oak sign" if kind == 0 else WoodTypes.NAMES[kind]+" sign"
+static func material(id: int) -> int:
+	var kind: int = maxi(0,BASES.find(base(id)))
+	return Nodes.PLANKS if kind == 0 else WoodTypes.PLANKS[kind]
 static func support_offset(id: int) -> Vector3i: return SUPPORT[facing(id)] if wall(id) else Vector3i.DOWN
 
 static func definitions() -> Dictionary:
 	var result: Dictionary = {}
-	for id in range(OAK,END): result[id] = {"name":"Oak sign","block":true,"shape":"sign","color":"b28c52","stack":16,"hardness":1.0,"tool":1,"hidden":id != OAK}
+	for kind in BASES.size():
+		var base_id: int = BASES[kind]
+		var color: String = "b28c52" if kind == 0 else WoodTypes.WOOD_COLORS[kind]
+		for offset in 20: result[base_id+offset] = {"name":("Oak sign" if kind == 0 else WoodTypes.NAMES[kind]+" sign"),"block":true,"shape":"sign","color":color,"stack":16,"hardness":1.0,"tool":1,"hidden":offset != 0}
 	return result
 
 static func recipes(inv: Inventory) -> void:
-	inv._recipe("Oak sign",OAK,3,[Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS,0,Nodes.STICK,0],3,"table")
+	for kind in BASES.size():
+		var planks: int = Nodes.PLANKS if kind == 0 else WoodTypes.PLANKS[kind]
+		inv._recipe(("Oak sign" if kind == 0 else WoodTypes.NAMES[kind]+" sign"),BASES[kind],3,[planks,planks,planks,planks,planks,planks,0,Nodes.STICK,0],3,"table")
 
 static func boxes(id: int) -> Array:
 	if wall(id): return [Barriers.rotate_box(AABB(Vector3(0,0.25,0),Vector3(1,0.5,5.0/56.0)),posmod(-facing(id),4))]
@@ -140,18 +159,18 @@ static func use(game: Node3D, target: Dictionary) -> bool:
 static func replaceable(id: int) -> bool:
 	return id == Nodes.AIR or Fluids.liquid(id) or Nodes.plant(id) or Fire.is_fire(id) or SnowCover.is_snow(id)
 
-static func placement_id(normal: Vector3i, angle: float) -> int:
-	if normal == Vector3i.UP: return STANDING+posmod(int(floorf(angle/(TAU/16.0)+0.5)),16)
+static func placement_id(normal: Vector3i, angle: float, kind_base: int = OAK) -> int:
+	if normal == Vector3i.UP: return kind_base+4+posmod(int(floorf(angle/(TAU/16.0)+0.5)),16)
 	var direction: int = SUPPORT.find(-normal)
-	return OAK+direction if direction >= 0 else 0
+	return kind_base+direction if direction >= 0 else 0
 
 static func try_place(game: Node3D, target: Dictionary) -> bool:
 	var held: int = game.inventory.held().id
 	if not is_sign(held) or target.is_empty(): return false
-	if held != OAK: return true
+	if not BASES.has(held): return true
 	var at: Vector3i = target.get("replace",target.pos if replaceable(int(target.id)) else target.pos+target.normal)
 	if not replaceable(game.world.node_at(at)): return true
-	var id: int = placement_id(target.normal,game.player.rotation.y)
+	var id: int = placement_id(target.normal,game.player.rotation.y,base(held))
 	if id == 0: return true
 	var behind: Vector3i = at+support_offset(id)
 	var backing: int = game.world.node_at(behind)

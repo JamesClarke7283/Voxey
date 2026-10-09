@@ -34,7 +34,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	var recipe: Dictionary = inv.recipes[inv.recipe_index(Signs.OAK)]
 	t.check(recipe.count == 3 and recipe.ingredients == {Nodes.PLANKS:6,Nodes.STICK:1} and recipe.station == "table","six oak planks and one stick craft three source signs at a table")
 	t.check(Nodes.max_stack(Signs.OAK) == 16 and Nodes.fuel_time(Signs.OAK) == 10,"oak signs stack to sixteen and provide ten seconds of furnace fuel")
-	for id in range(Signs.OAK,Signs.END):
+	for id in range(Signs.OAK,Signs.OAK+20):
 		var out: Array = BlockMesher._empty(); Signs.mesh(out,Vector3.ZERO,id)
 		t.check(Nodes.exists(id) and not Nodes.solid(id) and Nodes.transparent(id) and Nodes.drop(id) == Signs.OAK and Nodes.placeable(id) == (id == Signs.OAK) and out[0].size() > 0,"sign registry keeps oriented state non-solid with canonical drops and generated art: "+str(id))
 	for direction in 4:

@@ -451,7 +451,7 @@ static func uncached_title(id: int) -> String:
 	if Copper.DATA.has(id): return Copper.DATA[id].name
 	if RedstoneInputs.is_device(id): return RedstoneInputs.title(id)
 	if WoodTypes.DATA.has(id): return WoodTypes.DATA[id].name
-	if Signs.is_sign(id): return "Oak sign"
+	if Signs.is_sign(id): return Signs.title(id)
 	if FoodFeatures.is_cake(id): return FoodFeatures.title(id)
 	if Doors.is_door(id) or Doors.is_item(id): return Doors.title(id)
 	if SnowCover.is_snow(id): return SnowCover.title(id)
@@ -557,7 +557,7 @@ static func all_ids() -> Array:
 	ids.append_array(Barriers.items())
 	ids.append_array(Trapdoors.ITEMS)
 	ids.append(SnowCover.BASE)
-	ids.append(Signs.OAK)
+	ids.append_array(Signs.BASES)
 	for chain in Copper.CHAINS:
 		for id in chain:
 			# A hidden stage is a derived node (an oxidized decoration), so the
@@ -807,7 +807,7 @@ static func placeable(id: int) -> bool:
 	if DenseMaterials.is_bone(id): return id == DenseMaterials.BONE
 	if RedstoneInputs.is_device(id): return id == RedstoneInputs.item(id)
 	if WoodTypes.DATA.has(id): return not WoodTypes.DATA[id].get("hidden",false)
-	if Signs.is_sign(id): return id == Signs.OAK
+	if Signs.is_sign(id): return Signs.BASES.has(id)
 	if FoodFeatures.is_cake(id): return id == VillageContent.CAKE
 	if Doors.is_door(id) or Doors.is_item(id): return Doors.is_item(id)
 	if SnowCover.is_snow(id): return id == SnowCover.BASE
@@ -1037,7 +1037,7 @@ static func drop(id: int) -> int:
 	if CopperDecor.is_decor(id): return id
 	if Torches.is_copper(id): return Torches.COPPER
 	if CactusFlower.is_flower(id): return id
-	if Signs.is_sign(id): return Signs.OAK
+	if Signs.is_sign(id): return Signs.item(id)
 	# A huge mushroom block drops the *small* mushroom, rolled in `break_node`, so
 	# the generic path must not hand out the block itself.
 	if HugeMushrooms.is_huge(id): return 0

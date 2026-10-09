@@ -601,3 +601,4 @@ static func register_families() -> void:
 		var kind: int = 6+i
 		Doors.register_family(DOOR_ITEMS[i],PLANKS[kind],NAMES[kind]+" door",DOOR_BASES[i])
 		Trapdoors.register_family(TRAPDOOR_ITEMS[i],PLANKS[kind],NAMES[kind]+" trapdoor",TRAPDOOR_BASES[i])
+		Signs.register_base(SIGN_BASES[i])
