@@ -594,7 +594,7 @@ const TRAPDOOR_BASES = [9346,9378,9410,9426,9442]
 const SIGN_BASES = [9558,9578,9601,9633,9665]
 const FENCE_BASES = [9701,9717,9733,9809,9825]
 const BUTTON_ITEMS = [6964,6980,6988,7004,7012]
-const PLATE_ITEMS = [9700,9701,9702,9703,9704]
+const PLATE_ITEMS = [11242,11243,11244,11245,11246]
 
 static func register_families() -> void:
 	for i in 5:
@@ -603,3 +603,4 @@ static func register_families() -> void:
 		Trapdoors.register_family(TRAPDOOR_ITEMS[i],PLANKS[kind],NAMES[kind]+" trapdoor",TRAPDOOR_BASES[i])
 		Signs.register_base(SIGN_BASES[i])
 		Barriers.register_family(FENCE_BASES[i],PLANKS[kind])
+		RedstoneInputs.register_material(NAMES[kind],PLANKS[kind],PLATE_ITEMS[i])

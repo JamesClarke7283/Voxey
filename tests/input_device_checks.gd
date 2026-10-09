@@ -34,7 +34,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 			for y in range(1400,1405): world.set_node(Vector3i(x,y,z),Nodes.AIR)
 	var inv := Inventory.new()
 	t.check(RedstoneInputs.item(Nodes.BUTTON) == 215 and RedstoneInputs.item(Nodes.PRESSURE_PLATE) == 216,"legacy stone button and pressure plate item IDs remain unchanged")
-	t.check(RedstoneInputs.items().size() == 18 and RedstoneInputs.blocks().size() == 58,"eight button and ten plate materials expose only their canonical inventory items")
+	t.check(RedstoneInputs.items().size() == 28 and RedstoneInputs.blocks().size() == 93,"eight button and ten plate materials expose only their canonical inventory items")
 	for id in RedstoneInputs.items():
 		var recipe_index: int = inv.recipe_index(id); var recipe: Dictionary = inv.recipes[recipe_index]
 		var ingredient: int = Nodes.GOLD if id == 6978 else (Nodes.IRON if id == 6979 else RedstoneInputs.material(id))

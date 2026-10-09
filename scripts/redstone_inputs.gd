@@ -4,10 +4,10 @@ extends RefCounted
 # IDs encode attachment direction; electrical state stays in saved metadata.
 # Source behavior and the material-rule exception are documented alongside tests.
 const FIRST = 6900
-const BUTTON_ITEMS = [Nodes.BUTTON,6908,6916,6924,6932,6940,6948,6956]
-const PLATE_ITEMS = [Nodes.PRESSURE_PLATE,6971,6972,6973,6974,6975,6976,6977,6978,6979]
-const MATERIALS = [Nodes.STONE,Nodes.PLANKS,6035,6067,6099,6131,6163,Bastions.POLISHED,Nodes.GOLD_BLOCK,Nodes.IRON_BLOCK]
-const NAMES = ["Stone","Oak","Spruce","Birch","Jungle","Acacia","Dark oak","Polished blackstone","Light weighted","Heavy weighted"]
+static var BUTTON_ITEMS = [Nodes.BUTTON,6908,6916,6924,6932,6940,6948,6956]
+static var PLATE_ITEMS = [Nodes.PRESSURE_PLATE,6971,6972,6973,6974,6975,6976,6977,6978,6979]
+static var MATERIALS = [Nodes.STONE,Nodes.PLANKS,6035,6067,6099,6131,6163,Bastions.POLISHED,Nodes.GOLD_BLOCK,Nodes.IRON_BLOCK]
+static var NAMES = ["Stone","Oak","Spruce","Birch","Jungle","Acacia","Dark oak","Polished blackstone","Light weighted","Heavy weighted"]
 const SUPPORTS = [Vector3i.DOWN,Vector3i.UP,Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]
 static var meshes: Dictionary = {}
 static var icons: Dictionary = {}
@@ -15,18 +15,41 @@ static var visual_material: ShaderMaterial
 
 static func button_kind(id: int) -> int:
 	if id == Nodes.BUTTON: return 0
-	if id >= FIRST and id < FIRST+64 and (id-FIRST)%8 < 6 and id != FIRST: return (id-FIRST)/8
-	return -1
+	if id < FIRST or id >= FIRST+512 or id == FIRST: return -1
+	if (id-FIRST)%8 >= 6: return -1
+	# The kind is accepted only when its canonical base is a registered button. The
+	# pressure plates sit on arbitrary ids that happen to fall on the 8-stride (6972..6977
+	# are kind 9), so the stride alone would misread them as buttons.
+	var base: int = FIRST+((id-FIRST)/8)*8
+	# Kind 0 (the stone button) has its state base at `FIRST` while its item id is
+	# `Nodes.BUTTON`, so its stride base is always accepted.
+	return (id-FIRST)/8 if (int((id-FIRST)/8) == 0 or BUTTON_ITEMS.has(base)) else -1
 static func plate_kind(id: int) -> int: return PLATE_ITEMS.find(id)
 static func is_button(id: int) -> bool: return button_kind(id) >= 0
 static func is_plate(id: int) -> bool: return plate_kind(id) >= 0
 static func is_device(id: int) -> bool: return is_button(id) or is_plate(id)
 static func kind(id: int) -> int: return button_kind(id) if is_button(id) else plate_kind(id)
-static func wooden(id: int) -> bool: return kind(id) in range(1,7)
-static func item(id: int) -> int: return BUTTON_ITEMS[button_kind(id)] if is_button(id) else (id if is_plate(id) else 0)
+static func wooden(id: int) -> bool: return kind(id) in range(1,7) or kind(id) in range(10,15)
+static func item(id: int) -> int:
+	if is_button(id):
+		var k: int = button_kind(id)
+		return Nodes.BUTTON if k == 0 else FIRST+k*8
+	return id if is_plate(id) else 0
 static func material(id: int) -> int: return MATERIALS[maxi(kind(id),0)]
 static func title(id: int) -> String: return NAMES[maxi(kind(id),0)]+(" button" if is_button(id) else " pressure plate")
 static func items() -> Array: return BUTTON_ITEMS+PLATE_ITEMS
+
+# The later species register one material with a button and a plate. Kinds 0..9 are
+# already taken (the two weighted plates sit on 8 and 9), so their kind is the next free
+# one; the button's id follows from the 8-stride encoding and the plate carries its own.
+static func register_material(name: String, material_id: int, plate_id: int) -> void:
+	# Idempotent: a dimension change re-runs `configure`, and every table here is
+	# indexed by kind, so a second registration would shift every later kind.
+	if PLATE_ITEMS.has(plate_id) or MATERIALS.has(material_id): return
+	var kind_index: int = MATERIALS.size()
+	BUTTON_ITEMS.append(FIRST+kind_index*8)
+	PLATE_ITEMS.append(plate_id)
+	MATERIALS.append(material_id); NAMES.append(name)
 static func blocks() -> Array:
 	var result: Array = PLATE_ITEMS.duplicate()
 	for button in BUTTON_ITEMS:

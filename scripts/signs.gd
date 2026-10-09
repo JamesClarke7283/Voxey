@@ -11,6 +11,7 @@ static var BASES = [6600]
 const STANDING = OAK+4
 
 static func register_base(base: int) -> void:
+	# Idempotent: a dimension change re-runs `configure`.
 	if not BASES.has(base): BASES.append(base)
 const DEFAULT_COLOR = "#000000"
 const NEWLINES = [10,11,12,133,8232,8233]
