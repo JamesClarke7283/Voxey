@@ -220,6 +220,7 @@ func _process(delta: float) -> void:
 		if tick >= 1.0:
 			tick = 0.0
 			_simulate()
+			PointedDripstone.simulate(self,1.0)
 
 func record_edit(p: Vector3i, id: int) -> void:
 	if not edits.has(p) and edit_count == edits.size():
@@ -480,7 +481,8 @@ func _apply_column(result: Dictionary) -> void:
 			elif result.get("outposts",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,true)
 			elif result.get("igloos",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,true)
 			elif result.get("monuments",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,false,true)
-			elif result.get("cabins",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,false,false,true)
+			elif result.get("cabins",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,false,false,true,false)
+			elif result.get("hermitages",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,false,false,false,false,false,false,false,false,false,true)
 			elif result.get("treasure",{}).get("chests",{}).has(p): _structure_loot(p,-1,false,true)
 			elif result.get("corridors",{}).get("chests",{}).has(p): _structure_loot(p,-1,true)
 			else: _structure_loot(p,int(result.get("dungeons",{}).get("chests",{}).get(p,-1)))
@@ -754,6 +756,7 @@ func set_node(p: Vector3i, id: int) -> bool:
 	Dungeons.changed(self,p,old_id,id)
 	WoodTypes.changed(self,p,old_id,id)
 	Scaffolding.changed(self,p,old_id,id)
+	PointedDripstone.changed(self,p,old_id,id)
 	Pasture.changed(self,p)
 	if id == VillageContent.CAULDRON: Cauldrons.station(self,p)
 	Fire.track(self,p)
@@ -761,7 +764,7 @@ func set_node(p: Vector3i, id: int) -> bool:
 		for side in Fire.SIDES: Fire.track(self,p+side)
 	circuits.changed(p,old_id,id,_near(p) & NEAR_OBSERVER != 0)
 	record_edit(p,id)
-	if id == Nodes.SUGAR_CANE or WoodTypes.is_sapling(id) or not CropFarming.is_crop(id) and VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3: growth[p] = 0.0
+	if id == Nodes.SUGAR_CANE or id == Nodes.CACTUS and node_at(p+Vector3i.DOWN) != Nodes.CACTUS or WoodTypes.is_sapling(id) or not CropFarming.is_crop(id) and VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3: growth[p] = 0.0
 	else: growth.erase(p)
 	_mark_dirty(p)
 	if Barriers.is_wall(node_at(p+Vector3i.DOWN)): _mark_dirty(p+Vector3i.DOWN)
@@ -933,6 +936,7 @@ func collision_boxes(p: Vector3i) -> Array:
 	if RedstoneSensors.is_detector(id): return RedstoneSensors.boxes(id)
 	if Campfires.is_campfire(id): return Campfires.boxes(id)
 	if BuildingShapes.is_shape(id): return BuildingShapes.boxes(BuildingShapes.world_mask(self,p))
+	if PointedDripstone.is_stage(id): return PointedDripstone.boxes(id)
 	return [AABB(Vector3.ZERO,Vector3.ONE)] if Nodes.solid(id) else []
 
 func intersects(pos: Vector3, half_width: float = 0.29, height: float = 1.8) -> bool:
@@ -990,7 +994,7 @@ func raycast(origin: Vector3, direction: Vector3, reach: float = 5.0, liquids: b
 	for iteration in 128:
 		var id: int = node_at(cell)
 		if id != Nodes.AIR and id not in [Nodes.NETHER_PORTAL,Nodes.END_PORTAL] and (liquids or not Fluids.liquid(id)):
-			if RedstoneInputs.is_device(id) or BuildingShapes.is_shape(id) or Fluids.flowing(id) or Campfires.is_campfire(id) or Barriers.is_barrier(id) or RedstoneSensors.is_detector(id) or Trapdoors.is_trapdoor(id) or SnowCover.is_snow(id) or Doors.is_door(id) or FoodFeatures.is_cake(id) or Signs.is_sign(id) or CropFarming.is_crop(id) or Farmland.is_soil(id) or FruitCrops.is_stem(id) or Amethyst.is_crystal(id):
+			if RedstoneInputs.is_device(id) or BuildingShapes.is_shape(id) or Fluids.flowing(id) or Campfires.is_campfire(id) or Barriers.is_barrier(id) or RedstoneSensors.is_detector(id) or Trapdoors.is_trapdoor(id) or SnowCover.is_snow(id) or Doors.is_door(id) or FoodFeatures.is_cake(id) or Signs.is_sign(id) or CropFarming.is_crop(id) or Farmland.is_soil(id) or FruitCrops.is_stem(id) or Amethyst.is_crystal(id) or PointedDripstone.is_stage(id):
 				var hit: Dictionary = shape_hit(cell,origin,direction,reach)
 				if not hit.is_empty(): return hit
 			else: return {"pos":cell,"normal":normal,"id":id,"distance":distance,"point":origin+direction*distance}
@@ -1024,6 +1028,7 @@ func shape_hit(p: Vector3i, origin: Vector3, direction: Vector3, reach: float) -
 	if id == VillageContent.GLASS_PANE or GlassColors.is_stained_pane(id):
 		boxes = [AABB(Vector3(0.5-PANE_HALF_WIDTH,0.0,0.5-PANE_HALF_WIDTH),Vector3(PANE_HALF_WIDTH*2,1.0,PANE_HALF_WIDTH*2))]
 	if Candles.is_candle(id): boxes = Candles.boxes(id)
+	if PointedDripstone.is_stage(id): boxes = PointedDripstone.boxes(id)
 	if Candles.is_cake(id): boxes = Candles.boxes(Candles.FIRST)
 	if Signs.is_sign(id): boxes = Signs.boxes(id)
 	if RedstoneInputs.is_device(id): boxes = RedstoneInputs.boxes(id,circuits.state(p))
@@ -1057,7 +1062,12 @@ func _simulate() -> void:
 		var id: int = node_at(p)
 		if CropFarming.is_crop(id): growth.erase(p); continue # Retire legacy crop timers after loading old saves.
 		if VillageContent.shape(id) == "crop" and growth[p] >= 30:
-			if VillageContent.DATA[id].stage < 3: set_node(p,id+1)
+			# Cocoa advances one stage at a time through its own three-stage ladder,
+			# since its ids are not laid out three-wide (`mcl_cocoas.grow`).
+			if VillageContent.is_cocoa(id):
+				var next: int = VillageContent.cocoa_next(id)
+				if next != 0: set_node(p,next)
+			elif VillageContent.DATA[id].stage < 3: set_node(p,id+1)
 		elif WoodTypes.is_sapling(id):
 			WoodTypes.sapling_tick(self,p)
 		elif Bamboo.is_bamboo(id) and growth[p] > 90:
@@ -1067,6 +1077,14 @@ func _simulate() -> void:
 			var bamboo_rng := RandomNumberGenerator.new()
 			bamboo_rng.seed = generator.hash_at(p.x,p.y,p.z)
 			Bamboo.grow(self,generator,p,func(q: Vector3i) -> int: return Pasture.light(self,q,14),bamboo_rng)
+		elif id == Nodes.CACTUS:
+			# `mcl_core.grow_cactus`: the base cell grows the column up one, or its top
+			# sprouts a flower on the source's roll.
+			if growth[p] > 60:
+				growth[p] = 0.0
+				var cactus_rng := RandomNumberGenerator.new()
+				cactus_rng.seed = generator.hash_at(p.x,p.y,p.z)
+				if CactusFlower.grow(self,p,cactus_rng): _mark_dirty(p+Vector3i.UP)
 		elif id == Nodes.SUGAR_CANE and growth[p] > 60:
 			growth[p] = 0.0
 			var bottom: Vector3i = p
@@ -1345,7 +1363,7 @@ func cave_spawn(near: Vector3, vertical_reach: int = 12) -> Vector3:
 			if not intersects(pos): return pos
 	return Vector3.INF
 
-func _structure_loot(p: Vector3i, dungeon_seed: int = -1, corridor: bool = false, treasure: bool = false, wreck: bool = false, temple: bool = false, portal: bool = false, jungle: bool = false, outpost: bool = false, igloo: bool = false, monument: bool = false, cabin: bool = false) -> void:
+func _structure_loot(p: Vector3i, dungeon_seed: int = -1, corridor: bool = false, treasure: bool = false, wreck: bool = false, temple: bool = false, portal: bool = false, jungle: bool = false, outpost: bool = false, igloo: bool = false, monument: bool = false, cabin: bool = false, hermitage: bool = false) -> void:
 	var initialized: Dictionary = _structure_loot_ledger()
 	var key: String = station_key(p)
 	if initialized.has(key): return
@@ -1382,7 +1400,9 @@ func _structure_loot(p: Vector3i, dungeon_seed: int = -1, corridor: bool = false
 	if monument:
 		OceanTemples.fill_chest(station,generator.hash_at(p.x,20263,p.z)); _store_structure_loot(p,station,shared); return
 	if cabin:
-		WoodlandCabins.fill_chest(station,generator.hash_at(p.x,20277,p.z)); _store_structure_loot(p,station,shared); return
+		WoodlandCabins.fill_chest(station,generator.hash_at(p.x,20281,p.z)); _store_structure_loot(p,station,shared); return
+	if hermitage:
+		AncientHermitage.fill_chest(station,generator.hash_at(p.x,20311,p.z)); _store_structure_loot(p,station,shared); return
 	if dungeon_seed >= 0:
 		Dungeons.fill(station,dungeon_seed); _store_structure_loot(p,station,shared); return
 	if dimension == "nether" and not Bastions.at(generator,p).is_empty():

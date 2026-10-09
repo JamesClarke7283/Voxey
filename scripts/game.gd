@@ -31,6 +31,7 @@ var cave_sample_world: int = 0
 var cave_shelter: float = 0
 var identity: PlayerIdentity
 var player_homes: Dictionary = {}
+var command_block_pos := Vector3i.ZERO
 var ender_storage: Dictionary = PortableStorage.new_ender_station()
 var player_id: String:
 	get: return identity.session_id if identity != null else PlayerIdentity.OFFLINE
@@ -75,6 +76,8 @@ var sound_times: Dictionary = {}
 var audio_index: int = 0
 var autosave: float = 0.0
 var spawn_timer: float = 0.0
+# `pillager.lua`'s own `next_spawn_attempt`, seeded lazily on the first frame.
+var patrol_attempt: float = PillagerPatrols.ATTEMPT_MIN
 var achievement_timer: float = 0.0
 var pending_save: Dictionary = {}
 var settings: Dictionary = {}
@@ -290,6 +293,8 @@ func _process(delta: float) -> void:
 		WanderingTraders.update(self,delta)
 		# The source's sixty-second village cat spawner.
 		Cats.spawn_step(self,delta,Wolves.rng_for(world))
+		# `pillager.lua`'s own patrol globalstep.
+		PillagerPatrols.update(self,delta)
 		if autosave >= 45: autosave=0; save_game("",true); toast("World saved")
 		if spawn_timer > 6:
 			spawn_timer = 0
@@ -590,7 +595,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode==KEY_F11: toggle_fullscreen(); return
 		if state in ["title","loading"]: return
-		if state in ["book","enchanting","trading","workstation","map","sign"]:
+		if state in ["book","enchanting","trading","workstation","map","sign","command_block"]:
 			if event.physical_keycode == KEY_ESCAPE: resume()
 			return
 		if state == "console":
@@ -640,6 +645,7 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 	# shears yield the item, as the source's `_mcl_shears_drop` requires.
 	if Kelp.break_node(self,p,id,tool): return
 	if Seagrass.break_node(self,p,id,tool): return
+	if PointedDripstone.break_node(self,p,id,tool): return
 	if DenseMaterials.break_ice(self,p,id,tool): return
 	if Beehives.break_node(self,p,id,tool): return
 	if Doors.break_node(self,p,id,tool): return
@@ -655,6 +661,15 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 		if gamemode != "creative":
 			for entry in Bookshelves.contents(world,p): spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry.id,entry.count,entry.get("wear",0),entry.get("data",{}))
 			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Bookshelves.ID)
+		_break_particles(p,id); sound("break"); progress("gather"); api.emit_node_broken(p,id)
+		return
+	if LargePlants.is_large(id):
+		# A large plant breaks as a whole: removing either half removes the other,
+		# and only the bottom yields the item, which is the source's `after_dig_node`.
+		var other: Vector3i = LargePlants.partner(world,p,id)
+		if other != p: world.set_node(other,Nodes.AIR)
+		if not world.set_node(p,Nodes.AIR): return
+		if gamemode != "creative": spawn_drop(Vector3(p)+Vector3.ONE*0.5,LargePlants.bottom(id),1)
 		_break_particles(p,id); sound("break"); progress("gather"); api.emit_node_broken(p,id)
 		return
 	if Candles.break_node(self,p,id,tool): return
@@ -784,11 +799,14 @@ func spawn_arrow(origin: Vector3, velocity: Vector3) -> Arrow:
 	sound_at("arrow",origin)
 	return arrow
 
-func ignite_tnt(p: Vector3i, fuse: float = 3.0) -> void:
+func ignite_tnt(p: Vector3i, fuse: float = PrimedTnt.FUSE) -> void:
 	if world.node_at(p) != Nodes.TNT or not world.set_node(p,Nodes.AIR): return
 	var tnt := PrimedTnt.new()
 	tnt.game = self; tnt.position = Vector3(p); tnt.fuse = fuse
 	entities.add_child(tnt)
+	# `mcl_tnt`'s `TNT:on_activate` launches a newly primed block upward by two nodes
+	# with a small random sideways kick before gravity takes over.
+	tnt.launch()
 
 # Creeper and TNT blasts carve a rough sphere, drop a share of the nodes, light
 # other TNT, and hurt anything nearby in proportion to its distance.
@@ -866,7 +884,7 @@ static func _creature_class(kind: String) -> Creature:
 	if kind in Creature.ALCHEMY_KINDS: return AlchemyCreature.new()
 	if kind in ["rabbit",Striders.KIND] or Equines.is_equine(kind): return RuralAnimal.new()
 	if kind in ["villager","iron_golem"]: return VillageMob.new()
-	if kind in ["ghast","blaze","slime","enderman","end_crystal","ender_dragon","shulker"]: return ExpeditionCreature.new()
+	if kind in ["ghast","blaze","slime","magma_cube","enderman","end_crystal","ender_dragon","shulker"]: return ExpeditionCreature.new()
 	if kind in ["piglin","piglin_brute"]: return NetherResident.new()
 	return Creature.new()
 
@@ -893,7 +911,7 @@ func spawn_creature(kind: String, pos: Vector3, farm_key: String = "") -> Creatu
 		var settler := VillageMob.new(); settler.game = self; settler.kind = kind; settler.position = pos
 		creatures.add_child(settler); villages.manual(settler); return settler
 	if not Creature.KINDS.has(kind): return null
-	var mob: Creature = ExpeditionCreature.new() if kind in ["ghast","blaze","slime","enderman","end_crystal","ender_dragon","shulker"] else (NetherResident.new() if kind in ["piglin","piglin_brute"] else Creature.new())
+	var mob: Creature = ExpeditionCreature.new() if kind in ["ghast","blaze","slime","magma_cube","enderman","end_crystal","ender_dragon","shulker"] else (NetherResident.new() if kind in ["piglin","piglin_brute"] else Creature.new())
 	mob.game=self; mob.position=pos; mob.kind=kind; mob.farm_id=farm_key
 	creatures.add_child(mob)
 	return mob
@@ -1118,6 +1136,8 @@ func progress(action: String) -> void:
 		if inventory.count_item(Nodes.TOOLS+5)>0: achievements.award("getting_an_upgrade")
 		if inventory.count_item(Nodes.BREAD)>0: achievements.award("baker")
 		if inventory.count_item(Nodes.TOOLS)>0 or inventory.count_item(Nodes.TOOLS+4)>0 or _holds_tool_kind(0): achievements.award("first_pickaxe")
+		# An iron pickaxe is tool tier 2, kind 0 (`TOOLS + 2*5`).
+		if inventory.count_item(Nodes.TOOLS+10)>0 or _holds_tool_kind(0) and Nodes.tool_tier(inventory.held().id) >= 2: achievements.award("isnt_it_iron_pick")
 		_holds_smelted_iron()
 	if action=="build":
 		if world.edits.values().has(Nodes.WORKBENCH): achievements.award("craft_table")
@@ -1161,6 +1181,7 @@ func _resize_ui() -> void:
 		"workstation": survival.show_station(survival.workstation_pos,survival.workstation_id)
 		"map": survival.show_map()
 		"sign": Signs.reflow(self)
+		"command_block": hud.show_command_block(command_block_pos,world.circuits.state(command_block_pos))
 		"book": hud.show_book(hud.book_index)
 		"enchanting": hud.show_enchanting(hud.enchanting_pos)
 		"trading": hud.show_trading(villages.trading_key)
@@ -1554,7 +1575,9 @@ func _warm_shaders() -> void:
 	shader_warmup.add_child(label)
 
 func node_mesh(id: int) -> ArrayMesh:
-	if not node_meshes.has(id): node_meshes[id] = Art.build_node_mesh(id)
+	if not node_meshes.has(id):
+		var override: ArrayMesh = ModelOverrides.mesh(id)
+		node_meshes[id] = override if override != null else Art.build_node_mesh(id)
 	return node_meshes[id]
 
 func _particle_mesh(id: int) -> Mesh:
@@ -1639,6 +1662,33 @@ func open_console(initial: String = "/") -> void:
 	world.active=false
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
 	hud.show_console(initial)
+
+# The source's `show_formspec`: use a command block to open its command list. Editing
+# needs Creative mode, which the source pairs with the `maphack` privilege Voxey has no
+# equivalent of. Off Creative the list is shown read-only.
+func open_command_block(p: Vector3i) -> bool:
+	if world.node_at(p) != CommandBlocks.ID: return false
+	command_block_pos = p
+	state="command_block"
+	world.active=false
+	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
+	hud.show_command_block(p,world.circuits.state(p))
+	return true
+
+# The source's `commandblock_action_on`, run from the circuit's rising edge. The commands
+# run as the block's commander, which is the player who placed it.
+func run_command_block(block_state: Dictionary) -> void:
+	var commander: String = String(block_state.get("commander",player_id))
+	CommandBlocks.trigger(String(block_state.get("commands","")),commander,func(line: String) -> void: execute_command(line))
+
+# Store a command block's list after the source's own validation.
+func write_command_block(p: Vector3i, commands: String) -> Dictionary:
+	if world.node_at(p) != CommandBlocks.ID: return {"ok":false,"error":"The command block is gone."}
+	if gamemode != "creative": return {"ok":false,"error":"Editing the command block has failed! You can only change the command block in Creative Mode!"}
+	var check: Dictionary = CommandBlocks.validate(commands)
+	if not check.ok: return check
+	world.circuits.state(p)["commands"] = commands
+	return check
 
 func execute_command(command: String) -> String:
 	var parts: PackedStringArray=command.strip_edges().trim_prefix("/").split(" ",false)

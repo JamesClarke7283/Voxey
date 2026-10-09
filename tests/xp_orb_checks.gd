@@ -92,8 +92,21 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	XpOrbs.throw_xp(game,game.player.position+Vector3(1.5,0.5,0.0),37)
 	t.check(XpOrbs.orb_count(game) > orb_count and game.entities.get_child_count() > before,"throwing experience spawns orb nodes into the entity group")
 	var thrown_orb: XpOrbs.Orb = XpOrbs.orbs(game)[0]
+	# A live orb falls under gravity, so stop its physics before reading the throw
+	# velocity it was spawned with (otherwise a frame between spawn and assertion
+	# lowers `velocity.y` below the source's floor).
+	thrown_orb.set_physics_process(false)
+	thrown_orb.set_process(false)
 	t.check(thrown_orb.get_child_count() == 1 and thrown_orb.get_child(0) is MeshInstance3D,"a thrown orb carries a visible mesh")
-	t.check(thrown_orb.velocity.y >= 2.0 and thrown_orb.velocity.y <= 5.0 and Vector2(thrown_orb.velocity.x,thrown_orb.velocity.z).length() <= 2.0,"a thrown orb uses the source's throw velocity bounds")
+	t.check(thrown_orb.velocity.y >= 2.0 and thrown_orb.velocity.y <= 5.0 and absf(thrown_orb.velocity.x) <= 2.0 and absf(thrown_orb.velocity.z) <= 2.0,"a thrown orb uses the source's throw velocity bounds")
+	# `math.random(-2,2) * math.random()` bounds each horizontal axis separately, so
+	# the 2D speed can reach 2·sqrt(2). Assert the per-axis rule over many draws.
+	var vel_rng := RandomNumberGenerator.new(); vel_rng.seed = 4242
+	var bounds_ok: bool = true
+	for i in 200:
+		var v: Vector3 = XpOrbs.throw_velocity(vel_rng)
+		if v.y < 2.0 or v.y > 5.0 or absf(v.x) > 2.0 or absf(v.z) > 2.0: bounds_ok = false
+	t.check(bounds_ok,"the throw-velocity draw stays within the source's per-axis bounds")
 	t.check(thrown_orb.acceleration.y < 0.0,"a thrown orb starts under the source's downward gravity")
 	var experience_before: float = game.experience
 	for frame in 600:

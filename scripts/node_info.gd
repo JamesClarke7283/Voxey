@@ -158,6 +158,7 @@ static func mesh_kind(id: int, external_circuits: bool) -> int:
 	if Beacons.is_beacon(id) or Beacons.is_beam(id): return 16
 	if Seagrass.is_seagrass(id): return 17
 	if SeaPickles.is_pickle(id): return 18
+	if PointedDripstone.is_stage(id): return 33
 	if Corals.is_coral(id): return 19
 	if Conduits.is_conduit(id): return 20
 	if Scaffolding.is_scaffolding(id): return 21

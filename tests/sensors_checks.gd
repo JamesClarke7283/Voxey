@@ -46,7 +46,9 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	for i in range(1,3): world.set_node(p+Vector3i.RIGHT*i,Nodes.REDSTONE_WIRE)
 	world.set_node(p+Vector3i.RIGHT*3,Nodes.REDSTONE_LAMP); ticks(world,1)
 	t.check(circuit.output(p+Vector3i.RIGHT,Vector3i.RIGHT) == 15 and circuit.output(p+Vector3i.RIGHT*2,Vector3i.RIGHT) == 14 and circuit.state(p+Vector3i.RIGHT*3).powered,"detector power drives attenuated dust and a real redstone lamp")
-	game.daylight = 0.05; ticks(world,9)
+	game.daylight = 0.05; ticks(world,11)
+	# The lamp itself lags a signal going low by two ticks (`mcl_redstone_lamp`), so
+	# the circuit reads off one step before the lamp's own state does.
 	t.check(circuit.output(p,Vector3i.RIGHT) == 0 and not circuit.state(p+Vector3i.RIGHT*3).powered,"detectors resample darkness once per source second and turn the circuit off")
 	held(game,Nodes.APPLE); game.player.target = {"id":RedstoneSensors.DAYLIGHT,"pos":p,"normal":Vector3i.UP,"distance":4.0}
 	game.player.use()
@@ -100,7 +102,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	t.check(not RedstoneSensors.hit(world,target,Vector3(target)+Vector3(0,0.5,0.5)) and is_equal_approx(circuit.state(target).target_remaining,before) and circuit.state(target).out == 8,"a hit on an active target does not replace or extend its source pulse")
 	ticks(world,5)
 	t.check(world.node_at(target) == RedstoneSensors.TARGET_ON,"target remains active before the one-second boundary")
-	ticks(world,1)
+	ticks(world,3)
 	t.check(world.node_at(target) == RedstoneSensors.TARGET and circuit.output(target,Vector3i.RIGHT) == 0 and not circuit.state(target+Vector3i.RIGHT*2).powered,"target pulse ends at one second and switches its connected circuit off")
 	world.set_node(target+Vector3i.RIGHT,Nodes.STONE)
 	RedstoneSensors.hit(world,target); ticks(world,1)

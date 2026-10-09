@@ -3,6 +3,26 @@ extends RefCounted
 # The chiseled bookshelf (mcl_books/chiseled_bookshelf.lua): six one-item slots, a
 # comparator reading the last changed slot, a hopper above, and book drops.
 static func run(suite: Object, game: Node3D) -> void:
+	# --- the plain bookshelf is a 27-slot container, and written books copy ---
+	# `mcl_books`: a plain bookshelf stores books in 27 slots, opened like a chest.
+	var plain: Vector3i = Vector3i(20,game.world.generator.terrain_height(20,20)+24,20)
+	for x in range(-2,3):
+		for y in range(-1,4):
+			for z in range(-2,3): game.world.set_node(plain+Vector3i(x,y,z),Nodes.AIR)
+	game.world.set_node(plain,Nodes.BOOKSHELF)
+	var shelf: Dictionary = game.world.get_station(plain,"chest")
+	suite.check(shelf.slots.size() == 27,"a plain bookshelf holds a 27-slot container")
+	shelf.slots[0] = {"id":Nodes.BOOK,"count":3,"wear":0}
+	suite.check(game.world.circuits.container(plain).size() == 27 and game.world.circuits.container_signal(plain) > 0,"the bookshelf reads as a container and signals a comparator")
+	# `mcl_books`: one written book plus N writable books copies it N times.
+	var book_inv := Inventory.new()
+	var orig: Dictionary = {"id":Nodes.WRITTEN_BOOK,"count":1,"wear":0,"data":{"title":"My Book","text":"hello","author":"player","generation":0}}
+	var out: Dictionary = book_inv.craft_output_data(Nodes.WRITTEN_BOOK,[orig,{"id":Nodes.WRITABLE_BOOK,"count":2,"wear":0}])
+	suite.check(out.get("data",{}).get("title","") == "My Book" and out.get("data",{}).get("generation",0) == 1,"copying a written book carries its text and increments its generation")
+	var copy2: Dictionary = {"id":Nodes.WRITTEN_BOOK,"count":1,"wear":0,"data":{"title":"x","text":"y","generation":2}}
+	suite.check(book_inv.craft_output_data(Nodes.WRITTEN_BOOK,[copy2,{"id":Nodes.WRITABLE_BOOK,"count":1,"wear":0}]).has("error"),"a copy of a copy cannot be copied")
+	suite.check(book_inv.recipe_index(Nodes.WRITTEN_BOOK) >= 0,"the written-book copy recipe is registered")
+
 	suite.check(Bookshelves.ID == 11546 and Bookshelves.SLOTS == 6,"the shelf holds its allocated id and the source's six slots")
 	suite.check(Nodes.exists(Bookshelves.ID) and Nodes.placeable(Bookshelves.ID) and Nodes.tile(Bookshelves.ID,0) != 0,"the shelf exists, is placeable and has its own tile")
 	suite.check(Nodes.preferred_tool(Bookshelves.ID) == 1 and Nodes.hardness(Bookshelves.ID) == 1.5,"the shelf is a wooden block at the source's hardness")

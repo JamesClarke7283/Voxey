@@ -15,13 +15,24 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	for i in Barriers.FENCE_MATERIALS.size():
 		var fence: int = Barriers.FENCE_BASES[i]; var gate: int = fence+1
 		var f: Dictionary = inv.recipes[inv.recipe_index(fence)]; var g: Dictionary = inv.recipes[inv.recipe_index(gate)]
-		t.check(f.count == (6 if i == 1 else 3) and g.count == (2 if i == 1 else 1) and f.ingredients[Barriers.FENCE_MATERIALS[i]] == 4 and g.ingredients[Barriers.FENCE_MATERIALS[i]] == 2,"source fence/gate recipe material counts and yields: "+Nodes.title(fence))
+		# Brick fences (nether brick and red nether brick) yield 6/2; wood ones 3/1.
+		var brick: bool = Barriers.FENCE_MATERIALS[i] in [Nodes.NETHER_BRICKS,NetherBlocks.RED_NETHER_BRICKS]
+		t.check(f.count == (6 if brick else 3) and g.count == (2 if brick else 1) and f.ingredients[Barriers.FENCE_MATERIALS[i]] == 4 and g.ingredients[Barriers.FENCE_MATERIALS[i]] == 2,"source fence/gate recipe material counts and yields: "+Nodes.title(fence))
 	for i in Barriers.WALL_MATERIALS.size():
 		var wall: int = Barriers.WALL_FIRST+i; var recipe: Dictionary = inv.recipes[inv.recipe_index(wall)]
 		t.check(recipe.count == 6 and recipe.ingredients == {Barriers.WALL_MATERIALS[i]:6} and Nodes.exists(wall) and Nodes.placeable(wall),"source survival wall recipe and registry: "+Nodes.title(wall))
-	# Seven more wall materials were appended for the nether family, so the catalog
-	# grew from 35 to 42 items. The structural claims are unchanged.
-	t.check(Barriers.items().size() == 42 and not Nodes.all_ids().has(5005) and Nodes.drop(5008) == 5001 and not Nodes.placeable(5008),"catalog exposes every barrier item and hides gate placement states; all states drop their canonical gate")
+	# Nine more wall materials were appended for the nether, prismarine and mud
+	# families, so the catalog grew from 35 to 44 items. The structural claims are
+	# unchanged.
+	t.check(Barriers.items().size() == 46 and not Nodes.all_ids().has(5005) and Nodes.drop(5008) == 5001 and not Nodes.placeable(5008),"catalog exposes every barrier item and hides gate placement states; all states drop their canonical gate")
+	# `mclx_fences`: the red nether brick fence and gate.
+	t.check(Barriers.is_fence(5032) and Barriers.is_gate(5033) and Barriers.material(5032) == NetherBlocks.RED_NETHER_BRICKS,"the red nether brick fence and gate exist")
+	t.check(Barriers.connects(5032,5033) and Barriers.connects(5032,5016),"red nether brick fences connect to their gate and to nether brick fences")
+	t.check(not Barriers.connects(5032,5000),"but not to wood fences")
+	# Prismarine and mud-brick walls were appended for source parity
+	# (`mcl_ocean/prismarine.lua`, `mcl_mud/init.lua`).
+	t.check(Barriers.items().has(Barriers.WALL_FIRST+Barriers.WALL_MATERIALS.find(VillageContent.PRISMARINE)) and Barriers.items().has(Barriers.WALL_FIRST+Barriers.WALL_MATERIALS.find(EndMud.MUD_BRICKS)),"prismarine and mud-brick walls are reachable")
+	t.check(Barriers.material(Barriers.WALL_FIRST+Barriers.WALL_MATERIALS.find(EndMud.MUD_BRICKS)) == EndMud.MUD_BRICKS,"a mud-brick wall reports its source material")
 	t.check(Nodes.fuel_time(5000) == 15 and Nodes.fuel_time(5001) == 15 and Nodes.fuel_time(5016) == 0 and Fire.flammable(5000) and not Fire.flammable(5016),"oak barriers burn for fifteen seconds; brick fences do not burn")
 	t.check(Barriers.connects(5000,5001) and not Barriers.connects(5000,5016) and Barriers.connects(5016,5017) and not Barriers.connects(5016,5000),"wood and Nether-brick fence groups connect to matching gates without cross-material rails")
 	t.check(not Barriers.connects(5100,5001) and Barriers.connects(5100,5101) and Barriers.connects(5000,Nodes.GLASS) and not Barriers.connects(5000,4000),"source walls connect to other walls and full blocks, without inventing gate/slab connections")

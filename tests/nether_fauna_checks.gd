@@ -70,6 +70,50 @@ static func run(suite: Object, game: Node3D) -> void:
 	suite.check(absf(float(ghast_ok)/2000.0-0.05) < 0.02,"a ghast's position test passes one time in twenty (%d of 2000)" % ghast_ok)
 	world.set_node(arena+Vector3i(0,-1,0),NetherBlocks.NETHER_WART_BLOCK)
 	suite.check(not NetherSpawns.allowed("hoglin",world,arena,rng) and not NetherSpawns.allowed("piglin",world,arena,rng) and NetherSpawns.allowed("magma_cube",world,arena,rng),"hoglins and piglins never spawn on a nether wart block")
+	# `slime+magma_cube.lua`: a magma cube has three sizes and splits on death.
+	for mob in game.creatures.get_children():
+		if mob.kind == "slime" or mob.kind == "magma_cube": mob.queue_free()
+	await suite.process_frame
+	var big: Creature = spawned("magma_cube",game,Vector3(arena)+Vector3(0,0,10.5))
+	big.set_magma_size(4)
+	suite.check(big is ExpeditionCreature and big.info().health == 16.0 and big.info().damage == 6,"a big magma cube has the source's 16 health and 6 damage")
+	big.set_magma_size(2)
+	suite.check(big.info().health == 4.0 and big.info().damage == 4,"a small magma cube has 4 health and 4 damage")
+	big.set_magma_size(1)
+	suite.check(big.info().health == 1.0 and big.info().damage == 3,"a tiny magma cube has 1 health and 3 damage")
+	big.set_magma_size(4)
+	# The split rule itself: a big cube leaves small cubes, a small one tiny cubes,
+	# and a tiny one leaves no cubes (it drops 0–1 magma cream). This is asserted
+	# directly so the check does not depend on how many cubes are already live.
+	var split_rng := RandomNumberGenerator.new(); split_rng.seed = 7
+	suite.check(ExpeditionCreature.magma_child_size(4) == 2 and ExpeditionCreature.magma_child_size(2) == 1,"a magma cube splits into the next size down")
+	var counts_ok: bool = true
+	var spawned_any: bool = false
+	for i in 20:
+		split_rng.seed = i
+		var count: int = ExpeditionCreature.magma_child_count(4,split_rng)
+		if count < 1 or count > 2: counts_ok = false
+		if count > 0: spawned_any = true
+	suite.check(counts_ok and spawned_any,"a big magma cube leaves one or two smaller cubes on the source's roll")
+	# Big dies into small cubes, not items. Spawn a controlled cube so the assertion
+	# does not depend on how many cubes the earlier checks left live.
+	var victim: Creature = ExpeditionCreature.new()
+	victim.game = game; victim.kind = "magma_cube"; victim.position = Vector3(arena)+Vector3(0,20,0)
+	game.creatures.add_child(victim)
+	victim.set_magma_size(4)
+	victim.set_physics_process(false)
+	await suite.process_frame
+	var before_ids: Dictionary = {}
+	for mob in game.creatures.get_children():
+		if mob.kind == "magma_cube": before_ids[mob.get_instance_id()] = true
+	victim.die()
+	var new_kids: int = 0
+	for mob in game.creatures.get_children():
+		if mob.kind == "magma_cube" and not mob.is_queued_for_deletion() and not before_ids.has(mob.get_instance_id()): new_kids += 1
+	suite.check(new_kids >= 1,"a big magma cube splits into smaller ones")
+	for mob in game.creatures.get_children():
+		if mob.kind == "magma_cube" and is_instance_valid(mob): mob.queue_free()
+	await suite.process_frame
 	world.set_node(arena+Vector3i(0,-1,0),Nodes.STONE)
 
 	# --- the strider -------------------------------------------------------------------------

@@ -7,16 +7,17 @@ extends RefCounted
 # closed and 5..8 open. Wall connections are derived from neighbors.
 const FIRST = 5000
 const WALL_FIRST = 5100
-const FENCE_BASES = [5000,5016,5300,5316,5332,5348,5364]
-const FENCE_MATERIALS = [Nodes.PLANKS,Nodes.NETHER_BRICKS,6035,6067,6099,6131,6163]
-const WALL_MATERIALS = [Nodes.COBBLE,Nodes.MOSSY_COBBLE,Nodes.RED_BRICKS,Nodes.SANDSTONE,Nodes.BRICKS,Nodes.MOSSY_BRICKS,VillageContent.GRANITE,VillageContent.DIORITE,VillageContent.ANDESITE,Nodes.NETHER_BRICKS,Nodes.END_BRICKS,MinecloniaOres.BLACKSTONE,Bastions.POLISHED,Bastions.BRICKS,Nodes.COBBLED_DEEPSLATE,Nodes.POLISHED_DEEPSLATE,Nodes.DEEPSLATE_BRICKS,Masonry.DEEP_TILES,MinecloniaOres.TUFF,Masonry.POLISHED_TUFF,Masonry.TUFF_BRICKS,NetherBlocks.RED_NETHER_BRICKS,NetherBlocks.NETHER_WART_BLOCK,NetherBlocks.CHISELED_QUARTZ,NetherBlocks.SMOOTH_QUARTZ,NetherBlocks.QUARTZ_BRICK,NetherBlocks.POLISHED_BASALT,NetherBlocks.CRACKED_BLACKSTONE_BRICKS]
+const FENCE_BASES = [5000,5016,5300,5316,5332,5348,5364,5032]
+const FENCE_MATERIALS = [Nodes.PLANKS,Nodes.NETHER_BRICKS,6035,6067,6099,6131,6163,NetherBlocks.RED_NETHER_BRICKS]
+const WALL_MATERIALS = [Nodes.COBBLE,Nodes.MOSSY_COBBLE,Nodes.RED_BRICKS,Nodes.SANDSTONE,Nodes.BRICKS,Nodes.MOSSY_BRICKS,VillageContent.GRANITE,VillageContent.DIORITE,VillageContent.ANDESITE,Nodes.NETHER_BRICKS,Nodes.END_BRICKS,MinecloniaOres.BLACKSTONE,Bastions.POLISHED,Bastions.BRICKS,Nodes.COBBLED_DEEPSLATE,Nodes.POLISHED_DEEPSLATE,Nodes.DEEPSLATE_BRICKS,Masonry.DEEP_TILES,MinecloniaOres.TUFF,Masonry.POLISHED_TUFF,Masonry.TUFF_BRICKS,NetherBlocks.RED_NETHER_BRICKS,NetherBlocks.NETHER_WART_BLOCK,NetherBlocks.CHISELED_QUARTZ,NetherBlocks.SMOOTH_QUARTZ,NetherBlocks.QUARTZ_BRICK,NetherBlocks.POLISHED_BASALT,NetherBlocks.CRACKED_BLACKSTONE_BRICKS,VillageContent.PRISMARINE,EndMud.MUD_BRICKS]
 const SIDES = [Vector3i.RIGHT,Vector3i.BACK,Vector3i.LEFT,Vector3i.FORWARD]
 static var icon_cache: Dictionary = {}
 static var visual_cache: Dictionary = {}
 
 static func family(id: int) -> int:
-	if id >= FIRST and id < FIRST+32: return FIRST+(id-FIRST)/16*16
-	if id >= 5300 and id < 5380: return 5300+(id-5300)/16*16
+	# Every fence base owns a 16-id window (closed gate facings 1..4, open 5..8).
+	for base in FENCE_BASES:
+		if id >= base and id < base+16: return base
 	return -1
 static func is_fence(id: int) -> bool: return id in FENCE_BASES
 static func is_gate(id: int) -> bool: return family(id) >= 0 and id-family(id) in range(1,9)
@@ -39,7 +40,13 @@ static func full_solid(id: int) -> bool:
 
 static func connects(id: int, other: int) -> bool:
 	if is_wall(id): return is_wall(other) or full_solid(other)
-	if is_fence(id): return full_solid(other) or (is_fence(other) or is_gate(other)) and (material(id) == material(other) or WoodTypes.is_planks(material(id)) and WoodTypes.is_planks(material(other)))
+	if is_fence(id):
+		# Nether brick and red nether brick fences share one `fence_nether_brick` group,
+		# so they connect to each other as well as to their own material; wood fences
+		# connect across species.
+		var nether: bool = material(id) in [Nodes.NETHER_BRICKS,NetherBlocks.RED_NETHER_BRICKS]
+		var other_nether: bool = is_fence(other) and material(other) in [Nodes.NETHER_BRICKS,NetherBlocks.RED_NETHER_BRICKS]
+		return full_solid(other) or (is_fence(other) or is_gate(other)) and (material(id) == material(other) or nether and other_nether or WoodTypes.is_planks(material(id)) and WoodTypes.is_planks(material(other)))
 	return false
 
 static func neighbors(world: VoxelWorld, p: Vector3i) -> Array:
@@ -152,8 +159,8 @@ static func recipes(inv: Inventory) -> void:
 	for i in FENCE_MATERIALS.size():
 		var base: int = FENCE_MATERIALS[i]
 		var stick: int = Nodes.NETHER_BRICK_ITEM if i == 1 else Nodes.STICK
-		inv._recipe(title(FENCE_BASES[i]),FENCE_BASES[i],6 if i == 1 else 3,[base,stick,base,base,stick,base],3,"table")
-		inv._recipe(title(FENCE_BASES[i]+1),FENCE_BASES[i]+1,2 if i == 1 else 1,[stick,base,stick,stick,base,stick],3,"table")
+		inv._recipe(title(FENCE_BASES[i]),FENCE_BASES[i],6 if base in [Nodes.NETHER_BRICKS,NetherBlocks.RED_NETHER_BRICKS] else 3,[base,stick,base,base,stick,base],3,"table")
+		inv._recipe(title(FENCE_BASES[i]+1),FENCE_BASES[i]+1,2 if base in [Nodes.NETHER_BRICKS,NetherBlocks.RED_NETHER_BRICKS] else 1,[stick,base,stick,stick,base,stick],3,"table")
 	for i in WALL_MATERIALS.size():
 		var base: int = WALL_MATERIALS[i]
 		inv._recipe(title(WALL_FIRST+i),WALL_FIRST+i,6,[base,base,base,base,base,base],3,"table")

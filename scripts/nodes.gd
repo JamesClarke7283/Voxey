@@ -437,6 +437,10 @@ static func uncached_title(id: int) -> String:
 	if Conduits.is_ocean(id): return Conduits.title(id)
 	if Scaffolding.is_scaffolding(id): return "Scaffolding"
 	if Heads.is_any(id): return Heads.title(id)
+	if LargePlants.is_large(id): return LargePlants.DATA[id].name
+	if PointedDripstone.is_stage(id) or id == PointedDripstone.ITEM: return PointedDripstone.title(id)
+	if CopperDecor.is_decor(id): return CopperDecor.DATA[id].name
+	if Torches.is_copper(id): return "Copper torch"
 	if Rails.is_rail(id) or Rails.is_cart(id): return Rails.title(id)
 	if Archaeology.DATA.has(id): return Archaeology.DATA[id].name
 	if Decor.is_pot(id): return "Flower pot"
@@ -473,6 +477,10 @@ static func color(id: int) -> Color:
 	if Conduits.is_ocean(id): return Conduits.color(id)
 	if Scaffolding.is_scaffolding(id): return Color("c8b06a")
 	if Heads.is_any(id): return Heads.color(id)
+	if LargePlants.is_large(id): return LargePlants.color(id)
+	if PointedDripstone.is_stage(id): return PointedDripstone.color(id)
+	if CopperDecor.is_decor(id): return Color(CopperDecor.DATA[id].color)
+	if Torches.is_copper(id): return Color("c77a52")
 	if Fireworks.is_rocket(id): return Color("f2f2f2")
 	if Rails.DATA.has(id): return Color(Rails.DATA[id].color)
 	if Archaeology.DATA.has(id): return Color(Archaeology.DATA[id].color)
@@ -524,6 +532,10 @@ static func exists(id: int) -> bool:
 	if SnowCover.is_snow(id): return true
 	if Trapdoors.is_trapdoor(id): return true
 	if Barriers.is_barrier(id): return true
+	if LargePlants.is_large(id): return true
+	if PointedDripstone.is_stage(id) or id == PointedDripstone.ITEM: return true
+	if CopperDecor.is_decor(id): return true
+	if Torches.is_copper(id): return true
 	if Fluids.flowing(id): return true
 	if BuildingShapes.is_shape(id): return true
 	return VillageContent.DATA.has(id) or NAMES.has(id) or is_tool_id(id) or is_armor(id) or custom_nodes.has(id) or custom_items.has(id)
@@ -615,6 +627,8 @@ static func armor_material(id: int) -> int:
 	return 0 if id == ELYTRA else (id - ARMOR_BASE) / 4 if is_armor(id) else -1
 
 static func armor_piece(id: int) -> int:
+	# `mcl_heads`: a head carries `armor_head` and is worn in the helmet slot.
+	if Heads.is_any(id): return 0
 	if VillageContent.DATA.get(id,{}).has("armor"): return ["helmet","chestplate","leggings","boots"].find(VillageContent.DATA[id].armor)
 	return 1 if id == ELYTRA else (id - ARMOR_BASE) % 4 if is_armor(id) else -1
 
@@ -688,6 +702,10 @@ static func uncached_solid(id: int) -> bool:
 	if Conduits.is_ocean(id): return false
 	if Scaffolding.is_scaffolding(id): return false
 	if Heads.is_any(id): return false
+	if LargePlants.is_large(id): return false
+	if PointedDripstone.is_stage(id): return false
+	if CopperDecor.is_lantern(id) or CopperDecor.is_chain(id) or CopperDecor.is_bars(id): return false
+	if Torches.is_copper(id): return false
 	if Rails.is_rail(id) or Rails.is_cart(id): return false
 	if Decor.is_pot(id) or Decor.is_stand(id): return false
 	if id == Archaeology.POT: return false
@@ -794,6 +812,10 @@ static func placeable(id: int) -> bool:
 	if RedstoneSensors.is_device(id): return id == RedstoneSensors.item(id)
 	if Trapdoors.is_trapdoor(id): return id == Trapdoors.item(id)
 	if Barriers.is_barrier(id): return id == Barriers.item(id)
+	if LargePlants.is_large(id): return LargePlants.is_bottom(id)
+	if PointedDripstone.is_stage(id): return false
+	if id == PointedDripstone.ITEM: return true
+	if Torches.is_copper(id): return id == Torches.COPPER
 	if Fluids.flowing(id): return false
 	if BuildingShapes.is_shape(id): return id == BuildingShapes.item(id)
 	if id in Torches.WALLS: return false
@@ -1007,6 +1029,12 @@ static func drop(id: int) -> int:
 	if DenseMaterials.is_bone(id): return DenseMaterials.BONE
 	if RedstoneInputs.is_device(id): return RedstoneInputs.item(id)
 	if WoodTypes.is_wood(id): return 0 if WoodTypes.is_leaves(id) else WoodTypes.canonical(id)
+	if LargePlants.is_large(id): return LargePlants.bottom(id)
+	if PointedDripstone.is_stage(id): return PointedDripstone.ITEM
+	if CopperDecor.is_lantern(id): return CopperDecor.LANTERN_FLOOR
+	if CopperDecor.is_decor(id): return id
+	if Torches.is_copper(id): return Torches.COPPER
+	if CactusFlower.is_flower(id): return id
 	if Signs.is_sign(id): return Signs.OAK
 	# A huge mushroom block drops the *small* mushroom, rolled in `break_node`, so
 	# the generic path must not hand out the block itself.
@@ -1023,6 +1051,7 @@ static func drop(id: int) -> int:
 	if Barriers.is_barrier(id): return Barriers.item(id)
 	if Fluids.flowing(id): return 0
 	if BuildingShapes.is_shape(id): return BuildingShapes.item(id)
+	if Torches.is_copper(id): return Torches.copper_tile()
 	if Torches.is_torch(id): return TORCH
 	if Fire.is_fire(id) or NetherBlocks.is_soul_fire(id): return AIR
 	if id == MinecloniaOres.NETHER_GOLD: return GOLD_NUGGET
@@ -1082,6 +1111,7 @@ static func uncached_tile(id: int, face: int) -> int:
 	if Barriers.is_barrier(id): return tile(Barriers.material(id),face)
 	if Fluids.flowing(id): return tile(Fluids.base(id),face)
 	if BuildingShapes.is_shape(id): return tile(BuildingShapes.material(id),face)
+	if Torches.is_copper(id): return Torches.copper_tile()
 	if Torches.is_torch(id): return TORCH
 	if id == WOOL: id = VillageContent.WOOL_WHITE
 	if VillageContent.DATA.has(id): return 137+VillageContent.BLOCKS.find(id)

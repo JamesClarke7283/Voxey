@@ -54,7 +54,9 @@ func use() -> bool:
 	if Axolotls.capture(game,mob):
 		game.achievements.award("cutest_predator")
 		return true
-	if FishBuckets.capture(game,mob): return true
+	if FishBuckets.capture(game,mob):
+		game.achievements.award("tactical_fishing")
+		return true
 	# `dolphin:on_rightclick`: a fish sends it looking for treasure.
 	if mob != null and Dolphins.is_dolphin(mob.kind) and Dolphins.feed(game,mob): return true
 	if Golems.use(game,mob): return true
@@ -129,6 +131,15 @@ func use() -> bool:
 			game.toast("Washed clean.")
 			return true
 		return Cauldrons.use(game,target.pos)
+	# `mcl_core.bottle_dirt`: pouring a **water bottle** on dirt turns it to mud and
+	# returns the empty bottle. This must run before the generic potion branch, or a
+	# water bottle is drunk instead of poured. The source resolves both the `under`
+	# and `above` cells of its pointed thing, so either is accepted.
+	if held == VillageContent.WATER_BOTTLE and not target.is_empty():
+		var pour: Vector3i = target.pos+target.normal if target.normal != Vector3i.ZERO else target.pos
+		for cell in [target.pos,pour]:
+			if game.world.node_at(cell) == Nodes.DIRT and game.world.set_node(cell,VillageContent.MUD):
+				_consume(); give(VillageContent.GLASS_BOTTLE,1); game.sound("place"); return true
 	if PotionCatalog.is_bottle(held):
 		if PotionCatalog.ITEMS[held].form == "drink":
 			PotionEffects.apply_item(game.player,held); _consume()
@@ -179,7 +190,7 @@ func use() -> bool:
 	# Cocoa is exactly that case: its pod ids jump to a cobweb, so the old
 	# `id+3-stage` turned a pod into a cobweb. Cocoa has its own ripening path
 	# (the `RIPE_COCOA_POD` id) and is excluded here.
-	if held == Nodes.BONE_MEAL and not CropFarming.is_crop(id) and id != VillageContent.COCOA_POD and VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3:
+	if held == Nodes.BONE_MEAL and not CropFarming.is_crop(id) and not VillageContent.is_cocoa(id) and VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3:
 		var advanced: int = id+3-int(VillageContent.DATA[id].stage)
 		# Only advance when the destination is really a later stage of the same
 		# crop, so a table that is not three-wide cannot silently produce anything.
@@ -221,6 +232,8 @@ func use() -> bool:
 		if id in [VillageContent.WOODEN_DOOR,VillageContent.WOODEN_DOOR_OPEN]: toggle_door(p); return true
 		if id == VillageContent.BREWING_STAND: game.open_inventory("brewing",p); return true
 		if id in [VillageContent.BARREL,VillageContent.RECOVERY_CHEST]: PiglinAnger.on_container_opened(game); game.open_inventory("chest",p); return true
+		# `mcl_books`: a plain bookshelf is a 27-slot container, opened like a chest.
+		if id == Nodes.BOOKSHELF: game.open_inventory("chest",p); return true
 		if TrappedChests.is_trapped(id):
 			# Its signal lasts as long as the screen is open, so the close path must
 			# know which chest it was.
@@ -349,6 +362,16 @@ func exchange(cost: Array, id: int, count: int = 1) -> bool:
 	if trial.add_item(id,count) > 0: game.toast("Make room in your inventory first."); return false
 	game.inventory.slots = trial.slots; game.inventory.changed.emit(); game.sound("place"); return true
 
+# `mcl_lectern`: the text of the lectern's current page, sliced from the book body.
+# The source keeps a real `pages` array; Voxey stores one string, so the slice is
+# `256` characters per page, which is the same size the source's reader shows.
+static func _lectern_page(station: Dictionary) -> String:
+	var body: String = str(station.book.get("text",""))
+	if int(station.get("pages",1)) <= 1: return body
+	var page: int = clampi(int(station.get("page",1)),1,int(station.pages))
+	var per: int = maxi(1,ceili(body.length()/float(station.pages)))
+	return body.substr((page-1)*per,per)
+
 func show_station(p: Vector3i, id: int) -> void:
 	workstation_pos = p; workstation_id = id
 	game.state = "workstation"; game.world.active = false; Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -397,6 +420,40 @@ func show_station(p: Vector3i, id: int) -> void:
 				actions.append(["1 "+Nodes.title(input)+" → 1 "+Nodes.title(output),func(): exchange([[input,1]],output)])
 
 	elif id == VillageContent.LOOM:
+		# `mcl_loom`: the loom's real purpose is to apply a **pattern item + dye** to a
+		# banner the player carries, previewing the result. Voxey already lets a dye be
+		# used on a placed banner (`banners.gd`); this adds the loom's own carried-banner
+		# route, which is the source's UI.
+		for i in game.inventory.slots.size():
+			var slot: Dictionary = game.inventory.slots[i]
+			if not Banners.is_banner(slot.id): continue
+			var banner_index: int = i
+			var layers: Array = Banners.layers(slot)
+			for pattern_index in VillageContent.PATTERN_KEYS.size():
+				var pattern_id: int = VillageContent.PATTERN_FIRST+pattern_index
+				var key: String = VillageContent.PATTERN_KEYS[pattern_index]
+				if Banners.pattern(key).is_empty(): continue
+				var label: String = "Apply "+key.replace("_"," ")+" · pattern + dye + banner"
+				actions.append([label,func():
+					# Find a pattern item and a dye in the inventory, then emblazon.
+					var pattern_slot: int = -1; var dye_slot: int = -1
+					for j in game.inventory.slots.size():
+						var s: Dictionary = game.inventory.slots[j]
+						if s.id == pattern_id and pattern_slot < 0: pattern_slot = j
+						elif Banners.dye_color(s.id) >= 0 and dye_slot < 0: dye_slot = j
+					if pattern_slot < 0 or dye_slot < 0:
+						game.toast("The loom needs a pattern item and a dye.")
+						return
+					var banner: Dictionary = game.inventory.slots[banner_index]
+					if not Banners.emblazon(banner,Banners.pending_pattern(game.inventory.slots[pattern_slot].id),Banners.dye_color(game.inventory.slots[dye_slot].id)):
+						game.toast("That banner already carries its maximum of patterns.")
+						return
+					game.inventory.remove_item(pattern_id,1)
+					game.inventory.remove_item(game.inventory.slots[dye_slot].id,1)
+					game.inventory.changed.emit(); game.sound("place")
+					game.toast("Pattern applied at the loom.")
+					show_station(p,id)])
+		# The source's loom also crafts a plain banner from wool and a dye.
 		for dye in VillageContent.DATA:
 			if VillageContent.DATA[dye].get("family","") != "dye": continue
 			var dye_id: int = dye; var color_name: String = VillageContent.DATA[dye].dye
@@ -431,14 +488,27 @@ func show_station(p: Vector3i, id: int) -> void:
 	elif id == VillageContent.LECTERN:
 		var station: Dictionary = game.world.get_station(p,"lectern")
 		if station.has("book"):
-			var text := Label.new(); text.text = str(station.book.get("title","Book"))+"\n\n"+str(station.book.get("text","")); text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; text.custom_minimum_size.x = 650; list.add_child(text)
+			# `mcl_lectern`: the book is split into pages and the comparator reads the
+			# page number (`measure_lectern`). Pages are derived from the text, since
+			# Voxey stores a written book's body as one string.
+			if not station.has("pages"):
+				# A written book may carry its own page split; otherwise split the text
+				# into pages of roughly 256 characters.
+				var book: Dictionary = station.book
+				station.pages = maxi(1,int(book.get("pages",0))) if int(book.get("pages",0)) > 0 else maxi(1,ceili(str(book.get("text","")).length()/256.0))
+				station.page = 1
+			var page_text := Label.new(); page_text.text = str(station.book.get("title","Book"))+"\n\n"+_lectern_page(station); page_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; page_text.custom_minimum_size.x = 650; list.add_child(page_text)
+			var nav := Label.new(); nav.text = "Page %d / %d"%[int(station.page),int(station.pages)]; list.add_child(nav)
+			if int(station.pages) > 1:
+				actions.append(["Previous page",func(): station.page = maxi(1,int(station.page)-1); show_station(p,id)])
+				actions.append(["Next page",func(): station.page = mini(int(station.pages),int(station.page)+1); show_station(p,id)])
 			actions.append(["Take book",func():
-				if game.inventory.capacity(Nodes.WRITTEN_BOOK,0,station.book) >= 1: give(Nodes.WRITTEN_BOOK,1,station.book); station.erase("book"); show_station(p,id)])
+				if game.inventory.capacity(Nodes.WRITTEN_BOOK,0,station.book) >= 1: give(Nodes.WRITTEN_BOOK,1,station.book); station.erase("book"); station.erase("pages"); station.erase("page"); show_station(p,id)])
 		else:
 			actions.append(["Place a signed book from your inventory",func():
 				for slot in game.inventory.slots:
 					if slot.id == Nodes.WRITTEN_BOOK:
-						station.book = slot.get("data",{}).duplicate(true); slot.clear(); slot.merge({"id":0,"count":0,"wear":0}); game.inventory.changed.emit(); show_station(p,id); return
+						station.book = slot.get("data",{}).duplicate(true); station.erase("pages"); station.erase("page"); slot.clear(); slot.merge({"id":0,"count":0,"wear":0}); game.inventory.changed.emit(); show_station(p,id); return
 				game.toast("Write and sign a book first." )])
 	for action in actions:
 		var button := Button.new(); button.text = action[0]; button.custom_minimum_size = Vector2(680,48); button.pressed.connect(action[1]); list.add_child(button)

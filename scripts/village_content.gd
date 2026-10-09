@@ -196,6 +196,8 @@ const WOOL_PINK = 584
 const WOOL_LIGHT_BLUE = 585
 const WOOL_BROWN = 586
 const CARPET_WHITE = 587
+# Every carpet id, for the recipe engine's `group:carpet`.
+const CARPETS = [587,588,589,590,591,592,593,594,595,596,597,598,599,600,601,602]
 const CARPET_GREY = 588
 const CARPET_SILVER = 589
 const CARPET_BLACK = 590
@@ -340,6 +342,16 @@ const SWAMP_GRASS = 685
 const KELP_PLANT = 686
 const COCOA_POD = 687
 const RIPE_COCOA_POD = 688
+# `mcl_cocoas` grows a pod in **three** stages (`cocoa_1..cocoa_3`); Voxey had only
+# the unripe (`COCOA_POD`) and ripe (`RIPE_COCOA_POD`) ends, so a pod jumped
+# straight from small to ripe. The middle stage fills that gap.
+const COCOA_POD_MID = 698
+# The source's `mcl_cocoas.grow`: cocoa_1 -> cocoa_2 -> cocoa_3, one stage at a time.
+static func cocoa_next(id: int) -> int:
+	if id == COCOA_POD: return COCOA_POD_MID
+	if id == COCOA_POD_MID: return RIPE_COCOA_POD
+	return 0
+static func is_cocoa(id: int) -> bool: return id in [COCOA_POD,COCOA_POD_MID,RIPE_COCOA_POD]
 const LEAD = 930
 const SPIDER_EYE = 950
 const FERMENTED_SPIDER_EYE = 940
@@ -365,6 +377,12 @@ const BLOCKS = [
 	11546,
 	11590,11591,
 	11470,11471,11472,11473,11474,11475,11476,11477,11478,11479,11480,11481,11400,11401,11402,11403,11404,11405,11406,11407,11408,11409,11410,11411,11412,11413,11414,11415,11416,11417,11303,11304,11305,11507,11508,11509,11040,11041,11042,11043,11044,11045,11046,11047,11048,11049,11050,11051,11052,11053,11054,11055,11056,11057,11058,11059,11060,11061,11062,11063,11064,11065,11066,11067,11068,11069,11070,11071,
+	1262,1263,1264,1265,1266,1267,1268,1269,1270,1271,1274,
+	1297,1298,1299,1302,1303,
+	698,
+	701,
+	11418,11419,11420,11421,11422,11423,11424,11425,
+	11602,
 ]
 const DATA = {
 	9300:Rails.DATA[9300],
@@ -393,6 +411,17 @@ const DATA = {
 	1215:RespawnAnchors.BLOCK_DATA[1215],
 	1216:RespawnAnchors.BLOCK_DATA[1216],
 	1217:RespawnAnchors.BLOCK_DATA[1217],
+	1262:PointedDripstone.BLOCK_DATA[1262],
+	1263:PointedDripstone.BLOCK_DATA[1263],
+	1264:PointedDripstone.BLOCK_DATA[1264],
+	1265:PointedDripstone.BLOCK_DATA[1265],
+	1266:PointedDripstone.BLOCK_DATA[1266],
+	1267:PointedDripstone.BLOCK_DATA[1267],
+	1268:PointedDripstone.BLOCK_DATA[1268],
+	1269:PointedDripstone.BLOCK_DATA[1269],
+	1270:PointedDripstone.BLOCK_DATA[1270],
+	1271:PointedDripstone.BLOCK_DATA[1271],
+	1274:PointedDripstone.BLOCK_DATA[1274],
 	1175:{"name":"Powder snow","block":true,"shape":"cube","color":"f7fbfc","hardness":0.25,"tool":2},
 	1176:{"name":"Bucket of powder snow","color":"c9ced6","stack":1},
 	1170:{"name":"Bamboo shoot","block":true,"shape":"bamboo","color":"7ea33c","hardness":1.0,"tool":0,"plant":true},
@@ -634,6 +663,11 @@ const DATA = {
 	1122:{"name":"Wall torch","color":"c69349","block":true,"shape":"wall_torch","hidden":true,"hardness":0.22},
 	1117:{"name":"Fire","color":"ec8e33","block":true,"shape":"plant","hardness":0},
 	1118:{"name":"Eternal fire","color":"ec8e33","block":true,"shape":"plant","hardness":0},
+	1297:{"name":"Copper torch","color":"e0a06a","block":true,"shape":"torch","hardness":0.22},
+	1298:{"name":"Copper torch","color":"e0a06a","block":true,"shape":"wall_torch","hidden":true,"hardness":0.22},
+	1299:{"name":"Copper torch","color":"e0a06a","block":true,"shape":"wall_torch","hidden":true,"hardness":0.22},
+	1302:{"name":"Copper torch","color":"e0a06a","block":true,"shape":"wall_torch","hidden":true,"hardness":0.22},
+	1303:{"name":"Copper torch","color":"e0a06a","block":true,"shape":"wall_torch","hidden":true,"hardness":0.22},
 	1116:{"name":"Fire charge","color":"ec8137","family":"fire_charge"},
 	1244:{"name":"Firework rocket","color":"f2f2f2","stack":64,"fuel":0},
 	1245:{"name":"Firework rocket","color":"f2f2f2","stack":64,"fuel":0},
@@ -767,6 +801,8 @@ const DATA = {
 	686:{"name":"Kelp plant","color":"608453","block":true,"shape":"crop","crop":"kelp","stage":3},
 	687:{"name":"Cocoa pod (growing)","color":"719047","block":true,"shape":"crop","crop":"cocoa","stage":0},
 	688:{"name":"Cocoa pod (ripe)","color":"9f643c","block":true,"shape":"crop","crop":"cocoa","stage":3},
+	698:{"name":"Cocoa pod (growing)","color":"8a7a42","block":true,"shape":"crop","crop":"cocoa","stage":2},
+	701:CactusFlower.DATA[701],
 	930:{"name":"Lead","color":"b79661"},
 	512:{"name":"Emerald ore","color":"709786","block":true},
 	513:{"name":"Deepslate emerald ore","color":"45645d","block":true},
@@ -802,7 +838,7 @@ const DATA = {
 	537:{"name":"Polished diorite","color":"ded8c9","block":true},
 	538:{"name":"Polished andesite","color":"a7afaa","block":true},
 	539:{"name":"Chiseled stone bricks","color":"878b85","block":true},
-	540:{"name":"Dripstone block","color":"a58a74","block":true},
+	540:{"name":"Dripstone block","color":"a58a74","block":true,"tool":0,"hardness":1.5,"blast_resistance":6.0,"source_node":"mcl_dripstone:dripstone_block"},
 	541:{"name":"Quartz block","color":"e4dccc","block":true},
 	542:{"name":"Quartz pillar","color":"e4dccc","block":true},
 	543:{"name":"Glass pane","color":"b9dcd8","block":true,"shape":"pane"},
@@ -1175,6 +1211,14 @@ const DATA = {
 	11443:EndMud.DATA[11443],
 	11444:EndMud.DATA[11444],
 	11445:EndMud.DATA[11445],
+	11418:LargePlants.DATA[11418],
+	11419:LargePlants.DATA[11419],
+	11420:LargePlants.DATA[11420],
+	11421:LargePlants.DATA[11421],
+	11422:LargePlants.DATA[11422],
+	11423:LargePlants.DATA[11423],
+	11424:LargePlants.DATA[11424],
+	11425:LargePlants.DATA[11425],
 	11400:FlowersExtra.DATA[11400],
 	11401:FlowersExtra.DATA[11401],
 	11402:FlowersExtra.DATA[11402],
@@ -1237,6 +1281,7 @@ const DATA = {
 	11591:RedstoneOre.DATA[11591],
 	11600:RecoveryCompass.DATA[11600],
 	11601:WindCharge.DATA[11601],
+	11602:CommandBlocks.DATA[11602],
 	11530:CopperDecor.DATA[11530],
 	11531:CopperDecor.DATA[11531],
 	11532:CopperDecor.DATA[11532],
@@ -1704,6 +1749,7 @@ static func crop_drops(id: int) -> Array:
 	if CropFarming.is_crop(id): return CropFarming.harvest(id)
 	var seed_id: int = crop_seed(id)
 	if id == COCOA_POD: return [[COCOA_BEANS,1]]
+	if id == COCOA_POD_MID: return [[COCOA_BEANS,2]]
 	if id == RIPE_COCOA_POD: return [[COCOA_BEANS,3]]
 	if id == KELP_PLANT: return [[KELP,1]]
 	if seed_id == 0: return []
@@ -1762,6 +1808,8 @@ static func recipes(inv: Inventory) -> void:
 	inv._recipe("Cookies",COOKIE,8,[Nodes.GRAIN,COCOA_BEANS,Nodes.GRAIN],3,"table")
 	inv._shapeless("Rabbit stew",RABBIT_STEW,1,[Nodes.BOWL,COOKED_RABBIT,CARROT,BAKED_POTATO,Nodes.BROWN_MUSHROOM])
 	inv._recipe("Dried kelp block",DRIED_KELP_BLOCK,1,[DRIED_KELP,DRIED_KELP,DRIED_KELP,DRIED_KELP,DRIED_KELP,DRIED_KELP,DRIED_KELP,DRIED_KELP,DRIED_KELP],3,"table")
+	# `mcl_dripstone`: four pointed dripstone in a square make the block.
+	inv._recipe("Dripstone block",DRIPSTONE_BLOCK,1,[PointedDripstone.ITEM,PointedDripstone.ITEM,PointedDripstone.ITEM,PointedDripstone.ITEM],2)
 	inv._recipe("Dried kelp",DRIED_KELP,9,[DRIED_KELP_BLOCK],1)
 	inv._recipe("Quartz block",QUARTZ_BLOCK,1,[Nodes.QUARTZ,Nodes.QUARTZ,Nodes.QUARTZ,Nodes.QUARTZ],2)
 	for pair in [[GRANITE,POLISHED_GRANITE],[ANDESITE,POLISHED_ANDESITE],[DIORITE,POLISHED_DIORITE]]: inv._recipe(Nodes.title(pair[1]),pair[1],4,[pair[0],pair[0],pair[0],pair[0]],2)
@@ -1773,6 +1821,8 @@ static func recipes(inv: Inventory) -> void:
 	ArmorTrims.recipes(inv)
 	EndMud.recipes(inv)
 	FlowersExtra.recipes(inv)
+	LargePlants.recipes(inv)
+	CactusFlower.recipes(inv)
 	Sculk.recipes(inv)
 	PaleOak.recipes(inv)
 	CopperDecor.recipes(inv)
@@ -1783,13 +1833,19 @@ static func recipes(inv: Inventory) -> void:
 	TrappedChests.recipes(inv)
 	for pair in [[Nodes.FLOWER,DYE_RED],[Nodes.BONE_MEAL,DYE_WHITE],[INK_SAC,DYE_BLACK],[Nodes.LAPIS,DYE_BLUE],[COCOA_BEANS,DYE_BROWN],[Nodes.CACTUS,DYE_GREEN]]: inv._recipe(Nodes.title(pair[1]),pair[1],1,[pair[0]],1)
 	for mix in [[DYE_RED,DYE_YELLOW,DYE_ORANGE],[DYE_RED,DYE_WHITE,DYE_PINK],[DYE_BLUE,DYE_WHITE,DYE_LIGHT_BLUE],[DYE_BLUE,DYE_RED,DYE_PURPLE],[DYE_GREEN,DYE_WHITE,DYE_LIME],[DYE_BLUE,DYE_GREEN,DYE_CYAN],[DYE_BLACK,DYE_WHITE,DYE_GREY],[DYE_GREY,DYE_WHITE,DYE_SILVER],[DYE_PURPLE,DYE_PINK,DYE_MAGENTA]]: inv._shapeless(Nodes.title(mix[2]),mix[2],2,[mix[0],mix[1]])
+	# Populate the recipe engine's `group:carpet` before the carpet recipes register,
+	# so `ingredient_key` can map any carpet to the marker.
+	Inventory.CARPET_GROUP_IDS = CARPETS
 	for id in DATA:
 		var d: Dictionary = DATA[id]; var family: String = d.get("family","")
 		if family not in ["wool","carpet","bed","banner","terracotta"]: continue
 		var color_index: int = id-(WOOL_WHITE if family == "wool" else (CARPET_WHITE if family == "carpet" else (BED_WHITE if family == "bed" else (BANNER_WHITE if family == "banner" else TERRACOTTA_WHITE))))
 		var dye: int = DYE_WHITE+color_index; var wool: int = WOOL_WHITE+color_index
 		if family == "wool": inv._shapeless(Nodes.title(id),id,1,[Nodes.WOOL,dye])
-		if family == "carpet": inv._recipe(Nodes.title(id),id,3,[wool,wool],2)
+		if family == "carpet":
+			inv._recipe(Nodes.title(id),id,3,[wool,wool],2)
+			# `mcl_wool`: `group:carpet` + a dye re-dyes any carpet to the new colour.
+			inv._recipe(Nodes.title(id),id,1,[Inventory.CARPET_GROUP_MARKER,dye],2)
 		if family == "bed": inv._recipe(Nodes.title(id),id,1,[wool,wool,wool,p,p,p],3,"table")
 		if family == "banner": inv._recipe(Nodes.title(id),id,1,[wool,wool,wool,wool,wool,wool,0,Nodes.STICK,0],3,"table")
 		if family == "terracotta": inv._shapeless(Nodes.title(id),id,1,[Nodes.TERRACOTTA,dye])

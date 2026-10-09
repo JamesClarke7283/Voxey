@@ -56,6 +56,11 @@ func _init() -> void:
 	_recipe("Paper", Nodes.PAPER, 3, [Nodes.SUGAR_CANE,Nodes.SUGAR_CANE,Nodes.SUGAR_CANE], 3, "table")
 	_shapeless("Book", Nodes.BOOK, 1, [Nodes.PAPER,Nodes.PAPER,Nodes.PAPER,Nodes.LEATHER])
 	_shapeless("Writable book", Nodes.WRITABLE_BOOK, 1, [Nodes.BOOK,Nodes.FEATHER,Nodes.CHARCOAL])
+	# `mcl_books`: one written book plus 1..8 writable books copies it that many times.
+	for copies in range(1,9):
+		var copy_ingredients: Array = [Nodes.WRITTEN_BOOK]
+		for n in copies: copy_ingredients.append(Nodes.WRITABLE_BOOK)
+		_shapeless("Copy written book x%d"%copies,Nodes.WRITTEN_BOOK,copies,copy_ingredients)
 	_recipe("Enchanting table",Nodes.ENCHANTING_TABLE,1,[0,Nodes.BOOK,0,Nodes.DIAMOND,Nodes.OBSIDIAN,Nodes.DIAMOND,Nodes.OBSIDIAN,Nodes.OBSIDIAN,Nodes.OBSIDIAN],3,"table")
 	_recipe("Nether bricks",Nodes.NETHER_BRICKS,4,[Nodes.NETHERRACK,Nodes.NETHERRACK,Nodes.NETHERRACK,Nodes.NETHERRACK],2)
 	_shapeless("Pumpkin pie", Nodes.PUMPKIN_PIE, 1, [Nodes.PUMPKIN,Nodes.SUGAR,Nodes.EGG])
@@ -156,6 +161,11 @@ func _init() -> void:
 	for entry in RecoveryCompass.recipe_entries(): _recipe(entry[0],entry[1],entry[2],entry[3],3,"table")
 	for entry in WindCharge.recipe_entries(): _recipe(entry[0],entry[1],entry[2],entry[3],1,"table")
 
+# `group:carpet`: every carpet id is interchangeable in a group:carpet recipe. The
+# marker key is a plain integer that no real node uses, so it survives `migrate`.
+const CARPET_GROUP_MARKER = 6011
+static var CARPET_GROUP_IDS: Array = []
+
 func _shapeless(label: String, id: int, count: int, ingredients: Array) -> void:
 	_recipe(label,id,count,ingredients,2)
 	recipes.back()["shapeless"] = true
@@ -169,7 +179,7 @@ func _recipe(label: String, id: int, count: int, pattern: Array, width: int, sta
 	# Generic group:wood recipes accept mixed species; named wood products keep
 	# their exact material, including the original oak recipes.
 	var wood_product: bool = RedstoneInputs.is_device(id) or Doors.is_item(id) or Trapdoors.is_trapdoor(id) or Barriers.is_barrier(id) or BuildingShapes.is_shape(id) or Boats.is_boat(id) or Signs.is_sign(id)
-	recipes.append({"name":label, "id":id, "count":count, "pattern":pattern, "width":width, "ingredients":ingredients, "station":station,"wood_group":ingredients.has(Nodes.PLANKS) and not wood_product,"log_group":ingredients.has(Nodes.LOG) and (id == VillageContent.SMOKER or Campfires.is_campfire(id)),"wood_slab_group":ingredients.has(BuildingShapes.slab_for(Nodes.PLANKS)) and id in [RedstoneSensors.DAYLIGHT,VillageContent.COMPOSTER]})
+	recipes.append({"name":label, "id":id, "count":count, "pattern":pattern, "width":width, "ingredients":ingredients, "station":station,"wood_group":ingredients.has(Nodes.PLANKS) and not wood_product,"log_group":ingredients.has(Nodes.LOG) and (id == VillageContent.SMOKER or Campfires.is_campfire(id)),"wood_slab_group":ingredients.has(BuildingShapes.slab_for(Nodes.PLANKS)) and id in [RedstoneSensors.DAYLIGHT,VillageContent.COMPOSTER],"carpet_group":ingredients.has(CARPET_GROUP_MARKER),"group_any":CARPET_GROUP_IDS})
 
 func recipe_index(id: int) -> int:
 	for i in recipes.size():
@@ -332,6 +342,7 @@ func recipe_inputs(recipe: Dictionary) -> Array:
 	return inputs
 
 static func ingredient_key(recipe: Dictionary, id: int) -> int:
+	if recipe.get("carpet_group",false) and (id == CARPET_GROUP_MARKER or id in CARPET_GROUP_IDS): return CARPET_GROUP_MARKER
 	if recipe.get("wood_group",false) and WoodTypes.is_planks(id): return Nodes.PLANKS
 	if recipe.get("log_group",false) and (WoodTypes.is_log(id) or id in [Nodes.CRIMSON_STEM,Nodes.WARPED_STEM]): return Nodes.LOG
 	if recipe.get("wood_slab_group",false) and BuildingShapes.half_slab(id) and WoodTypes.is_planks(BuildingShapes.material(id)): return BuildingShapes.slab_for(Nodes.PLANKS)
@@ -367,12 +378,34 @@ func craft(index: int, station: String) -> bool:
 	return true
 
 static func craft_output_data(id: int, ingredients: Array) -> Dictionary:
+	# `mcl_books`: copying a written book needs the original's text/author, and a copy
+	# of a copy of a copy is refused at generation 2. The output carries the original's
+	# metadata with `generation` incremented.
+	if id == Nodes.WRITTEN_BOOK:
+		var copy: Dictionary = _copy_book_data(ingredients)
+		if copy.has("error"): return copy
+		return copy
 	if id == VillageContent.SUSPICIOUS_STEW: return FoodFeatures.craft_data(ingredients)
 	if id == VillageContent.FILLED_MAP: return ExplorationMaps.craft_output_data(ingredients)
 	# A dyed leather piece is the same armour id with a colour, so the craft output has
 	# to carry that metadata; `apply_craft` returns {} for every other recipe.
 	if CauldronWash.is_leather_armor(id): return CauldronWash.apply_craft(ingredients).get("data",{})
 	return PortableStorage.output_data(id,ingredients) if PortableStorage.is_shulker(id) else Pouches.output_data(id,ingredients)
+
+# The written-book copy output: the original's title/text/author plus an incremented
+# generation, or `{"error":...}` when the rule refuses (generation >= 2, or no
+# original in the grid). `mcl_books/init.lua`.
+static func _copy_book_data(ingredients: Array) -> Dictionary:
+	var original: Dictionary = {}
+	for ingredient in ingredients:
+		if int(ingredient.id) == Nodes.WRITTEN_BOOK: original = ingredient; break
+	if original.is_empty(): return {"error":"no original book"}
+	var raw: Dictionary = original.get("data",{})
+	var generation: int = int(raw.get("generation",0))
+	if generation >= 2: return {"error":"a copy of a copy cannot be copied"}
+	var metadata: Dictionary = {"title":str(raw.get("title","Untitled")).left(64),"text":str(raw.get("text","")).left(12000),"generation":generation+1}
+	if str(raw.get("author","")) != "": metadata["author"] = str(raw.author).left(64)
+	return {"data":metadata}
 
 static func craft_replacement(id: int) -> int:
 	return Nodes.BUCKET if id == Nodes.MILK_BUCKET else Beehives.replacement(id)

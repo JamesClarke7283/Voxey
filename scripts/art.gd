@@ -271,8 +271,45 @@ static func make_atlas() -> ImageTexture:
 				var c: Color = base * rng.randf_range(0.85,1.1)
 				c.a = 1.0
 				img.set_pixel(tile_index%8*16+x, tile_index/8*16+y, c)
+	# GIMP-authored overrides. A hand-drawn 16x16 PNG at
+	# `res://assets/textures/tiles/tile_<index>.png` replaces the procedural tile for
+	# that index. The directory ships empty, so this is inert unless an artist drops
+	# a tile in; the procedural art remains the fallback for every index without one.
+	_apply_png_overrides(img)
 	atlas_texture = ImageTexture.create_from_image(img)
 	return atlas_texture
+
+# Blit every `assets/textures/tiles/tile_<content_id>.png` (a 16x16 image) over the
+# atlas cell that content id uses. Missing files, non-16x16 images and ids that do
+# not map to a tile are skipped, so a bad drop cannot corrupt the atlas.
+static func _apply_png_overrides(img: Image) -> void:
+	var dir := DirAccess.open("res://assets/textures/tiles")
+	if dir == null: return
+	for file in dir.get_files():
+		if not file.begins_with("tile_") or not file.ends_with(".png"): continue
+		var id_text: String = file.substr(5,file.length()-5-4)
+		if not id_text.is_valid_int(): continue
+		var content_id: int = id_text.to_int()
+		var tile: int = Nodes.tile(content_id,0)
+		if tile < 0 or tile >= 137+VillageContent.BLOCKS.size()+WoodTypes.TEXTURES.size(): continue
+		var path: String = "res://assets/textures/tiles/"+file
+		# Prefer the imported resource (export-safe); fall back to reading the raw bytes
+		# so a tile is picked up even before Godot has imported it.
+		var source: Image = _load_tile(path)
+		if source == null: continue
+		source.convert(Image.FORMAT_RGBA8)
+		if source.get_width() != 16 or source.get_height() != 16: continue
+		img.blit_rect(source,Rect2i(0,0,16,16),Vector2i(tile%8*16,tile/8*16))
+
+# A 16x16 override image from an imported resource, or null. A PNG imports as a
+# `Texture2D` (or an `Image`), both of which this accepts; the raw read is a
+# fallback for an unimported drop-in.
+static func _load_tile(path: String) -> Image:
+	if ResourceLoader.exists(path):
+		var resource: Resource = load(path)
+		if resource is Texture2D: return (resource as Texture2D).get_image()
+		if resource is Image: return resource
+	return Image.load_from_file(path)
 
 static func crack_texture(stage: int) -> ImageTexture:
 	# Luanti-style crack overlay. The image has an even size, so its exact centre is

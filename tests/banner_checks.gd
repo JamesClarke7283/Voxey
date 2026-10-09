@@ -88,6 +88,15 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	var plain: Dictionary = {"id":VillageContent.BANNER_FIRST,"count":1}
 	t.check(not Banners.combine(host,plain),"a banner with no layers adds nothing")
 
+	# --- the loom applies a pattern to a carried banner --------------------
+	# `mcl_loom`: the loom's real purpose. It reads a held pattern item and a dye and
+	# emblazons a carried banner, which is the same `emblazon` the placed-banner path
+	# uses. Assert the underlying rule the loom UI drives.
+	var carried: Dictionary = {"id":VillageContent.BANNER_FIRST,"count":1}
+	t.check(Banners.pending_pattern(VillageContent.PATTERN_FIRST+2) == "creeper","a pattern item selects its own pattern at the loom")
+	t.check(Banners.emblazon(carried,Banners.pending_pattern(VillageContent.PATTERN_FIRST+2),Banners.dye_color(VillageContent.DYE_RED)) and Banners.layers(carried)[0].pattern == "creeper","the loom applies the selected pattern with the chosen dye")
+	t.check(Banners.describe(carried).contains("Creeper"),"and the banner describes the applied pattern")
+
 	# --- recipes -----------------------------------------------------------
 	var inv := Inventory.new()
 	# Every special pattern is craftable from paper plus its item.

@@ -31,16 +31,23 @@ func run() -> void:
 		var recipe: Dictionary = inv.recipes[inv.recipe_index(slab)]
 		var stair_recipe: Dictionary = inv.recipes[inv.recipe_index(stair)]
 		check(recipe.count == 6 and recipe.ingredients[base] == 3 and stair_recipe.count == 4 and stair_recipe.ingredients[base] == 6,"source slab and stair crafting yields for "+Nodes.title(base))
-	check(BuildingShapes.items().size() == (BuildingShapes.MATERIALS.size()+BuildingShapes.EXTRA_MATERIALS.size())*2 and not Nodes.all_ids().has(4001) and not Nodes.all_ids().has(4002),"catalog exposes a slab and stair for every material and hides placement-only variants")
+	check(BuildingShapes.items().size() == (BuildingShapes.MATERIALS.size()+BuildingShapes.extra_list().size())*2 and not Nodes.all_ids().has(4001) and not Nodes.all_ids().has(4002),"catalog exposes a slab and stair for every material and hides placement-only variants")
 	# The materials added after the original 51 keep their own band, so the original
 	# families' ids are untouched and the appended ones do not collide with the
 	# barrier families at 5000.
-	for base in BuildingShapes.EXTRA_MATERIALS:
+	for base in BuildingShapes.extra_list():
 		var slab: int = BuildingShapes.slab_for(base); var stair: int = BuildingShapes.stair_for(base)
 		check(slab >= BuildingShapes.EXTRA_FIRST and BuildingShapes.is_shape(slab) and BuildingShapes.material(slab) == base and BuildingShapes.item(slab) == slab and BuildingShapes.item(stair) == stair,"extra material has a slab and stair in the extra band: "+Nodes.title(base))
 	check(BuildingShapes.slab_for(Nodes.STONE) == 4016 and BuildingShapes.family(BuildingShapes.EXTRA_FIRST) == BuildingShapes.EXTRA_FIRST and not BuildingShapes.is_shape(5000),"the original material ids are unchanged and the extra band does not overlap the barriers")
 	check(BuildingShapes.stonecutter_inputs(Nodes.GOLD_BLOCK).is_empty() and BuildingShapes.stonecutter_inputs(Nodes.PLANKS).is_empty(),"wood and decorative metal shapes have no source stonecutter recipes")
 	check(BuildingShapes.stonecutter_inputs(Nodes.DEEPSLATE_BRICKS).has(Nodes.DEEPSLATE) and BuildingShapes.stonecutter_inputs(Nodes.BRICKS).has(Nodes.STONE),"stonecutter accepts source raw materials for finished shapes")
+	# Mud-brick and prismarine shapes were appended for source parity
+	# (`mcl_mud/init.lua:43-58`, `mcl_ocean/prismarine.lua:65-87`), and both are
+	# cut from their base blocks.
+	check(BuildingShapes.slab_for(EndMud.MUD_BRICKS) != 0 and BuildingShapes.stair_for(EndMud.MUD_BRICKS) != 0 and BuildingShapes.material(BuildingShapes.stair_for(EndMud.MUD_BRICKS)) == EndMud.MUD_BRICKS,"mud-brick stairs and slabs are reachable")
+	check(BuildingShapes.stair_for(VillageContent.PRISMARINE) != 0 and BuildingShapes.stonecutter_inputs(EndMud.MUD_BRICKS).has(EndMud.PACKED_MUD) and BuildingShapes.stonecutter_inputs(VillageContent.PRISMARINE_BRICK).has(VillageContent.PRISMARINE),"prismarine shapes exist and the source stonecutter routes are present")
+	# `mcl_trees/api.lua`:555-596: every species' bark wood and stripped bark wood.
+	check(BuildingShapes.slab_for(6005) != 0 and BuildingShapes.stair_for(6166) != 0 and BuildingShapes.title(BuildingShapes.stair_for(6005)) == "Oak bark stairs","all twelve bark materials have a slab and a stair")
 	check(Nodes.fuel_time(4000) == 7.5 and Nodes.fuel_time(4003) == 15,"wood slabs retain the source fractional fuel duration")
 	for id in range(4000,4011):
 		var bits: int = BuildingShapes.mask(id)

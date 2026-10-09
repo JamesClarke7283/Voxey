@@ -28,7 +28,23 @@ extends RefCounted
 
 static func handles(id: int) -> bool:
 	return id in [Nodes.BONE_MEAL,Nodes.BUCKET,Nodes.WATER_BUCKET,Nodes.LAVA_BUCKET,
-		Nodes.FLINT_AND_STEEL,PiglinBarter.FIRE_CHARGE,VillageContent.XP_BOTTLE] or is_potion(id)
+		Nodes.FLINT_AND_STEEL,PiglinBarter.FIRE_CHARGE,VillageContent.XP_BOTTLE] or is_potion(id) or Nodes.is_armor(id)
+
+# The source's armor/head action (`mcl_dispensers/init.lua`:88-124): armor is
+# equipped onto a player within one node of the dispensed cell (or the cell below),
+# and a head or pumpkin is placed as a node when equipping fails. Returns the
+# outcome when the action applies.
+static func equip_action(game: Node3D, p: Vector3i, d: Vector3i, slot: Dictionary) -> Dictionary:
+	var id: int = slot.id
+	if not Nodes.is_armor(id): return {}
+	var target: Vector3i = p+d
+	for cell in [target,target+Vector3i.DOWN]:
+		if game.player.position.distance_to(Vector3(cell)+Vector3.ONE*0.5) <= 1.0:
+			if game.player.equip_armor(slot): return {"applied":true,"replacement":0,"consume":true}
+	# Equipping failed: a head or a pumpkin is placed as a node when the cell is free.
+	if game.world.node_at(target) == Nodes.AIR and id in [Nodes.PUMPKIN]:
+		if game.world.set_node(target,id): return {"applied":true,"replacement":0,"consume":true}
+	return {}
 
 static func is_potion(id: int) -> bool:
 	# The throwable forms live in `PotionCatalog.ITEMS[id].form`; `VillageContent.DATA`

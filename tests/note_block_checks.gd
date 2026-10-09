@@ -90,6 +90,12 @@ static func run(t: SceneTree, game: Node3D) -> void:
 		world.set_node(p+Vector3i.DOWN,base); before = game.audio_index_3d
 		t.check(NoteBlocks.play(world,p) and advance(before,game) and voice(game).stream == NoteBlockTones.sample(choices[base]),"real note playback chooses the current support instrument: "+choices[base])
 	world.set_node(p+Vector3i.DOWN,Nodes.DIRT)
+	# `mcl_noteblock/init.lua`: a head above the block plays that mob's voice.
+	world.set_node(p+Vector3i.UP,Heads.FLOOR+3)
+	before = game.audio_index_3d
+	t.check(NoteBlocks.play(world,p) and advance(before,game) and voice(game).stream == game.sounds["skeleton"],"a skeleton skull above a note block plays the skeleton voice")
+	t.check(NoteBlocks.head_sound(1) == "fuse" and NoteBlocks.head_sound(6) == "wither_shoot" and NoteBlocks.head_sound(2) == "","head voices match the source table and the human head has none")
+	world.set_node(p+Vector3i.UP,Nodes.AIR)
 	var lever: Vector3i = p+Vector3i.LEFT
 	world.set_node(lever,Nodes.LEVER); world.circuits.state(lever).on = true
 	before = game.audio_index_3d; var pitch_before: int = NoteBlocks.state(world,p).note

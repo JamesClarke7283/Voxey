@@ -1191,6 +1191,32 @@ func show_console(initial: String = "") -> void:
 	console_input.grab_focus()
 	console_input.caret_column=initial.length()
 
+func show_command_block(p: Vector3i, station: Dictionary) -> void:
+	_clear(); screen = "command_block"; _dim()
+	var panel := _fitted_panel(Vector2(680,470),Color("3a3730"))
+	_label(panel,"COMMAND BLOCK",Vector2(24,18),24,ACCENT)
+	var editable: bool = game.gamemode == "creative"
+	_label(panel,"%s · commander: %s"%["Commands run as the placer" if editable else "Read-only outside Creative mode",str(station.get("commander",game.player_id))],Vector2(24,56),14,MUTED)
+	var editor := TextEdit.new()
+	editor.position = Vector2(24,88); editor.size = Vector2(632,180)
+	editor.text = str(station.get("commands","")); editor.editable = editable
+	editor.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	editor.add_theme_font_size_override("font_size",16)
+	panel.add_child(editor)
+	_label(panel,"One command per line, without the leading slash. Placeholders: @c commander, @p/@n nearest, @f farthest, @r random, @@ a literal @.",Vector2(24,276),12,MUTED)
+	var status := _label(panel,"",Vector2(24,308),13,Color("ffb3a7"))
+	var feedback: Callable = func(result: Dictionary):
+		if result.ok:
+			status.add_theme_color_override("font_color",Color("a8e0a0"))
+			status.text = "Command block updated."
+		else:
+			status.add_theme_color_override("font_color",Color("ffb3a7"))
+			status.text = str(result.error)
+	_label(panel,"Command blocks run their list once on each rising redstone edge.",Vector2(24,336),12,MUTED)
+	if editable:
+		_button(panel,"Submit",Rect2(24,370,300,36),func(): feedback.call(game.write_command_block(p,editor.text)))
+	_button(panel,"Close",Rect2(340,370,316,36),game.resume)
+
 func show_enchanting(p: Vector3i, selected_item: int = -1, selected_enchantment: String = "") -> void:
 	enchanting_pos = p
 	_clear(); screen = "enchanting"; _dim()

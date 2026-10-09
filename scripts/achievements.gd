@@ -72,6 +72,10 @@ const DEFINITIONS = [
 	{"id":"hot_stuff","title":"Hot Stuff","description":"Fill a bucket with lava.","goal":0,"xp":0},
 	{"id":"sniper_duel","title":"Sniper Duel","description":"Kill a skeleton with an arrow from at least 50 blocks away.","goal":0,"xp":50},
 	{"id":"who_is_cutting_onions","title":"Who is Cutting Onions?","description":"Obtain a crying obsidian block.","goal":0,"xp":0},
+	# The source award set's three remaining titles that map onto systems Voxey runs.
+	{"id":"not_quite_nine_lives","title":"Not Quite \"Nine\" Lives","description":"Charge a respawn anchor to its maximum.","goal":0,"xp":0},
+	{"id":"isnt_it_iron_pick","title":"Isn't It Iron Pick","description":"Craft an iron pickaxe.","goal":0,"xp":0},
+	{"id":"tactical_fishing","title":"Tactical Fishing","description":"Catch a fish with a bucket.","goal":0,"xp":0},
 ]
 
 var game: Node3D

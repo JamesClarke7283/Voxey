@@ -72,7 +72,13 @@ static func comparator_signal(id: int) -> int:
 static func charge_up(world: VoxelWorld, p: Vector3i) -> bool:
 	var id: int = world.node_at(p)
 	if not is_anchor(id) or charge(id) >= 4: return false
-	return world.set_node(p,for_charge(charge(id)+1))
+	var result: bool = world.set_node(p,for_charge(charge(id)+1))
+	# The source's "Not Quite 'Nine' Lives" fires when an anchor reaches its fourth
+	# charge, which is the maximum.
+	if result and charge(world.node_at(p)) >= 4:
+		var game: Node = world.get_parent()
+		if game != null and game.get("achievements") != null: game.achievements.award("not_quite_nine_lives")
+	return result
 
 # --- using it ----------------------------------------------------------------
 

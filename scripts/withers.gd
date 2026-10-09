@@ -143,3 +143,56 @@ static func invulnerable(creature: Creature) -> bool:
 # The star is guaranteed, which is what makes the beacon reachable.
 static func roll_star(rng: RandomNumberGenerator) -> int:
 	return rng.randi_range(STAR_MIN,STAR_MAX)
+
+# `wither_unstuck` (`wither.lua`:102-127): a walled-in wither breaks the blocks
+# inside its own collision box (plus `xz_exp`), skipping `wither_immune` nodes, air,
+# liquids and unbreakable blocks, and dropping what it destroys. Voxey has no
+# `wither_immune` group, so the immune set is the source's own: bedrock, obsidian,
+# the end portal frame and barriers. Returns the number of blocks removed.
+static func unstuck(game: Node3D, boss: Creature, xz_exp: int = 2) -> int:
+	var world: VoxelWorld = game.world
+	var removed: int = 0
+	var lo: Vector3i = Vector3i((boss.position-Vector3(boss.width,0,boss.width)).floor())-Vector3i(xz_exp,0,xz_exp)
+	var hi: Vector3i = Vector3i((boss.position+Vector3(boss.width,boss.height,boss.width)).floor())+Vector3i(xz_exp,0,xz_exp)
+	for x in range(lo.x,hi.x+1):
+		for y in range(lo.y,hi.y+1):
+			for z in range(lo.z,hi.z+1):
+				var at := Vector3i(x,y,z)
+				var id: int = world.node_at(at)
+				if id == Nodes.AIR or Fluids.liquid(id) or WitherImmune(id): continue
+				if not Nodes.solid(id): continue
+				if world.set_node(at,Nodes.AIR):
+					game.spawn_drop(Vector3(at)+Vector3.ONE*0.5,Nodes.drop(id),1)
+					removed += 1
+	return removed
+
+# The source's `wither_immune` group plus the engine's unbreakables.
+static func WitherImmune(id: int) -> bool:
+	return id in [Nodes.BEDROCK,Nodes.OBSIDIAN,Bastions.CRYING_OBSIDIAN,Nodes.END_FRAME,Nodes.END_FRAME_EYE,Nodes.END_PORTAL,Nodes.END_GATEWAY,Nodes.NETHER_PORTAL,Nodes.PISTON_HEAD]
+
+# ground contact the boss releases **four** wither skeletons in a 15x4x15 area
+# around itself, on a solid cell with three cells of clearance above. Returns the
+# number spawned. Difficulty-gated off on Easy, as the source does.
+static func release_skeletons(game: Node3D, boss: Creature) -> int:
+	if game.difficulty <= 1: return 0
+	var world: VoxelWorld = game.world
+	var rng := RandomNumberGenerator.new()
+	rng.seed = world.seed_value+boss.get_instance_id()
+	var origin: Vector3i = Vector3i(boss.position.floor())
+	var spawned: int = 0
+	for i in 4:
+		for attempt in 10:
+			var at: Vector3i = origin+Vector3i(rng.randi_range(-7,7),rng.randi_range(-2,2),rng.randi_range(-7,7))
+			if not world.loaded_at(Vector3(at)): continue
+			if not Nodes.solid(world.node_at(at)): continue
+			var clear: bool = true
+			for dy in [1,2,3]:
+				if Nodes.solid(world.node_at(at+Vector3i(0,dy,0))): clear = false; break
+			if not clear: continue
+			# The source marks summoned skeletons `_wither_parent` so they do not
+			# attack their invoker; Voxey keeps the boss out of their way by making
+			# the skeleton itself persistent.
+			var mob: Creature = game.spawn_creature("wither_skeleton",Vector3(at)+Vector3(0.5,1,0.5))
+			if mob != null: mob.set_meta("persistent",true); spawned += 1
+			break
+	return spawned

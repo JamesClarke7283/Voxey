@@ -293,8 +293,11 @@ func run() -> void:
 	game.explode(Vector3(blast)+Vector3.ONE*0.5,2.2)
 	check(game.world.node_at(blast)==Nodes.AIR and game.world.node_at(blast+Vector3i.UP)==Nodes.AIR and game.world.node_at(blast+Vector3i(3,3,3))==Nodes.OBSIDIAN,"explosions carve a crater but spare obsidian")
 	game.world.set_node(blast,Nodes.TNT)
+	check(is_equal_approx(PrimedTnt.FUSE,4.0) and is_equal_approx(PrimedTnt.BLAST_RADIUS,4.0),"TNT uses the source's four-second fuse and radius-four blast")
 	game.ignite_tnt(blast,0.05)
 	check(game.world.node_at(blast)==Nodes.AIR and game.entities.get_child_count()==1,"igniting TNT primes it as an entity")
+	var primed_tnt = game.entities.get_child(0)
+	check(primed_tnt is PrimedTnt and primed_tnt.velocity.y > 1.0 and primed_tnt.velocity.length() < 2.1,"a primed block launches upward by two nodes with only a small sideways kick")
 	game.resume()
 	timeout=Time.get_ticks_msec()+10000
 	while game.entities.get_child_count()>0 and Time.get_ticks_msec()<timeout: await process_frame

@@ -156,6 +156,49 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	for slot in target_slots: slot.id = Nodes.STONE; slot.count = 64; slot.wear = 0; slot.erase("data")
 	hslots[0] = {"id":Nodes.DIAMOND,"count":2,"wear":0}; circuit.hopper(hopper)
 	suite.check(hslots[0].count == 2,"hopper leaves items in place when destination inventory is full")
+	# `mcl_furnaces`'s `on_hopper_out`: a hopper below pulls the output **and** a
+	# non-fuel item left in the fuel slot, so a non-burnable item is not trapped.
+	for slot in hslots: slot.id = 0; slot.count = 0; slot.wear = 0
+	var furnace := Vector3i(3,52,18)
+	game.world.set_node(furnace,Nodes.FURNACE)
+	game.world.set_node(furnace+Vector3i.DOWN,Nodes.HOPPER); circuit.configure(furnace+Vector3i.DOWN,Vector3i.UP)
+	var fslots: Array = circuit.container(furnace)
+	fslots[0] = {"id":Nodes.IRON_ORE,"count":1,"wear":0}
+	fslots[1] = {"id":Nodes.STONE,"count":1,"wear":0}   # a non-fuel item in the fuel slot
+	fslots[2] = {"id":Nodes.IRON,"count":1,"wear":0}
+	circuit.hopper(furnace+Vector3i.DOWN)
+	circuit.hopper(furnace+Vector3i.DOWN)
+	var pulled: Array = circuit.container(furnace+Vector3i.DOWN)
+	var pulled_ids: Array = []
+	for slot in pulled:
+		if slot.id != 0: pulled_ids.append(slot.id)
+	suite.check(fslots[2].id == 0 and fslots[1].id == 0 and pulled_ids.has(Nodes.IRON) and pulled_ids.has(Nodes.STONE),"a hopper pulls the furnace output and a non-fuel item from the fuel slot")
+	# `mcl_bells`: a bell rings on the rising edge of redstone power.
+	var bell := Vector3i(7,52,18)
+	for y in range(51,55): game.world.set_node(Vector3i(bell.x,y,bell.z),Nodes.AIR)
+	game.world.set_node(bell-Vector3i.UP,Nodes.STONE)
+	game.world.set_node(bell,VillageContent.BELL)
+	game.world.set_node(bell+Vector3i.BACK,Nodes.REDSTONE_BLOCK)
+	var alarm_before: float = game.villages.alarm if game.get("villages") != null else 0.0
+	for i in 3: circuit.step()
+	suite.check(game.get("villages") == null or game.villages.alarm > alarm_before or alarm_before > 0.0,"powered redstone rings a bell on its rising edge")
+	game.world.set_node(bell+Vector3i.BACK,Nodes.AIR)
+	for i in 3: circuit.step()
+	game.world.set_node(bell,Nodes.AIR)
+	# `mcl_hoppers`: a transfer into a hopper that was empty restarts the destination's
+	# own timer at the empty-hopper cooldown.
+	var h1 := Vector3i(9,52,18)
+	var h2 := h1+Vector3i.RIGHT
+	for y in range(51,55):
+		game.world.set_node(Vector3i(h1.x,y,h1.z),Nodes.AIR)
+		game.world.set_node(Vector3i(h2.x,y,h2.z),Nodes.AIR)
+	game.world.set_node(h1,Nodes.HOPPER); circuit.configure(h1,Vector3i.RIGHT)
+	game.world.set_node(h2,Nodes.HOPPER); circuit.configure(h2,Vector3i.RIGHT)
+	var h1slots: Array = circuit.container(h1); h1slots[0] = {"id":Nodes.DIAMOND,"count":1,"wear":0}
+	circuit.state(h2).erase("transfer_delay")
+	circuit.hopper(h1)
+	suite.check(circuit.container(h2)[0].id == Nodes.DIAMOND and is_equal_approx(float(circuit.state(h2).get("transfer_delay",0.0)),RedstoneCircuit.HOPPER_EMPTY_COOLDOWN),"a transfer into an empty hopper starts its short cooldown")
+	game.world.set_node(h1,Nodes.AIR); game.world.set_node(h2,Nodes.AIR)
 	var dispenser := Vector3i(5,50,18)
 	game.world.set_node(dispenser,Nodes.DISPENSER); circuit.configure(dispenser,Vector3i.RIGHT)
 	var dslots: Array = circuit.container(dispenser); dslots[0] = {"id":Nodes.ARROW_ITEM,"count":2,"wear":0}

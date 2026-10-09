@@ -16,7 +16,7 @@ const ONE_TICK_DETACH = true
 const SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.UP,Vector3i.DOWN,Vector3i.FORWARD,Vector3i.BACK]
 const HORIZONTAL = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]
 const FURNACES = [Nodes.FURNACE,VillageContent.SMOKER,VillageContent.BLAST_FURNACE]
-const CONTAINERS = [VillageContent.RECOVERY_CHEST,VillageContent.BREWING_STAND,TrappedChests.ID,Nodes.CHEST,Nodes.FURNACE,Nodes.DISPENSER,Nodes.DROPPER,Nodes.HOPPER,VillageContent.BARREL,VillageContent.SMOKER,VillageContent.BLAST_FURNACE]
+const CONTAINERS = [VillageContent.RECOVERY_CHEST,VillageContent.BREWING_STAND,TrappedChests.ID,Nodes.CHEST,Nodes.BOOKSHELF,Nodes.FURNACE,Nodes.DISPENSER,Nodes.DROPPER,Nodes.HOPPER,VillageContent.BARREL,VillageContent.SMOKER,VillageContent.BLAST_FURNACE]
 var world: VoxelWorld
 var tracked: Dictionary = {}
 var power: Dictionary = {}
@@ -39,7 +39,7 @@ func _init(owner_world: VoxelWorld) -> void:
 	world = owner_world
 
 static func circuit_node(id: int) -> bool:
-	return Rails.is_rail(id) or id in Nodes.CIRCUIT_NODES or id == NoteBlocks.ID or RedstoneInputs.is_device(id) or RedstoneSensors.is_device(id) or Barriers.is_gate(id) or Trapdoors.is_trapdoor(id) or Doors.is_door(id) or Copper.is_bulb(id) or Copper.is_rod(id)
+	return Rails.is_rail(id) or id in Nodes.CIRCUIT_NODES or id == NoteBlocks.ID or id == VillageContent.BELL or RedstoneInputs.is_device(id) or RedstoneSensors.is_device(id) or Barriers.is_gate(id) or Trapdoors.is_trapdoor(id) or Doors.is_door(id) or Copper.is_bulb(id) or Copper.is_rod(id) or CommandBlocks.is_command_block(id)
 
 func state(p: Vector3i) -> Dictionary:
 	var key: String = VoxelWorld.station_key(p)
@@ -156,6 +156,9 @@ func interact(p: Vector3i) -> bool:
 	var id: int = world.node_at(p)
 	if RedstoneInputs.is_button(id): return RedstoneInputs.use(world.get_parent(),{"pos":p,"id":id})
 	if RedstoneSensors.is_detector(id): return RedstoneSensors.toggle(world,p)
+	# The source's command block is used to open its command list, whether or not it is
+	# powered; the list runs on the rising edge instead.
+	if CommandBlocks.is_command_block(id): return world.get_parent().open_command_block(p)
 	if id not in [Nodes.LEVER,Nodes.REPEATER,Nodes.COMPARATOR,Nodes.DISPENSER,Nodes.DROPPER,Nodes.HOPPER]: return false
 	var s: Dictionary = state(p)
 	match id:
@@ -336,6 +339,22 @@ func step(dt: float = 0.1) -> void:
 			continue
 		var was_on: bool = s.get("powered",false)
 		s["powered"] = on
+		# `mcl_bells`: a bell rings on the rising edge of redstone power, and a ringing
+		# bell glows every raid mob within 48 nodes for three seconds.
+		if id == VillageContent.BELL and on and not was_on:
+			var game: Node = world.get_parent()
+			if game != null and game.get("villages") != null: game.villages.ring_bell(p)
+		# `mcl_redstone_lamp`: the source's off node returns `delay = 2`, so the lamp
+		# lags a signal going low by two ticks while lighting immediately. Voxey steps
+		# the circuit at 10 Hz, so the lag is two steps.
+		if id == Nodes.REDSTONE_LAMP:
+			if on: s["lamp_off"] = 0
+			elif was_on:
+				s["lamp_off"] = int(s.get("lamp_off",0))+1
+				if int(s["lamp_off"]) < 2: on = true
+				else: s["lamp_off"] = 0
+			else: s["lamp_off"] = 0
+		s["powered"] = on
 		if Copper.is_bulb(id): Copper.bulb(world,p,id,s,level)
 		elif id in [Nodes.PISTON,Nodes.STICKY_PISTON]: piston(p,on)
 		elif id == NoteBlocks.ID: NoteBlocks.power(world,p,on,was_on)
@@ -348,6 +367,13 @@ func step(dt: float = 0.1) -> void:
 			if int(s.get("trapdoor_power",0)) != level: Trapdoors.set_open(world,p,on)
 			s["trapdoor_power"] = level
 		elif id in [Nodes.DISPENSER,Nodes.DROPPER] and on and not was_on: dispense(p,id == Nodes.DISPENSER)
+		# The source's command block runs its list once on the rising edge of power.
+		# The `powered` flag above is that edge, so the list runs on `on and not was_on`.
+		elif CommandBlocks.is_command_block(id) and on and not was_on:
+			var commands: String = String(state(p).get("commands",""))
+			if not commands.is_empty():
+				var game: Node = world.get_parent()
+				game.run_command_block(state(p))
 		elif id == Nodes.HOPPER and not on:
 			# `mcl_hoppers`: HOPPER_COOLDOWN_TIME 0.400s when a transfer happened and
 			# HOPPER_INTERVAL_TIME 0.050s when it did not, so an idle hopper keeps
@@ -372,6 +398,13 @@ func container_signal(p: Vector3i) -> int:
 	# `measure_chiseled_bookshelf`: a shelf reports the last slot that changed, not its
 	# fullness, which is why it is read here beside the trapped chest.
 	if world.node_at(p) == Bookshelves.ID: return Bookshelves.comparator_output(world,p)
+	# `mcl_comparators.measure_lectern`: a lectern reports the current page, scaled to
+	# 15 across the book's pages.
+	if world.node_at(p) == VillageContent.LECTERN:
+		var lectern: Dictionary = world.get_station(p,"lectern")
+		var pages: int = maxi(1,int(lectern.get("pages",0))) if lectern.has("pages") else 1
+		if pages <= 1: return 15 if lectern.has("book") else 0
+		return clampi(int(floor((14.0*(int(lectern.get("page",1))-1))/(pages-1)+1)),0,15)
 	if Copper.is_bulb(world.node_at(p)): return Copper.signal_strength(world.node_at(p))
 	if Beehives.is_hive(world.node_at(p)): return Beehives.signal_strength(world,p)
 	if world.node_at(p) == Jukeboxes.ID: return Jukeboxes.signal_strength(world,p)
@@ -407,6 +440,13 @@ static func consume_one(slot: Dictionary) -> void:
 	slot.count -= 1
 	if slot.count <= 0: slot.id = 0; slot.count = 0; slot.wear = 0; slot.erase("data")
 
+# A container is empty when every slot holds nothing, which is the source's test for
+# a destination hopper that deserves the short cooldown.
+static func was_empty(slots: Array) -> bool:
+	for slot in slots:
+		if int(slot.get("id",0)) != 0 and int(slot.get("count",0)) > 0: return false
+	return true
+
 func hopper(p: Vector3i) -> bool:
 	var slots: Array = container(p)
 	var d := direction(p)
@@ -428,7 +468,15 @@ func hopper(p: Vector3i) -> bool:
 				if (d == Vector3i.DOWN and i != 0) or (d != Vector3i.DOWN and i == 0): continue
 				if Brewing.accepts(i,slot.id): eligible.append(destination[i])
 			if slot.id != 0 and insert_one(eligible,slot): consume_one(slot); return true
-		elif slot.id != 0 and insert_one(destination,slot): consume_one(slot); return true
+		elif slot.id != 0:
+			# `mcl_hoppers`: a transfer into a hopper that was **empty** restarts the
+			# destination's own timer at `EMPTY_HOPPER_COOLDOWN_TIME` (0.350 s).
+			var dest_was_empty: bool = was_empty(destination)
+			if insert_one(destination,slot):
+				consume_one(slot)
+				if world.node_at(p+d) == Nodes.HOPPER and dest_was_empty:
+					state(p+d)["transfer_delay"] = HOPPER_EMPTY_COOLDOWN
+				return true
 	if world.node_at(p+Vector3i.UP) == Bookshelves.ID:
 		# The source registers `_on_hopper_out` on the shelf, so a hopper above feeds
 		# one book per transfer into the first free slot.
@@ -439,7 +487,13 @@ func hopper(p: Vector3i) -> bool:
 		if Composters.level(compost) == 8 and insert_one(slots,{"id":Nodes.BONE_MEAL,"count":1,"wear":0}):
 			Composters.harvest(compost); return true
 	var above: Array = container(p+Vector3i.UP)
-	if world.node_at(p+Vector3i.UP) in FURNACES: above = [above[2]]
+	if world.node_at(p+Vector3i.UP) in FURNACES:
+		# `mcl_furnaces`'s `on_hopper_out`: the source pulls the output **and** a
+		# non-fuel item left in the fuel slot, so an item that cannot burn is not
+		# trapped in the furnace forever.
+		var furnace: Array = above
+		above = [furnace[2]]
+		if furnace.size() > 1 and int(furnace[1].id) != 0 and Nodes.fuel_time(int(furnace[1].id)) <= 0: above.append(furnace[1])
 	if world.node_at(p+Vector3i.UP) == VillageContent.BREWING_STAND: above = above.slice(2,5)
 	for slot in above:
 		if slot.id != 0 and insert_one(slots,slot): consume_one(slot); return true
@@ -523,9 +577,10 @@ func dispense(p: Vector3i, projectile: bool) -> void:
 			if insert_one(destination,slot): consume_one(slot)
 			return
 		# The source's per-item `_on_dispense` actions: bone meal, buckets, flint and
-		# steel, fire charges, potions and XP bottles.
+		# steel, fire charges, potions, XP bottles and armor/heads.
 		if Dispensers.handles(slot.id):
-			var outcome: Dictionary = Dispensers.dispense(game,p,d,slot)
+			var outcome: Dictionary = Dispensers.equip_action(game,p,d,slot)
+			if outcome.is_empty(): outcome = Dispensers.dispense(game,p,d,slot)
 			if bool(outcome.get("applied",false)):
 				if int(outcome.get("replacement",0)) != 0 and int(outcome.replacement) != slot.id: slot.id = int(outcome.replacement)
 				if bool(outcome.get("consume",true)): consume_one(slot)
@@ -554,6 +609,7 @@ func movable(p: Vector3i) -> bool:
 	# `mcl_pistons/api.lua`: `inv_nodes_movable` defaults to **true**, so a chest, a
 	# furnace, a dispenser or a hopper is pushed like any other block. It is a
 	# setting in the source, and Voxey's default follows the source's default.
+	if CommandBlocks.is_command_block(id): return false # Source `unmovable_by_piston = 1`.
 	if id in CONTAINERS and not INV_NODES_MOVABLE: return false
 	if id in [Nodes.BEDROCK,Nodes.OBSIDIAN,Nodes.END_FRAME,Nodes.END_FRAME_EYE,Nodes.END_PORTAL,Nodes.END_GATEWAY,Nodes.NETHER_PORTAL,Nodes.BLAZE_SPAWNER,Nodes.PISTON_HEAD,Nodes.BED_FOOT,Nodes.BED_HEAD] or id in [VillageContent.COMPOSTER,VillageContent.CAULDRON] or PortableStorage.is_storage(id): return false
 	return not (id in [Nodes.PISTON,Nodes.STICKY_PISTON] and state(p).get("extended",false))

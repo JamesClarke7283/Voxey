@@ -24,6 +24,7 @@ var igloo_cache: Dictionary = {}
 var witch_cache: Dictionary = {}
 var ocean_temple_cache: Dictionary = {}
 var cabin_cache: Dictionary = {}
+var hermitage_cache: Dictionary = {}
 # Vertical bounds are read for nearly every node lookup, so they are kept as
 # plain values and refreshed whenever the dimension changes.
 var dimension: String = "overworld":
@@ -227,7 +228,15 @@ func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false,
 					for y in range(h + 1, h + 4): data[x + z * 18 + y * 324] = Nodes.CACTUS
 				elif not desert and not snowy and decoration < 5:
 					if decoration != 0: data[x + z * 18 + (h + 1) * 324] = Nodes.WHEAT
-					elif data[x+z*18+h*324] == Nodes.GRASS: data[x+z*18+(h+1)*324] = FoodFeatures.natural_flower(hash_at(wx,101,wz))
+					elif data[x+z*18+h*324] == Nodes.GRASS:
+						# The source grows large two-block plants in the plains and
+						# forests; here a minority of flower sites become one, needing
+						# both the flower cell and the cell above it free.
+						if h + 2 < terrain_ceiling() and hash_at(wx,113,wz) % 100 < 8:
+							var large: int = LargePlants.BOTTOMS[hash_at(wx,127,wz) % LargePlants.BOTTOMS.size()]
+							data[x + z * 18 + (h + 1) * 324] = large
+							data[x + z * 18 + (h + 2) * 324] = large + 1
+						else: data[x+z*18+(h+1)*324] = FoodFeatures.natural_flower(hash_at(wx,101,wz))
 				elif decoration == 6 and not snowy:
 					data[x + z * 18 + (h + 1) * 324] = Nodes.PUMPKIN
 				elif decoration == 7 and snowy:
@@ -296,6 +305,9 @@ func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false,
 	var monuments: Dictionary = OceanTemples.overlay(self,coord,data,deep)
 	# A woodland cabin garrisons illagers, and its evoker drops the totem of undying.
 	var cabins: Dictionary = WoodlandCabins.overlay(self,coord,data,deep)
+	# The deep-dark hermitage is the only source of the echo shard, and its chest is
+	# the only source of the sculk catalyst the death spread needs.
+	var hermitages: Dictionary = AncientHermitage.overlay(self,coord,data,deep)
 	Amethyst.overlay(self,coord,data,deep)
 	for p in edits:
 		var lx: int = p.x - base_x
@@ -394,7 +406,7 @@ func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false,
 							reactive[cell] = id
 		if by < mesh_levels.x or by > mesh_levels.y: blocks.append({"y":by,"data":compact})
 		else: blocks.append({"y":by,"data":compact, "surfaces":BlockMesher.build(padded,true,info,flags)})
-	return {"coord":coord, "blocks":blocks,"special":special,"reactive":reactive,"flowing":flowing,"pasture_cells":pasture_cells,"pasture_lights":pasture_lights,"dungeons":dungeons,"corridors":corridors,"treasure":treasure,"ruins":ruins,"wrecks":wrecks,"temples":temples,"portals":portals,"jungles":jungles,"outposts":outposts,"igloos":igloos,"witches":witches,"monuments":monuments,"cabins":cabins}
+	return {"coord":coord, "blocks":blocks,"special":special,"reactive":reactive,"flowing":flowing,"pasture_cells":pasture_cells,"pasture_lights":pasture_lights,"dungeons":dungeons,"corridors":corridors,"treasure":treasure,"ruins":ruins,"wrecks":wrecks,"temples":temples,"portals":portals,"jungles":jungles,"outposts":outposts,"igloos":igloos,"witches":witches,"monuments":monuments,"cabins":cabins,"hermitages":hermitages}
 
 # The column forms below write exactly what the per-node functions return, but
 # compute everything that depends only on x and z once per column.

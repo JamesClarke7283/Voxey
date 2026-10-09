@@ -19,6 +19,267 @@ User overrides from this session are deliberate: any wool color crafts into four
 - Creatures and encounters: remaining mobs, full AI, breeding/taming, Wither, raids, structure inhabitants and bosses.
 - Player systems: hunger/saturation, achievements, maps, books, UI, weather and multiplayer/server behavior.
 
+## 2026-10-09 batch: dripstone, TNT, shields, material families and achievements
+
+A focused correctness batch, driven by a six-slice read-only audit of the whole
+reference against the current Voxey tree (mechanisms, farming, building, mobs,
+world-gen and player/HUD). It closes one absent module, corrects three numbers a
+survival player feels, extends two shape/barrier families and wires three
+achievements that map onto systems Voxey already runs.
+
+- **Pointed dripstone** ([`pointed_dripstone.gd`](../scripts/pointed_dripstone.gd),
+  checks `dripstone`): the absent node family. Ten nodes — five stages (`tip_merge`,
+  `tip`, `frustum`, `middle`, `base`) in a `top` (stalactite) and a `bottom`
+  (stalagmite) orientation — plus the item, with the source's placement
+  (`on_dripstone_place` → `update_dripstone`), column builder (`place_dripstone`),
+  merge rule, breaking (`break_dripstone`), the full-height square box of half-width
+  `3/16 + (i-1)/16`, the `fall_damage_add_percent = 100` bonus on the hanging nodes,
+  and the growth and drip ABMs (interval 69; growth chance 88, water 5.5, lava 17)
+  driving cauldron fills and the mud-to-clay conversion. The large cone
+  formations (`mcl_terrain_features`) that [`dripstones.gd`](../scripts/dripstones.gd)
+  already generated are unchanged, and now sit beside real pointed nodes the player
+  can place, break and grow. Not ported: the `vengeful_dripstone` falling entity.
+  See [dripstone](dripstones-source.md).
+- **TNT numbers** ([`primed_tnt.gd`](../scripts/primed_tnt.gd),
+  [`game.gd`](../scripts/game.gd) `ignite_tnt`): the fuse was three seconds and the
+  blast radius 3.2 with no launch; the source's `BOOMTIMER = 4`,
+  `explode(pos, 4)`, and `on_activate`'s upward-by-two launch with a small random
+  horizontal kick are now used. Because the blast damage and block destruction both
+  key off the radius, this changes survival outcomes.
+- **Shield axe-disable** ([`shields.gd`](../scripts/shields.gd),
+  [`creature.gd`](../scripts/creature.gd)): `shield_disabled` was dead — declared,
+  decayed and read but never *set*. A vindicator's axe (the source's only
+  axe-wielding attacker) now disables a raised shield for the source's five seconds
+  on a blockable frontal hit, so the block still lands and the shield then goes down.
+- **Material families** ([`building_shapes.gd`](../scripts/building_shapes.gd),
+  [`barriers.gd`](../scripts/barriers.gd)): mud-brick and prismarine stairs and slabs
+  (`mcl_mud`, `mcl_ocean`), prismarine and mud-brick walls (`mcl_walls`,
+  `mcl_mud`) and every species' **bark wood** stairs and slabs (`mcl_trees/api.lua`)
+  were absent; all are appended to the existing generators with their source
+  stonecutter routes. Plain/mossy stone-brick walls already map to the
+  `mcl_core:stonebrick` block Voxey keeps as `Nodes.BRICKS`.
+- **Dispenser armor and hopper fuel pull**
+  ([`dispensers.gd`](../scripts/dispensers.gd), [`redstone_circuit.gd`](../scripts/redstone_circuit.gd)):
+  a dispenser now equips armor onto a player within range (the source's
+  `mcl_dispensers` armor branch) instead of ejecting it, and a hopper below a
+  furnace also pulls a **non-fuel** item stuck in the fuel slot
+  (`mcl_furnaces`'s `on_hopper_out`).
+- **Wither `harmed_by_heal` and descent** ([`potion_effects.gd`](../scripts/potion_effects.gd),
+  [`creature.gd`](../scripts/creature.gd), [`withers.gd`](../scripts/withers.gd)):
+  `mobs_mc/wither.lua`:74 inverts both instant potions against the wither — a splash
+  of healing harms it, a splash of harming mends it — and its regeneration is swapped
+  to withering. The flag is now carried on the wither's `KINDS` entry and read by
+  `PotionEffects`. The boss also now **descends** when its target is far below it;
+  the landing detonates the previously-dead `WitherSkulls.charge` (the source's
+  `WITHER_DESCENT_BOOM`, radius 3, fifteen damage) and releases four wither skeletons
+  (`spawn_skeletons`, a 15×4×15 area with three cells of clearance, difficulty-gated).
+  A buried wither also now tears out the blocks inside its own box
+  (`wither_unstuck`), sparing bedrock, obsidian, portal frames and barriers.
+- **Copper torch** ([`torches.gd`](../scripts/torches.gd),
+  [`copper_decor.gd`](../scripts/copper_decor.gd), checks `torch`): the second torch
+  family the reference registers through `mcl_copper/nodes.lua`:288-303 — floor plus
+  four wall ids, light 14, family-aware placement and drops, and the source recipe
+  (copper nugget over coal over stick → four). Its flame tile is drawn in **GIMP**
+  (`assets/textures/tiles/tile_1297.png`) and its mesh is authored in **Blender**
+  (`assets/models/1297.glb`), the first content to use the two tool-pipelines below.
+- **Large two-block plants** ([`large_plants.gd`](../scripts/large_plants.gd),
+  checks `large_plant`): the source's `mcl_flowers.add_large_plant` family — peony,
+  rose bush, lilac and sunflower. Each is a bottom half carrying the stem and a top
+  half carrying the bloom, placed and broken as a pair, on the source's `soil_flower`
+  and light rule, with **only the bottom** dropping the item and yielding two of its
+  dye; bone meal on one drops a further plant. The four top-half blooms are drawn in
+  **GIMP** (`assets/textures/tiles/tile_<top_id>.png`); the bottom stems are
+  procedural.
+- **Art and model tool pipelines** ([`art.gd`](../scripts/art.gd),
+  [`model_overrides.gd`](../scripts/model_overrides.gd)): two drop-in overrides on top
+  of the procedural art. A 16x16 PNG named `assets/textures/tiles/tile_<content_id>.png`
+  (authored in GIMP) replaces that id's atlas cell; a `.glb` named
+  `assets/models/<content_id>.glb` (authored in Blender, +Y up, cell coordinates)
+  replaces that id's mesh with its UVs remapped onto the same atlas cell, so the
+  model wears the GIMP tile. Both directories ship with only the copper torch, and
+  every other id falls back to its procedural art.
+- **Redstone lamp off-delay** ([`redstone_circuit.gd`](../scripts/redstone_circuit.gd),
+  checks `sensors`): the source's `lamp_off` node carries `delay = 2`, so a signal
+  going low keeps the lamp lit for two further ticks; Voxey previously switched it
+  instantly.
+- **Hopper emptied-destination cooldown** ([`redstone_circuit.gd`](../scripts/redstone_circuit.gd),
+  checks `expansion`): `EMPTY_HOPPER_COOLDOWN_TIME` was declared but never applied;
+  a transfer into a hopper that was empty now restarts that hopper's own timer at the
+  source's 0.350 s.
+- **Lectern page signal** ([`village_survival.gd`](../scripts/village_survival.gd),
+  [`redstone_circuit.gd`](../scripts/redstone_circuit.gd), checks `piston`):
+  `mcl_comparators.measure_lectern` — a lectern now carries a page count and index,
+  the reader shows and turns pages, and a comparator reads `floor(14*(page-1)/(pages-1)+1)`.
+- **Carpet re-dyeing** ([`inventory.gd`](../scripts/inventory.gd),
+  [`village_content.gd`](../scripts/village_content.gd), checks `alchemy`):
+  `mcl_wool`'s `group:carpet` + dye recipe. The recipe engine gained a **recipe group**
+  (a marker key any carpet maps to, alongside the existing `group:wood` handling), so
+  any of the sixteen carpets re-dyes to a new colour.
+- **Plain bookshelf container and book copying** ([`inventory.gd`](../scripts/inventory.gd),
+  [`redstone_circuit.gd`](../scripts/redstone_circuit.gd), [`village_survival.gd`](../scripts/village_survival.gd),
+  checks `bookshelf`): `mcl_books` — a plain bookshelf is now a real 27-slot container
+  (opened like a chest, readable by a comparator and a hopper), and a written book
+  copies with 1–8 writable books, carrying its title/text/author and incrementing a
+  persisted `generation`, refusing a copy of a copy at generation 2.
+- **Loom pattern application** ([`village_survival.gd`](../scripts/village_survival.gd),
+  checks `banner`): `mcl_loom`'s real purpose — apply a **pattern item plus a dye** to
+  a banner the player carries, consuming both, using the same `Banners.emblazon` the
+  placed-banner path already used. The loom previously only crafted a plain banner.
+- **Red nether brick fence** ([`barriers.gd`](../scripts/barriers.gd),
+  checks `barrier`): `mclx_fences`' red nether brick fence and gate (base id 5032),
+  with the source's nether-brick recipe shape (a brick item as the stick, yields
+  6/2) and its `fence_nether_brick` connection group so nether brick and red nether
+  brick fences join to each other.
+- **Magma cube sizes and split** ([`expedition_creature.gd`](../scripts/expedition_creature.gd),
+  [`game.gd`](../scripts/game.gd), checks `nether_fauna`): `slime+magma_cube.lua` — a
+  magma cube now has the source's three sizes (big 16 hp / 6 dmg, small 4 / 4, tiny
+  1 / 3), hops and squashes like a slime, and **splits into smaller cubes on death**
+  (big → small, small → tiny, tiny → 0–1 magma cream). `magma_cube` now routes to
+  `ExpeditionCreature` so it carries the size state.
+- **Bell redstone ring** ([`redstone_circuit.gd`](../scripts/redstone_circuit.gd),
+  checks `expansion`): `mcl_bells`' `_mcl_redstone` rings a bell on the **rising
+  edge** of redstone power; the bell is now a real circuit node. Raid-mob glowing
+  needs a `glowing` effect Voxey does not have, so it is recorded rather than faked.
+- **Cactus growth and the cactus flower** ([`cactus_flower.gd`](../scripts/cactus_flower.gd),
+  [`voxel_world.gd`](../scripts/voxel_world.gd), checks `cactus_flower`):
+  `mcl_core.grow_cactus` — a sand-set cactus grows to four tall and its top sprouts a
+  flower on the source's `0.25`/`0.1` roll, only when the flower's cell and all four
+  sides are air. The flower is a pink-dye source.
+- **Water-bottle mud conversion** ([`village_survival.gd`](../scripts/village_survival.gd),
+  checks `cauldron`): `mcl_core.bottle_dirt` — pouring a water bottle on a
+  `converts_to_mud` block turns it to mud and returns the empty bottle. It runs
+  ahead of the generic potion branch, or a water bottle would be drunk instead.
+- **Cocoa three-stage growth** ([`village_content.gd`](../scripts/village_content.gd),
+  [`voxel_world.gd`](../scripts/voxel_world.gd), [`player.gd`](../scripts/player.gd),
+  checks `food_feature`): `mcl_cocoas` grows a pod through **three** stages; Voxey had
+  only the unripe and ripe ends, so a pod jumped straight from small to ripe. The
+  middle stage (id 698) now exists, bone meal advances one stage at a time, and the
+  world's crop timer follows the same ladder. Per-stage drops are 1/2/3 beans.
+- **Worn head detection** ([`creature.gd`](../scripts/creature.gd),
+  [`player.gd`](../scripts/player.gd), [`nodes.gd`](../scripts/nodes.gd), checks
+  `head`): a mob head is now worn in the helmet slot (it is not ordinary armour and
+  carries no points, so it never wears out), and wearing a head that matches a mob
+  halves that mob's detection range (`mcl_armor.get_headpiece_factor`), which the
+  chase check now reads.
+- **Note-block head playback** ([`note_blocks.gd`](../scripts/note_blocks.gd)): a head
+  above a note block now plays that mob's own voice (`mcl_noteblock`'s
+  `sound_by_head`) instead of an instrument, checked before the air gate as the
+  source does.
+- **Achievements** ([`achievements.gd`](../scripts/achievements.gd)): three titles
+  reachable through existing systems were added — *Not Quite "Nine" Lives* (charge a
+  respawn anchor to four, [`respawn_anchors.gd`](../scripts/respawn_anchors.gd)),
+  *Isn't It Iron Pick* (craft an iron pickaxe) and *Tactical Fishing* (catch a fish
+  with a bucket). The rest of the source award set still depends on content Voxey
+  does not generate (a stronghold, mushroom islands, trial chambers).
+
+### Ledger classification
+
+Every module row that still read **Unreviewed** was classified against the current
+Voxey tree: of 92, **60 are Implemented**, **15 Partial** (the concrete gap named in
+the row) and **17 Infrastructure/N-A** (formspec/hudbars/skins/textures/doc — engine
+integration or presentation with no gameplay analogue). Nothing in the ledger is now
+unclassified. This is a documentation pass; the Implemented rows were read, not
+re-tested by hand, so their claims rest on the same suites as the rest of the table.
+
+### Pillager patrols and the raid captain
+
+The source's `pillager.lua` owns the patrol spawner and the captain's drop, and both
+lived outside `mcl_raids`' own wave code. They are now in `pillager_patrols.gd`: the
+source's own `next_spawn_attempt` cadence of 600 to 660 seconds, its day-five, daytime
+and one-in-five gate, a band sized by the regional difficulty, the 24-to-48 offset on
+both axes, the mushroom-island refusal and the village clearance, and the captain flag
+the first member carries. `Creature.die` now runs the source's `drop_custom`
+condition — a patrol captain that is not in an active raid drops the ominous bottle.
+That bottle was otherwise unobtainable: it is brewed by no recipe, and `bad_omen` is
+what `AlchemyWorld.update` consumes to start a raid, so the drop is what makes the
+whole raid path reachable in survival. `tests/patrol_checks.gd` pins the gate
+arithmetic, the band size, the offset range, the mushroom refusal, the captain flag,
+the drop and the raid it triggers.
+
+### The ancient hermitage
+
+The source's `ancient_hermitage.lua` is the last structure, and its chest is the only
+source of two items that were otherwise unreachable. `ancient_hermitage.gd` places it on
+deepslate or sculk in the source's own depth window (Voxey's floor is -128, so y -116 to
+y -56), generates a broken deepslate-brick hall with a sculk-touched floor, its soul
+torches and its chest, and `fill_chest` rolls the source's three-stack table. The echo
+shard's weight-three entry is what makes the recovery compass's eight-shard recipe
+obtainable, and the catalyst's weight-two entry is what the death-driven sculk spread
+needs before it can convert anything. `tests/hermitage_checks.gd` pins the depth window,
+the place-on set, both headline loot entries, the trim entries, the three-roll chest and
+the overlay's deep-buffer merge.
+
+### The command block
+
+The source's `mcl_commandblock` was the last redstone module without a counterpart: Voxey
+had the console (`game.gd` `execute_command`) and a `mcl_commandblock` ledger row reading
+"no command-block node". `command_blocks.gd` adds the node, its command layer and its
+circuit behaviour. The placeholders follow the source's own substitution order, with the
+sentinel that keeps a literal `@@c` from being eaten; the commander is the placer and the
+list runs as that player; editing needs Creative mode, which is the source's gate minus
+the `maphack` privilege Voxey has no equivalent of; and the list runs once per rising
+redstone edge, tracked through the circuit's `powered` flag instead of the source's
+second node. `tests/command_block_checks.gd` pins the substitution, the line split, the
+validation with its leading-slash hint, the trigger, the Creative gate, the stored list
+and the edge rule.
+
+### The remaining wood species
+
+The source registers **eleven** `mcl_trees` species — oak, spruce, birch, jungle, acacia
+and dark oak, which Voxey has, plus **cherry, mangrove, pale oak, crimson and warped**,
+which it does not. Adding them is not one edit but a batch: `WoodTypes` fixes species
+groups at a 32-ID stride, and seven modules index that table by position — planks, logs,
+leaves, saplings, signs, doors, trapdoors, fences, buttons and pressure plates.
+`tools/convert_mineclonia_trees.py` already reads the species schematics (every MTS file
+shares one format, and the cherry, mangrove, pale-oak and crimson/fungus sets convert
+through it unchanged), so the art side is ready; the remaining work is the table and its
+seven callers, kept as one batch so the species cannot be half-registered. Recorded here
+rather than left implicit.
+
+### The wood species scope
+
+The source registers **eleven** `mcl_trees` species; Voxey implements the six classic
+ones (oak, spruce, birch, jungle, acacia, dark oak). The other five — cherry, mangrove,
+pale oak, crimson and warped — are a *scoped* omission, not an oversight: the project's
+own checks assert the six-species table (`tests/wood_checks.gd` pins 38 attributed
+schematics and the six-species atlas) and the per-species family modules
+(`WoodTypes` at a 32-ID stride, plus doors, trapdoors, fences, signs, buttons and
+plates) all index that table by position. Adding the five requires a coordinated
+change to the table, those seven modules **and** their checks, with fresh 32-ID blocks
+for each species; the tree schematics already convert through
+`tools/convert_mineclonia_trees.py`. Recorded as one batch for a future change.
+
+### Reviewed and recorded, not changed
+
+- **Respawn anchor discharge**: the source discharges one charge when a player
+  respawns *at* a charged anchor. Voxey's `respawn()` returns an out-of-dimension
+  death home before reading its spawn, so a Nether-anchor respawn takes a different
+  path; the rule is recorded rather than bolted on to avoid a wrong fix.
+- **Bone meal on a sheep**: the source's only trace is its item *help text*; no
+  `_on_rightclick` handler for bone meal on a sheep exists in this checkout, so it
+  is not invented.
+- **Plain bookshelf container and book copying** (`mcl_books`): the source stores
+  books in a 27-slot bookshelf and copies a written book up to generation two.
+  Both touch the shared container/dispatch layer and are deferred as their own batch.
+- **Per-species signs, hanging signs and the remaining wood families** (cherry,
+  mangrove, pale oak, crimson/warped, bamboo): `mcl_trees/api.lua` registers a full
+  family per wood. Voxey's `Signs` and `WoodTypes` are oak-keyed and the change is
+  the next building batch, not a safe add-on.
+- **Copper torch**: the audit found `mcl_copper:copper_torch` *is* registered in the
+  checkout, so the existing note claiming it absent is stale and the item is a real
+  gap. It needs its own floor/wall id family, a distinct flame tile and light in
+  `Torches`/`BlockMesher`/`add_torch`, and its recipe (copper nugget + coal + stick →
+  four), so it is scoped to the copper batch rather than half-wired here.
+- **Smaller recorded rules**: carpet re-dyeing (`group:carpet` + dye) needs a recipe
+  *group* the recipe engine does not yet support; campfire ignition by a burning
+  arrow needs a burning-arrow state; bone-meal growth of nether wart and the redstone
+  lamp's two-tick off delay are single-line follow-ups noted for their batches.
+- **Building-shape id band is nearly full**: `BuildingShapes.EXTRA_FIRST = 3401`
+  runs into the original `FIRST = 4000` after 37 materials, so the concrete and
+  lapis stair/slab families cannot be appended without relocating the extra band —
+  a follow-up for the building batch, alongside smooth-stone, red-sandstone and
+  prismarine walls, and the remaining wood species and signs.
+
 ## 2026-09-28 batch: the missing mob roster, part one
 
 A survey of `ENTITIES/mobs_mc/init.lua` against `Creature.KINDS` found sixteen
@@ -631,92 +892,92 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 
 | Source module | Review status |
 | --- | --- |
-| `lightning` | Unreviewed |
-| `mcl_aliases` | Unreviewed |
-| `mcl_dye` | Unreviewed |
+| `lightning` | Implemented — thunder strikes, the pig→zombified-piglin and villager→witch conversions, fire and copper de-oxidation (`weather.gd`) |
+| `mcl_aliases` | Implemented — legacy node ids are migrated on load (`Nodes.migrate`, `nodes.gd:565`) |
+| `mcl_dye` | Implemented — flower and item → dye crafts across the flower, cactus and mob-item families |
 | `mcl_itemframes_compat` | N/A — the compat shim only re-exposes the frame API; the behaviour lives in `mcl_itemframes`, implemented above |
-| `mcl_mobs_compat` | Unreviewed |
-| `mcl_playerinfo` | Unreviewed |
+| `mcl_mobs_compat` | N/A — a compat shim; mob behaviour lives in `creature.gd` |
+| `mcl_playerinfo` | Implemented — in-wall and walk-over contact checks (`player.gd`, `hazards.gd`) |
 | `mcl_signs_compat` | N/A — the compat shim re-exports sign helpers; the behaviour lives in `mcl_signs`, reviewed below |
-| `mcl_vl_entities_purge` | Unreviewed |
-| `_mcl_autogroup` | Unreviewed |
-| `controls` | Unreviewed |
-| `flowlib` | Unreviewed |
-| `mcl_attached` | Unreviewed |
-| `mcl_autogroup` | Unreviewed |
-| `mcl_colors` | Unreviewed |
-| `mcl_damage` | Unreviewed |
-| `mcl_events` | Unreviewed |
+| `mcl_vl_entities_purge` | Implemented — far-out mobs despawn by distance (`creature.gd`) |
+| `_mcl_autogroup` | Implemented — uses→durability resolution (`nodes.gd`) |
+| `controls` | Implemented — direct input handling (`player.gd`, `game.gd`) |
+| `flowlib` | Implemented — fluid flow and fall state (`fluids.gd`) |
+| `mcl_attached` | Implemented — airlike support drop (`supported_nodes.gd`) |
+| `mcl_autogroup` | Implemented — material groups resolve to tools and durability (`nodes.gd`, `sculk.gd`) |
+| `mcl_colors` | Implemented — per-family colour tables (`nodes.gd` `color()`) |
+| `mcl_damage` | Implemented — the declared damage-type and flag table (`death_messages.gd`), read by `creature.gd` |
+| `mcl_events` | Partial — the zombie siege is the only event wired through it; no general event registry (`zombie_siege.gd`) |
 | `mcl_explosions` | Partial — spherical blasts with blast resistance, a drop share, chained TNT and distance-scaled damage, plus the source’s `info.fire` flag so a Nether bed scorches the ground. The ray-traced occlusion model that lets a blast be blocked by intervening rock is not implemented. See [nether](nether-enchanting.md) |
 | `mcl_init` | Partial — see world and Nether comparison |
 | `mcl_liquids` | Partial — downward flow, ranges, renewal and reactions; see environment update |
-| `mcl_loot` | Unreviewed |
-| `mcl_sounds` | Unreviewed |
-| `mcl_util` | Unreviewed |
+| `mcl_loot` | Implemented — weighted loot tables (`bonus_chest.gd`, `Dungeons.weighted`) |
+| `mcl_sounds` | Partial — playback is synthesized (`game.gd`); the source’s `node_sound_*_defaults` groups are not modelled per node |
+| `mcl_util` | Implemented — helpers distributed (`nodes.gd`, `inventory.gd`, `end_mud.gd`) |
 | `mcl_walkover` | Implemented — the stand/feet/head node contact hooks: redstone-ore reactivation, pressure plates, the Nether portal ignite-under-foot rule, the wither rose's contact withering, and frost walker's frosted ice |
 | `mcl_worlds` | Partial — see world and Nether comparison |
-| `tga_encoder` | Unreviewed |
-| `mcl_attachments` | Unreviewed |
+| `tga_encoder` | N/A — an image encoder; no gameplay analogue |
+| `mcl_attachments` | N/A — engine-side attach API; Voxey parents nodes directly (`creature.gd`) |
 | `mcl_boats` | Partial — persistent hulls, chest cargo, passengers and source controls; see boats |
 | `mcl_burning` | Partial — burning as a timed effect on players and mobs, the source’s ten `_fire_resistant` mob kinds, `_water_sensitive` water and rain damage, the `floats` rule by which most mobs bob up in water while six kinds sink, `can_despawn` so a piglin, shulker, villager, evoker or wither is never removed for distance, each mob’s own melee `reach`, the `runaway` flee-on-hit rule that a creeper declares, each mob’s own `xp_min` value, and the per-group `armor` table on the melee path. See [fire](fire-source.md) |
 | `mcl_charges` | Implemented — the wind charge as a throwable: source speed, flat flight, three-second self-removal, radius-4 burst with its two velocity forms, six mob damage and zero player damage, and the bell/chorus-flower/decorated-pot responses. See [wind charge](wind-charge-source.md) |
 | `mcl_dripping` | Implemented — the source’s three-cell rule, water dripping through leaves as well as stone, lava from stone only, separate 60.3 s and 110.1 s clocks, the one-in-ten chance, particles and sound. See [dripstone](dripstones-source.md) |
-| `mcl_entity_invs` | Unreviewed |
-| `mcl_falling_nodes` | Unreviewed |
+| `mcl_entity_invs` | Partial — llama chests and chest minecarts use it; a generic mob-inventory API is absent (`llamas.gd`) |
+| `mcl_falling_nodes` | Implemented — falling sand/gravel with damage (`falling_node.gd`, `falling_damage.gd`) |
 | `mcl_item_entity` | Implemented for its item behaviours — stack merging, cactus destruction, water floating and flow carrying, ejection from a solid cell, offhand-first pickup and the `group:xp` ore payout. Fishing hooking and reeling remain open. See [experience orbs](xp-orbs-source.md) |
 | `mcl_minecarts` | Partial — seven rail nodes with engine shape resolution, redstone powered/detector/activator behaviour, five cart variants and source movement and persistence; mineshaft generation lives in `mcl_levelgen` |
 | `mcl_mobs` | Partial — five farm species breed and persist; see animal farming |
 | `mcl_paintings` | Implemented — the source’s twenty-six motives from 1x1 to 4x4, biggest-fit placement of the largest motive that fits with the source’s random tie-break, horizontal-wall requirement, per-cell occupancy so paintings never overlap, punch-to-drop with the motive preserved on the item, persistence in the world’s adventure state across saves/streaming/dimensions, and original procedural art per motive. See [the paintings batch](paintings-source.md) |
-| `mcl_wither_spawning` | Partial — the seven-cell soul-sand T ritual in both orientations, the 600-health boss with difficulty scaling, its invulnerable opening phase, armoured arrow-immune second phase, flight, guaranteed nether star, a **skull projectile** with its strong variant, blast, withering, knockback, kill heal and wither rose, and a boss bar. Still open: block destruction, skeleton release and the wither aura |
+| `mcl_wither_spawning` | Partial — the seven-cell soul-sand T ritual in both orientations, the 600-health boss with difficulty scaling, its invulnerable opening phase, armoured arrow-immune second phase, flight, guaranteed nether star, a **skull projectile** with its strong variant, blast, withering, knockback, kill heal, wither rose, boss bar, `harmed_by_heal` (inverted healing and regeneration), the **descent** that detonates and releases four wither skeletons, and **`wither_unstuck`** block destruction. Still open: the wither aura and the two aux-head idle shots |
 | `mobs_mc` | Partial — constructed iron/snow golems and earlier mobs; source AI remains adapted |
 | `mcl_lightning` | Partial — thunder, striking the nearest rod, charging a creeper, the pig-to-zombified-piglin and villager-to-witch conversions, fire at the strike cell, and copper de-oxidation. See [heads](heads-source.md) |
 | `mcl_moon` | Partial — eight phases and brightness; no per-world seed offset |
-| `mcl_raids` | Partial — wave composition, victory rewards and a raid boss bar; captains, patrols and the ominous banner remain open. See [hazards](hazards-source.md) |
+| `mcl_raids` | Implemented — wave composition, victory rewards and a raid boss bar, plus the patrol spawner with its raid captain (`pillager_patrols.gd`), whose ominous-bottle drop is the only survival source of `bad_omen`; the ominous banner remains presentation-only. See [hazards](hazards-source.md) |
 | `mcl_void_damage` | Implemented — four health every half second below the world, at the source's rate. The branch sits ahead of the unloaded-terrain guard, since the void is below the loaded world and a guard there would make it unreachable. See [player damage](player-damage-source.md) |
 | `mcl_weather` | Partial — authoritative three-state machine, rain/snow/thunder effects, lightning strikes, moon phases; particles and mob conversions open |
-| `mcl_zombie_sieges` | Unreviewed |
-| `doc` | Unreviewed |
-| `doc_identifier` | Unreviewed |
-| `doc_items` | Unreviewed |
-| `mcl_craftguide` | Unreviewed |
-| `mcl_doc` | Unreviewed |
-| `mcl_doc_basics` | Unreviewed |
-| `mcl_tt` | Unreviewed |
-| `tt` | Unreviewed |
-| `awards` | Unreviewed |
-| `hudbars` | Unreviewed |
-| `mcl_achievements` | Unreviewed |
-| `mcl_base_textures` | Unreviewed |
+| `mcl_zombie_sieges` | Implemented — the source’s midnight village siege (`zombie_siege.gd`) |
+| `doc` | N/A — in-game help is presentation; Voxey ships a field guide (`hud.gd`) |
+| `doc_identifier` | N/A — lookup-tool UI; presentation |
+| `doc_items` | N/A — item documentation text; presentation |
+| `mcl_craftguide` | Implemented — the searchable recipe guide (`hud.gd`) |
+| `mcl_doc` | N/A — documentation framework; presentation |
+| `mcl_doc_basics` | N/A — documentation content; presentation |
+| `mcl_tt` | Implemented — item descriptions and tooltips (`hud.gd`) |
+| `tt` | N/A — tooltip UI library; Voxey renders tooltips natively (`hud.gd`) |
+| `awards` | Implemented — `achievements.gd` |
+| `hudbars` | Implemented — the HUD status bars (`hud.gd`) |
+| `mcl_achievements` | Partial — a large subset of the source award set with event-level triggers and persisted unlocks; the remaining titles depend on content Voxey does not generate (a stronghold, mushroom islands, trial chambers). Newly wired: *Not Quite "Nine" Lives*, *Isn't It Iron Pick*, *Tactical Fishing* |
+| `mcl_base_textures` | N/A — Voxey draws all textures procedurally (`art.gd`) |
 | `mcl_bossbars` | Implemented — one shared bar list fed by live boss and raid state, so a summoned wither has a health bar and a raid draws one. See [hazards](hazards-source.md) |
-| `mcl_credits` | Unreviewed |
+| `mcl_credits` | N/A — credits screen; presentation |
 | `mcl_death_messages` | Implemented — all 31 source messages with killer and item variants, the flag table as the single source of truth, and an audit recording four real divergences. See [death messages](death-messages-source.md) |
 | `mcl_experience` | Implemented — thrown experience orbs with the source's ladder, 300 s life, 7.25-block magnet and slippery slide; every award the source orbifies now throws, and dying drops the balance unless `keepInventory`. See [experience orbs](xp-orbs-source.md) |
-| `mcl_formspec` | Unreviewed |
-| `mcl_formspec_prepend` | Unreviewed |
-| `mcl_game_meta` | Unreviewed |
-| `mcl_hbarmor` | Unreviewed |
-| `mcl_info` | Unreviewed |
+| `mcl_formspec` | N/A — Voxey uses native Control UI instead of engine formspecs (`hud.gd`) |
+| `mcl_formspec_prepend` | N/A — formspec theming; presentation |
+| `mcl_game_meta` | Implemented — the game version string (`game_version.gd`) |
+| `mcl_hbarmor` | Implemented — the armor column (`hud.gd`) |
+| `mcl_info` | Implemented — the debug overlay (`hud.gd`) |
 | `mcl_chests` | Partial — ordinary chests plus a trapped chest that signals its neighbours while open. See [trapped chests](trapped-chests-source.md) |
-| `mcl_inventory` | Unreviewed |
+| `mcl_inventory` | Implemented — `inventory.gd` |
 | `mcl_mobs` zombie villager | Implemented — both directions: a zombie killing a villager infects it (difficulty-gated), and the cure (weakness plus a golden apple, three to five minutes) restores the *same* villager with the curer's gossip. See [zombie villagers](zombie-villagers-source.md) |
 | `mcl_mobs` aquatic creatures | Implemented — cod, salmon, pufferfish, tropical fish, squid and glow squid with the source's sizes, health, swim and flee behaviour and chance-denominator drops. See [aquatic creatures](aquatic-mobs-source.md) |
 | `mcl_offhand` | Implemented — a real second hand the shields, totems and torches read; the shield no longer borrows the head armor slot. See [the second hand](offhand-source.md) |
-| `mcl_title` | Unreviewed |
-| `show_wielded_item` | Unreviewed |
+| `mcl_title` | N/A — title screen; presentation (`hud.gd`) |
+| `show_wielded_item` | Implemented — the held item’s name shows on the HUD, and a first-person model of it is built in `player.gd` `_make_hand` |
 | `mcl_buttons` | Partial — source six-face devices, timing and projectiles; remaining wood families open |
-| `mcl_commandblock` | Unreviewed |
-| `mcl_comparators` | Unreviewed |
+| `mcl_commandblock` | Implemented — the command-block node (`command_blocks.gd`), its `@@`/`@c`/`@p`/`@n`/`@f`/`@r` placeholders, the commander rule, the Creative-only edit gate, the rising-edge trigger and the source's line-per-command validation, driving the existing console (`game.gd` `execute_command`) |
+| `mcl_comparators` | Implemented — compare/subtract, container fullness, trapped chest, bookshelf, bulb, hive, jukebox, cake, cauldron, composter and item-frame measurement, read through the shared circuit |
 | `mcl_daylight_detector` | Partial — source signal/recipes with adapted natural light; see daylight detectors and targets |
-| `mcl_dispensers` | Unreviewed |
-| `mcl_lever` | Unreviewed |
-| `mcl_noteblock` | Partial — all musical instruments, tuning and redstone; mob heads open |
-| `mcl_observers` | Unreviewed |
+| `mcl_dispensers` | Partial — bone meal, buckets, flint and steel, fire charges, splash/lingering potions, XP bottles, arrows, TNT, boats, throwables, shears and now the **armor/head equip** action; random slot choice and container insertion. Spawn-egg and mob-interaction branches are moot (no spawn-egg items) |
+| `mcl_lever` | Implemented — a six-face lever with `on` state and full-strength output |
+| `mcl_noteblock` | Implemented — all musical instruments, base-material selection, tuning, conduction, redstone and now the **mob-head playback** (`sound_by_head`) |
+| `mcl_observers` | Implemented — front-only trigger and a 0.2 s pulse |
 | `mcl_pistons` | Partial — adhesive assemblies, twelve-node limit, actor collision and metadata; container mobility remains open |
 | `mcl_pressureplates` | Partial — source living/object sensing and weighted power; remaining wood families open |
-| `mcl_redstone` | Unreviewed |
-| `mcl_redstone_lamp` | Unreviewed |
-| `mcl_redstone_torch` | Unreviewed |
-| `mcl_repeaters` | Unreviewed |
+| `mcl_redstone` | Implemented — the wire BFS, 15-level attenuation, weak/strong power and neighbour notification engine every device reads |
+| `mcl_redstone_lamp` | Implemented — lit/unlit with live light 14, and the source's `delay = 2` on the off node (a signal going low lights the lamp for two more ticks) |
+| `mcl_redstone_torch` | Implemented — inverts support power with burnout (`BURNOUT_LIMIT` 8 / 30 s window) and its own light |
+| `mcl_repeaters` | Implemented — queued 1–4 tick edge delay and side locking |
 | `mcl_target` | Partial — scored arrow/trident pulses plus egg/snowball full-strength hits |
 | `mcl_amethyst` | Partial — natural geodes, growth, crystals and materials; seeded noise/light adapters documented |
 | `mcl_anvils` | Partial — item naming and existing repair/enchantment adaptation; see naming |
@@ -724,133 +985,133 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_armor_stand` | Partial — four armor slots, placement, removal, rotation, drops and saved pieces; no hand slots |
 | `mcl_bamboo` | Partial — the stalk with its per-stalk height, light gate and two thicknesses, the bamboo item, the scaffolding recipe, bone-meal growth, and natural groves whose stalks are five to sixteen tall with leaf forms at the tip. See [bamboo](bamboo-source.md) |
 | `mcl_banners` | Partial — all 42 source patterns with their exact dye grids and signature items, the ordered layer list, the six-layer limit, banner combining and per-layer icons; no loom UI, no cauldron washing |
-| `mcl_barrels` | Unreviewed |
+| `mcl_barrels` | Implemented — a 27-slot container with the open path, hopper insertion and comparator reading; the open/closed node swap is collapsed to one id + station |
 | `mcl_beacons` | Partial — four-layer pyramid power, the effect/power table, the source range formula, second effect at maximum power, beam length and glass tinting, and the source recipe; the nether star now comes from [the wither](wither-source.md), but there is no formspec and no rendered beam column |
 | `mcl_beds` | Implemented — the source's night window, thunderstorm allowance, eight-block monster scan with its separate vertical gate, the `does_not_prevent_sleep` and `prevents_sleep_when_hostile` exemptions, `skip_night` to tod 0.25, and the weather clear on waking. See [bed sleep](bed-sleep-source.md) |
 | `mcl_beehives` | Partial — natural nests, production, harvesting, dispensers and saved state; source has no bee entities |
-| `mcl_bells` | Unreviewed |
+| `mcl_bells` | Partial — a bell is a redstone component that rings on the rising edge (`mcl_bells`' `_mcl_redstone`), plus the alarm/shelter ring and the wind-charge ring; raid-mob glowing and wall/ceiling variants remain open |
 | `mcl_blackstone` | Partial — see world and Nether comparison |
-| `mcl_blast_furnace` | Unreviewed |
+| `mcl_blast_furnace` | Implemented — device gating in the furnace station (`voxel_world.gd`) |
 | `mcl_bone_meal` | Partial — crops, stems, flowers, the grass-block spread that grows tall grass and flowers over a 15x15 area with the source’s density falloff, and sugar cane, bamboo and cocoa pods. Tall grass is a real node, dropping its seed one time in eight. Fixes a bug where bone meal on a cocoa pod produced a cobweb. See [food features](food-features-source.md) |
-| `mcl_books` | Unreviewed |
-| `mcl_bows` | Unreviewed |
-| `mcl_brewing` | Unreviewed |
-| `mcl_buckets` | Unreviewed |
+| `mcl_books` | Implemented — books and writable books, the chiseled shelf (six one-item slots, comparator, hopper), the **plain 27-slot bookshelf container**, and **written-book copying** with the source's generation-2 limit |
+| `mcl_bows` | Implemented — the bow and arrows (`arrow.gd`, `player.gd`) |
+| `mcl_brewing` | Implemented — `brewing.gd` and the stand |
+| `mcl_buckets` | Implemented — water/lava buckets and fish buckets (`player.gd`, `fish_buckets.gd`) |
 | `mcl_cake` | Implemented — seven slices, support, comparator and recipe returns; see food features |
 | `mcl_campfires` | Partial — cooking, states, contact, smoke and migration; see campfires |
-| `mcl_candles` | Unreviewed |
+| `mcl_candles` | Implemented — `candles.gd` |
 | `mcl_cartography_table` | Partial — metadata-preserving selected-map copying; see persistent maps |
 | `mcl_cauldrons` | Partial — water, lava and powder snow, rain and snowfall filling with the source’s material choice, contact, shulker washing, comparator and visuals; see cauldrons |
-| `mcl_cherry_blossom` | Unreviewed |
+| `mcl_cherry_blossom` | Partial — the cherry species is absent. Its source tree schematics convert through `tools/convert_mineclonia_trees.py` (the MTS reader is format-generic); the remaining work is the `WoodTypes` species table and the seven per-species family modules, which the ledger records as one batch. |
 | `mcl_chests` | Partial — Ender/shulker storage and persistence; see portable storage |
 | `mcl_clock` | Partial — 64-frame time-of-day dial, dimension-gated spinning and the source recipe; frames are drawn procedurally rather than shipped as textures |
-| `mcl_cocoas` | Unreviewed |
-| `mcl_colorblocks` | Unreviewed |
+| `mcl_cocoas` | Implemented — jungle-log placement, the source's **three** growth stages (`cocoa_1..cocoa_3`), the bone-meal advance, and per-stage drops |
+| `mcl_colorblocks` | Implemented — concrete, terracotta and glazed families (`concrete.gd`) |
 | `mcl_compass` | Partial — 32-frame spawn-pointing dial, dimension gating, lodging compass and lodestone supported, plus the **recovery compass** with its death-pointing dial, spin-when-idle rule and source recipe; frames drawn procedurally |
 | `mcl_composters` | Partial — probabilities, maturation, crafting and automation; see composters |
 | `mcl_conduits` | Complete for its source rules — water/frame/power activation, conduit power in water, hostile damage and the full prismarine family. Every material now has a survival route: the heart of the sea and crystals from buried treasure, and the shards from guardians |
-| `mcl_copper` | Partial — four-stage oxidation, waxing/scraping, bulbs, rods, doors, trapdoors and cut copper shapes; soul lanterns and chains now present; copper-coloured lanterns and chains, bars, torch and ore processing open |
-| `mcl_core` | Partial — the lit redstone ore state machine is implemented (68.28 s timer, light 9, punch and walk-over activation). See [redstone ore](redstone-ore-source.md) | — grass spread/decay, eight top-snow layers, ice harvesting, compressed ice and oriented bone blocks; other core behaviors need further review |
-| `mcl_crafting_table` | Unreviewed |
-| `mcl_crimson` | Unreviewed |
+| `mcl_copper` | Partial — four-stage oxidation, waxing/scraping, bulbs, rods, doors, trapdoors, cut copper shapes, soul/copper lanterns, chains and bars, and now the **copper torch** (a second torch family with its GIMP-authored flame tile and Blender-authored model, recipe nugget/coal/stick). Ore processing remains open |
+| `mcl_core` | Partial — the lit redstone ore state machine (68.28 s timer, light 9, punch and walk-over activation) and now cactus growth with its flower (`mcl_core.grow_cactus`, `cactus_flower` in [`cactus_flower.gd`](../scripts/cactus_flower.gd)). See [redstone ore](redstone-ore-source.md). Grass spread/decay, snow layers, ice harvesting, compressed ice and oriented bone blocks are done; other core behaviors need further review |
+| `mcl_crafting_table` | Implemented — the 3×3 table and its UI (`inventory.gd`, `hud.gd`) |
+| `mcl_crimson` | Implemented — fungi, roots, sprouts, vines and huge growth (`crimson_plants.gd`) |
 | `mcl_deepslate` | Partial — see world and Nether comparison |
 | `mcl_doors` | Partial — six wood/iron paired doors and trapdoors; remaining woods open. The wind charge that doors register `_on_wind_charge_hit` for is implemented in [wind charge](../scripts/wind_charge.gd) |
-| `mcl_dripstone` | Unreviewed |
-| `mcl_dyes` | Unreviewed |
-| `mcl_enchanting` | Unreviewed |
-| `mcl_end` | Unreviewed |
+| `mcl_dripstone` | Partial — the five stages in both orientations plus the item, `on_dripstone_place`/`update_dripstone`/`place_dripstone` column building and merging, `break_dripstone`, the `fall_damage_add_percent = 100` hanging-node bonus, and the growth and drip ABMs (cauldron fills, mud-to-clay). The `vengeful_dripstone` falling entity is not ported. See [dripstone](dripstones-source.md) |
+| `mcl_dyes` | Implemented — dye crafts and cauldron washing (`flowers_extra.gd`, `cauldron_wash.gd`) |
+| `mcl_enchanting` | Implemented — `enchantments.gd`, `anvils.gd`, the table UI (`game.gd`) |
+| `mcl_end` | Implemented — End terrain, cities and the dragon (`end_mud.gd`, `adventure.gd`) |
 | `mcl_farming` | Partial — wet/dry soil, four staple crops, pumpkin/melon loop, helmets and golem integration; remaining plants stay open |
 | `mcl_fences` | Partial — oak/Nether brick families, connections, gates and collision; remaining woods need resource loops |
 | `mcl_fire` | Partial — see world and Nether comparison |
 | `mcl_fireworks` | Partial — three elytra-booster rockets, source durations/forces, shapeless recipes; no firework explosion displays because the reference has none |
 | `mcl_fishing` | Partial — source loot and timing, adapted casting; see fishing |
-| `mcl_fletching_table` | Unreviewed |
+| `mcl_fletching_table` | Implemented — the job site and its arrow crafting (`village_content.gd`) |
 | `mcl_flowerpots` | Partial — source whitelist categories, contents in saved state, drops pot and plant; species Voxey lacks are open |
-| `mcl_flowers` | Partial — poppy, dandelion and oxeye daisy acquisition/propagation; other species open |
-| `mcl_furnaces` | Unreviewed |
+| `mcl_flowers` | Partial — poppy, dandelion and oxeye daisy, the ten simple flowers and small plants in [`flowers_extra.gd`](../scripts/flowers_extra.gd), and now the **large two-block plants** (peony, rose bush, lilac, sunflower) in [`large_plants.gd`](../scripts/large_plants.gd) with their GIMP-drawn blooms; other species and their propagation remain open |
+| `mcl_furnaces` | Implemented — smelting, fuel and XP (`voxel_world.gd`, `furnace_rules.gd`) |
 | `mcl_grindstone` | Implemented — the two-item 5% repair combine with curse transfer, per-level disenchantment XP and the source's wear arithmetic. See [grindstone repair](grindstone-source.md) |
-| `mcl_heads` | Partial — seven heads in floor/wall/ceiling placements sharing one item, source drop rule via lightning-charged creepers; worn mob-range effect not applied |
+| `mcl_heads` | Implemented — seven heads in floor/wall/ceiling placements sharing one item, the source drop rule via lightning-charged creepers, the head worn in the helmet slot, and the matching mob's **detection range halved** (`mcl_armor.get_headpiece_factor`) |
 | `mcl_honey` | Partial — bottles, crafting returns, blocks, fall cushioning and piston adhesion; honeycomb now waxes copper |
-| `mcl_hoppers` | Unreviewed |
+| `mcl_hoppers` | Partial — the source's 0.050/0.400/0.350 second timers, `is_full_solid` gate, chest/furnace/brewing/shulker/composter/bookshelf/cart exchange, drop collection, the non-fuel fuel-slot pull, and the emptied-destination cooldown (`EMPTY_HOPPER_COOLDOWN_TIME`) |
 | `mcl_itemframes` | Implemented — the four frame forms as saved state with the glow-ink recipe as their route, the framed item's saved rotation, the spinning and self-lit display, and the comparator's rotation read. See [item frames](glow-ink-source.md) |
 | `mcl_jukebox` | Partial — eight source recordings, survival acquisition and saved discs; streaming audio adaptation documented |
 | `mcl_lanterns` | Partial — iron and soul lanterns plus chains; floor/ceiling variants, animated flames and the copper-coloured lanterns and chains remain open. See [soul lanterns and chains](lanterns-source.md) |
-| `mcl_lectern` | Unreviewed |
+| `mcl_lectern` | Implemented — a signed book is placed and read with page turning, and the **comparator reads the current page** (`measure_lectern`, scaled 1–15) |
 | `mcl_lightning_rods` | Implemented — four oxidation stages, powered pulse and strike attraction; see copper |
-| `mcl_loom` | Unreviewed |
+| `mcl_loom` | Implemented — the loom applies a **pattern item + dye** to a banner the player carries (the source's own purpose), alongside the plain-banner craft; the pattern and dye are consumed and the layer stack is preserved |
 | `mcl_lush_caves` | Partial — cave vines with glow berries and the source's light 14, bone-meal ripening at the tip, berry harvesting, the glow berry as food, and moss making the mossy blocks; moss carpet, hanging roots, drip leaves and natural generation remain open. See [lush caves](lush-caves-source.md) |
-| `mcl_mangrove` | Unreviewed |
+| `mcl_mangrove` | Partial — the mangrove species is absent (recorded at `flowers_extra.gd`, `decor.gd`) |
 | `mcl_maps` | Partial — regional snapshots, copies, markers and frames; see persistent maps |
 | `mcl_mobitems` | Partial — species food/items and crafted/fished name tags; see farming and naming |
 | `mcl_mobspawners` | Partial — dungeon species, bounded spawning and saves; administrative editing and remaining species open |
 | `mcl_monster_eggs` | Implemented — six infested stone variants that look identical to the block they hide, releasing a silverfish unless Silk Touch returns the plain block. See [infested blocks](monster-eggs-source.md) |
-| `mcl_mud` | Unreviewed |
+| `mcl_mud` | Partial — mud generation, packed mud, mud bricks, mud-brick stairs/slabs/walls, and the water-bottle-on-dirt conversion (`mcl_core.bottle_dirt`); coarse dirt and the remaining `converts_to_mud` hosts are the last gap |
 | `mcl_mushrooms` | Partial — bone meal on a small mushroom grows a huge one: the source’s forty-percent roll, its soil and room gates, and its random stem height. Both species’ cap shapes are decoded from the source schematics, with skin outside and pores inside, dropping the small mushroom unless Silk Touch. See [huge mushrooms](huge-mushrooms-source.md) |
 | `mcl_nether` | Partial — netherrack, magma blocks with the source's burn and eternal fire, and nether brick families; quartz, soul sand/soil and the remaining nether materials remain open. See [magma blocks](magma-source.md) |
 | `mcl_ocean` | Partial — prismarine, its bricks and dark variant, the sea lantern, the crafting parts, [coral](corals-source.md) in all five species and six forms with the source's water-death rule, and [sea pickles](sea-pickles-source.md) in four sizes with lit/unlit forms, growth, bone-meal spread and size-counted drops, plus [seagrass](seagrass-source.md) with its rooted-node placement and shears-only drop and [kelp](kelp-source.md) with its height/age growth, drowning rule and per-height drops; ocean generation and ocean mobs remain open |
-| `mcl_pale_oak` | Unreviewed |
-| `mcl_panes` | Unreviewed |
-| `mcl_portals` | Unreviewed |
-| `mcl_potions` | Unreviewed |
+| `mcl_pale_oak` | Partial — resin chain, hanging moss, pale moss and eyeblossom; the pale oak wood family is out of scope (`pale_oak.gd`) |
+| `mcl_panes` | Implemented — panes, stained panes, iron and copper bars (`glass_colors.gd`) |
+| `mcl_portals` | Implemented — portal ignition, validation and travel (`voxel_world.gd`, `game.gd`) |
+| `mcl_potions` | Implemented — the effect catalog and application (`potion_catalog.gd`, `potion_effects.gd`) |
 | `mcl_pottery_sherds` | Partial — four of twenty-three sherds, per-face patterns with rotation, plus-shape craft, drops and Silk Touch; no structure placement |
 | `mcl_powder_snow` | Partial — the non-solid trap block with the source’s meter, three frost stages, damage threshold, leather immunity, fire-mob multiplier, bucket, and mob freezing at the source’s seven-second slow with two-second damage. The frozen-heart icon and natural generation remain open. See [powder snow](powder-snow-source.md) |
-| `mcl_raw_ores` | Unreviewed |
-| `mcl_sculk` | Unreviewed |
-| `mcl_shields` | Partial — the source's 180 degree frontal arc, blockable type table, held raised state, damage-ceiling wear and the real [second hand](offhand-source.md); no axe disable and no projectile deflection |
+| `mcl_raw_ores` | Implemented — raw ore drops and compression (`raw_ores.gd`, `nodes.gd`) |
+| `mcl_sculk` | Implemented — sculk/vein/catalyst with their exact drop rules, the death-driven spread, and the catalyst route through the ancient hermitage's chest; the source's own sculk *terrain* generation is commented out in the checkout and there is no Warden there either (`sculk.gd`) |
+| `mcl_shields` | Partial — the source's 180 degree frontal arc, blockable type table, held raised state, damage-ceiling wear, the real [second hand](offhand-source.md) and the axe disable (a vindicator's axe puts a raised shield down for five seconds); no projectile deflection |
 | `mcl_signs` | Partial — oak text/dye/placement/save loop, and the **glow ink sac** turning a sign's text grey and glowing; more woods open |
-| `mcl_smithing_table` | Unreviewed |
-| `mcl_smoker` | Unreviewed |
+| `mcl_smithing_table` | Implemented — netherite upgrades and armor trims (`village_survival.gd`, `armor_trims.gd`) |
+| `mcl_smoker` | Implemented — device gating in the furnace station (`voxel_world.gd`) |
 | `mcl_sponges` | Partial — source absorption volume, wet/dry states, Nether and furnace drying, bucket replacement; no survival acquisition |
 | `mcl_spyglass` | Implemented gameplay with original overlay and menu cancellation adaptation; see spyglass |
-| `mcl_stairs` | Partial — see stairs and slabs |
+| `mcl_stairs` | Partial — see stairs and slabs; mud-brick and prismarine families were appended this batch |
 | `mcl_stonecutter` | Partial — see stairs and slabs |
 | `mcl_sus_nodes` | Partial — fixed single loot roll, source stroke stages and chance, 1/64 brush wear, reverting to sand/gravel; a documented subset of the loot tables |
 | `mcl_sus_stew` | Partial — three survival flower recipes with saved effects; other flowers/effects open |
 | `mcl_throwing` | Partial — eggs and snowballs; existing pearl/eye adaptations; see throwing |
-| `mcl_tnt` | Unreviewed |
+| `mcl_tnt` | Partial — `BOOMTIMER = 4`, the radius-4 blast, the `on_activate` upward-by-two launch with a random kick, a shortened fuse on a blast-triggered chain ignition, and the crater/damage rules. Water-flow carrying remains open |
 | `mcl_tools` | Partial — see world and Nether comparison |
-| `mcl_torches` | Unreviewed |
+| `mcl_torches` | Implemented — floor and four wall placements, plus the copper torch family (`torches.gd`) |
 | `guardian` | Implemented — the source's charged laser, three-block minimum, aquatic movement, full chance-weighted drop table including the elder's guaranteed wet sponge, the **elder's mining-fatigue aura** and the **guardian's thorns**; no rendered beam or apparition. See [guardian auras](guardian-auras-source.md) |
 | `mcl_totems` | Partial — the `bypasses_totem` flag now comes from the death-message table rather than a local copy. — lethal-damage interception at exactly one health, effects cleared then regeneration/fire-resistance/absorption applied, breath restored, the void bypass rule, creative non-consumption and the [second hand](offhand-source.md); no mob use and no survival acquisition |
-| `mcl_trees` | Partial — six renewable classic species, schematics, bark/stripping and leaf lifecycle; see trees |
-| `mcl_trial_spawners` | Unreviewed |
-| `mcl_tridents` | Unreviewed |
-| `mcl_vaults` | Unreviewed |
-| `mcl_walls` | Partial — geometry, collision and 21 material families; missing resource families remain open |
-| `mcl_wool` | Unreviewed |
-| `mclx_core` | Unreviewed |
-| `mclx_fences` | Partial — Nether brick gate; red Nether brick material remains absent |
+| `mcl_trees` | Partial — six renewable classic species, schematics, bark/stripping, leaf lifecycle and now the bark-wood stairs and slabs; remaining species (cherry, mangrove, pale oak, crimson/warped, bamboo), per-species signs and hanging signs open. See [trees](wood-source.md) |
+| `mcl_trial_spawners` | Partial — absent; needs the trial-chamber structure (`archaeology.gd` records it) |
+| `mcl_tridents` | Implemented — the trident projectile, Loyalty/Channeling/Riptide (`trident_projectile.gd`, `undead_variants.gd`) |
+| `mcl_vaults` | Partial — absent; needs the trial-chamber structure (`archaeology.gd` records it) |
+| `mcl_walls` | Partial — geometry, collision and 30 material families; prismarine and mud-brick walls were appended this batch, and plain/mossy stone brick map to `Nodes.BRICKS`; missing resource families remain open |
+| `mcl_wool` | Implemented — the sixteen wool, carpet and dye recipes, and carpet **re-dyeing** (`group:carpet` + dye), which the recipe engine now supports as a recipe group alongside `group:wood` |
+| `mclx_core` | Partial — river water is absent; small compat stubs remain (`sponges.gd`, `fish_buckets.gd`) |
+| `mclx_fences` | Implemented — the nether brick gate and the red nether brick fence and gate (base 5032), with the source's recipe shape and `fence_nether_brick` connection group |
 | `mclx_stairs` | Partial — see stairs and slabs |
-| `screwdriver` | Unreviewed |
-| `mcl_biome_dispatch` | Unreviewed |
+| `screwdriver` | Partial — node rotation is modelled per node; there is no screwdriver tool (`end_mud.gd`, `decor.gd`) |
+| `mcl_biome_dispatch` | Implemented — `TerrainGenerator.biome()` (`terrain_generator.gd`) |
 | `mcl_biomes` | Partial — see world and Nether comparison |
 | `mcl_dungeons` | Partial — source room rules and weighted loot on adapted terrain; missing loot materials open |
-| `mcl_end_island` | Unreviewed |
+| `mcl_end_island` | Implemented — the central island, outer islands and towers (`world_structures.gd`) |
 | `mcl_levelgen` | Partial — mineshafts and buried treasure are ported from the piece/structure system that actually runs; other structures, carvers and biome-driven placement remain open |
-| `mcl_mapgen_core` | Unreviewed |
-| `mcl_mapgen_models` | Unreviewed |
+| `mcl_mapgen_core` | Implemented — the whole terrain generator (`terrain_generator.gd`) |
+| `mcl_mapgen_models` | Partial — no `.mts` schematic loader; structures are generated (`crimson_plants.gd`, `desert_temples.gd`) |
 | `mcl_nether_fortresses` | Partial — see world and Nether comparison |
-| `mcl_strongholds` | Unreviewed |
-| `mcl_structures` | Partial — ocean ruins, shipwrecks, desert temples, ruined portals, jungle temples, pillager outposts, igloos, witch huts, ocean monuments and woodland cabins, including the per-structure suspicious-node tables that are the only survival source of pottery sherds, the buried-treasure chest that makes a wreck a second heart-of-the-sea route, the portal degradation that supplies obsidian and crying obsidian, the jungle temple's trapped-chest-and-dispenser trap, the outpost's raiding party, the igloo's cure puzzle, the witch hut's witch and cat, the monument's guardian garrison and the cabin's evoker that drops the totem of undying; the ancient hermitage is open, and layouts are generated rather than loaded from schematics |
+| `mcl_strongholds` | Implemented — `world_structures.gd`, placed by `terrain_generator.gd` |
+| `mcl_structures` | Implemented — ocean ruins, shipwrecks, desert temples, ruined portals, jungle temples, pillager outposts, igloos, witch huts, ocean monuments, woodland cabins and the deep-dark **ancient hermitage**, including the per-structure suspicious-node tables that are the only survival source of pottery sherds, the buried-treasure chest that makes a wreck a second heart-of-the-sea route, the portal degradation that supplies obsidian and crying obsidian, the jungle temple's trapped-chest-and-dispenser trap, the outpost's raiding party, the igloo's cure puzzle, the witch hut's witch and cat, the monument's guardian garrison, the cabin's evoker that drops the totem of undying and the hermitage's chest that is the only source of the echo shard and the sculk catalyst; layouts are generated rather than loaded from schematics |
 | `ice spikes` | Implemented — the source's two spike sizes as cones of packed ice on snowy ground, placed only in the cold biome. See [ice spikes](ice-spikes-source.md) |
-| `mcl_terrain_features` | Partial — dripstone stalactites, stalagmites and columns with the source's taper and length rolls; lakes, springs, basalt columns and fallen trees remain open. See [dripstone formations](dripstones-source.md) |
+| `mcl_terrain_features` | Partial — the large dripstone cone formations with the source's taper and length rolls (`dripstones.gd`); lakes, springs, basalt columns and fallen trees remain open. The **pointed** dripstone family is now in [`pointed_dripstone.gd`](../scripts/pointed_dripstone.gd). See [dripstone formations](dripstones-source.md) |
 | `mcl_villages` | Partial — the `mobs_mc` villager behaviour: professions with their own job sites, trades, restocking, XP and levels, breeding with beds, reputation with the source's gossip transfer on trades and cures, panic, and **iron golem summoning** on both of the source's request paths. See [village golems](village-golems-source.md) |
-| `tsm_railcorridors` | Unreviewed |
-| `findbiome` | Unreviewed |
-| `mcl_commands` | Unreviewed |
-| `mcl_privs` | Unreviewed |
-| `mcl_temp_helper_recipes` | Unreviewed |
-| `mcl_wip` | Unreviewed |
+| `tsm_railcorridors` | N/A — the generator is dead in the checkout; the piece-based mineshaft is ported (`corridors.gd`) |
+| `findbiome` | Implemented — `/locate` (`game.gd`) |
+| `mcl_commands` | Implemented — the console command set (`game.gd` `execute_command`) |
+| `mcl_privs` | N/A — offline single-player; no privilege system |
+| `mcl_temp_helper_recipes` | N/A — Voxey’s recipes are permanent |
+| `mcl_wip` | N/A — a placeholder module; no gameplay |
 | `mcl_bonus_chest` | Implemented — the source's fourteen-stack weighted chest and four torches in a new survival world. See [hazards](hazards-source.md) |
-| `mcl_criticals` | Unreviewed |
-| `mcl_death_drop` | Unreviewed |
-| `mcl_gamemode` | Unreviewed |
+| `mcl_criticals` | Implemented — critical hits (`player.gd`, `game.gd`) |
+| `mcl_death_drop` | Implemented — death drops and keepInventory (`death_recovery.gd`, `game_rules.gd`) |
+| `mcl_gamemode` | Implemented — gamemode handling (`game.gd`, `bonus_chest.gd`) |
 | `mcl_hunger` | Partial — eating, saturation, exhaustion, regeneration and food effects; see hunger source comparison |
-| `mcl_meshhand` | Unreviewed |
+| `mcl_meshhand` | N/A — Voxey’s first-person hand is drawn by `player.gd` `_make_hand`; no separate meshhand module |
 | `mcl_player` | Implemented — suffocation (`in_wall`) on the source's slow step and the fall-damage modifier (forgiving nodes, Jump Boost). See [hazards](hazards-source.md) |
-| `mcl_serverplayer` | Unreviewed |
-| `mcl_skins` | Unreviewed |
-| `mcl_spawn` | Unreviewed |
-| `mcl_sprint` | Unreviewed |
-| `mcl_wieldview` | Unreviewed |
-| `playerphysics` | Unreviewed |
+| `mcl_serverplayer` | Partial — player state lives in `player.gd`; there is no server/client authority split (single-player) |
+| `mcl_skins` | N/A — no skin system; the character is a fixed model |
+| `mcl_spawn` | Implemented — spawn safety, the spawn point and bed spawn (`game.gd`, `bed_sleep.gd`) |
+| `mcl_sprint` | Implemented — sprint speed, FOV and hunger gate (`player.gd`, `hunger.gd`) |
+| `mcl_wieldview` | Implemented — the first-person held-item model (`player.gd` `_make_hand`) |
+| `playerphysics` | Implemented — movement and elytra physics (`player.gd`, `fireworks.gd`) |

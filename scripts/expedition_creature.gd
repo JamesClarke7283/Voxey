@@ -2,6 +2,7 @@ class_name ExpeditionCreature
 extends Creature
 
 var slime_size: int = 2
+var magma_size: int = 2
 var slime_hop: float = 0.0
 var crystal_key: String = ""
 var wings: Array = []
@@ -12,11 +13,17 @@ var attack_phase: float = 0.0
 func _ready() -> void:
 	super._ready()
 	if kind == "slime": set_slime_size(2)
+	if kind == "magma_cube": set_magma_size(2)
 
 func info() -> Dictionary:
 	var data: Dictionary = super.info()
 	if kind == "slime":
 		data = data.duplicate(); data.damage = slime_size if slime_size > 1 else 0; data.health = slime_size*slime_size
+	# `slime+magma_cube.lua`: big 16 hp / 6 dmg, small 4 hp / 4, tiny 1 hp / 3.
+	elif kind == "magma_cube":
+		data = data.duplicate()
+		data.health = 16.0 if magma_size == 4 else (4.0 if magma_size == 2 else 1.0)
+		data.damage = 6 if magma_size == 4 else (4 if magma_size == 2 else 3)
 	return data
 
 func _build_model() -> void:
@@ -105,11 +112,14 @@ func aggressive() -> bool:
 	return super.aggressive()
 
 func _physics_process(delta: float) -> void:
-	if kind == "slime" and game.playing():
+	if (kind == "slime" or kind == "magma_cube") and game.playing():
 		slime_hop -= delta
 		if grounded and slime_hop <= 0:
 			velocity.y = 5.4; slime_hop = randf_range(0.6,1.4)
-		model.scale = Vector3.ONE*(slime_size/2.0)*Vector3(1.0+sin(life*7)*0.04,1.0-sin(life*7)*0.06,1.0+sin(life*7)*0.04)
+		if kind == "slime":
+			model.scale = Vector3.ONE*(slime_size/2.0)*Vector3(1.0+sin(life*7)*0.04,1.0-sin(life*7)*0.06,1.0+sin(life*7)*0.04)
+		else:
+			model.scale = Vector3.ONE*(magma_size/2.0)*Vector3(1.0+sin(life*7)*0.04,1.0-sin(life*7)*0.06,1.0+sin(life*7)*0.04)
 	if not game.playing(): return
 	if game.leads.sleep_if_unloaded(self): return
 	if Farming.sleep_if_unloaded(self): return
@@ -238,6 +248,16 @@ func die() -> void:
 				child.set_slime_size(slime_size/2)
 		else: game.spawn_drop(center(),Nodes.SLIME_BALL,randi_range(1,2))
 		XpOrbs.throw_xp(game,center(),slime_size); game.puff(center(),Color("8db65e"),10); queue_free(); return
+	if kind == "magma_cube":
+		# `slime+magma_cube.lua`: big -> small (0.8–1.5 children), small -> tiny
+		# (0.6–1.0), tiny -> nothing (it drops 0–1 magma cream instead).
+		if magma_size > 1:
+			var count: int = magma_child_count(magma_size,RandomNumberGenerator.new())
+			for i in count:
+				var child: Creature = game.spawn_creature("magma_cube",position+Vector3((i%2-0.5)*0.4,0.1,(i/2-0.5)*0.4))
+				if child != null: child.set_magma_size(magma_child_size(magma_size))
+		else: game.spawn_drop(center(),Nodes.MAGMA_CREAM,randi_range(0,1))
+		XpOrbs.throw_xp(game,center(),magma_size); game.puff(center(),Color("f28826"),10); queue_free(); return
 	if is_queued_for_deletion(): return
 	if kind == "end_crystal":
 		queue_free() # Mark first: nearby crystal explosions cannot re-enter death.
@@ -258,3 +278,18 @@ func set_slime_size(value: int) -> void:
 	health = slime_size*slime_size
 	width = 0.235*slime_size; height = 0.49*slime_size
 	model.scale = Vector3.ONE*(slime_size/2.0)
+
+# `slime+magma_cube.lua`: the child count and size for a split, exposed so the rule
+# is testable without depending on the live spawn.
+static func magma_child_count(size: int, rng: RandomNumberGenerator) -> int:
+	# big -> 0.8–1.5 children, small -> 0.6–1.0. Voxey rounds up, so a big cube always
+	# leaves at least one and often two, matching the source's `on_die` range.
+	return maxi(1,ceili(rng.randf_range(0.8,1.5) if size == 4 else rng.randf_range(0.6,1.0)))
+static func magma_child_size(size: int) -> int: return maxi(1,size/2)
+
+# `slime+magma_cube.lua`: the same three sizes, with the source's own hitbox.
+func set_magma_size(value: int) -> void:
+	magma_size = value if value in [1,2,4] else 2
+	health = 16.0 if magma_size == 4 else (4.0 if magma_size == 2 else 1.0)
+	width = 0.255*magma_size; height = 0.5075*magma_size
+	model.scale = Vector3.ONE*(magma_size/2.0)

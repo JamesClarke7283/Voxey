@@ -238,6 +238,11 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	inv.grid[0] = {"id":Nodes.WOOL,"count":1,"wear":0}; inv.grid[1] = {"id":Nodes.WOOL,"count":1,"wear":0}
 	var white_recipe: int = inv.matching_recipe("hand")
 	suite.check(white_recipe >= 0 and inv.recipes[white_recipe].id == VillageContent.CARPET_WHITE,"white wool from sheep crafts the new white carpet")
+	# `mcl_wool`: `group:carpet` + a dye re-dyes any carpet to the new colour.
+	inv.grid[0] = {"id":VillageContent.CARPET_WHITE,"count":1,"wear":0}; inv.grid[1] = {"id":VillageContent.DYE_RED,"count":1,"wear":0}
+	var redye: int = inv.matching_recipe("hand")
+	suite.check(redye >= 0 and inv.recipes[redye].id == VillageContent.CARPET_RED,"a white carpet and red dye re-dye to a red carpet")
+	suite.check(inv.take_grid_result("hand").id == VillageContent.CARPET_RED,"the re-dye crafts through the grid")
 
 	# --- water hurts a water-sensitive mob, and fire resistance --------------
 	# The source marks four mobs `_water_sensitive`, and Voxey has two of them: a

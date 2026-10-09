@@ -100,6 +100,11 @@ static func recipes(inv: Inventory) -> void:
 	inv._recipe("Copper lantern",LANTERN_FLOOR_STAGES[0],1,
 		[Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,CHAIN_STAGES[0],Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET,Nodes.IRON_NUGGET],3,"table")
 	inv._recipe("Copper bars",BAR_STAGES[0],16,[Nodes.COPPER,Nodes.COPPER,Nodes.COPPER,Nodes.COPPER,Nodes.COPPER,Nodes.COPPER],3,"table")
+	# `mcl_copper/crafting.lua`:151-156: nugget over coal over stick makes four
+	# copper torches. A copper lantern is also craftable from copper torches, but
+	# Voxey's lantern recipe already uses the nugget ring, matching the source's own
+	# alternative, so only the torch is added here.
+	inv._recipe("Copper torch",Torches.COPPER,4,[RawOres.COPPER_NUGGET,Nodes.COAL,Nodes.STICK],1)
 
 # --- art ---------------------------------------------------------------------
 

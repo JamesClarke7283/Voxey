@@ -7,11 +7,13 @@ static func draw(img: Image, id: int, base: Color) -> void:
 	if id == CropFarming.POISONOUS_POTATO: CropFarming.draw(img,id); return
 	if id == Spyglass.ID: Spyglass.draw(img); return
 	if id == Amethyst.SHARD: Amethyst.draw(img,id); return
+	if LargePlants.is_bottom(id): LargePlants.draw(img,id); return
 	if FlowersExtra.is_flower(id) or FlowersExtra.is_plant(id): FlowersExtra.draw(img,id); return
 	if Sculk.is_echo_shard(id): Sculk.draw(img); return
 	if Totems.is_totem(id): Totems.draw(img); return
 	if Beacons.is_beacon(id): Beacons.draw(img,id); return
 	if Seagrass.is_seagrass(id): Seagrass.draw(img,id); return
+	if id == PointedDripstone.ITEM: PointedDripstone.draw(img,PointedDripstone.node_for(2,1)); return
 	if SeaPickles.is_pickle(id): SeaPickles.draw(img,id); return
 	if Corals.is_coral(id): Corals.draw(img,id); return
 	if Conduits.is_ocean(id): Conduits.draw(img,id); return

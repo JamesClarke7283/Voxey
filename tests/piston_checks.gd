@@ -18,6 +18,23 @@ static func drops(game: Node3D, id: int) -> int:
 	return total
 
 static func run(t: SceneTree, game: Node3D) -> void:
+	# `mcl_comparators.measure_lectern`: a lectern reports its current page, scaled to
+	# 15 across the book's pages.
+	var lec: Vector3i = Vector3i(24,game.world.generator.terrain_height(24,24)+20,24)
+	for x in range(-2,3):
+		for y in range(-1,4):
+			for z in range(-2,3): game.world.set_node(lec+Vector3i(x,y,z),Nodes.AIR)
+	game.world.set_node(lec,VillageContent.LECTERN)
+	var lst: Dictionary = game.world.get_station(lec,"lectern")
+	lst.book = {"title":"Big","text":"x".repeat(1000)}
+	lst.pages = 4; lst.page = 1
+	t.check(game.world.circuits.container_signal(lec) == 1,"a lectern on its first page reads power one")
+	lst.page = 4
+	t.check(game.world.circuits.container_signal(lec) == 15,"and power fifteen on its last page")
+	lst.page = 2
+	t.check(game.world.circuits.container_signal(lec) == 5,"with the source's scaling in between")
+	t.check(VillageSurvival._lectern_page({"book":{"text":"abcdef"},"pages":3,"page":2}) == "cd","the lectern slices the page from the book body")
+
 	game._clear_entities(); await t.process_frame
 	game.state = "playing"; game.gamemode = "survival"; game.world.active = false
 	game.world.set_process(false); game.player.set_process(false); game.player.set_physics_process(false)

@@ -145,6 +145,24 @@ static func run(t: SceneTree, game: Node3D) -> void:
 		for z in range(-4,5):
 			for y in range(4): world.set_node(Vector3i(ground.x+x,ground.y+y,ground.z+z),Nodes.AIR)
 
+	# --- worn heads and the detection range --------------------------------
+	# `mcl_heads`: a head carries `armor_head`, is worn in the helmet slot, and halves
+	# the detection range of a matching mob.
+	t.check(Nodes.armor_piece(Heads.FLOOR+3) == 0 and not Nodes.is_armor(Heads.FLOOR+3),"a head wears in the helmet slot but is not ordinary armor")
+	t.check(Nodes.armor_points(Heads.FLOOR+3) == 0,"a worn head carries no armour points")
+	game.gamemode = "survival"
+	game.player.armor_slots[0] = {"id":0,"count":0,"wear":0}
+	game.inventory.restore([]); game.inventory.add_item(Heads.FLOOR+3,1); game.inventory.selected = 0
+	t.check(game.player.equip_armor(game.inventory.held()) and game.player.armor_slots[0].id == Heads.FLOOR+3,"a skeleton skull equips in the helmet slot")
+	var zombie2: Creature = game.spawn_creature("zombie",Vector3(ground)+Vector3(2.5,0.5,0.5))
+	var skeleton: Creature = game.spawn_creature("skeleton",Vector3(ground)+Vector3(3.5,0.5,0.5))
+	if zombie2 != null and skeleton != null:
+		t.check(is_equal_approx(zombie2.detection_factor(),1.0),"a head that does not match the mob does not change its detection")
+		t.check(is_equal_approx(skeleton.detection_factor(),0.5),"a matching head halves the mob's detection range")
+	game.player.armor_slots[0] = {"id":0,"count":0,"wear":0}
+	if is_instance_valid(zombie2): zombie2.queue_free()
+	if is_instance_valid(skeleton): skeleton.queue_free()
+
 # Vertex count of the real chunk mesh, the path a placed head renders through.
 static func chunk_verts(world: VoxelWorld, coord: Vector3i) -> int:
 	var built: Array = BlockMesher.build(world._snapshot(coord),true)

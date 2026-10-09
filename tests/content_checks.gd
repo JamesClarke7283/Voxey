@@ -227,9 +227,11 @@ static func _anchor_checks(suite: SceneTree, game: Node3D) -> void:
 		for z in range(6,11): game.world.set_node(Vector3i(x,1799,z),Nodes.STONE)
 	# Charging takes a glowstone and stops at four.
 	game.world.set_node(anchor_at,RespawnAnchors.BASE)
+	game.achievements.unlocked.clear()
 	for i in 4:
 		suite.check(RespawnAnchors.charge_up(game.world,anchor_at),"charge %d is accepted" % (i+1))
 	suite.check(RespawnAnchors.charge(game.world.node_at(anchor_at)) == 4,"the anchor charges to four")
+	suite.check(game.achievements.is_unlocked("not_quite_nine_lives"),"charging an anchor to its maximum awards Not Quite Nine Lives")
 	suite.check(not RespawnAnchors.charge_up(game.world,anchor_at),"a full anchor refuses another glowstone")
 	# The asymmetry: harmless uncharged, explosive charged, and both safe in the Nether.
 	var was_dimension: String = game.world.dimension

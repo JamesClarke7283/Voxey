@@ -33,13 +33,11 @@ static func is_recovery_compass(id: int) -> bool: return id == ID
 # `mcl_compass.register_compass`'s recipe: eight echo shards around a compass.
 # The source writes it as a full 3x3 with the compass in the middle.
 #
-# **The echo shard has no acquisition route in Voxey.** The source's only source is
-# the ancient hermitage's chest (`MAPGEN/mcl_structures/ancient_hermitage.lua`:39,
-# weight 3 for one to three shards), and Voxey does not generate that structure. The
-# recipe is registered exactly as the source writes it, so the item is reachable the
-# moment the hermitage lands and is *not* given an invented route in the meantime —
-# the same treatment `Sculk` records for the shard. The compass's own dial, its
-# pointing rule and the death-position source are all complete.
+# **The echo shard's route is the ancient hermitage.** The source's only source is that
+# structure's chest (`MAPGEN/mcl_structures/ancient_hermitage.lua`:39, weight 3 for one
+# to three shards), which `ancient_hermitage.gd` now generates in the deep dark; the
+# recipe is registered exactly as the source writes it, and the hermitage's chest is
+# what supplies the shards.
 static func recipe_entries() -> Array:
 	return [["Recovery compass",ID,1,
 		[Sculk.ECHO_SHARD,Sculk.ECHO_SHARD,Sculk.ECHO_SHARD,

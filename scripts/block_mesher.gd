@@ -227,6 +227,7 @@ static func _custom(kind: int, out: Array, p: Vector3, id: int, data: PackedInt3
 		30: _plant(out,p,id,info)
 		31: _ladder(out,p,data,Vector3i(p))
 		32: _bed_half(out,p,id,data,Vector3i(p))
+		33: PointedDripstone.mesh(out,p,id)
 
 static func _empty() -> Array:
 	return [PackedVector3Array(),PackedVector3Array(),PackedVector2Array(),PackedVector2Array(),PackedColorArray(),PackedInt32Array()]
@@ -244,6 +245,8 @@ static func _quad(out: Array, vertices: Array, uvs: Array, normal: Vector3, tile
 static func _plant(out: Array, p: Vector3, id: int, info: NodeInfo.View = null) -> void:
 	var h: float = 0.55 if id == Nodes.WHEAT else 0.9
 	if id in [Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM]: h = 0.45
+	# A large plant fills both of its cells, so its cross reaches the cell top.
+	if LargePlants.is_large(id): h = 1.0
 	if id in [Nodes.SUGAR_CANE,Nodes.VINE]: h = 1.0
 	var uv: Array = [Vector2(0,1),Vector2(1,1),Vector2(1,0),Vector2(0,0)]
 	for flip in 2:
@@ -254,10 +257,11 @@ static func _plant(out: Array, p: Vector3, id: int, info: NodeInfo.View = null) 
 
 static func _torch(out: Array, p: Vector3, id: int = Nodes.TORCH) -> void:
 	var start: int = out[0].size()
-	_art_box(out,Vector3(0,0.375,0),Vector3(0.125,0.75,0.125),Nodes.TORCH,Nodes.TORCH)
+	var tile: int = Torches.copper_tile() if Torches.is_copper(id) else Nodes.TORCH
+	_art_box(out,Vector3(0,0.375,0),Vector3(0.125,0.75,0.125),tile,tile)
 	var rotation := Basis.IDENTITY
 	var base: Vector3 = p+Vector3(0.5,0,0.5)
-	if id in Torches.WALLS:
+	if id in Torches.WALLS or id in Torches.COPPER_WALLS:
 		var support: Vector3 = Vector3(Torches.support(id))
 		rotation = Basis(Vector3.UP.cross(-support).normalized(),PI/6.0)
 		base += support*0.4+Vector3.UP*0.15

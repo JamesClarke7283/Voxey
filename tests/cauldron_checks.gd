@@ -91,6 +91,14 @@ static func run(t: SceneTree, game: Node3D = null) -> void:
 	t.check(game.world.circuits.state(p+Vector3i.RIGHT).get("out",0) == 1,"a live comparator transmits cauldron fill through the circuit")
 	game.world.set_node(p,Nodes.AIR); game.world.set_node(p,VillageContent.CAULDRON)
 	t.check(Cauldrons.level(game.world.get_station(p,"cauldron")) == 0,"breaking and replacing a cauldron cannot restore its removed liquid")
+	# `mcl_core.bottle_dirt`: a water bottle poured on dirt turns it to mud and
+	# returns the empty bottle, before the generic potion handling drinks it.
+	game.world.set_node(p,Nodes.DIRT)
+	equip(inv,VillageContent.WATER_BOTTLE)
+	game.player.target = {"pos":p,"id":Nodes.DIRT,"normal":Vector3i.UP,"distance":2.0}
+	game.survival.use()
+	t.check(game.world.node_at(p) == VillageContent.MUD and inv.held().id == VillageContent.GLASS_BOTTLE,"pouring a water bottle on dirt makes mud and returns the empty bottle")
+	game.world.set_node(p,VillageContent.CAULDRON)
 	_live_checks(t,game,p)
 
 static func _washing_checks(t: SceneTree) -> void:

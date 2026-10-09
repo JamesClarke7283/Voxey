@@ -527,7 +527,7 @@ func carried_slot(id: int) -> Dictionary:
 	return {}
 
 func equip_armor(slot: Dictionary) -> bool:
-	if not Nodes.is_armor(slot.id): return false
+	if not Nodes.is_armor(slot.id) and not Heads.is_head(slot.id): return false
 	var piece: int = Nodes.armor_piece(slot.id)
 	if game.gamemode != "creative" and Inventory.enchantment(armor_slots[piece],"Curse of Binding") > 0: game.toast("Curse of Binding prevents replacing this armor."); return false
 	var previous: Dictionary = armor_slots[piece].duplicate()
@@ -609,7 +609,7 @@ func use() -> void:
 	if Hunger.can_eat(self,held):
 		Eating.start(self)
 		return
-	if Nodes.is_armor(held) and held != FruitCrops.CARVED:
+	if (Nodes.is_armor(held) or Heads.is_head(held)) and held != FruitCrops.CARVED:
 		equip_armor(game.inventory.held())
 		return
 	# Milking: an empty bucket on a cow becomes a milk bucket.
@@ -744,8 +744,8 @@ func use() -> void:
 		return
 	# Bone meal ripens a cocoa pod one stage, which is the source's `mcl_cocoas.grow`.
 	# Only the two unripe stages respond; a ripe pod is left alone.
-	if held == Nodes.BONE_MEAL and id == VillageContent.COCOA_POD:
-		if game.world.set_node(p,VillageContent.RIPE_COCOA_POD):
+	if held == Nodes.BONE_MEAL and VillageContent.is_cocoa(id) and id != VillageContent.RIPE_COCOA_POD:
+		if game.world.set_node(p,VillageContent.cocoa_next(id)):
 			if game.gamemode != "creative": game.inventory.consume_selected()
 			game.puff(Vector3(p)+Vector3.ONE*0.5,Color("b8e07a"),8)
 			game.sound("place"); swing = 1
@@ -794,6 +794,13 @@ func use() -> void:
 	if held == Nodes.BONE_MEAL and FoodFeatures.flower(id):
 		if FoodFeatures.bone_meal(game,p) and game.gamemode != "creative": game.inventory.consume_selected()
 		return
+	# `mcl_flowers.add_large_plant`'s `_on_bone_meal`: bone meal on a large plant
+	# drops one more of the plant rather than growing anything.
+	if held == Nodes.BONE_MEAL and LargePlants.is_large(id):
+		if game.gamemode != "creative": game.inventory.consume_selected()
+		game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,LargePlants.bottom(id),1)
+		game.puff(Vector3(p)+Vector3.ONE*0.5,Color("b8e07a"),8)
+		return
 	# A crop accepts bone meal and a seed is planted from the hand, which the crop
 	# system owns. Without this call neither interaction is reachable.
 	if CropFarming.use(game,target): return
@@ -825,6 +832,7 @@ func use() -> void:
 	if game.rails != null and Minecarts.place(game,place_target,held): return
 	if Kelp.place(game,place_target,game.inventory.held().id): return
 	if Seagrass.place(game,place_target,game.inventory.held().id): return
+	if PointedDripstone.place(game,place_target,game.inventory.held().id): return
 	if SeaPickles.place(game,place_target,game.inventory.held().id): return
 	if Corals.place(game,place_target,game.inventory.held().id): return
 	if Scaffolding.place(game,place_target,game.inventory.held().id): return
@@ -859,10 +867,23 @@ func use() -> void:
 	if place_id == Nodes.WATER and game.dimension == "nether": game.toast("Water evaporates in the Nether."); return
 	var destination: Vector3i = place_target.get("replace",p+target.normal)
 	var soil_id: int = game.world.node_at(destination+Vector3i.DOWN) if SnowCover.is_snow(id) else id
-	if place_id == Nodes.TORCH:
-		place_id = Torches.placed(target.normal)
+	if place_id == Nodes.TORCH or place_id == Torches.COPPER:
+		place_id = Torches.placed_for(place_id,target.normal)
 		if place_id == 0 or not BuildingShapes.supports(game.world,destination-target.normal,target.normal): return
 	if WoodTypes.is_sapling(place_id) and not WoodTypes.soil(soil_id): return
+	if LargePlants.is_bottom(place_id):
+		# A large plant places both halves at once, on `soil_flower`, needing light.
+		if not LargePlants.can_place(game.world,destination):
+			game.toast("Large plants need soil and light."); return
+		if not game.world.set_node(destination,place_id): return
+		if not game.world.set_node(destination+Vector3i.UP,LargePlants.top(place_id)):
+			game.world.set_node(destination,Nodes.AIR); return
+		if game.gamemode != "creative": game.inventory.consume_selected()
+		game.sound("place"); swing = 1
+		game.progress("build")
+		game.api.emit_node_placed(destination,place_id)
+		game.api.emit_node_placed(destination+Vector3i.UP,LargePlants.top(place_id))
+		return
 	if FoodFeatures.flower(place_id) and not FoodFeatures.flower_supported(game.world,destination): return
 	if place_id == Nodes.SUGAR_CANE and not game.world.can_plant_cane(destination):
 		game.toast("Plant sugar cane on dirt, grass or sand beside water.")
@@ -927,6 +948,10 @@ func use() -> void:
 			var d := Vector3i.ZERO; d[axis] = int(signf(forward[axis]))
 			if place_id == Nodes.HOPPER: d = -target.normal
 			game.world.circuits.configure(destination,d,support)
+			# `after_place_node`: the block's commander is the player who placed it, and
+			# its commands run as that player.
+			if CommandBlocks.is_command_block(place_id):
+				game.world.circuits.state(destination)["commander"] = game.player_id
 			if place_id == Nodes.IRON_DOOR:
 				game.world.set_node(destination+Vector3i.UP,Nodes.IRON_DOOR)
 				game.world.circuits.configure(destination+Vector3i.UP,d)

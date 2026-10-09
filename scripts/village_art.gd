@@ -4,6 +4,7 @@ extends RefCounted
 static func pixel(id: int, x: int, y: int, noise: Color) -> Color:
 	if Beacons.is_beacon(id) or Beacons.is_beam(id): return Beacons.pixel(id,x,y,noise)
 	if Seagrass.is_seagrass(id): return Seagrass.pixel(id,x,y,noise)
+	if PointedDripstone.is_stage(id): return PointedDripstone.pixel(id,x,y,noise)
 	if SeaPickles.is_pickle(id): return SeaPickles.pixel(id,x,y,noise)
 	if Corals.is_coral(id): return Corals.pixel(id,x,y,noise)
 	if Conduits.is_ocean(id): return Conduits.pixel(id,x,y,noise)
@@ -27,6 +28,12 @@ static func pixel(id: int, x: int, y: int, noise: Color) -> Color:
 	if id >= NetherBlocks.RED_NETHER_BRICKS and id <= NetherBlocks.SOUL_FIRE: return NetherBlocks.pixel(id,x,y,noise)
 	if GlassColors.is_stained(id): return GlassColors.pixel(id,x,y,noise)
 	if id >= EndMud.PURPUR_PILLAR and id <= EndMud.MUD_BRICKS: return EndMud.pixel(id,x,y,noise)
+	if CactusFlower.is_flower(id):
+		# A pink bloom on a short green stem.
+		if x in [7,8] and y >= 8: return Color("548448")
+		if Vector2(x-7.5,y-6.0).length() > 3.6: return Color(0,0,0,0)
+		return Color("e06aa0").lightened(0.15 if (x+y)%2 == 0 else 0.0)
+	if LargePlants.is_large(id): return LargePlants.pixel(id,x,y,noise)
 	if id >= FlowersExtra.TULIP_ORANGE and id <= FlowersExtra.PINK_PETALS: return FlowersExtra.pixel(id,x,y,noise)
 	if id >= Sculk.SCULK and id <= Sculk.CATALYST: return Sculk.pixel(id,x,y,noise)
 	if id >= NetherBlocks.RED_NETHER_BRICKS and id <= NetherBlocks.SOUL_FIRE: return NetherBlocks.pixel(id,x,y,noise)

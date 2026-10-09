@@ -113,3 +113,15 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	player.health = 20; player.damage_cooldown = 0
 	survival.shield_raised = true
 	game.inventory.held().wear = 0
+
+	# --- axe disable -------------------------------------------------------
+	# `mcl_shields.disable_player_shield`: an axe that lands on a raised shield puts
+	# it down for the source's five seconds, after which it recovers.
+	survival.shield_raised = true; survival.shield_disabled = 0.0
+	t.check(Shields.can_block(player,ahead,"mob"),"the shield blocks before the axe lands")
+	Shields.disable(survival)
+	t.check(is_equal_approx(survival.shield_disabled,Shields.DISABLE_SECONDS),"an axe hit disables the shield for the source's five seconds")
+	t.check(not Shields.can_block(player,ahead,"mob"),"a disabled shield blocks nothing")
+	# Decay over the five seconds returns it, which `survival.update` performs.
+	survival.shield_disabled = 0.0
+	t.check(Shields.can_block(player,ahead,"mob"),"the shield recovers once the disable expires")

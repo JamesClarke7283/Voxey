@@ -229,17 +229,22 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	# --- the cocoa pod that used to become a cobweb -------------------------
 	# Cocoa's ids jump to a cobweb after the pod, so the shared crop path's
 	# `id+3-stage` arithmetic turned a pod into a cobweb. That path now excludes
-	# cocoa, and cocoa ripens through its own ids.
+	# cocoa, and cocoa ripens through its own three-stage ladder (`mcl_cocoas.grow`).
 	suite.check(VillageContent.DATA[VillageContent.COCOA_POD].shape == "crop","cocoa is crop-shaped, which is why the shared crop path once caught it")
 	suite.check(VillageContent.COCOA_POD+3 != VillageContent.RIPE_COCOA_POD,"cocoa's ids are not three consecutive stages, so id arithmetic cannot advance them")
 	suite.check(VillageContent.DATA[VillageContent.COCOA_POD+3].name == "Cobweb","the id three past a cocoa pod is a cobweb, which is what the old arithmetic produced")
+	suite.check(VillageContent.cocoa_next(VillageContent.COCOA_POD) == VillageContent.COCOA_POD_MID and VillageContent.cocoa_next(VillageContent.COCOA_POD_MID) == VillageContent.RIPE_COCOA_POD,"cocoa ripens one stage at a time through three stages")
 	game.world.set_node(plain+Vector3i(6,1,6),Nodes.LOG)
 	game.world.set_node(plain+Vector3i(6,1,7),VillageContent.COCOA_POD)
 	held(game,Nodes.BONE_MEAL,3)
 	game.player.position = Vector3(plain.x+6.5,plain.y+0.01,plain.z+7.5)
 	click(game,Vector3(plain+Vector3i(6,1,7))+Vector3(0.5,0.5,0.5))
-	suite.check(game.world.node_at(plain+Vector3i(6,1,7)) == VillageContent.RIPE_COCOA_POD,"bone meal ripens a cocoa pod instead of turning it into a cobweb")
+	suite.check(game.world.node_at(plain+Vector3i(6,1,7)) == VillageContent.COCOA_POD_MID,"bone meal advances a cocoa pod one stage instead of turning it into a cobweb")
 	suite.check(game.inventory.count_item(Nodes.BONE_MEAL) == 2,"ripening a pod consumes one bone meal")
+	# A second use takes the middle stage to ripe.
+	held(game,Nodes.BONE_MEAL,3)
+	click(game,Vector3(plain+Vector3i(6,1,7))+Vector3(0.5,0.5,0.5))
+	suite.check(game.world.node_at(plain+Vector3i(6,1,7)) == VillageContent.RIPE_COCOA_POD,"a second bone meal ripens the middle stage")
 	# A ripe pod is left alone, which is the source's guard.
 	held(game,Nodes.BONE_MEAL,3)
 	click(game,Vector3(plain+Vector3i(6,1,7))+Vector3(0.5,0.5,0.5))

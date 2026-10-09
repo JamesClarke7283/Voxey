@@ -95,17 +95,39 @@ static func power(world: VoxelWorld, p: Vector3i, on: bool, was_on: bool) -> voi
 
 static func play(world: VoxelWorld, p: Vector3i) -> bool:
 	if world.node_at(p) != ID or not world.loaded_at(Vector3(p)): return false
+	var game: Node3D = world.get_parent()
+	var above: int = world.node_at(p+Vector3i.UP)
+	# `mcl_noteblock/init.lua`:55-80: a **head** above the block plays that mob's own
+	# voice instead of an instrument, and it is checked before the air gate, since a
+	# head is not air. `sound_by_head`'s own table is ported to Voxey's synthesized
+	# voices; the wither skeleton and human head have no source voice and fall through
+	# to the skeleton growl, as the source's `find("skeleton")` does.
+	if Heads.is_any(above):
+		var head_voice: String = head_sound(Heads.kind(above))
+		if head_voice != "":
+			if game.audio_enabled: game.sound_at(head_voice,Vector3(p)+Vector3.ONE*0.5)
+			return true
 	# Source requires literal air, even glass/flowers/liquids silence the block.
-	if world.node_at(p+Vector3i.UP) != Nodes.AIR: return false
+	if above != Nodes.AIR: return false
 	var data: Dictionary = state(world,p)
 	var voice: String = instrument(world.node_at(p+Vector3i.DOWN))
-	var game: Node3D = world.get_parent()
 	if game.audio_enabled:
 		var key: String = "note_"+voice
 		if not game.sounds.has(key): game.sounds[key] = NoteBlockTones.sample(voice)
 		game.sound_at(key,Vector3(p)+Vector3.ONE*0.5,pitch(data.note))
 	particle(game,p,data.note)
 	return true
+
+# `sound_by_head`: the mob voice a worn head plays above a note block. `Heads.NAMES`
+# order is zombie, creeper, human, skeleton, wither skeleton, piglin, dragon.
+static func head_sound(kind_index: int) -> String:
+	match kind_index:
+		0: return "zombie"
+		1: return "fuse"
+		3,4: return "skeleton"
+		5: return "zombie"
+		6: return "wither_shoot"
+	return ""
 
 static func particle(game: Node3D, p: Vector3i, note: int) -> void:
 	if Vector3(p).distance_to(game.player.position) > 70 or not is_instance_valid(game.entities): return

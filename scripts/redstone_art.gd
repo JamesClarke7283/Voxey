@@ -48,6 +48,14 @@ static func build(id: int, state: Dictionary = {}, level: int = 0) -> Node3D:
 				box(root,p+Vector3.UP*0.1,Vector3(0.14,0.09,0.14),red,glow)
 			if state.get("subtract",false): box(root,Vector3(0.28,0.16,-0.25),Vector3(0.17,0.03,0.045),Color("df724b"),1)
 			if state.get("locked",false): box(root,Vector3(0,0.24,0),Vector3(0.6,0.12,0.12),Color("33323a"))
+		CommandBlocks.ID:
+			# The source's command block: a dark stone shell whose face lights when the
+			# block is running its list.
+			box(root,Vector3(0,0.5,0),Vector3.ONE*0.99,Color("9a7c5e"))
+			for face in [Vector3(0,0,-0.501),Vector3(0,0,0.501)]:
+				box(root,face+Vector3.UP*0.5,Vector3(0.9,0.9,0.02),Color("7fc98a") if on else Color("6a6a6a"),glow)
+			for face in [Vector3(-0.501,0,0),Vector3(0.501,0,0)]:
+				box(root,face+Vector3.UP*0.5,Vector3(0.02,0.9,0.9),Color("7fc98a") if on else Color("6a6a6a"),glow)
 		Nodes.PISTON,Nodes.STICKY_PISTON:
 			box(root,Vector3(0,0.5,0.09),Vector3(1,1,0.82),stone.darkened(0.12))
 			for x in [-0.46,0.46]: box(root,Vector3(x,0.5,0),Vector3(0.08,0.86,0.88),Color("b5ad91"))

@@ -36,8 +36,17 @@ const BLOCKABLE = ["mob","player","arrow","generic","explosion","dragon_breath",
 const WEAR_THRESHOLD = 3.0
 # Source `_mcl_uses`.
 const USES = 336
+# `mcl_shields.shield_disable_duration = 5`: an axe hit disables a raised shield.
+const DISABLE_SECONDS = 5.0
 
 static func is_shield(id: int) -> bool: return id == VillageContent.SHIELD
+
+# `mcl_shields.disable_player_shield`: an axe that lands on a raised shield disables
+# it for five seconds and plays the tool-break sound. The source disables the shield
+# on the *blocked* hit, so the block still happens and the shield then goes down.
+static func disable(survival) -> void:
+	survival.shield_disabled = DISABLE_SECONDS
+	survival.game.sound("break")
 
 # `find_angle`: the dot product of the attack direction and the player's look,
 # measured from the shield centre rather than the feet.

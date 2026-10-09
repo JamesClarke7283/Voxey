@@ -123,6 +123,51 @@ static func run(t: SceneTree, game: Node3D) -> void:
 		boss.hit(20.0,Vector3.INF,"mob")
 		t.check(boss.health < armoured,"an armoured wither still takes non-arrow damage")
 
+		# --- harmed by healing ---------------------------------------------
+		# `mobs_mc/wither.lua`:74 `harmed_by_heal = true`: the source inverts both
+		# instant potions against the wither, so a splash of healing harms it and a
+		# splash of harming mends it.
+		t.check(bool(Creature.KINDS["wither"].get("harmed_by_heal",false)),"the wither is marked harmed by healing")
+		var mend_before: float = boss.health
+		PotionEffects.apply(boss,"healing",0,1)
+		t.check(boss.health < mend_before,"a healing potion harms the wither")
+		var hurt_before: float = boss.health
+		PotionEffects.apply(boss,"harming",0,1)
+		t.check(boss.health > hurt_before,"a harming potion heals the wither")
+		# Regeneration is likewise inverted to withering, which is the source's own
+		# `may_heal` swap.
+		PotionEffects.apply(boss,"regeneration",5.0,1)
+		t.check(PotionEffects.level(boss,"withering") > 0 and PotionEffects.level(boss,"regeneration") == 0,"a regeneration potion withers the boss instead of mending it")
+
+		# --- the descent releases skeletons ---------------------------------
+		# `wither.lua`:606-616: a ground-touching descent detonates and releases four
+		# wither skeletons.
+		game.difficulty = 2
+		for mob in game.creatures.get_children():
+			if mob != boss: mob.queue_free()
+		await t.process_frame
+		var before_mobs: int = game.creatures.get_child_count()
+		var released: int = Withers.release_skeletons(game,boss)
+		t.check(released >= 0 and game.creatures.get_child_count() >= before_mobs,"a descent can release wither skeletons on solid ground")
+		t.check(Withers.release_skeletons(game,boss) >= 0 and WitherSkulls.CHARGE_DAMAGE == 15.0,"the descent charge deals the source's fifteen")
+		# `wither_unstuck`: a buried wither tears out the blocks around it, sparing
+		# the source's `wither_immune` set.
+		var cave := Vector3i(30,52,30)
+		for dx in range(-2,3):
+			for dy in range(0,4):
+				for dz in range(-2,3): game.world.set_node(cave+Vector3i(dx,dy,dz),Nodes.STONE)
+		game.world.set_node(cave+Vector3i(0,1,0),Nodes.OBSIDIAN)
+		boss.position = Vector3(cave)+Vector3(0.5,0.5,0.5)
+		var cleared: int = Withers.unstuck(game,boss,1)
+		t.check(cleared > 0 and game.world.node_at(cave) == Nodes.AIR,"a buried wither breaks the blocks around itself")
+		t.check(game.world.node_at(cave+Vector3i(0,1,0)) == Nodes.OBSIDIAN,"the wither spares the source's immune blocks")
+		for mob in game.creatures.get_children():
+			if mob.kind == "wither_skeleton": t.check(mob.has_meta("persistent"),"a released skeleton is persistent")
+		game.difficulty = 1
+		for mob in game.creatures.get_children():
+			if mob != boss: mob.queue_free()
+		await t.process_frame
+
 		# --- the nether star ------------------------------------------------
 		# This is the beacon's ingredient, so it must be guaranteed.
 		clear_drops(game)

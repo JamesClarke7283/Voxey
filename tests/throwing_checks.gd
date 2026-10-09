@@ -167,6 +167,16 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 		game.world.circuits.dispense(dispenser,true)
 		suite.check(projectiles(game).is_empty() and slots[0].count == 1,"a blocked dispenser preserves its "+Nodes.title(id))
 		game.world.set_node(dispenser+Vector3i.FORWARD,Nodes.AIR)
+	# `mcl_dispensers`: armor in a dispenser equips itself onto a player within range,
+	# rather than being ejected.
+	var helmet: int = Nodes.armor_id(3,0)
+	var d2: Vector3i = game.world.circuits.direction(dispenser)
+	game.player.position = Vector3(dispenser+d2)+Vector3(0.5,0.0,0.5)
+	game.player.armor_slots[0] = {"id":0,"count":0,"wear":0}
+	var slots2: Array = game.world.circuits.container(dispenser)
+	slots2[0] = {"id":helmet,"count":1,"wear":0}
+	game.world.circuits.dispense(dispenser,true)
+	suite.check(game.player.armor_slots[0].id == helmet and slots2[0].count == 0,"a dispenser equips armor onto a nearby player and consumes it")
 	game.world.set_node(dispenser,Nodes.AIR)
 	clear_shots(game)
 	# Real save/reload and dormant restoration must retain age and never duplicate.

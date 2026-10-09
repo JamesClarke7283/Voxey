@@ -13,7 +13,11 @@ static func apply(target: Node3D, effect: String, duration: float, potency: int 
 	var player: bool = target is VoxeyPlayer
 	var undead: bool = not player and target.kind in UNDEAD
 	if effect in ["healing","harming"]:
-		var healing: bool = (effect == "healing") != undead
+		# `mobs_mc/wither.lua`:74 `harmed_by_heal = true`. The wither is the one mob
+		# the source inverts both instant potions against, so a splash of healing
+		# harms it and a splash of harming heals it.
+		var inverted: bool = not player and bool(target.info().get("harmed_by_heal",false))
+		var healing: bool = ((effect == "healing") != undead) != inverted
 		var amount: float = (4 if effect == "healing" else 6)*potency*scale
 		if healing: target.health = minf(20 if player else target.info().health,target.health+amount)
 		elif player: target.hurt(amount,true)
@@ -25,6 +29,10 @@ static func apply(target: Node3D, effect: String, duration: float, potency: int 
 	# A fire-resistant mob never catches light, which is the source's
 	# `_fire_resistant`: a blaze cannot be set alight by a blaze's own fireball.
 	if not player and effect == "burning" and Fire.resistant(target.kind): return
+	# Reversed heal-on-effect: the source's `harmed_by_heal` also inverts regeneration,
+	# so a regeneration potion withers the boss instead of mending it.
+	if not player and effect == "regeneration" and bool(target.info().get("harmed_by_heal",false)):
+		effect = "withering"
 	if not player and ((effect in ["poison","regeneration"] and undead) or (effect in ["poison","infested"] and target.kind in ["spider","silverfish"]) or (effect == "oozing" and target.kind == "slime")): return
 	var previous: int = level(target,effect)
 	var remaining: float = float(target.game.survival.effects.get(effect,0)) if player else float(target.get_meta("effect_"+effect,0))

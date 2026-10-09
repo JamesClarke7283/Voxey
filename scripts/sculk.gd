@@ -42,9 +42,11 @@ extends RefCounted
 #     sculk anywhere in the checkout**, and no DeepDark biome in Voxey either.
 #   - There is no Warden, and nothing in the checkout references one.
 #
-# With no sensor, no shrieker, no Warden and no generation, the only live way sculk
-# enters a world is the death-driven spread below, and the only live way to *obtain*
-# a sculk block is Silk Touch.
+# With no sensor, no shrieker, no Warden and no sculk *terrain* generation, the only
+# live way sculk enters ordinary terrain is the death-driven spread below. The sculk
+# catalyst it needs is the ancient hermitage's chest entry, which
+# `ancient_hermitage.gd` now supplies, and that ruin's own shell carries loose sculk,
+# so a block is also reachable by Silk Touch from the ruin itself.
 #
 # Source rules reproduced here:
 #

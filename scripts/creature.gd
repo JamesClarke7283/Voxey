@@ -117,7 +117,7 @@ const KINDS = {
 	"tropical_fish": {"hostile":false,"health":3.0,"speed":1.6,"width":0.3,"height":0.79,"damage":0,"drops":[],"voice":"","pitch":1.6,"swims":true,"flees":true,"can_despawn":true,"xp":1},
 	"squid": {"hostile":false,"health":10.0,"speed":1.4,"width":0.4,"height":0.9,"damage":0,"drops":[],"voice":"","pitch":0.8,"swims":true,"can_despawn":true,"xp":1},
 	"glow_squid": {"hostile":false,"health":10.0,"speed":1.4,"width":0.4,"height":0.9,"damage":0,"drops":[],"voice":"","pitch":0.85,"swims":true,"can_despawn":true,"xp":1},
-	"wither": {"hostile":true,"health":600.0,"speed":3.0,"width":1.0,"height":3.5,"damage":8,"drops":[],"voice":"","pitch":0.4,"ranged":true,"flies":true,"fires":true,"can_despawn":false,"reach":5,"xp":50,"armor":{"undead":80,"fleshy":100}},
+	"wither": {"hostile":true,"health":600.0,"speed":3.0,"width":1.0,"height":3.5,"damage":8,"drops":[],"voice":"","pitch":0.4,"ranged":true,"flies":true,"fires":true,"can_despawn":false,"reach":5,"xp":50,"armor":{"undead":80,"fleshy":100},"harmed_by_heal":true},
 	"wither_skeleton": {"hostile":true,"health":20.0,"speed":2.0,"width":0.3,"height":2.4,"damage":5,"drops":[[Nodes.COAL,0,1],[Nodes.BONE,0,2]],"voice":"skeleton","pitch":0.7,"burns":false,"skull_chance":40,"floats":false,"reach":2,"xp":5,"armor":{"undead":100,"fleshy":100}},
 	"guardian_elder": {"hostile":true,"health":80.0,"speed":1.4,"width":1.99,"height":2.0,"damage":8,"drops":[],"voice":"","pitch":0.5,"swims":true,"ranged":true,"xp":10},
 }
@@ -184,6 +184,13 @@ var berry_clock: float = 0.0
 # `mobs_mc/wither.lua`'s `ws.skulls_fired`, which decides when the fourth skull is
 # the strong variant.
 var skulls_fired: int = 0
+# `ws.pending_explode`: set once the boss has descended onto a target, consumed when
+# it touches the ground. Its descent detonates (`WITHER_DESCENT_BOOM = 7`) and
+# releases four wither skeletons.
+var wither_descent: bool = false
+# Source `DESCENT_TRIGGER`: the boss dives when its target is far enough below it.
+const DESCENT_TRIGGER: float = 2.5
+const DESCENT_SPEED: float = 12.0
 # Powder-snow freezing: the source slows a mob to a standstill over seven seconds,
 # then damages it every two while it stays in. A wither skeleton is the one mob that
 # opts out, through `can_freeze = false`.
@@ -1010,7 +1017,7 @@ func _physics_process(delta: float) -> void:
 	if hostile and sight_timer <= 0 and distance < SIGHT_RANGE:
 		sight_timer = SIGHT_INTERVAL
 		if _sees_player(): last_seen = life
-	var chasing: bool = aggressive() and distance < 24 and life-last_seen < 4.0
+	var chasing: bool = aggressive() and distance < 24.0*detection_factor() and life-last_seen < 4.0
 	# The source gives a zombie `attack_npcs = true`, so it goes for a villager as
 	# readily as for the player, and takes whichever is nearer. Without this a
 	# zombie never lands the killing blow that infects a villager, so the infection
@@ -1116,8 +1123,23 @@ func _physics_process(delta: float) -> void:
 	# the source's `swims = true` behaviour.
 	# A wither flies: it holds its altitude above the target rather than falling.
 	if data.get("flies",false) and kind == "wither":
-		var want: float = game.player.position.y+4.0
-		velocity.y = clampf((want-position.y)*0.8,-3.0,3.0)
+		# `wither_ascend` + `wither_descent`: normally it hovers four above the
+		# target, but when the target is far below it dives, and the dive's landing
+		# detonates and releases wither skeletons.
+		if chasing and game.player.position.y < position.y-DESCENT_TRIGGER: wither_descent = true
+		if wither_descent:
+			velocity.y = -DESCENT_SPEED
+			if grounded:
+				# `WITHER_DESCENT_BOOM = 7` at the boss's eye height.
+				WitherSkulls.charge(game,position+Vector3.UP*1.5,self)
+				Withers.release_skeletons(game,self)
+				wither_descent = false
+		else:
+			var want: float = game.player.position.y+4.0
+			velocity.y = clampf((want-position.y)*0.8,-3.0,3.0)
+		# `wither_unstuck`: a wither buried in terrain tears out the blocks around it.
+		if game.difficulty >= 1 and game.world.intersects(position,width,height):
+			Withers.unstuck(game,self,2)
 	elif data.get("swims",false) and Fluids.water(game.world.node_at(Vector3i(position.floor()))) and not has_meta("dolphin_leaping"):
 		velocity.y = knock.y*0.2
 		if chasing and (distance > Guardians.MIN_ATTACK_DISTANCE or not Guardians.is_guardian(kind)):
@@ -1194,6 +1216,11 @@ func _physics_process(delta: float) -> void:
 			else:
 				var before_hit: float = game.player.health
 				game.player.hurt(maxf(0,swing*PotionEffects.melee(self)),false,position)
+				# `mcl_shields`: an axe-wielding attacker (the vindicator) disables a
+				# shield it strikes from the front, even though the blow is blocked.
+				# It disables only a *blockable* frontal hit, so the test mirrors the
+				# block test rather than running unconditionally.
+				if kind == Illagers.VINDICATOR and Shields.can_block(game.player,position,"mob"): Shields.disable(game.survival)
 				if Hoglins.is_family(kind) and not Hoglins.baby(self) and game.player.health < before_hit: game.player.velocity += Hoglins.toss(position,game.player.position,0.0,true,Hoglins.rng_for(game.world))
 				if game.player.health < before_hit:
 					Creature.deal_effect(game,self,game.player)
@@ -1274,6 +1301,17 @@ func _physics_process(delta: float) -> void:
 func facing_player() -> bool:
 	var toward: Vector3 = ((game.player.position-position)*Vector3(1,0,1)).normalized()
 	return (-model.global_basis.z).dot(toward) >= cos(deg_to_rad(5.0))
+
+# `mcl_armor.get_headpiece_factor`: a player wearing a head that matches this mob
+# is detected at **half** range. `mcl_heads` gives each head `armor_head = 1` and
+# the source halves (`HEADPIECE_FACTOR = 0.5`) when the worn piece matches the mob.
+func detection_factor() -> float:
+	if not is_instance_valid(game.player): return 1.0
+	var worn: int = int(game.player.armor_slots[0].id)
+	if worn == 0: return 1.0
+	# `mob_head` returns -1 for a mob with no head, which never equals a worn id.
+	if worn == Heads.mob_head(kind): return 0.5
+	return 1.0
 
 func _sees_player() -> bool:
 	return _sees(game.player.position+Vector3.UP*1.1)
@@ -1410,6 +1448,11 @@ func die() -> void:
 	# The wither's nether star is guaranteed, and is the beacon's ingredient.
 	if kind == "wither":
 		game.spawn_drop(center(),VillageContent.NETHER_STAR,Withers.roll_star(RandomNumberGenerator.new()))
+	# `pillager:drop_custom`: a patrol captain that is not in an active raid drops the
+	# ominous bottle, which is the only survival source of `bad_omen` and so the only
+	# way to start a raid without creative items.
+	if PillagerPatrols.is_captain(self) and not get_meta("raid",false):
+		game.spawn_drop(center(),PotionCatalog.find("ominous","drink","normal"),1)
 	if Guardians.is_guardian(kind) and growth_remaining <= 0:
 		var rng := RandomNumberGenerator.new()
 		for entry in Guardians.roll_drops(kind,rng,int(get_meta("looting",0))):

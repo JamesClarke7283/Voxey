@@ -12,24 +12,29 @@ const MATERIALS = [Nodes.PLANKS,Nodes.STONE,Nodes.COBBLE,Nodes.MOSSY_COBBLE,Node
 # actually happened: the wood species' slabs landed inside the appended band.
 # A separate, verified-free band keeps both families independent.
 const EXTRA_FIRST = 3401
-const EXTRA_MATERIALS = [NetherBlocks.RED_NETHER_BRICKS,NetherBlocks.NETHER_WART_BLOCK,NetherBlocks.CHISELED_QUARTZ,NetherBlocks.SMOOTH_QUARTZ,NetherBlocks.QUARTZ_BRICK,NetherBlocks.POLISHED_BASALT,NetherBlocks.CRACKED_BLACKSTONE_BRICKS,PaleOak.RESIN_BRICK_BLOCK]
+const EXTRA_MATERIALS = [NetherBlocks.RED_NETHER_BRICKS,NetherBlocks.NETHER_WART_BLOCK,NetherBlocks.CHISELED_QUARTZ,NetherBlocks.SMOOTH_QUARTZ,NetherBlocks.QUARTZ_BRICK,NetherBlocks.POLISHED_BASALT,NetherBlocks.CRACKED_BLACKSTONE_BRICKS,PaleOak.RESIN_BRICK_BLOCK,EndMud.MUD_BRICKS,VillageContent.PRISMARINE,VillageContent.PRISMARINE_BRICK]
+# `mcl_trees/api.lua`:555-596 registers a `<name>_bark` stair and slab for every
+# species' bark wood and stripped bark wood.
+const BARK_MATERIALS = [6005,6037,6069,6101,6133,6165,6006,6038,6070,6102,6134,6166]
 const DIRECTIONS = [Vector3i.BACK,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.LEFT]
 const SIDES = [Vector3i.RIGHT,Vector3i.LEFT,Vector3i.UP,Vector3i.DOWN,Vector3i.BACK,Vector3i.FORWARD]
 static var icon_cache: Dictionary = {}
 
+static func extra_list() -> Array: return EXTRA_MATERIALS+BARK_MATERIALS
 static func is_shape(id: int) -> bool:
-	if id >= EXTRA_FIRST and id < EXTRA_FIRST+EXTRA_MATERIALS.size()*16: return (id-EXTRA_FIRST)%16 <= 10
+	if id >= EXTRA_FIRST and id < EXTRA_FIRST+extra_list().size()*16: return (id-EXTRA_FIRST)%16 <= 10
 	return id >= FIRST and id < FIRST+MATERIALS.size()*16 and (id-FIRST)%16 <= 10
 static func variant(id: int) -> int:
-	return (id-EXTRA_FIRST)%16 if id >= EXTRA_FIRST and id < EXTRA_FIRST+EXTRA_MATERIALS.size()*16 else (id-FIRST)%16
+	return (id-EXTRA_FIRST)%16 if id >= EXTRA_FIRST and id < EXTRA_FIRST+extra_list().size()*16 else (id-FIRST)%16
 static func material(id: int) -> int:
-	if id >= EXTRA_FIRST and id < EXTRA_FIRST+EXTRA_MATERIALS.size()*16: return EXTRA_MATERIALS[(id-EXTRA_FIRST)/16]
+	if id >= EXTRA_FIRST and id < EXTRA_FIRST+extra_list().size()*16: return extra_list()[(id-EXTRA_FIRST)/16]
 	return MATERIALS[(id-FIRST)/16]
 static func family(id: int) -> int:
-	if id >= EXTRA_FIRST and id < EXTRA_FIRST+EXTRA_MATERIALS.size()*16: return EXTRA_FIRST+(id-EXTRA_FIRST)/16*16
+	if id >= EXTRA_FIRST and id < EXTRA_FIRST+extra_list().size()*16: return EXTRA_FIRST+(id-EXTRA_FIRST)/16*16
 	return FIRST+(id-FIRST)/16*16
 static func slab_for(base: int) -> int:
-	if base in EXTRA_MATERIALS: return EXTRA_FIRST+EXTRA_MATERIALS.find(base)*16
+	var all: Array = extra_list()
+	if base in all: return EXTRA_FIRST+all.find(base)*16
 	return FIRST+MATERIALS.find(base)*16 if base in MATERIALS else 0
 static func stair_for(base: int) -> int:
 	var slab: int = slab_for(base)
@@ -41,12 +46,18 @@ static func facing(id: int) -> int: return (variant(id)-3)%4
 static func item(id: int) -> int: return family(id)+(3 if stair(id) else 0)
 static func count(id: int) -> int: return 2 if variant(id) == 2 else 1
 static func title(id: int) -> String:
-	var name: String = WoodTypes.NAMES[WoodTypes.species(material(id))] if WoodTypes.is_planks(material(id)) else Nodes.title(material(id))
+	var m: int = material(id)
+	var name: String
+	if WoodTypes.is_planks(m): name = WoodTypes.NAMES[WoodTypes.species(m)]
+	# Bark wood tiles read "<Species> bark wood"; the source's shape is
+	# "<Species> Bark Stairs", so drop the trailing " wood".
+	elif m in BARK_MATERIALS: name = Nodes.title(m).trim_suffix(" wood")
+	else: name = Nodes.title(m)
 	return name+ (" stairs" if stair(id) else " slab")
 static func items() -> Array:
 	var ids: Array = []
 	for base in MATERIALS: ids.append(slab_for(base)); ids.append(stair_for(base))
-	for base in EXTRA_MATERIALS: ids.append(slab_for(base)); ids.append(stair_for(base))
+	for base in extra_list(): ids.append(slab_for(base)); ids.append(stair_for(base))
 	return ids
 
 # Matches mcl_stairs/cornerstair.lua's lead/trail rules. Stored facings are the
@@ -142,7 +153,7 @@ static func mesh(out: Array, p: Vector3, id: int, data: Variant, padded_cell: Ve
 					BlockMesher._quad(out,points,uv,normal,Nodes.tile(material(id),face),Color(shade,shade,shade),true)
 
 static func recipes(inv: Inventory) -> void:
-	for base in MATERIALS+EXTRA_MATERIALS:
+	for base in MATERIALS+extra_list():
 		inv._recipe(title(slab_for(base)),slab_for(base),6,[base,base,base],3,"table")
 		inv._recipe(title(stair_for(base)),stair_for(base),4,[base,0,0,base,base,0,base,base,base],3,"table")
 
@@ -167,6 +178,11 @@ static func stonecutter_inputs(base: int) -> Array:
 		VillageContent.POLISHED_ANDESITE: return [VillageContent.ANDESITE,VillageContent.POLISHED_ANDESITE]
 		Bastions.POLISHED: return [MinecloniaOres.BLACKSTONE,Bastions.POLISHED]
 		Bastions.BRICKS: return [MinecloniaOres.BLACKSTONE,Bastions.POLISHED,Bastions.BRICKS]
+		# `mcl_mud/init.lua:43-58` cuts mud-brick shapes from packed mud.
+		EndMud.MUD_BRICKS: return [EndMud.PACKED_MUD,EndMud.MUD_BRICKS]
+		# `mcl_ocean/prismarine.lua:65-87` cuts all three prismarine forms.
+		VillageContent.PRISMARINE: return [VillageContent.PRISMARINE,VillageContent.PRISMARINE_BRICK,VillageContent.PRISMARINE_DARK]
+		VillageContent.PRISMARINE_BRICK,VillageContent.PRISMARINE_DARK: return [VillageContent.PRISMARINE,VillageContent.PRISMARINE_BRICK,VillageContent.PRISMARINE_DARK]
 	return [base]
 
 static func try_place(game: Node, target: Dictionary) -> bool:
