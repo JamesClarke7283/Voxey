@@ -555,6 +555,13 @@ static func natural_species(generator: TerrainGenerator, x: int, z: int) -> int:
 	var climate_value: float = generator.climate.get_noise_2d(x,z)
 	if region in ["Swamp","Willow shores"]: return 3 if climate_value > 0.05 else 0
 	if climate_value > 0.12: return 4
+	# The source's cherry, mangrove and pale oak each own a biome Voxey does not
+	# generate. They are placed instead in the nearest existing region, at a smaller
+	# share than the classic species, so every species is reachable in survival through
+	# its own saplings. Crimson and warped come from the Nether's fungus trees.
+	if region in ["Swamp","Willow shores"] and generator.hash_at(x,271,z)%7 == 0: return 7
+	if generator.hash_at(x,283,z)%11 == 0: return 6
+	if generator.hash_at(x,293,z)%13 == 0: return 8
 	var patch: int = generator.hash_at(floori(x/64.0),237,floori(z/64.0))%100
 	if patch < 18: return 5
 	if patch < 43: return 2
