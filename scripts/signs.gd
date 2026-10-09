@@ -13,6 +13,34 @@ const STANDING = OAK+4
 static func register_base(base: int) -> void:
 	# Idempotent: a dimension change re-runs `configure`.
 	if not BASES.has(base): BASES.append(base)
+# Hanging signs. The source registers three placements — a ceiling `hanging_sign`, an
+# `attached` form under a non-full support, and a `wall` form on a side. Each species owns
+# a 20-id block, like the standing signs: sixteen ceiling/attached rotations, then four
+# wall facings. Whether a ceiling state is the plain or attached form is carried in the
+# station (the support's shape), which is exactly the distinction the source draws.
+static var HANGING_BASES: Array = []
+static var HANGING_ITEMS: Array = []
+
+static func register_hanging(base: int, item_id: int) -> void:
+	if not HANGING_BASES.has(base):
+		HANGING_BASES.append(base); HANGING_ITEMS.append(item_id)
+
+static func hanging_base(id: int) -> int:
+	for b in HANGING_BASES:
+		if id >= b and id < b+20: return b
+	return 0
+static func is_hanging(id: int) -> bool: return hanging_base(id) != 0
+static func hanging_item(id: int) -> int: return HANGING_ITEMS[maxi(0,HANGING_BASES.find(hanging_base(id)))] if is_hanging(id) else 0
+static func hanging_wall(id: int) -> bool: return is_hanging(id) and id-hanging_base(id) >= 16
+static func hanging_facing(id: int) -> int: return (id-hanging_base(id)-16) if hanging_wall(id) else (id-hanging_base(id))
+static func hanging_kind(id: int) -> int: return maxi(0,HANGING_BASES.find(hanging_base(id))) if is_hanging(id) else -1
+static func hanging_title(id: int) -> String:
+	var kind: int = hanging_kind(id)
+	return "Oak hanging sign" if kind >= 0 else ""
+static func hanging_material(id: int) -> int:
+	var kind: int = hanging_kind(id)
+	return Nodes.PLANKS if kind <= 0 else WoodTypes.PLANKS[kind]
+
 const DEFAULT_COLOR = "#000000"
 const NEWLINES = [10,11,12,133,8232,8233]
 const WHITESPACE = [9,32,5760,8192,8193,8194,8195,8196,8197,8198,8200,8201,8202,8287,12288]
@@ -47,14 +75,29 @@ static func definitions() -> Dictionary:
 		var base_id: int = BASES[kind]
 		var color: String = "b28c52" if kind == 0 else WoodTypes.WOOD_COLORS[kind]
 		for offset in 20: result[base_id+offset] = {"name":("Oak sign" if kind == 0 else WoodTypes.NAMES[kind]+" sign"),"block":true,"shape":"sign","color":color,"stack":16,"hardness":1.0,"tool":1,"hidden":offset != 0}
+	# A hanging sign carries its own item id; its twenty states are hidden above it.
+	for kind in HANGING_BASES.size():
+		var base_id: int = HANGING_BASES[kind]
+		var color: String = "b28c52" if kind == 0 else WoodTypes.WOOD_COLORS[kind]
+		var item_id: int = HANGING_ITEMS[kind]
+		for offset in 20: result[base_id+offset] = {"name":("Oak hanging sign" if kind == 0 else WoodTypes.NAMES[kind]+" hanging sign"),"block":true,"shape":"sign","color":color,"stack":16,"hardness":1.0,"tool":1,"hidden":base_id+offset != item_id}
 	return result
 
 static func recipes(inv: Inventory) -> void:
 	for kind in BASES.size():
 		var planks: int = Nodes.PLANKS if kind == 0 else WoodTypes.PLANKS[kind]
 		inv._recipe(("Oak sign" if kind == 0 else WoodTypes.NAMES[kind]+" sign"),BASES[kind],3,[planks,planks,planks,planks,planks,planks,0,Nodes.STICK,0],3,"table")
+	# The source's hanging sign is a stripped log over two chains, six out.
+	for kind in HANGING_BASES.size():
+		var log: int = WoodTypes.log_id(kind)
+		var chain: int = CopperDecor.CHAIN
+		inv._recipe(("Oak hanging sign" if kind == 0 else WoodTypes.NAMES[kind]+" hanging sign"),HANGING_ITEMS[kind],6,
+			[log,log,log,0,chain,0,0,chain,0],3,"table")
 
 static func boxes(id: int) -> Array:
+	if is_hanging(id):
+		var y: float = 5.0/16.0 if hanging_wall(id) else 8.0/16.0
+		return [Barriers.rotate_box(AABB(Vector3(0,y,0.375),Vector3(1,8.0/16,0.25)),posmod(-hanging_facing(id),4))]
 	if wall(id): return [Barriers.rotate_box(AABB(Vector3(0,0.25,0),Vector3(1,0.5,5.0/56.0)),posmod(-facing(id),4))]
 	return [AABB(Vector3(0.3,0,0.3),Vector3(0.4,1,0.4))]
 
@@ -73,9 +116,10 @@ static func mesh(out: Array, at: Vector3, id: int) -> void:
 	for index in parts[5]: out[5].append(offset+index)
 
 static func icon_faces(id: int) -> Array:
-	id = item(id)
+	id = hanging_item(id) if is_hanging(id) else item(id)
 	if not icons.has(id):
-		var out: Array = BlockMesher._empty(); mesh(out,Vector3.ZERO,STANDING)
+		var source: int = (hanging_base(id)+4) if is_hanging(id) else STANDING
+		var out: Array = BlockMesher._empty(); mesh(out,Vector3.ZERO,source)
 		icons[id] = Barriers.project_icon(out)
 	return icons[id]
 
@@ -126,13 +170,13 @@ static func refresh(world: VoxelWorld) -> void:
 	if game != null and game.get("survival") != null: game.survival.refresh_displays()
 
 static func apply_dye(world: VoxelWorld, p: Vector3i, color: String) -> bool:
-	if not is_sign(world.node_at(p)) or not DYE_COLORS.has(color): return false
+	if not (is_sign(world.node_at(p)) or is_hanging(world.node_at(p))) or not DYE_COLORS.has(color): return false
 	station(world,p)["color"] = DYE_COLORS[color]; refresh(world); return true
 
 # Source glow affects the text sprite, not neighboring light. `Signs.use` applies
 # it when a glow ink sac is held (`mcl_signs/init.lua`:487-497).
 static func apply_glow(world: VoxelWorld, p: Vector3i) -> bool:
-	if not is_sign(world.node_at(p)): return false
+	if not (is_sign(world.node_at(p)) or is_hanging(world.node_at(p))): return false
 	var state: Dictionary = station(world,p)
 	state.glow = true
 	if state.color == DEFAULT_COLOR: state.color = "#7e7e7e"
@@ -142,7 +186,7 @@ static func sneaking(game: Node3D) -> bool:
 	return Input.is_physical_key_pressed(KEY_CTRL) or game.touch and is_instance_valid(game.controls) and game.controls.sneak_held
 
 static func use(game: Node3D, target: Dictionary) -> bool:
-	if target.is_empty() or not is_sign(int(target.get("id",0))) or game.target_mob() != null: return false
+	if target.is_empty() or not (is_sign(int(target.get("id",0))) or is_hanging(int(target.get("id",0)))) or game.target_mob() != null: return false
 	# `mcl_signs/init.lua`:487-497 — a glow ink sac makes the sign's text glow. The
 	# branch sits above the dye test so the sac is never mistaken for a dye, and below
 	# the sign guard above so it only runs on an actual sign click.
@@ -165,8 +209,31 @@ static func placement_id(normal: Vector3i, angle: float, kind_base: int = OAK) -
 	var direction: int = SUPPORT.find(-normal)
 	return kind_base+direction if direction >= 0 else 0
 
+static func hanging_placement_id(kind_index: int, normal: Vector3i, angle: float) -> int:
+	var kind_base: int = HANGING_BASES[clampi(kind_index,0,HANGING_BASES.size()-1)]
+	# Ceiling and attached forms hang from the node above; the wall form faces a side.
+	if normal == Vector3i.DOWN: return kind_base+posmod(int(floorf(angle/(TAU/16.0)+0.5)),16)
+	var direction: int = SUPPORT.find(-normal)
+	return kind_base+16+direction if direction >= 0 else 0
+
 static func try_place(game: Node3D, target: Dictionary) -> bool:
 	var held: int = game.inventory.held().id
+	if is_hanging(held):
+		# `hanging_sign`: place below a walkable support, or against a side.
+		if target.is_empty(): return false
+		var kind_index: int = hanging_kind(held)
+		var at: Vector3i = target.get("replace",target.pos if replaceable(int(target.id)) else target.pos+target.normal)
+		var id: int = hanging_placement_id(kind_index,target.normal,game.player.rotation.y)
+		if id == 0 or not replaceable(game.world.node_at(at)): return true
+		var anchor: Vector3i = at+(Vector3i.UP if not hanging_wall(id) else SUPPORT[hanging_facing(id)])
+		if not game.world.loaded_at(Vector3(at)) or not game.world.loaded_at(Vector3(anchor)): return true
+		if not (Nodes.solid(game.world.node_at(anchor)) or is_sign(game.world.node_at(anchor)) or is_hanging(game.world.node_at(anchor))): return true
+		if game.world.set_node(at,id):
+			station(game.world,at)
+			if game.gamemode != "creative": game.inventory.consume_selected()
+			game.player.swing = 1; game.sound("place"); game.api.emit_node_placed(at,id)
+			open_editor(game,at,true)
+		return true
 	if not is_sign(held) or target.is_empty(): return false
 	if not BASES.has(held): return true
 	var at: Vector3i = target.get("replace",target.pos if replaceable(int(target.id)) else target.pos+target.normal)
@@ -188,8 +255,12 @@ static func try_place(game: Node3D, target: Dictionary) -> bool:
 static func airlike(id: int) -> bool:
 	return id == Nodes.AIR
 
+static func support_offset_for(id: int) -> Vector3i:
+	if is_hanging(id): return SUPPORT[hanging_facing(id)] if hanging_wall(id) else Vector3i.UP
+	return support_offset(id)
+
 static func supported(world: VoxelWorld, p: Vector3i, id: int) -> bool:
-	var backing: Vector3i = p+support_offset(id)
+	var backing: Vector3i = p+support_offset_for(id)
 	return not world.loaded_at(Vector3(backing)) or not airlike(world.node_at(backing))
 
 static func validate_support(world: VoxelWorld, p: Vector3i) -> void:
@@ -197,8 +268,8 @@ static func validate_support(world: VoxelWorld, p: Vector3i) -> void:
 		var pending: Dictionary = world.get_meta("sign_support_pending",{})
 		pending[p] = true; world.set_meta("sign_support_pending",pending); return
 	var id: int = world.node_at(p)
-	if is_sign(id) and not supported(world,p,id) and world.set_node(p,Nodes.AIR):
-		world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,OAK,1)
+	if (is_sign(id) or is_hanging(id)) and not supported(world,p,id) and world.set_node(p,Nodes.AIR):
+		world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,hanging_item(id) if is_hanging(id) else OAK,1)
 
 static func finish_piston(world: VoxelWorld) -> void:
 	var pending: Dictionary = world.get_meta("sign_support_pending",{})
@@ -207,7 +278,7 @@ static func finish_piston(world: VoxelWorld) -> void:
 	if not pending.is_empty(): refresh(world)
 
 static func changed(world: VoxelWorld, p: Vector3i, old_id: int, new_id: int) -> void:
-	if is_sign(old_id) and not is_sign(new_id):
+	if (is_sign(old_id) or is_hanging(old_id)) and not (is_sign(new_id) or is_hanging(new_id)):
 		world.stations.erase(VoxelWorld.station_key(p))
 		var game: Node = world.get_parent()
 		var session: Dictionary = game.get_meta("sign_editor",{})
@@ -219,13 +290,13 @@ static func changed(world: VoxelWorld, p: Vector3i, old_id: int, new_id: int) ->
 			if game.survival.displays.has(key):
 				if is_instance_valid(game.survival.displays[key]): game.survival.displays[key].queue_free()
 				game.survival.displays.erase(key)
-	elif is_sign(new_id):
+	elif is_sign(new_id) or is_hanging(new_id):
 		station(world,p)
 		if world.circuits.moving: validate_support(world,p)
 	if not airlike(new_id): return
 	for offset in [Vector3i.UP,Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
 		var at: Vector3i = p+offset; var id: int = world.node_at(at)
-		if not is_sign(id) or at+support_offset(id) != p: continue
+		if not (is_sign(id) or is_hanging(id)) or at+support_offset_for(id) != p: continue
 		validate_support(world,at)
 
 static func font() -> SystemFont:

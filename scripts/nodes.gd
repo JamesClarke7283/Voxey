@@ -451,6 +451,7 @@ static func uncached_title(id: int) -> String:
 	if Copper.DATA.has(id): return Copper.DATA[id].name
 	if RedstoneInputs.is_device(id): return RedstoneInputs.title(id)
 	if WoodTypes.DATA.has(id): return WoodTypes.DATA[id].name
+	if Signs.is_hanging(id): return Signs.hanging_title(id)
 	if Signs.is_sign(id): return Signs.title(id)
 	if FoodFeatures.is_cake(id): return FoodFeatures.title(id)
 	if Doors.is_door(id) or Doors.is_item(id): return Doors.title(id)
@@ -490,6 +491,7 @@ static func color(id: int) -> Color:
 	if Copper.DATA.has(id): return Color(Copper.DATA[id].color)
 	if RedstoneInputs.is_device(id): return color(RedstoneInputs.material(id))
 	if WoodTypes.species(id) >= 0: return WoodTypes.color(id)
+	if Signs.is_hanging(id): return color(Signs.hanging_material(id))
 	if Signs.is_sign(id): return color(Signs.material(id))
 	if FoodFeatures.is_cake(id): return Color("f0d4a5")
 	if Doors.is_door(id) or Doors.is_item(id): return color(Doors.material(id))
@@ -526,7 +528,7 @@ static func exists(id: int) -> bool:
 	if Copper.is_copper(id): return true
 	if RedstoneInputs.is_device(id): return true
 	if WoodTypes.DATA.has(id): return true
-	if Signs.is_sign(id): return true
+	if Signs.is_sign(id) or Signs.is_hanging(id): return true
 	if FoodFeatures.is_cake(id): return true
 	if Doors.is_door(id) or Doors.is_item(id): return true
 	if SnowCover.is_snow(id): return true
@@ -558,6 +560,7 @@ static func all_ids() -> Array:
 	ids.append_array(Trapdoors.ITEMS)
 	ids.append(SnowCover.BASE)
 	ids.append_array(Signs.BASES)
+	ids.append_array(Signs.HANGING_ITEMS)
 	for chain in Copper.CHAINS:
 		for id in chain:
 			# A hidden stage is a derived node (an oxidized decoration), so the
@@ -664,7 +667,7 @@ static func durability(id: int) -> int:
 static func max_stack(id: int) -> int:
 	if Rails.is_cart(id): return 1
 	if Archaeology.is_brush(id) or id == Archaeology.POT or Decor.is_pot(id) or Decor.is_stand(id): return 1
-	if Signs.is_sign(id): return 16
+	if Signs.is_sign(id) or Signs.is_hanging(id): return 16
 	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("stack",1 if VillageContent.DATA[id].has("armor") else 64)
 	if id in [WRITABLE_BOOK,WRITTEN_BOOK,BOW,LAVA_BUCKET]: return 1
 	if id in [EGG,SNOWBALL,ENDER_PEARL]: return 16
@@ -716,7 +719,7 @@ static func uncached_solid(id: int) -> bool:
 	if Archaeology.is_sherd(id) or Archaeology.is_brush(id): return false
 	if Copper.is_rod(id): return false
 	if RedstoneInputs.is_device(id): return false
-	if Signs.is_sign(id): return false
+	if Signs.is_sign(id) or Signs.is_hanging(id): return false
 	if FoodFeatures.is_cake(id): return true
 	if Doors.is_door(id): return true
 	if SnowCover.is_snow(id): return SnowCover.layers(id) > 1
@@ -761,7 +764,7 @@ static func uncached_transparent(id: int) -> bool:
 	if FruitCrops.is_pumpkin_head(id): return false
 	if RedstoneInputs.is_device(id): return true
 	if WoodTypes.is_leaves(id) or WoodTypes.is_sapling(id): return true
-	if Signs.is_sign(id): return true
+	if Signs.is_sign(id) or Signs.is_hanging(id): return true
 	if FoodFeatures.is_cake(id): return true
 	if Doors.is_door(id): return true
 	if SnowCover.is_snow(id): return true
@@ -808,6 +811,7 @@ static func placeable(id: int) -> bool:
 	if RedstoneInputs.is_device(id): return id == RedstoneInputs.item(id)
 	if WoodTypes.DATA.has(id): return not WoodTypes.DATA[id].get("hidden",false)
 	if Signs.is_sign(id): return Signs.BASES.has(id)
+	if Signs.is_hanging(id): return id == Signs.hanging_item(id)
 	if FoodFeatures.is_cake(id): return id == VillageContent.CAKE
 	if Doors.is_door(id) or Doors.is_item(id): return Doors.is_item(id)
 	if SnowCover.is_snow(id): return id == SnowCover.BASE
@@ -847,7 +851,7 @@ static func preferred_tool(id: int) -> int:
 	if id == ICE: return 0
 	if RedstoneInputs.is_device(id): return 1 if WoodTypes.is_planks(RedstoneInputs.material(id)) else 0
 	if WoodTypes.is_wood(id): return 4 if WoodTypes.is_leaves(id) else 1
-	if Signs.is_sign(id): return 1
+	if Signs.is_sign(id) or Signs.is_hanging(id): return 1
 	if Doors.is_door(id) or Doors.is_item(id): return 0 if Doors.iron(id) else 1
 	if SnowCover.is_snow(id): return 2
 	if Trapdoors.is_trapdoor(id): return 1 if Trapdoors.item(id) != Trapdoors.IRON else 0
@@ -881,7 +885,7 @@ static func hardness(id: int) -> float:
 	if Farmland.is_soil(id): return 0.6
 	if RedstoneInputs.is_device(id): return 0.5
 	if WoodTypes.is_wood(id): return 0.2 if WoodTypes.is_leaves(id) else (0.0 if WoodTypes.is_sapling(id) else 2.0)
-	if Signs.is_sign(id): return 1.0
+	if Signs.is_sign(id) or Signs.is_hanging(id): return 1.0
 	if FoodFeatures.is_cake(id): return 0.5
 	if Doors.is_door(id) or Doors.is_item(id): return 5.0 if Doors.iron(id) else 3.0
 	if SnowCover.is_snow(id): return 0.1
@@ -939,7 +943,7 @@ static func harvestable(id: int, tool: int) -> bool:
 	if FruitCrops.harvestable(id): return true
 	if id in [ICE,DenseMaterials.PACKED_ICE,DenseMaterials.BLUE_ICE]: return true
 	if RedstoneInputs.is_button(id): return true
-	if Signs.is_sign(id): return true
+	if Signs.is_sign(id) or Signs.is_hanging(id): return true
 	if Doors.is_door(id): return not Doors.iron(id) or tool_kind(tool) == 0
 	if SnowCover.is_snow(id) or id == SNOW_BLOCK: return tool_kind(tool) == 2
 	if Trapdoors.is_trapdoor(id): return Trapdoors.item(id) != Trapdoors.IRON or tool_kind(tool) == 0
@@ -1038,6 +1042,7 @@ static func drop(id: int) -> int:
 	if Torches.is_copper(id): return Torches.COPPER
 	if CactusFlower.is_flower(id): return id
 	if Signs.is_sign(id): return Signs.item(id)
+	if Signs.is_hanging(id): return Signs.hanging_item(id)
 	# A huge mushroom block drops the *small* mushroom, rolled in `break_node`, so
 	# the generic path must not hand out the block itself.
 	if HugeMushrooms.is_huge(id): return 0
@@ -1104,6 +1109,7 @@ static func uncached_tile(id: int, face: int) -> int:
 	if DenseMaterials.is_bone(id): return 137+VillageContent.BLOCKS.find(DenseMaterials.BONE_END if DenseMaterials.end_tile(id,face) else DenseMaterials.BONE)
 	if RedstoneInputs.is_device(id): return tile(RedstoneInputs.material(id),face)
 	if WoodTypes.is_wood(id): return 137+VillageContent.BLOCKS.size()+WoodTypes.TEXTURES.find(WoodTypes.texture_id(id,face))
+	if Signs.is_hanging(id): return tile(Signs.hanging_material(id),face)
 	if Signs.is_sign(id): return tile(Signs.material(id),face)
 	if Candles.is_cake(id): return tile(WOOL,face)
 	if FoodFeatures.is_cake(id): return tile(WOOL,face)
@@ -1183,6 +1189,7 @@ static func pick_item(id: int) -> int:
 	if RedstoneInputs.is_device(id): return RedstoneInputs.item(id)
 	if Doors.is_door(id): return Doors.item(id)
 	if Signs.is_sign(id): return Signs.item(id)
+	if Signs.is_hanging(id): return Signs.hanging_item(id)
 	if Trapdoors.is_trapdoor(id): return Trapdoors.item(id)
 	if Barriers.is_barrier(id): return Barriers.item(id)
 	if BuildingShapes.is_shape(id): return BuildingShapes.item(id)
@@ -1196,7 +1203,7 @@ static func fuel_time(id: int) -> float:
 	if id in [NoteBlocks.ID,Jukeboxes.ID]: return 15.0
 	if RedstoneInputs.is_device(id): return 5.0 if RedstoneInputs.is_button(id) and WoodTypes.is_planks(RedstoneInputs.material(id)) else (15.0 if WoodTypes.is_planks(RedstoneInputs.material(id)) else 0.0)
 	if WoodTypes.is_wood(id): return WoodTypes.fuel_time(id)
-	if Signs.is_sign(id): return 10.0
+	if Signs.is_sign(id) or Signs.is_hanging(id): return 10.0
 	if Doors.is_item(id): return 0.0 if Doors.iron(id) else 10.0
 	if Boats.is_boat(id): return 60.0
 	if id == RedstoneSensors.DAYLIGHT: return 15.0

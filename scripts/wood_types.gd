@@ -599,6 +599,8 @@ const DOOR_BASES = [9112,9144,9176,9208,9240]
 const TRAPDOOR_ITEMS = [9301,9302,9303,9304,9305]
 const TRAPDOOR_BASES = [9346,9378,9410,9426,9442]
 const SIGN_BASES = [9558,9578,9601,9633,9665]
+const HANGING_BASES = [11603,11635,11667,11699,11731,11763,11800,11832,11870,11902,11934]
+const HANGING_ITEMS = [11603,11635,11667,11699,11731,11763,11800,11832,11870,11902,11934]
 const FENCE_BASES = [9701,9717,9733,9809,9825]
 const BUTTON_ITEMS = [6964,6980,6988,7004,7012]
 const PLATE_ITEMS = [11242,11243,11244,11245,11246]
@@ -611,3 +613,6 @@ static func register_families() -> void:
 		Signs.register_base(SIGN_BASES[i])
 		Barriers.register_family(FENCE_BASES[i],PLANKS[kind])
 		RedstoneInputs.register_material(NAMES[kind],PLANKS[kind],PLATE_ITEMS[i])
+	# Hanging signs cover every species, the classic one included.
+	for k in 11:
+		Signs.register_hanging(HANGING_BASES[k],HANGING_ITEMS[k])
