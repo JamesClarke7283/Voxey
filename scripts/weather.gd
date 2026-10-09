@@ -330,12 +330,16 @@ static func convert_mob(game: Node3D, mob: Creature, kind: String) -> Creature:
 
 # --- moon -------------------------------------------------------------------
 
-# Source phase: the day counter, advanced after midday, modulo eight. Source
-# seeds a per-world phase offset from the mapgen seed; a single-player world has
-# no such offset, so phase 0 is the first full moon.
+# Source phase: the day counter, advanced after midday, modulo eight, plus the
+# world's own offset. The source draws that offset from the mapgen seed with a
+# `PcgRandom`, so two worlds rarely share a starting moon; the same draw is made here
+# from the world seed with the generator's own hash, which is deterministic per world.
+static func phase_offset(world: VoxelWorld) -> int:
+	return world.generator.hash_at(0,311,0)%MOON_PHASES
+
 static func moon_phase(world: VoxelWorld) -> int:
 	var game: Node3D = world.get_parent()
-	return posmod(game.day_number(),MOON_PHASES)
+	return posmod(game.day_number()+phase_offset(world),MOON_PHASES)
 
 # Source brightness: 0.0 at new moon (phase 4), 1.0 at full moon (phase 0).
 static func moon_brightness(world: VoxelWorld) -> float:

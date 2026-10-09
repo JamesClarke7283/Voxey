@@ -167,11 +167,17 @@ static func run(t: SceneTree, game: Node3D) -> void:
 		game.day_time = float(day)
 		phases[Weather.moon_phase(world)] = true
 	t.check(phases.size() == 8 and Weather.MOON_PHASES == 8,"the moon cycles through all eight phases")
-	# day_number() is one-based, so offset to land on the two named phases.
-	game.day_time = 3.0
-	t.check(Weather.moon_phase(world) == 4 and is_equal_approx(Weather.moon_brightness(world),0.0),"phase four is the new moon and reports zero brightness")
-	game.day_time = 7.0
-	t.check(Weather.moon_phase(world) == 0 and is_equal_approx(Weather.moon_brightness(world),1.0),"phase zero is the full moon and reports full brightness")
+	# Each world carries its own phase offset (the source's `PcgRandom` draw from the
+	# mapgen seed), so the days that land on the named phases are the offset plus the
+	# phase index. `day_number()` is one-based.
+	var offset: int = Weather.phase_offset(world)
+	for phase in 8:
+		game.day_time = float(posmod(phase-offset-1,8)+8)
+		t.check(Weather.moon_phase(world) == phase,"day %d reports phase %d" % [int(game.day_time),phase])
+	game.day_time = float(posmod(4-offset-1,8)+8)
+	t.check(is_equal_approx(Weather.moon_brightness(world),0.0),"phase four is the new moon and reports zero brightness")
+	game.day_time = float(posmod(0-offset-1,8)+8)
+	t.check(is_equal_approx(Weather.moon_brightness(world),1.0),"phase zero is the full moon and reports full brightness")
 	game.day_time = 0.0
 
 	# --- persistence -------------------------------------------------------

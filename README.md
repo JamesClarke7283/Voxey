@@ -260,7 +260,7 @@ Voxey includes three dimensions, redstone simulation, villages and trading, brew
 
 ## Validation
 
-Latest validation: **9,582 checks passed** across nine suites, with no failures or script errors. Rendered checks include `tests/farm_golem_tour.gd`, `tests/nature_tour.gd`, `tests/mechanism_tour.gd`, `tests/home_tour.gd` and `tests/travel_tour.gd`; all use isolated temporary saves. Source comparisons and remaining differences are tracked in the [parity ledger](docs/mineclonia-parity.md).
+Latest validation: **9,595 checks passed** across nine suites, with no failures or script errors. Rendered checks include `tests/farm_golem_tour.gd`, `tests/nature_tour.gd`, `tests/mechanism_tour.gd`, `tests/home_tour.gd` and `tests/travel_tour.gd`; all use isolated temporary saves. Source comparisons and remaining differences are tracked in the [parity ledger](docs/mineclonia-parity.md).
 
 On Linux/macOS with Godot on `PATH`:
 
