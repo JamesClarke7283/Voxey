@@ -1077,7 +1077,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mclx_core` | Partial — river water is absent; small compat stubs remain (`sponges.gd`, `fish_buckets.gd`) |
 | `mclx_fences` | Implemented — the nether brick gate and the red nether brick fence and gate (base 5032), with the source's recipe shape and `fence_nether_brick` connection group |
 | `mclx_stairs` | Partial — see stairs and slabs |
-| `screwdriver` | Partial — node rotation is modelled per node; there is no screwdriver tool (`end_mud.gd`, `decor.gd`) |
+| `screwdriver` | Implemented — the rotation tool (`screwdriver.gd`), dispatching to each family's own state encoding for stairs, doors, trapdoors, gates, signs, logs and the source's three-way nodes, with the source's two hundred uses |
 | `mcl_biome_dispatch` | Implemented — `TerrainGenerator.biome()` (`terrain_generator.gd`) |
 | `mcl_biomes` | Partial — see world and Nether comparison |
 | `mcl_dungeons` | Partial — source room rules and weighted loot on adapted terrain; missing loot materials open |

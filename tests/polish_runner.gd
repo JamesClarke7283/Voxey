@@ -96,6 +96,13 @@ func run() -> void:
 	check(not game.game_rules.keepInventory and "false" in game.execute_command("/gamerule keepinventory"),"keepInventory defaults to false and accepts the lowercase name")
 	check("set to true" in game.execute_command("/gamerule keepInventory true") and game.game_rules.keepInventory,"gamerule command enables inventory preservation")
 	check("Usage" in game.execute_command("/gamerule keepInventory maybe") and game.game_rules.keepInventory,"invalid gamerule values leave the rule unchanged")
+	# `/findbiome` and `/listbiomes`, the source's search commands.
+	var biomes: String = game.execute_command("/listbiomes")
+	check("Sunwash desert" in biomes and "Swamp" in biomes and "," in biomes,"listbiomes names the generator's biomes")
+	check("Usage" in game.execute_command("/findbiome"),"findbiome without a name reports its usage")
+	var found: String = game.execute_command("/findbiome Oakwood meadow")
+	check(("at " in found and "nodes away" in found) or "No " in found,"findbiome reports a found column or gives up within its budget: "+found)
+	check("findbiome" in game.execute_command("/help"),"the help lists the new commands")
 	check(game.save_game("user://polish-check.json"),"polish state saves")
 	game.load_world_data(game.read_save("user://polish-check.json"))
 	while game.state == "loading": await process_frame

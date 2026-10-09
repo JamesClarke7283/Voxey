@@ -1690,6 +1690,40 @@ func write_command_block(p: Vector3i, commands: String) -> Dictionary:
 	world.circuits.state(p)["commands"] = commands
 	return check
 
+
+# The source's `/findbiome` and `/listbiomes`. Voxey's biome names are its own, so the
+# list is read from the generator rather than an enum table.
+func known_biomes() -> Array:
+	var seen: Dictionary = {}
+	for z in range(-128,129,16):
+		for x in range(-128,129,16): seen[world.generator.biome(floori(player.position.x)+x,floori(player.position.z)+z)] = true
+	for name in ["Sunwash desert","Frostpine highlands","Swamp","Willow shores","Oakwood meadow","Warped forest","Soul sand valley","Crimson forest","Basalt deltas","Nether wastes","The End","End highlands"]: seen[name] = true
+	var names: Array = seen.keys(); names.sort(); return names
+
+func find_biome(wanted: String) -> String:
+	var origin: Vector2i = Vector2i(floori(player.position.x),floori(player.position.z))
+	var target: String = wanted.strip_edges()
+	for name in known_biomes():
+		if name.to_lower() == target.to_lower(): target = name; break
+	# A square spiral, one node at a time, to the source's ten-thousand-node budget.
+	var steps: int = 10000
+	var at: Vector2i = origin
+	var dx: int = 0
+	var dz: int = 1
+	var leg: int = 1
+	var walked: int = 0
+	var budget: int = 0
+	while budget < steps:
+		for i in 2:
+			for j in leg:
+				at += Vector2i(dx,dz)
+				budget += 1
+				if world.generator.biome(at.x,at.y) == target:
+					return "%s at %d, %d (about %d nodes away)." % [target,at.x,at.y,int(Vector2(at-origin).length())]
+			var swap: int = dx; dx = -dz; dz = swap
+		leg += 1
+	return "No %s within %d nodes." % [target,steps]
+
 func execute_command(command: String) -> String:
 	var parts: PackedStringArray=command.strip_edges().trim_prefix("/").split(" ",false)
 	var response: String=""
@@ -1698,7 +1732,7 @@ func execute_command(command: String) -> String:
 		"gamemode":
 			if parts.size()!=2 or not set_gamemode(parts[1].to_lower()): response="Usage: /gamemode survival | creative"
 			else: response="Game mode set to "+gamemode.capitalize()+"."
-		"help": response="/gamemode survival | creative  ·  /time day | night  ·  /seed  ·  /save  ·  /spawnpoint\n/give <item> [count]  ·  /spawn <creature>  ·  /tp <x> <y> <z>  ·  /heal  ·  /killmobs\n/dimension overworld | nether | end  ·  /xp <points>  ·  /locate village | stronghold | fortress | bastion | end_city\n/sethome  ·  /home  ·  /weather clear | rain | thunder\n/gamerule keepInventory [true | false]\nCreative: F or double Space toggles flight. Space rises; Shift descends."
+		"help": response="/gamemode survival | creative  ·  /time day | night  ·  /seed  ·  /save  ·  /spawnpoint\n/give <item> [count]  ·  /spawn <creature>  ·  /tp <x> <y> <z>  ·  /heal  ·  /killmobs\n/dimension overworld | nether | end  ·  /xp <points>  ·  /locate village | stronghold | fortress | bastion | end_city\n/findbiome <biome>  ·  /listbiomes\n/sethome  ·  /home  ·  /weather clear | rain | thunder\n/gamerule keepInventory [true | false]\nCreative: F or double Space toggles flight. Space rises; Shift descends."
 		"gamerule": response = GameRules.command(self,parts)
 		"seed": response="World seed: "+str(world.seed_value)
 		"save": response="World saved to "+saves.save_path(active_world_id) if save_game() else "The world could not be saved."
@@ -1734,6 +1768,14 @@ func execute_command(command: String) -> String:
 			elif parts[1] == "fortress": response = "Nether fortress: "+str(Vector3i(roundi((player.position.x-60)/160)*160+60,29,roundi((player.position.z-60)/160)*160+60))
 			elif parts[1] == "end_city": response = "End city: (288, 43, 0) in the End highlands."
 			else: response = "Unknown structure."
+		"findbiome":
+			# `findbiome`'s spiral search: walk outward from the player until a column
+			# reports the requested biome, up to the source's 10 000-node budget. A biome
+			# name has spaces, so every remaining word is the name.
+			if parts.size() < 2: response = "Usage: /findbiome <biome>"
+			else: response = find_biome(" ".join(parts.slice(1)))
+		"listbiomes":
+			response = ", ".join(known_biomes())
 		"dimension":
 			if parts.size() != 2 or parts[1] not in ["overworld","nether","end"]: response="Usage: /dimension overworld | nether | end"
 			else: travel_dimension(parts[1]); response="Entering "+parts[1].capitalize()+"."
