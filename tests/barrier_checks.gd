@@ -24,7 +24,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	# Nine more wall materials were appended for the nether, prismarine and mud
 	# families, so the catalog grew from 35 to 44 items. The structural claims are
 	# unchanged.
-	t.check(Barriers.items().size() == 46 and not Nodes.all_ids().has(5005) and Nodes.drop(5008) == 5001 and not Nodes.placeable(5008),"catalog exposes every barrier item and hides gate placement states; all states drop their canonical gate")
+	t.check(Barriers.items().size() == 56 and not Nodes.all_ids().has(5005) and Nodes.drop(5008) == 5001 and not Nodes.placeable(5008),"catalog exposes every barrier item and hides gate placement states; all states drop their canonical gate")
 	# `mclx_fences`: the red nether brick fence and gate.
 	t.check(Barriers.is_fence(5032) and Barriers.is_gate(5033) and Barriers.material(5032) == NetherBlocks.RED_NETHER_BRICKS,"the red nether brick fence and gate exist")
 	t.check(Barriers.connects(5032,5033) and Barriers.connects(5032,5016),"red nether brick fences connect to their gate and to nether brick fences")

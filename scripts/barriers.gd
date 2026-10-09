@@ -7,8 +7,15 @@ extends RefCounted
 # closed and 5..8 open. Wall connections are derived from neighbors.
 const FIRST = 5000
 const WALL_FIRST = 5100
-const FENCE_BASES = [5000,5016,5300,5316,5332,5348,5364,5032]
-const FENCE_MATERIALS = [Nodes.PLANKS,Nodes.NETHER_BRICKS,6035,6067,6099,6131,6163,NetherBlocks.RED_NETHER_BRICKS]
+static var FENCE_BASES = [5000,5016,5300,5316,5332,5348,5364,5032]
+static var FENCE_MATERIALS = [Nodes.PLANKS,Nodes.NETHER_BRICKS,6035,6067,6099,6131,6163,NetherBlocks.RED_NETHER_BRICKS]
+
+# The later species each reserve a 16-id fence window and a gate pair, handed in at
+# startup so the classic ids never shift.
+static func register_family(base: int, material_id: int) -> void:
+	if FENCE_BASES.has(base): return
+	FENCE_BASES.append(base)
+	FENCE_MATERIALS.append(material_id)
 const WALL_MATERIALS = [Nodes.COBBLE,Nodes.MOSSY_COBBLE,Nodes.RED_BRICKS,Nodes.SANDSTONE,Nodes.BRICKS,Nodes.MOSSY_BRICKS,VillageContent.GRANITE,VillageContent.DIORITE,VillageContent.ANDESITE,Nodes.NETHER_BRICKS,Nodes.END_BRICKS,MinecloniaOres.BLACKSTONE,Bastions.POLISHED,Bastions.BRICKS,Nodes.COBBLED_DEEPSLATE,Nodes.POLISHED_DEEPSLATE,Nodes.DEEPSLATE_BRICKS,Masonry.DEEP_TILES,MinecloniaOres.TUFF,Masonry.POLISHED_TUFF,Masonry.TUFF_BRICKS,NetherBlocks.RED_NETHER_BRICKS,NetherBlocks.NETHER_WART_BLOCK,NetherBlocks.CHISELED_QUARTZ,NetherBlocks.SMOOTH_QUARTZ,NetherBlocks.QUARTZ_BRICK,NetherBlocks.POLISHED_BASALT,NetherBlocks.CRACKED_BLACKSTONE_BRICKS,VillageContent.PRISMARINE,EndMud.MUD_BRICKS]
 const SIDES = [Vector3i.RIGHT,Vector3i.BACK,Vector3i.LEFT,Vector3i.FORWARD]
 static var icon_cache: Dictionary = {}
