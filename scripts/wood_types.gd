@@ -4,17 +4,18 @@ extends RefCounted
 # Canonical oak IDs remain compatible with old saves. Other species occupy
 # permanent 32-ID groups; axis variants drop their canonical vertical item.
 const FIRST = 6000
-const NAMES = ["Oak","Spruce","Birch","Jungle","Acacia","Dark oak"]
-const KEYS = ["oak","spruce","birch","jungle","acacia","dark_oak"]
-const PLANKS = [Nodes.PLANKS,6035,6067,6099,6131,6163]
-const LOGS = [Nodes.LOG,6032,6064,6096,6128,6160]
-const LEAVES = [Nodes.LEAVES,6033,6065,6097,6129,6161]
-const SAPLINGS = [Nodes.SAPLING,6034,6066,6098,6130,6162]
+const BASES = [13001,13033,13065,13097,13129]
+const NAMES = ["Oak","Spruce","Birch","Jungle","Acacia","Dark oak","Cherry","Mangrove","Pale oak","Crimson","Warped"]
+const KEYS = ["oak","spruce","birch","jungle","acacia","dark_oak","cherry","mangrove","pale_oak","crimson","warped"]
+const PLANKS = [Nodes.PLANKS,6035,6067,6099,6131,6163,13004,13036,13068,13100,13132]
+const LOGS = [Nodes.LOG,6032,6064,6096,6128,6160,13001,13033,13065,13097,13129]
+const LEAVES = [Nodes.LEAVES,6033,6065,6097,6129,6161,13002,13034,13066,13098,13130]
+const SAPLINGS = [Nodes.SAPLING,6034,6066,6098,6130,6162,13003,13035,13067,13099,13131]
 const SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.UP,Vector3i.DOWN,Vector3i.FORWARD,Vector3i.BACK]
-const BARK_COLORS = ["745335","62503b","d7d4bc","785840","82796c","46372b"]
-const WOOD_COLORS = ["b7955e","896744","dbcf9c","b88661","ba6f4c","594336"]
-const LEAF_COLORS = ["639144","426d4b","79a44d","3d9650","748444","42633b"]
-const TEXTURES = [6000,6001,6002,6003,6004,6016,6017,6032,6033,6034,6035,6036,6048,6049,6064,6065,6066,6067,6068,6080,6081,6096,6097,6098,6099,6100,6112,6113,6128,6129,6130,6131,6132,6144,6145,6160,6161,6162,6163,6164,6176,6177]
+const BARK_COLORS = ["745335","62503b","d7d4bc","785840","82796c","46372b","8f5f6a","59433a","6f6a5c","6b2a2a","2f5f5c"]
+const WOOD_COLORS = ["b7955e","896744","dbcf9c","b88661","ba6f4c","594336","e6b7bd","87553c","ded4c2","7a3f3f","3b8f86"]
+const LEAF_COLORS = ["639144","426d4b","79a44d","3d9650","748444","42633b","efa9b8","4f7a3f","b9c48a","7a3030","3f7f7a"]
+const TEXTURES = [6000,6001,6002,6003,6004,6016,6017,6032,6033,6034,6035,6036,6048,6049,6064,6065,6066,6067,6068,6080,6081,6096,6097,6098,6099,6100,6112,6113,6128,6129,6130,6131,6132,6144,6145,6160,6161,6162,6163,6164,6176,6177,13001,13002,13003,13004,13005,13017,13018,13033,13034,13035,13036,13037,13049,13050,13065,13066,13067,13068,13069,13081,13082,13097,13098,13099,13100,13101,13113,13114,13129,13130,13131,13132,13133,13145,13146]
 const DATA = {
 	6004:{"name":"Oak stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":6004},
 	6005:{"name":"Oak bark wood","block":true,"family":"wood_bark_wood","hardness":2,"tool":1,"blast_resistance":3,"drop":6005},
@@ -78,25 +79,83 @@ const DATA = {
 	6169:{"name":"Dark oak log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":6160,"hidden":true},
 	6170:{"name":"Dark oak stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":6164,"hidden":true},
 	6171:{"name":"Dark oak stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":6164,"hidden":true},
+	13001:{"name":"Cherry log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13001},
+	13002:{"name":"Cherry leaves","block":true,"family":"wood_leaves","hardness":0.2,"tool":4,"blast_resistance":0.2,"drop":13002,"transparent":true},
+	13003:{"name":"Cherry sapling","block":true,"family":"wood_sapling","hardness":0,"tool":4,"blast_resistance":3,"drop":13003,"transparent":true,"shape":"plant"},
+	13004:{"name":"Cherry planks","block":true,"family":"wood_planks","hardness":2,"tool":1,"blast_resistance":3,"drop":13004},
+	13005:{"name":"Cherry stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13005},
+	13006:{"name":"Cherry bark wood","block":true,"family":"wood_bark_wood","hardness":2,"tool":1,"blast_resistance":3,"drop":13006},
+	13007:{"name":"Cherry stripped bark wood","block":true,"family":"wood_stripped_bark_wood","hardness":2,"tool":1,"blast_resistance":3,"drop":13007},
+	13009:{"name":"Cherry log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13001,"hidden":true},
+	13010:{"name":"Cherry log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13001,"hidden":true},
+	13011:{"name":"Cherry stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13005,"hidden":true},
+	13012:{"name":"Cherry stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13005,"hidden":true},
+	13033:{"name":"Mangrove log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13033},
+	13034:{"name":"Mangrove leaves","block":true,"family":"wood_leaves","hardness":0.2,"tool":4,"blast_resistance":0.2,"drop":13034,"transparent":true},
+	13035:{"name":"Mangrove sapling","block":true,"family":"wood_sapling","hardness":0,"tool":4,"blast_resistance":3,"drop":13035,"transparent":true,"shape":"plant"},
+	13036:{"name":"Mangrove planks","block":true,"family":"wood_planks","hardness":2,"tool":1,"blast_resistance":3,"drop":13036},
+	13037:{"name":"Mangrove stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13037},
+	13038:{"name":"Mangrove bark wood","block":true,"family":"wood_bark_wood","hardness":2,"tool":1,"blast_resistance":3,"drop":13038},
+	13039:{"name":"Mangrove stripped bark wood","block":true,"family":"wood_stripped_bark_wood","hardness":2,"tool":1,"blast_resistance":3,"drop":13039},
+	13041:{"name":"Mangrove log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13033,"hidden":true},
+	13042:{"name":"Mangrove log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13033,"hidden":true},
+	13043:{"name":"Mangrove stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13037,"hidden":true},
+	13044:{"name":"Mangrove stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13037,"hidden":true},
+	13065:{"name":"Pale oak log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13065},
+	13066:{"name":"Pale oak leaves","block":true,"family":"wood_leaves","hardness":0.2,"tool":4,"blast_resistance":0.2,"drop":13066,"transparent":true},
+	13067:{"name":"Pale oak sapling","block":true,"family":"wood_sapling","hardness":0,"tool":4,"blast_resistance":3,"drop":13067,"transparent":true,"shape":"plant"},
+	13068:{"name":"Pale oak planks","block":true,"family":"wood_planks","hardness":2,"tool":1,"blast_resistance":3,"drop":13068},
+	13069:{"name":"Pale oak stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13069},
+	13070:{"name":"Pale oak bark wood","block":true,"family":"wood_bark_wood","hardness":2,"tool":1,"blast_resistance":3,"drop":13070},
+	13071:{"name":"Pale oak stripped bark wood","block":true,"family":"wood_stripped_bark_wood","hardness":2,"tool":1,"blast_resistance":3,"drop":13071},
+	13073:{"name":"Pale oak log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13065,"hidden":true},
+	13074:{"name":"Pale oak log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13065,"hidden":true},
+	13075:{"name":"Pale oak stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13069,"hidden":true},
+	13076:{"name":"Pale oak stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13069,"hidden":true},
+	13097:{"name":"Crimson log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13097},
+	13098:{"name":"Crimson leaves","block":true,"family":"wood_leaves","hardness":0.2,"tool":4,"blast_resistance":0.2,"drop":13098,"transparent":true},
+	13099:{"name":"Crimson sapling","block":true,"family":"wood_sapling","hardness":0,"tool":4,"blast_resistance":3,"drop":13099,"transparent":true,"shape":"plant"},
+	13100:{"name":"Crimson planks","block":true,"family":"wood_planks","hardness":2,"tool":1,"blast_resistance":3,"drop":13100},
+	13101:{"name":"Crimson stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13101},
+	13102:{"name":"Crimson bark wood","block":true,"family":"wood_bark_wood","hardness":2,"tool":1,"blast_resistance":3,"drop":13102},
+	13103:{"name":"Crimson stripped bark wood","block":true,"family":"wood_stripped_bark_wood","hardness":2,"tool":1,"blast_resistance":3,"drop":13103},
+	13105:{"name":"Crimson log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13097,"hidden":true},
+	13106:{"name":"Crimson log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13097,"hidden":true},
+	13107:{"name":"Crimson stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13101,"hidden":true},
+	13108:{"name":"Crimson stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13101,"hidden":true},
+	13129:{"name":"Warped log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13129},
+	13130:{"name":"Warped leaves","block":true,"family":"wood_leaves","hardness":0.2,"tool":4,"blast_resistance":0.2,"drop":13130,"transparent":true},
+	13131:{"name":"Warped sapling","block":true,"family":"wood_sapling","hardness":0,"tool":4,"blast_resistance":3,"drop":13131,"transparent":true,"shape":"plant"},
+	13132:{"name":"Warped planks","block":true,"family":"wood_planks","hardness":2,"tool":1,"blast_resistance":3,"drop":13132},
+	13133:{"name":"Warped stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13133},
+	13134:{"name":"Warped bark wood","block":true,"family":"wood_bark_wood","hardness":2,"tool":1,"blast_resistance":3,"drop":13134},
+	13135:{"name":"Warped stripped bark wood","block":true,"family":"wood_stripped_bark_wood","hardness":2,"tool":1,"blast_resistance":3,"drop":13135},
+	13137:{"name":"Warped log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13129,"hidden":true},
+	13138:{"name":"Warped log","block":true,"family":"wood_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13129,"hidden":true},
+	13139:{"name":"Warped stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13133,"hidden":true},
+	13140:{"name":"Warped stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":13133,"hidden":true},
 }
 static var SCHEMATICS: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/trees/mineclonia_trees.json"))
 
-static func base(kind: int) -> int: return FIRST+clampi(kind,0,5)*32
+static func base(kind: int) -> int: return FIRST+clampi(kind,0,5)*32 if kind < 6 else BASES[clampi(kind,6,10)-6]
 static func species(id: int) -> int:
 	if id in [Nodes.LOG,Nodes.LEAVES,Nodes.SAPLING,Nodes.PLANKS]: return 0
-	return (id-FIRST)/32 if id >= FIRST and id < FIRST+192 else -1
+	if id >= FIRST and id < FIRST+192: return (id-FIRST)/32
+	for i in BASES.size():
+		if id >= BASES[i] and id < BASES[i]+32: return i+6
+	return -1
 static func part(id: int) -> int:
 	if id in [Nodes.LOG,Nodes.LEAVES,Nodes.SAPLING,Nodes.PLANKS]: return [Nodes.LOG,Nodes.LEAVES,Nodes.SAPLING,Nodes.PLANKS].find(id)
-	return posmod(id-FIRST,32) if species(id) >= 0 else -1
+	return posmod(id-base(species(id)),32) if species(id) >= 0 else -1
 static func is_wood(id: int) -> bool: return id in [Nodes.LOG,Nodes.LEAVES,Nodes.SAPLING,Nodes.PLANKS] or DATA.has(id)
 static func is_log(id: int) -> bool: return is_wood(id) and part(id) in [0,4,5,6,8,9,10,11]
 static func is_leaves(id: int) -> bool: return LushCaveExtra.is_azalea_leaves(id) or is_wood(id) and part(id) == 1
 static func is_sapling(id: int) -> bool: return is_wood(id) and part(id) == 2
 static func is_planks(id: int) -> bool: return is_wood(id) and part(id) == 3
-static func log_id(kind: int) -> int: return LOGS[clampi(kind,0,5)]
-static func leaves_id(kind: int) -> int: return LEAVES[clampi(kind,0,5)]
-static func sapling_id(kind: int) -> int: return SAPLINGS[clampi(kind,0,5)]
-static func planks_id(kind: int) -> int: return PLANKS[clampi(kind,0,5)]
+static func log_id(kind: int) -> int: return LOGS[clampi(kind,0,LOGS.size()-1)]
+static func leaves_id(kind: int) -> int: return LEAVES[clampi(kind,0,LEAVES.size()-1)]
+static func sapling_id(kind: int) -> int: return SAPLINGS[clampi(kind,0,SAPLINGS.size()-1)]
+static func planks_id(kind: int) -> int: return PLANKS[clampi(kind,0,PLANKS.size()-1)]
 static func stripped(id: int) -> bool: return part(id) in [4,6,10,11]
 static func axis(id: int) -> int: return 0 if part(id) in [8,10] else (2 if part(id) in [9,11] else 1)
 static func canonical(id: int) -> int:
@@ -155,7 +214,7 @@ static func pixel(key: int, x: int, y: int, noise: Color) -> Color:
 	return noise
 
 static func recipes(inv: Inventory) -> void:
-	for kind in 6:
+	for kind in 11:
 		var group: int = base(kind)
 		for id in [log_id(kind),group+4,group+5,group+6]:
 			if id != Nodes.LOG: inv._recipe(NAMES[kind]+" planks",planks_id(kind),4,[id],1)
@@ -232,6 +291,11 @@ static func schematics(kind: int, giant: bool = false) -> Array:
 		3: return ["jungle_tree_huge_1","jungle_tree_huge_2","jungle_tree_huge_3","jungle_tree_huge_4"] if giant else ["jungle_tree","jungle_tree_2","jungle_tree_3","jungle_tree_4"]
 		4: return ["acacia_1","acacia_2","acacia_3","acacia_4","acacia_5","acacia_6","acacia_7","acacia_weirdo"]
 		5: return ["dark_oak"]
+		6: return ["cherry_1","cherry_2","cherry_3"]
+		7: return ["mangrove_1","mangrove_2","mangrove_3","mangrove_4","mangrove_5"]
+		8: return ["pale_oak_1","pale_oak_2","pale_oak_3"]
+		9: return ["crimson_fungus_1","crimson_fungus_2","crimson_fungus_3"]
+		10: return ["warped_fungus_1","warped_fungus_2","warped_fungus_3"]
 	return []
 
 static func rotate(p: Vector3i, turn: int, giant: bool) -> Vector3i:

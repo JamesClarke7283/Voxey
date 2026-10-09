@@ -37,7 +37,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 			var uv_end: Vector2 = Vector2(tile%8*16+16,tile/8*16+16)/Vector2(atlas_size)
 			textures_fit = textures_fit and tile >= 0 and uv_end.x <= 1.0 and uv_end.y <= 1.0
 	t.check(textures_fit,"all species textures fit the expanded atlas with UV coordinates inside its bounds")
-	t.check(WoodTypes.SCHEMATICS.size() == 38,"all38 source tree schematics are present as attributed immutable data")
+	t.check(WoodTypes.SCHEMATICS.size() == 55,"all55 source tree schematics are present as attributed immutable data")
 	for kind in 6:
 		var label: String = WoodTypes.NAMES[kind]
 		var log_id: int = WoodTypes.log_id(kind); var leaves: int = WoodTypes.leaves_id(kind); var sap: int = WoodTypes.sapling_id(kind); var planks: int = WoodTypes.planks_id(kind)
