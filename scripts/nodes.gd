@@ -549,6 +549,8 @@ static func all_ids() -> Array:
 		if not VillageContent.DATA[id].get("hidden",false) and id not in ids: ids.append(id)
 	ids.erase(VillageContent.WOOL_WHITE)
 	ids.append_array([6200,6201,6202,6203,6204])
+	ids.append_array(WoodTypes.DOOR_ITEMS)
+	ids.append_array(WoodTypes.TRAPDOOR_ITEMS)
 	ids.erase(IRON_DOOR_OPEN); ids.erase(VillageContent.WOODEN_DOOR_OPEN)
 	ids.append_array(WoodTypes.items())
 	ids.append_array(BuildingShapes.items())

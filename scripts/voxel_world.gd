@@ -82,6 +82,7 @@ func configure(seed_number: int, atlas: Texture2D, dimension_name: String = "ove
 	Dungeons.reset(self)
 	Copper.reset(self)
 	Copper.register_families()
+	WoodTypes.register_families()
 	Weather.reset(self)
 	Conduits.reset(self)
 	Corals.reset(self)

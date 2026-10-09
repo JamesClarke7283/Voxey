@@ -582,3 +582,22 @@ static func natural_tree(generator: TerrainGenerator, x: int, z: int) -> Diction
 	plan["origin"] = Vector3i(x,h+1,z); plan["species"] = kind
 	Beehives.decorate_tree(generator,plan)
 	return plan
+
+# The later species also carry the building-part families. Doors, trapdoors, signs,
+# fences, buttons and plates each reserve their own state block; the bases here are
+# explicit so a species' block never overlaps another family's, and are handed to the
+# owning modules at startup from `VoxelWorld.configure`.
+const DOOR_ITEMS = [9001,9002,9003,9004,9005]
+const DOOR_BASES = [9112,9144,9176,9208,9240]
+const TRAPDOOR_ITEMS = [9301,9302,9303,9304,9305]
+const TRAPDOOR_BASES = [9346,9378,9410,9426,9442]
+const SIGN_BASES = [9558,9578,9601,9633,9665]
+const FENCE_BASES = [9701,9717,9733,9809,9825]
+const BUTTON_ITEMS = [6964,6980,6988,7004,7012]
+const PLATE_ITEMS = [9700,9701,9702,9703,9704]
+
+static func register_families() -> void:
+	for i in 5:
+		var kind: int = 6+i
+		Doors.register_family(DOOR_ITEMS[i],PLANKS[kind],NAMES[kind]+" door",DOOR_BASES[i])
+		Trapdoors.register_family(TRAPDOOR_ITEMS[i],PLANKS[kind],NAMES[kind]+" trapdoor",TRAPDOOR_BASES[i])
