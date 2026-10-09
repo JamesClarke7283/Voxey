@@ -402,7 +402,7 @@ const COLORS = {
 	59:Color("6b7b5c"), 60:Color("7e8970"), 61:Color("343b40"), 62:Color("a66d52"),
 	256:Color("484039"), 257:Color("987047"), 258:Color("b3824f"), 259:Color("edc753"), 260:Color("cbd3d1"), 261:Color("eee2c5")
 }
-const KIND_NAMES = ["pickaxe", "axe", "shovel", "sword", "hoe", "shears"]
+const KIND_NAMES = ["pickaxe", "axe", "shovel", "sword", "hoe", "shears", "screwdriver"]
 const TIER_NAMES = ["Wooden", "Stone", "Iron", "Diamond"]
 const DURABILITY = [60, 132, 251, 1562]
 const SHEARS_ID = SHEARS # 123; outside the TOOLS id range but behaves as kind 5

@@ -803,6 +803,7 @@ const DATA = {
 	688:{"name":"Cocoa pod (ripe)","color":"9f643c","block":true,"shape":"crop","crop":"cocoa","stage":3},
 	698:{"name":"Cocoa pod (growing)","color":"8a7a42","block":true,"shape":"crop","crop":"cocoa","stage":2},
 	701:CactusFlower.DATA[701],
+	279:{"name":"Screwdriver","color":"c0c6cc","stack":1,"durability":200,"tool_kind":6,"source_node":"screwdriver:screwdriver"},
 	930:{"name":"Lead","color":"b79661"},
 	512:{"name":"Emerald ore","color":"709786","block":true},
 	513:{"name":"Deepslate emerald ore","color":"45645d","block":true},
@@ -1821,6 +1822,7 @@ static func recipes(inv: Inventory) -> void:
 	ArmorTrims.recipes(inv)
 	EndMud.recipes(inv)
 	FlowersExtra.recipes(inv)
+	Screwdriver.recipes(inv)
 	LargePlants.recipes(inv)
 	CactusFlower.recipes(inv)
 	Sculk.recipes(inv)

@@ -569,6 +569,8 @@ func use() -> void:
 			if game.gamemode != "creative": game.inventory.consume_selected()
 			game.sound("place"); swing = 1
 			return
+	if Screwdriver.is_screwdriver(held) and not target.is_empty():
+		if Screwdriver.turn(game,target.pos,Screwdriver.ROTATE_FACE): return
 	if Candles.use(game,target): return
 	if game.boats.use(): return
 	if RedstoneInputs.use(game,target): return
@@ -846,6 +848,8 @@ func use() -> void:
 	if Sponges.place_wet(game,place_target): return
 	if Copper.try_place(game,place_target): return
 	if Trapdoors.try_place(game,place_target): return
+	if Screwdriver.is_screwdriver(held) and not place_target.is_empty():
+		if Screwdriver.turn(game,place_target.pos,Screwdriver.ROTATE_AXIS): return
 	if Signs.try_place(game,place_target): return
 	if RedstoneInputs.try_place(game,place_target): return
 	if Barriers.try_place(game,place_target): return
