@@ -223,31 +223,26 @@ second node. `tests/command_block_checks.gd` pins the substitution, the line spl
 validation with its leading-slash hint, the trigger, the Creative gate, the stored list
 and the edge rule.
 
-### The remaining wood species
+### The wood species
 
-The source registers **eleven** `mcl_trees` species — oak, spruce, birch, jungle, acacia
-and dark oak, which Voxey has, plus **cherry, mangrove, pale oak, crimson and warped**,
-which it does not. Adding them is not one edit but a batch: `WoodTypes` fixes species
-groups at a 32-ID stride, and seven modules index that table by position — planks, logs,
-leaves, saplings, signs, doors, trapdoors, fences, buttons and pressure plates.
-`tools/convert_mineclonia_trees.py` already reads the species schematics (every MTS file
-shares one format, and the cherry, mangrove, pale-oak and crimson/fungus sets convert
-through it unchanged), so the art side is ready; the remaining work is the table and its
-seven callers, kept as one batch so the species cannot be half-registered. Recorded here
-rather than left implicit.
+The source registers **eleven** `mcl_trees` species, and all eleven are implemented:
+oak, spruce, birch, jungle, acacia and dark oak, plus **cherry, mangrove, pale oak,
+crimson and warped**. Each later species owns its own 32-ID `WoodTypes` block (logs,
+planks, leaves, saplings, stripped and bark variants), its own colours, tree plans and
+recipes, and its own building-part families:
 
-### The wood species scope
+* doors and trapdoors through their `register_family` entry points;
+* signs through `Signs.register_base`, each in a 20-id block (four wall facings then
+  sixteen standing facings);
+* fences and gates through `Barriers.register_family`;
+* buttons and pressure plates through `RedstoneInputs.register_material` (a button's id
+  is fixed by the 8-stride kind encoding, a plate carries its own).
 
-The source registers **eleven** `mcl_trees` species; Voxey implements the six classic
-ones (oak, spruce, birch, jungle, acacia, dark oak). The other five — cherry, mangrove,
-pale oak, crimson and warped — are a *scoped* omission, not an oversight: the project's
-own checks assert the six-species table (`tests/wood_checks.gd` pins 38 attributed
-schematics and the six-species atlas) and the per-species family modules
-(`WoodTypes` at a 32-ID stride, plus doors, trapdoors, fences, signs, buttons and
-plates) all index that table by position. Adding the five requires a coordinated
-change to the table, those seven modules **and** their checks, with fresh 32-ID blocks
-for each species; the tree schematics already convert through
-`tools/convert_mineclonia_trees.py`. Recorded as one batch for a future change.
+Every family base was chosen so it overlaps no other family's state window. The
+species tree schematics convert through `tools/convert_mineclonia_trees.py`; the
+overworld species are placed naturally so each is reachable in survival through its own
+saplings, and the Nether's crimson and warped fungi grow their huge forms through
+`crimson_plants.gd`.
 
 ### Reviewed and recorded, not changed
 
@@ -964,7 +959,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_offhand` | Implemented — a real second hand the shields, totems and torches read; the shield no longer borrows the head armor slot. See [the second hand](offhand-source.md) |
 | `mcl_title` | N/A — title screen; presentation (`hud.gd`) |
 | `show_wielded_item` | Implemented — the held item’s name shows on the HUD, and a first-person model of it is built in `player.gd` `_make_hand` |
-| `mcl_buttons` | Partial — source six-face devices, timing and projectiles; remaining wood families open |
+| `mcl_buttons` | Implemented — source six-face devices, timing and projectiles, across all eleven wood species (Stone, the six classics and the five later ones) |
 | `mcl_commandblock` | Implemented — the command-block node (`command_blocks.gd`), its `@@`/`@c`/`@p`/`@n`/`@f`/`@r` placeholders, the commander rule, the Creative-only edit gate, the rising-edge trigger and the source's line-per-command validation, driving the existing console (`game.gd` `execute_command`) |
 | `mcl_comparators` | Implemented — compare/subtract, container fullness, trapped chest, bookshelf, bulb, hive, jukebox, cake, cauldron, composter and item-frame measurement, read through the shared circuit |
 | `mcl_daylight_detector` | Partial — source signal/recipes with adapted natural light; see daylight detectors and targets |
@@ -973,7 +968,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_noteblock` | Implemented — all musical instruments, base-material selection, tuning, conduction, redstone and now the **mob-head playback** (`sound_by_head`) |
 | `mcl_observers` | Implemented — front-only trigger and a 0.2 s pulse |
 | `mcl_pistons` | Partial — adhesive assemblies, twelve-node limit, actor collision and metadata; container mobility remains open |
-| `mcl_pressureplates` | Partial — source living/object sensing and weighted power; remaining wood families open |
+| `mcl_pressureplates` | Implemented — source living/object sensing and weighted power, across all eleven wood species plus the two weighted plates |
 | `mcl_redstone` | Implemented — the wire BFS, 15-level attenuation, weak/strong power and neighbour notification engine every device reads |
 | `mcl_redstone_lamp` | Implemented — lit/unlit with live light 14, and the source's `delay = 2` on the off node (a signal going low lights the lamp for two more ticks) |
 | `mcl_redstone_torch` | Implemented — inverts support power with burnout (`BURNOUT_LIMIT` 8 / 30 s window) and its own light |
@@ -1002,7 +997,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_candles` | Implemented — `candles.gd` |
 | `mcl_cartography_table` | Partial — metadata-preserving selected-map copying; see persistent maps |
 | `mcl_cauldrons` | Partial — water, lava and powder snow, rain and snowfall filling with the source’s material choice, contact, shulker washing, comparator and visuals; see cauldrons |
-| `mcl_cherry_blossom` | Partial — the cherry species is absent. Its source tree schematics convert through `tools/convert_mineclonia_trees.py` (the MTS reader is format-generic); the remaining work is the `WoodTypes` species table and the seven per-species family modules, which the ledger records as one batch. |
+| `mcl_cherry_blossom` | Implemented — the cherry species, its tree schematics and its building parts (`wood_types.gd`) |
 | `mcl_chests` | Partial — Ender/shulker storage and persistence; see portable storage |
 | `mcl_clock` | Partial — 64-frame time-of-day dial, dimension-gated spinning and the source recipe; frames are drawn procedurally rather than shipped as textures |
 | `mcl_cocoas` | Implemented — jungle-log placement, the source's **three** growth stages (`cocoa_1..cocoa_3`), the bone-meal advance, and per-stage drops |
@@ -1013,15 +1008,15 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_copper` | Partial — four-stage oxidation, waxing/scraping, bulbs, rods, doors, trapdoors, cut copper shapes, soul/copper lanterns, chains and bars, and now the **copper torch** (a second torch family with its GIMP-authored flame tile and Blender-authored model, recipe nugget/coal/stick). Ore processing remains open |
 | `mcl_core` | Partial — the lit redstone ore state machine (68.28 s timer, light 9, punch and walk-over activation) and now cactus growth with its flower (`mcl_core.grow_cactus`, `cactus_flower` in [`cactus_flower.gd`](../scripts/cactus_flower.gd)). See [redstone ore](redstone-ore-source.md). Grass spread/decay, snow layers, ice harvesting, compressed ice and oriented bone blocks are done; other core behaviors need further review |
 | `mcl_crafting_table` | Implemented — the 3×3 table and its UI (`inventory.gd`, `hud.gd`) |
-| `mcl_crimson` | Implemented — fungi, roots, sprouts, vines and huge growth (`crimson_plants.gd`) |
+| `mcl_crimson` | Implemented — fungi, roots, sprouts, vines, the crimson and warped wood families and huge growth (`crimson_plants.gd`, `wood_types.gd`) |
 | `mcl_deepslate` | Partial — see world and Nether comparison |
-| `mcl_doors` | Partial — six wood/iron paired doors and trapdoors; remaining woods open. The wind charge that doors register `_on_wind_charge_hit` for is implemented in [wind charge](../scripts/wind_charge.gd) |
+| `mcl_doors` | Implemented — wood/iron paired doors and trapdoors across all eleven wood species, registered through their `register_family` entry points. The wind charge that doors register `_on_wind_charge_hit` for is implemented in [wind charge](../scripts/wind_charge.gd) |
 | `mcl_dripstone` | Partial — the five stages in both orientations plus the item, `on_dripstone_place`/`update_dripstone`/`place_dripstone` column building and merging, `break_dripstone`, the `fall_damage_add_percent = 100` hanging-node bonus, and the growth and drip ABMs (cauldron fills, mud-to-clay). The `vengeful_dripstone` falling entity is not ported. See [dripstone](dripstones-source.md) |
 | `mcl_dyes` | Implemented — dye crafts and cauldron washing (`flowers_extra.gd`, `cauldron_wash.gd`) |
 | `mcl_enchanting` | Implemented — `enchantments.gd`, `anvils.gd`, the table UI (`game.gd`) |
 | `mcl_end` | Implemented — End terrain, cities and the dragon (`end_mud.gd`, `adventure.gd`) |
 | `mcl_farming` | Partial — wet/dry soil, four staple crops, pumpkin/melon loop, helmets and golem integration; remaining plants stay open |
-| `mcl_fences` | Partial — oak/Nether brick families, connections, gates and collision; remaining woods need resource loops |
+| `mcl_fences` | Implemented — wood and Nether brick families with connections, gates and collision, across all eleven wood species |
 | `mcl_fire` | Partial — see world and Nether comparison |
 | `mcl_fireworks` | Partial — three elytra-booster rockets, source durations/forces, shapeless recipes; no firework explosion displays because the reference has none |
 | `mcl_fishing` | Partial — source loot and timing, adapted casting; see fishing |
@@ -1040,7 +1035,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_lightning_rods` | Implemented — four oxidation stages, powered pulse and strike attraction; see copper |
 | `mcl_loom` | Implemented — the loom applies a **pattern item + dye** to a banner the player carries (the source's own purpose), alongside the plain-banner craft; the pattern and dye are consumed and the layer stack is preserved |
 | `mcl_lush_caves` | Partial — cave vines with glow berries and the source's light 14, bone-meal ripening at the tip, berry harvesting, the glow berry as food, and moss making the mossy blocks; moss carpet, hanging roots, drip leaves and natural generation remain open. See [lush caves](lush-caves-source.md) |
-| `mcl_mangrove` | Partial — the mangrove species is absent (recorded at `flowers_extra.gd`, `decor.gd`) |
+| `mcl_mangrove` | Implemented — the mangrove species, its tree schematics and its building parts (`wood_types.gd`) |
 | `mcl_maps` | Partial — regional snapshots, copies, markers and frames; see persistent maps |
 | `mcl_mobitems` | Partial — species food/items and crafted/fished name tags; see farming and naming |
 | `mcl_mobspawners` | Partial — dungeon species, bounded spawning and saves; administrative editing and remaining species open |
@@ -1049,7 +1044,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_mushrooms` | Partial — bone meal on a small mushroom grows a huge one: the source’s forty-percent roll, its soil and room gates, and its random stem height. Both species’ cap shapes are decoded from the source schematics, with skin outside and pores inside, dropping the small mushroom unless Silk Touch. See [huge mushrooms](huge-mushrooms-source.md) |
 | `mcl_nether` | Partial — netherrack, magma blocks with the source's burn and eternal fire, and nether brick families; quartz, soul sand/soil and the remaining nether materials remain open. See [magma blocks](magma-source.md) |
 | `mcl_ocean` | Partial — prismarine, its bricks and dark variant, the sea lantern, the crafting parts, [coral](corals-source.md) in all five species and six forms with the source's water-death rule, and [sea pickles](sea-pickles-source.md) in four sizes with lit/unlit forms, growth, bone-meal spread and size-counted drops, plus [seagrass](seagrass-source.md) with its rooted-node placement and shears-only drop and [kelp](kelp-source.md) with its height/age growth, drowning rule and per-height drops; ocean generation and ocean mobs remain open |
-| `mcl_pale_oak` | Partial — resin chain, hanging moss, pale moss and eyeblossom; the pale oak wood family is out of scope (`pale_oak.gd`) |
+| `mcl_pale_oak` | Implemented — resin chain, hanging moss, pale moss, eyeblossom and the pale oak wood family (`pale_oak.gd`, `wood_types.gd`) |
 | `mcl_panes` | Implemented — panes, stained panes, iron and copper bars (`glass_colors.gd`) |
 | `mcl_portals` | Implemented — portal ignition, validation and travel (`voxel_world.gd`, `game.gd`) |
 | `mcl_potions` | Implemented — the effect catalog and application (`potion_catalog.gd`, `potion_effects.gd`) |
@@ -1058,7 +1053,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_raw_ores` | Implemented — raw ore drops and compression (`raw_ores.gd`, `nodes.gd`) |
 | `mcl_sculk` | Implemented — sculk/vein/catalyst with their exact drop rules, the death-driven spread, and the catalyst route through the ancient hermitage's chest; the source's own sculk *terrain* generation is commented out in the checkout and there is no Warden there either (`sculk.gd`) |
 | `mcl_shields` | Partial — the source's 180 degree frontal arc, blockable type table, held raised state, damage-ceiling wear, the real [second hand](offhand-source.md) and the axe disable (a vindicator's axe puts a raised shield down for five seconds); no projectile deflection |
-| `mcl_signs` | Partial — oak text/dye/placement/save loop, and the **glow ink sac** turning a sign's text grey and glowing; more woods open |
+| `mcl_signs` | Implemented — the text/dye/placement/save loop and the **glow ink sac**, across all eleven wood species |
 | `mcl_smithing_table` | Implemented — netherite upgrades and armor trims (`village_survival.gd`, `armor_trims.gd`) |
 | `mcl_smoker` | Implemented — device gating in the furnace station (`voxel_world.gd`) |
 | `mcl_sponges` | Partial — source absorption volume, wet/dry states, Nether and furnace drying, bucket replacement; no survival acquisition |
@@ -1073,7 +1068,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_torches` | Implemented — floor and four wall placements, plus the copper torch family (`torches.gd`) |
 | `guardian` | Implemented — the source's charged laser, three-block minimum, aquatic movement, full chance-weighted drop table including the elder's guaranteed wet sponge, the **elder's mining-fatigue aura** and the **guardian's thorns**; no rendered beam or apparition. See [guardian auras](guardian-auras-source.md) |
 | `mcl_totems` | Partial — the `bypasses_totem` flag now comes from the death-message table rather than a local copy. — lethal-damage interception at exactly one health, effects cleared then regeneration/fire-resistance/absorption applied, breath restored, the void bypass rule, creative non-consumption and the [second hand](offhand-source.md); no mob use and no survival acquisition |
-| `mcl_trees` | Partial — six renewable classic species, schematics, bark/stripping, leaf lifecycle and now the bark-wood stairs and slabs; remaining species (cherry, mangrove, pale oak, crimson/warped, bamboo), per-species signs and hanging signs open. See [trees](wood-source.md) |
+| `mcl_trees` | Implemented — all eleven source species (the six classics plus cherry, mangrove, pale oak, crimson and warped), their schematics, bark/stripping, leaf lifecycle, per-species signs, doors, trapdoors, fences, buttons and plates. Bamboo stalks have their own module. Hanging signs remain open. See [trees](wood-source.md) |
 | `mcl_trial_spawners` | Partial — absent; needs the trial-chamber structure (`archaeology.gd` records it) |
 | `mcl_tridents` | Implemented — the trident projectile, Loyalty/Channeling/Riptide (`trident_projectile.gd`, `undead_variants.gd`) |
 | `mcl_vaults` | Partial — absent; needs the trial-chamber structure (`archaeology.gd` records it) |
