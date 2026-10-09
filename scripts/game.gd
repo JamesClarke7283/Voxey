@@ -810,6 +810,31 @@ func ignite_tnt(p: Vector3i, fuse: float = PrimedTnt.FUSE) -> void:
 
 # Creeper and TNT blasts carve a rough sphere, drop a share of the nodes, light
 # other TNT, and hurt anything nearby in proportion to its distance.
+
+# The source's `mcl_explosions` exposure test: `N_EXPOSURE_RAYS` rays from random points
+# in `size` about `body` toward `center`, counted unobstructed in `STEP_LENGTH` steps.
+# A wall of stone between the body and the blast returns zero, a clear line returns one.
+const EXPOSURE_RAYS = 16
+const EXPOSURE_STEP = 0.5
+
+func blast_exposure(center: Vector3, body: Vector3, size: Vector3) -> float:
+	var clear: int = 0
+	for ray in EXPOSURE_RAYS:
+		var from: Vector3 = body+Vector3(randf_range(-0.5,0.5)*size.x,randf_range(-0.5,0.5)*size.y,randf_range(-0.5,0.5)*size.z)
+		var toward: Vector3 = center-from
+		var length: float = toward.length()
+		if length < 0.001: clear += 1; continue
+		var step: Vector3 = toward/length*EXPOSURE_STEP
+		var at: Vector3 = from
+		var blocked: bool = false
+		var travelled: float = 0.0
+		while travelled < length:
+			at += step; travelled += EXPOSURE_STEP
+			var id: int = world.node_at(Vector3i(floori(at.x+0.5),floori(at.y+0.5),floori(at.z+0.5)))
+			if Nodes.solid(id) and not Nodes.transparent(id): blocked = true; break
+		if not blocked: clear += 1
+	return float(clear)/float(EXPOSURE_RAYS)
+
 func explode(center: Vector3, radius: float, source: Node = null, fire: bool = false) -> void:
 	var removed: Array = []
 	# The source's `info.fire`: when set, one destroyed node in three becomes fire
@@ -852,13 +877,20 @@ func explode(center: Vector3, radius: float, source: Node = null, fire: bool = f
 	for p in removed: settle(p+Vector3i.UP)
 	var blast: float = radius*2.0
 	var player_distance: float = center.distance_to(player.position+Vector3.UP*0.9)
-	if player_distance < blast: player.hurt(lerpf(16.0,1.0,player_distance/blast),false,center,"explosion")
+	# The source's exposure model: a body behind intervening rock takes less of the
+	# blast. `N_EXPOSURE_RAYS` rays are cast from random points in the body's box to the
+	# blast centre, and the fraction that reach it unobstructed scales the damage.
+	if player_distance < blast:
+		var exposure: float = blast_exposure(center,player.position+Vector3.UP*0.9,Vector3(0.6,1.8,0.6))
+		if exposure > 0.0: player.hurt(lerpf(16.0,1.0,player_distance/blast)*exposure,false,center,"explosion")
 	for mob in creatures.get_children():
 		if mob == source or mob.is_queued_for_deletion(): continue
 		var d: float = center.distance_to(mob.center())
 		if d < blast:
+			var mob_exposure: float = blast_exposure(center,mob.center(),Vector3(mob.width*2.0,mob.height,mob.width*2.0))
+			if mob_exposure <= 0.0: continue
 			# A charged creeper's blast is the only explosion that yields heads.
-			mob.hit(lerpf(20.0,1.0,d/blast),center,"charged_explosion" if source is Creature and source.charged else "")
+			mob.hit(lerpf(20.0,1.0,d/blast)*mob_exposure,center,"charged_explosion" if source is Creature and source.charged else "")
 	boats.explode(center,radius)
 	puff(center,Color("d8c9a6"),50,radius*2.2)
 	puff(center,Color("ff9b3a"),20,radius*1.4)

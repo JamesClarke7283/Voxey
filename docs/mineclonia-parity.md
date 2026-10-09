@@ -903,7 +903,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_colors` | Implemented — per-family colour tables (`nodes.gd` `color()`) |
 | `mcl_damage` | Implemented — the declared damage-type and flag table (`death_messages.gd`), read by `creature.gd` |
 | `mcl_events` | Partial — the zombie siege is the only event wired through it; no general event registry (`zombie_siege.gd`) |
-| `mcl_explosions` | Partial — spherical blasts with blast resistance, a drop share, chained TNT and distance-scaled damage, plus the source’s `info.fire` flag so a Nether bed scorches the ground. The ray-traced occlusion model that lets a blast be blocked by intervening rock is not implemented. See [nether](nether-enchanting.md) |
+| `mcl_explosions` | Implemented — spherical blasts with blast resistance, a drop share, chained TNT, distance-scaled damage and the source's **ray-traced exposure model**, so a blast is partly blocked by intervening rock, plus the `info.fire` flag so a Nether bed scorches the ground. See [nether](nether-enchanting.md) |
 | `mcl_init` | Partial — see world and Nether comparison |
 | `mcl_liquids` | Partial — downward flow, ranges, renewal and reactions; see environment update |
 | `mcl_loot` | Implemented — weighted loot tables (`bonus_chest.gd`, `Dungeons.weighted`) |
