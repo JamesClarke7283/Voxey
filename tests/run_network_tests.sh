@@ -14,6 +14,7 @@ config/name="Voxey Network Tests"
 run/main_scene="res://scenes/main.tscn"
 [rendering]
 renderer/rendering_method="gl_compatibility"
+limits/opengl/max_lights_per_object=24
 PROJECT
 godot --headless --path "$voxey_check_dir" --editor --import --quit > "$voxey_check_dir/import.log" 2>&1
 if rg -q 'SCRIPT ERROR:|^ERROR:' "$voxey_check_dir/import.log"; then cat "$voxey_check_dir/import.log"; exit 1; fi

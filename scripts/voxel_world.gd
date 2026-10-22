@@ -790,8 +790,8 @@ func set_node(p: Vector3i, id: int) -> bool:
 	if (own|_near(p)) & NEAR_LIQUID: fluids.changed(p,old_id,node_at(p))
 	var game: Node = get_parent()
 	if game != null and game.has_method("remove_torch"):
-		if Torches.is_torch(old_id): game.remove_torch(p)
-		if Torches.is_torch(id): game.add_torch(p)
+		if Torches.has_light(old_id): game.remove_torch(p)
+		if Torches.has_light(id): game.add_torch(p)
 	if not gated or _near(p) & NEAR_SNOW or SnowCover.tracks(self,p): SnowCover.changed(self,p)
 	if not gated or _near(p) & NEAR_FOOD: FoodFeatures.changed(self,p)
 	if not gated or (own|_near(p)) & NEAR_SIGN: Signs.changed(self,p,old_id,id)

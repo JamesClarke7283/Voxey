@@ -6,6 +6,8 @@ const TUFF = 696
 const BLACKSTONE = 697
 const CHUNK_SIZE = 80
 const CHUNK_OFFSET = -32
+# More veins, retaining the original size and density of each vein.
+const ABUNDANCE_MULTIPLIER = 3
 
 # Luanti scatter: floor(clipped mapchunk volume / scarcity) clusters, each
 # voxel in a cubic cluster accepted with probability count / size^3. Separate
@@ -29,6 +31,7 @@ static func placements(gen: TerrainGenerator, coord: Vector2i) -> Array:
 			var max_y: int = mini(rule.max,cy*80+CHUNK_OFFSET+79-source_y)
 			if rule.size >= max_y-min_y+1: continue
 			var count: int = (80*80*(max_y-min_y+1))/int(rule.scarcity)
+			count *= ABUNDANCE_MULTIPLIER
 			for cz in range(first.y,last.y+1):
 				for cx in range(first.x,last.x+1):
 					var clusters: PackedInt64Array = _clusters(gen,index,rule,cy,cx,cz,min_y,max_y,count).get(coord,PackedInt64Array())

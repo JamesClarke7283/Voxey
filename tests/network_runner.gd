@@ -21,7 +21,12 @@ func run() -> void:
 		game.start_new("8675309","Network test","creative")
 		var deadline: int = Time.get_ticks_msec()+90000
 		while game.state == "loading" and Time.get_ticks_msec() < deadline: await process_frame
-		check(game.network.host(port) == OK,"server binds all interfaces")
+		var world_id: String = game.active_world_id
+		game.return_to_title()
+		check(game.host_world(world_id,port) == OK,"saved singleplayer world starts loading for hosting")
+		deadline = Time.get_ticks_msec()+90000
+		while game.state == "loading" and Time.get_ticks_msec() < deadline: await process_frame
+		check(game.network.active() and game.state == "paused","loaded singleplayer world starts hosting and opens Escape menu")
 		check(game.network.local_ip().is_valid_ip_address() and game.network.join_address().ends_with(":"+str(port)),"host provides a copyable local IP and join address")
 		print("NETWORK HOST READY")
 		var origin := Vector3i(8,100,8)

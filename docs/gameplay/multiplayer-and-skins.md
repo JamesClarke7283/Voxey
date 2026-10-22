@@ -2,7 +2,7 @@
 
 ## Host and join
 
-Open a world, pause, and choose **Multiplayer → Host this world**. The server listens on **0.0.0.0**, using **UDP port 24570** by default, and supports up to **16 players** including the host. You can change the port before hosting.
+From the title screen, choose **Multiplayer**, select a saved singleplayer world under **World to host**, then click **Host selected world**. The world loads with its saved inventory, buildings, game mode, and rules before hosting starts. You can also open **Multiplayer** from the Escape menu to **Host this world**, or select another saved world to host; the current world is saved before switching. The server listens on **0.0.0.0**, using **UDP port 24570** by default, and supports up to **16 players** including the host. You can change the port before hosting.
 
 The **Escape menu** shows your computer's **local IP address** while hosting. Its single **Copy IP** button copies the complete join address, including the port (`IP:port`). If your computer has several network adapters, select the appropriate address in the Multiplayer screen before copying. Share this local address with players on your LAN. `0.0.0.0` is the listening address; guests use the displayed local address to connect.
 

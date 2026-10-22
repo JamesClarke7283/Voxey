@@ -1410,42 +1410,63 @@ var network_status_label: Label
 
 func show_multiplayer() -> void:
 	_clear(); screen = "multiplayer"; _dim()
-	var panel := _fitted_panel(Vector2(680,580))
+	var panel := _fitted_panel(Vector2(680,640))
 	_label(panel,"PLAY TOGETHER",Vector2(30,24),12,ACCENT)
 	_label(panel,"Multiplayer",Vector2(30,49),30)
-	_label(panel,"Host your current world, or join a friend's server.",Vector2(30,96),15,MUTED)
-	_label(panel,"Server address",Vector2(30,143),13,MUTED)
-	var address := LineEdit.new(); address.text = "127.0.0.1"; address.placeholder_text = "Host IP or hostname"
-	address.position = Vector2(30,167); address.size = Vector2(400,38); panel.add_child(address)
-	_label(panel,"UDP port",Vector2(460,143),13,MUTED)
-	var port := SpinBox.new(); port.min_value = 1024; port.max_value = 65535; port.value = game.network.server_port if game.network.active() else VoxeyNetwork.DEFAULT_PORT
-	port.position = Vector2(460,167); port.size = Vector2(185,38); panel.add_child(port)
-	var host_button := _button(panel,"Host this world",Rect2(30,228,295,45),func():
-		if game.network.host(int(port.value)) == OK: show_pause()
-		else: show_multiplayer())
-	host_button.disabled = game.network.active() or game.state in ["title","loading"]
-	var join_button := _button(panel,"Join server",Rect2(350,228,295,45),func():
+	_label(panel,"Host a singleplayer world, or join a friend's server.",Vector2(30,96),15,MUTED)
+	_label(panel,"World to host",Vector2(30,135),13,MUTED)
+	var worlds := OptionButton.new(); worlds.name = "HostWorldPicker"
+	worlds.position = Vector2(30,157); worlds.size = Vector2(400,40)
+	worlds.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	panel.add_child(worlds)
+	var current: bool = game.state not in ["title","loading"]
+	if current:
+		worlds.add_item("Current world · "+game.world_name)
+		worlds.set_item_metadata(0,game.active_world_id)
+	for entry in game.saves.list_worlds():
+		if current and entry.id == game.active_world_id: continue
+		worlds.add_item(String(entry.name)+" · "+String(entry.get("mode","survival")).capitalize())
+		worlds.set_item_metadata(worlds.item_count-1,entry.id)
+	var has_worlds: bool = worlds.item_count > 0
+	if not has_worlds: worlds.add_item("No saved worlds yet")
+	worlds.disabled = game.network.active() or not has_worlds
+	_label(panel,"UDP port",Vector2(460,135),13,MUTED)
+	var port := SpinBox.new(); port.name = "NetworkPort"
+	port.min_value = 1024; port.max_value = 65535; port.value = game.network.server_port if game.network.active() else VoxeyNetwork.DEFAULT_PORT
+	port.position = Vector2(460,157); port.size = Vector2(185,40); panel.add_child(port)
+	var host_button := _button(panel,"Host this world" if current else "Host selected world",Rect2(30,212,615,43),func():
+		var error: Error = game.host_world(str(worlds.get_item_metadata(worlds.selected)),int(port.value))
+		if error != OK and is_instance_valid(network_status_label): network_status_label.text = game.network.status)
+	host_button.disabled = game.network.active() or not has_worlds or game.state == "loading"
+	if not has_worlds: host_button.tooltip_text = "Create a singleplayer world first."
+	worlds.item_selected.connect(func(index: int):
+		host_button.text = "Host this world" if current and index == 0 else "Host selected world")
+	_label(panel,"Server address",Vector2(30,271),13,MUTED)
+	var address := LineEdit.new(); address.text = "127.0.0.1"; address.placeholder_text = "Host IP or IP:port"
+	address.position = Vector2(30,295); address.size = Vector2(400,40); panel.add_child(address)
+	var join_button := _button(panel,"Join server",Rect2(460,295,185,40),func():
 		if game.state != "title": game.save_game()
 		game.network.join(address.text,int(port.value))
 		if is_instance_valid(network_status_label): network_status_label.text = game.network.status)
 	join_button.disabled = game.network.active()
-	network_status_label = _label(panel,game.network.status,Vector2(30,303),15,ACCENT,610)
+	network_status_label = _label(panel,game.network.status,Vector2(30,357),15,ACCENT,610)
 	if game.network.active() and not game.network.client():
-		_label(panel,"LOCAL IP — SHARE WITH PLAYERS ON YOUR NETWORK",Vector2(30,348),12,ACCENT)
+		_label(panel,"LOCAL IP — SHARE WITH PLAYERS ON YOUR NETWORK",Vector2(30,402),12,ACCENT)
 		var addresses: PackedStringArray = VoxeyNetwork.local_ip_addresses()
 		if addresses.is_empty(): addresses.append("127.0.0.1")
-		var chooser := OptionButton.new(); chooser.position = Vector2(30,373); chooser.size = Vector2(270,40)
+		var chooser := OptionButton.new(); chooser.position = Vector2(30,427); chooser.size = Vector2(270,40)
 		for ip_address in addresses: chooser.add_item(ip_address)
 		panel.add_child(chooser)
 		chooser.item_selected.connect(func(index: int): game.network.share_address = chooser.get_item_text(index))
-		_label(panel,"Escape menu → Copy IP\ncopies the full IP:port address",Vector2(320,376),14,MUTED)
-		_label(panel,"Listening on all interfaces. For internet play, forward UDP port %d.\nUp to 16 players. Other local addresses are available in the dropdown."%game.network.server_port,Vector2(30,435),14,MUTED,610)
+		_label(panel,"Escape menu → Copy IP\ncopies the full IP:port address",Vector2(320,430),14,MUTED)
+		_label(panel,"Listening on all interfaces. For internet play, forward UDP port %d.\nUp to 16 players. Other local addresses are available in the dropdown."%game.network.server_port,Vector2(30,489),14,MUTED,610)
 	else:
-		_label(panel,"Hosting listens on 0.0.0.0 (all network interfaces).\nYour local IP and Copy IP button appear when hosting starts.\nFor internet play, forward the UDP port to the host.\nOpen a world first to enable hosting. Up to 16 players.",Vector2(30,350),14,MUTED,610)
-	_button(panel,"Disconnect",Rect2(30,510,190,43),func():
+		_label(panel,"Hosting listens on 0.0.0.0 (all network interfaces).\nChoose a saved world above; it loads before hosting starts.\nThe Escape menu's Copy IP button copies your local IP:port.\nFor internet play, forward the UDP port. Up to 16 players.",Vector2(30,402),14,MUTED,610)
+		if not has_worlds: _button(panel,"Create a world",Rect2(30,504,220,40),show_new_world)
+	_button(panel,"Disconnect",Rect2(30,575,190,43),func():
 		if game.network.client(): game.return_to_title()
 		else: game.network.stop(); show_multiplayer()).disabled = not game.network.active()
-	_button(panel,"Back",Rect2(455,510,190,43),func():
+	_button(panel,"Back",Rect2(455,575,190,43),func():
 		if game.state == "title": show_title()
 		else: show_pause())
 

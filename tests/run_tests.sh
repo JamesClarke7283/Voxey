@@ -19,6 +19,7 @@ window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 [rendering]
 renderer/rendering_method="gl_compatibility"
+limits/opengl/max_lights_per_object=24
 PROJECT
 godot --headless --path "$voxey_check_dir" --editor --import --quit > "$voxey_check_dir/import.log" 2>&1
 # Godot can return zero after a script error, so check diagnostics as well.
@@ -26,7 +27,7 @@ if rg -q 'SCRIPT ERROR:|^ERROR:' "$voxey_check_dir/import.log"; then
   cat "$voxey_check_dir/import.log"
   exit 1
 fi
-for voxey_suite in test_survival village_runner alchemy_runner parity_runner polish_runner building_runner environment_runner systems_runner lifecycle_runner steam_runner skin_checks; do
+for voxey_suite in test_survival village_runner alchemy_runner parity_runner polish_runner building_runner environment_runner systems_runner lifecycle_runner steam_runner skin_checks hosting_runner torch_lighting_runner; do
   godot --headless --path "$voxey_check_dir" --script "res://tests/$voxey_suite.gd" 2>&1 | tee "$voxey_check_dir/$voxey_suite.log"
   if rg -q 'SCRIPT ERROR:|^ERROR:' "$voxey_check_dir/$voxey_suite.log"; then
     exit 1

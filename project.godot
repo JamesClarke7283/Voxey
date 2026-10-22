@@ -47,4 +47,5 @@ rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
+limits/opengl/max_lights_per_object=24
 environment/defaults/default_clear_color=Color(0.49, 0.7, 0.85, 1)

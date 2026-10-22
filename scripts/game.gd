@@ -5,7 +5,10 @@ const SaveStore = preload("res://scripts/world_store.gd")
 const SAVE_VERSION = 3
 const SAVE_VERSIONS = [1,2,3]
 const MOD_ENTRY = preload("res://scripts/voxey_mods.gd")
+const MAX_TORCH_LIGHTS = 24
+const TORCH_LIGHT_DISTANCE = 30.0
 var server_on_load: int = 0
+var show_host_menu_on_load: bool = false
 var network: VoxeyNetwork
 var world: VoxelWorld
 var player: VoxeyPlayer
@@ -281,6 +284,7 @@ func _process(delta: float) -> void:
 	if state == "loading" and world.area_ready(world.target): _finish_loading()
 	if state != "loading" and is_instance_valid(shader_warmup): shader_warmup.queue_free(); shader_warmup = null
 	if state != "title" and state != "loading": world.target = player.position
+	_update_torch_lights()
 	if network != null and network.client() and state != "loading":
 		world.target = player.position
 		_update_day()
@@ -339,11 +343,6 @@ func _process(delta: float) -> void:
 	_update_day()
 	clouds.position.x = player.position.x + fmod(Time.get_ticks_msec()*0.0006,40)
 	clouds.position.z = player.position.z
-	var visible_torches: int = 0
-	for p in torch_lights:
-		var light: OmniLight3D = torch_lights[p]
-		light.visible = Vector3(p).distance_to(player.position)<30 and visible_torches<24
-		if light.visible: visible_torches += 1
 
 func _update_day() -> void:
 	environment.environment.ambient_light_sky_contribution = 1.0
@@ -550,22 +549,27 @@ func _finish_loading() -> void:
 		# no-op on a reload.
 		BonusChest.offer(self,player.position)
 	for p in world.edits:
-		if Torches.is_torch(world.edits[p]) or world.edits[p] in [Nodes.GLOWSTONE,Nodes.SHROOMLIGHT]: add_torch(p)
+		if Torches.has_light(world.edits[p]): add_torch(p)
 	player.velocity=Vector3.ZERO
 	player.flying=false
 	boats.restore()
 	Minecarts.restore(self,world.adventure_state.get("carts",{}))
 	player.camera.make_current()
 	resume()
-	if server_on_load > 0:
-		var error: Error = network.host(server_on_load)
-		print(network.status)
-		if error == OK: print("Join address: "+network.join_address())
-		server_on_load = 0
-		if error != OK: push_error(network.status)
 	toast("Welcome to Voxey. Tap the bag button to craft, or pause for the field guide." if touch else "Welcome to Voxey. Press E to craft, or Esc for the field guide.")
 	spawn_timer=5
 	save_game()
+	if server_on_load > 0:
+		var port: int = server_on_load
+		var show_menu: bool = show_host_menu_on_load
+		server_on_load = 0; show_host_menu_on_load = false
+		var error: Error = network.host(port)
+		print(network.status)
+		if error == OK: print("Join address: "+network.join_address())
+		if show_menu:
+			pause()
+			if error != OK: hud.show_multiplayer()
+		elif error != OK: push_error(network.status)
 	MOD_ENTRY.fire("on_world_entered",[world_name,world.seed_value])
 
 func _safe_spawn(near: Vector3) -> Vector3:
@@ -1120,16 +1124,42 @@ func _spawn_creature() -> void:
 
 func add_torch(p: Vector3i) -> void:
 	if torch_lights.has(p): return
+	var id: int = int(world.edits.get(p,world.node_at(p)))
+	if not Torches.has_light(id): return
 	var light := OmniLight3D.new()
-	light.position=Torches.flame_position(p,world.edits.get(p,world.node_at(p)))
+	light.position=Torches.flame_position(p,id)
 	# Glowstone glows a touch wider and cooler than a torch flame.
-	var glow: bool = world.node_at(p)==Nodes.GLOWSTONE
+	var glow: bool = id in [Nodes.GLOWSTONE,Nodes.SHROOMLIGHT]
 	light.omni_range=10 if glow else 8
 	light.light_color=Color("e8dba0") if glow else Color("ffbc60")
 	light.light_energy=1.1 if glow else 0.8
 	light.shadow_enabled=false
+	light.visible=false
 	add_child(light)
 	torch_lights[p]=light
+
+func _update_torch_lights() -> void:
+	# Select by distance, never by placement order. Otherwise older lights in
+	# another room exhaust the budget and newly placed torches stay dark.
+	var eye: Vector3 = player.camera.global_position
+	var candidates: Array[Vector3i] = []
+	var distances: Dictionary = {}
+	for p in torch_lights.keys():
+		var light: OmniLight3D = torch_lights[p]
+		if not is_instance_valid(light): torch_lights.erase(p); continue
+		if not world.loaded_at(Vector3(p)): continue
+		if not Torches.has_light(world.node_at(p)): remove_torch(p); continue
+		var distance: float = light.global_position.distance_squared_to(eye)
+		if distance >= TORCH_LIGHT_DISTANCE*TORCH_LIGHT_DISTANCE: continue
+		candidates.append(p); distances[p] = distance
+	candidates.sort_custom(func(a: Vector3i,b: Vector3i):
+		if distances[a] != distances[b]: return distances[a] < distances[b]
+		if a.x != b.x: return a.x < b.x
+		if a.y != b.y: return a.y < b.y
+		return a.z < b.z)
+	var selected: Dictionary = {}
+	for i in mini(MAX_TORCH_LIGHTS,candidates.size()): selected[candidates[i]] = true
+	for p in torch_lights: torch_lights[p].visible = selected.has(p)
 
 func sleep_at(p: Vector3i) -> void:
 	if dimension != "overworld":
@@ -1367,21 +1397,46 @@ func delete_world(id: String) -> bool:
 	toast("World deleted.")
 	return true
 
-func enter_world(id: String, mode: String) -> void:
-	if not saves.valid_id(id): return
+# A different save must finish loading before clients can receive its snapshot.
+func host_world(id: String, port: int = VoxeyNetwork.DEFAULT_PORT) -> Error:
+	if network.active() or state == "loading": return ERR_ALREADY_IN_USE
+	if port < 1024 or port > 65535:
+		network.status = "Use a port from 1024 to 65535."
+		return ERR_INVALID_PARAMETER
+	if not saves.valid_id(id):
+		network.status = "Choose a saved world to host."
+		return ERR_INVALID_PARAMETER
+	if state != "title" and id == active_world_id:
+		var error: Error = network.host(port)
+		if error == OK: pause()
+		return error
+	if state != "title" and not save_game():
+		network.status = "Could not save the current world before switching."
+		return ERR_CANT_CREATE
+	finish_background_save()
+	server_on_load = port; show_host_menu_on_load = true
+	if not enter_world(id):
+		server_on_load = 0; show_host_menu_on_load = false
+		network.status = "Could not open the selected world. Its backup has been kept."
+		return ERR_CANT_OPEN
+	return OK
+
+func enter_world(id: String, mode: String = "") -> bool:
+	if not saves.valid_id(id): return false
 	var data: Dictionary=read_save(saves.save_path(id))
 	if data.is_empty():
 		var metadata: Dictionary=saves.read_json(saves.world_path(id).path_join("world.json"))
 		if not FileAccess.file_exists(saves.save_path(id)) and not metadata.is_empty():
-			start_new(str(metadata.seed),metadata.name,mode,id)
-			return
+			start_new(str(metadata.seed),metadata.name,mode if not mode.is_empty() else str(metadata.get("mode","survival")),id)
+			return state == "loading" or state == "playing" or state == "paused"
 		toast("This world couldn't be read. Its backup has been kept.")
-		return
+		return false
 	active_world_id=id
 	data.world_id=id
-	data.gamemode=mode
+	if not mode.is_empty(): data.gamemode=mode
 	load_world_data(data)
 	hud.show_loading()
+	return true
 
 func _clean_station_storage() -> void:
 	for station_state in world.stations.values():
@@ -1459,7 +1514,7 @@ func load_world_data(data: Dictionary) -> void:
 	var load_position: Array=data.get("spawn",data.position) if player.health<=0 and dimension == "overworld" else data.position
 	world.target=Vector3(load_position[0],load_position[1],load_position[2])
 	for p in world.edits:
-		if Torches.is_torch(world.edits[p]) or world.edits[p] == Nodes.GLOWSTONE: add_torch(p)
+		if Torches.has_light(world.edits[p]): add_torch(p)
 	state="loading"
 	world.active=false
 

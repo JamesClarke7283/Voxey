@@ -20,6 +20,7 @@ const SUPPORTS = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]
 
 static func is_copper(id: int) -> bool: return id == COPPER or id in COPPER_WALLS
 static func is_torch(id: int) -> bool: return id == Nodes.TORCH or id in WALLS or is_copper(id)
+static func has_light(id: int) -> bool: return is_torch(id) or id in [Nodes.GLOWSTONE,Nodes.SHROOMLIGHT]
 static func base(id: int) -> int: return COPPER if is_copper(id) else Nodes.TORCH
 static func wall_set(id: int) -> Array: return COPPER_WALLS if is_copper(id) else WALLS
 static func support(id: int) -> Vector3i:
