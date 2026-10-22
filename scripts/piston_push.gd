@@ -100,6 +100,9 @@ static func actors(world: VoxelWorld) -> Array:
 	var riding: bool = game.boats != null and is_instance_valid(game.boats.riding)
 	var mounted: bool = game.survival != null and is_instance_valid(game.survival.mount)
 	if is_instance_valid(game.player) and not riding and not mounted: result.append({"actor":game.player,"width":0.29,"height":1.8})
+	if game.get("network") != null and game.network.active() and not game.network.client():
+		for avatar in game.network.avatars.values():
+			if is_instance_valid(avatar): result.append({"actor":avatar,"width":0.29,"height":1.8})
 	for actor in game.creatures.get_children():
 		if actor is Creature and not actor.is_queued_for_deletion() and not Boats.is_passenger(actor): result.append({"actor":actor,"width":actor.width,"height":actor.height})
 	if game.boats != null:
@@ -129,6 +132,7 @@ static func future_boxes(world: VoxelWorld, p: Vector3i, ids: Dictionary) -> Arr
 	if FoodFeatures.is_cake(id): return FoodFeatures.boxes(id)
 	if Doors.is_door(id): return Doors.boxes(id)
 	if Trapdoors.is_trapdoor(id): return Trapdoors.boxes(id)
+	if id in SteamMachines.BLOCKS: return SteamMachines.boxes(id)
 	if id == VillageContent.CAULDRON: return Cauldrons.boxes()
 	if RedstoneSensors.is_detector(id): return RedstoneSensors.boxes(id)
 	if Campfires.is_campfire(id): return Campfires.boxes(id)
@@ -204,7 +208,7 @@ static func actor_shifts(world: VoxelWorld, planned: Dictionary, movement: Vecto
 			var end_body: AABB = Trapdoors.actor_box(destination+rider.offset,rider.width,rider.height)
 			if not world.loaded_at(destination+rider.offset) or future_intersects(world,end_body,future) or future_intersects(world,start_body.merge(end_body),swept_ignore): blocked = true
 		if blocked:
-			if actor is VoxeyPlayer or actor is Creature or actor is BoatEntity: return {}
+			if actor is VoxeyPlayer or actor is Creature or actor is BoatEntity or actor is NetworkAvatar: return {}
 			continue # Loose entities do not jam an otherwise valid push.
 		moved.append({"actor":actor,"position":destination,"launch":launch})
 	return {"shifts":moved}
@@ -236,10 +240,15 @@ static func push(circuit: RedstoneCircuit, start: Vector3i, movement: Vector3i, 
 	if planned.is_empty(): return false
 	var shifts: Dictionary = actor_shifts(world,planned,movement,head)
 	if shifts.is_empty(): return false
+	return apply_plan(circuit,planned,movement,shifts,head)
+
+# Shared atomic translation for pistons and larger steam frame assemblies.
+static func apply_plan(circuit: RedstoneCircuit, planned: Dictionary, movement: Vector3i, shifts: Dictionary, head: Variant = null) -> bool:
+	var world: VoxelWorld = circuit.world
 	for entry in planned.nodes:
 		entry.state = world.block_states.get(VoxelWorld.station_key(entry.from),{}).duplicate(true)
 		if Signs.is_sign(entry.id): Signs.station(world,entry.from)
-		entry.station = world.stations.get(VoxelWorld.station_key(entry.from),{}).duplicate(true)
+		entry.station = world.stations.get(VoxelWorld.station_key(entry.from),{})
 		entry.hive = Beehives.move_state(world,entry.from)
 	var old_drops: Dictionary = {}
 	for drop in world.get_parent().drops.get_children(): old_drops[drop.get_instance_id()] = true
@@ -261,9 +270,12 @@ static func push(circuit: RedstoneCircuit, start: Vector3i, movement: Vector3i, 
 	var game: Node = world.get_parent()
 	for shift in shifts.shifts:
 		var actor: Node3D = shift.actor; actor.position = shift.position
+		if actor is NetworkAvatar:
+			actor.destination = shift.position
+			game.network.carry_player(int(actor.get_meta("peer_id")),shift.position)
 		if actor is BoatEntity: actor.seat_occupants(); actor.store_record()
 		elif game.survival != null and actor == game.survival.mount: game.player.position = actor.position+Vector3.UP*1.1
-		if shift.launch and not actor is BoatEntity:
+		if shift.launch and not actor is BoatEntity and not actor is NetworkAvatar:
 			var strength := Vector3(10,13,10) if actor is VoxeyPlayer else (Vector3(20,20,20) if actor is Creature else (Vector3(9,11,9) if actor is ItemDrop else (Vector3(43,72,43) if actor is FallingNode else Vector3(6,9,6))))
 			actor.velocity += Vector3(movement)*strength
 	finish(circuit)

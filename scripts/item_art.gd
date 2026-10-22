@@ -23,7 +23,10 @@ static func texture(id: int) -> Texture2D:
 	var img := Image.create(16,16,false,Image.FORMAT_RGBA8)
 	var base: Color = Nodes.color(id)
 	var dark := Color("36332d")
-	if id == Nodes.TORCH:
+	if id in [SteamMachines.PIPE,SteamMachines.FRAME]: SteamMachines.draw_fitting(img,id)
+	elif AntiqueArms.DATA.has(id): AntiqueArms.draw(img,id)
+	elif id in range(SteamMachines.IRON_POWDER,SteamMachines.EMERALD_POWDER+1): SteamMachines.draw_powder(img,id)
+	elif id == Nodes.TORCH:
 		_line(img,Vector2(3,14),Vector2(10,7),Color("624126"),3)
 		_line(img,Vector2(4,13),Vector2(11,6),Color("bd925c"),2)
 		_polygon(img,[[8,7],[8,3],[10,4],[11,1],[14,4],[14,7],[12,9]],Color("f6a52f"))

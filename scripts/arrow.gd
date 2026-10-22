@@ -23,6 +23,10 @@ var shooter_id: int = 0
 var player_damage: float = 3.0
 
 func _ready() -> void:
+	if item_id == AntiqueArms.SHOT:
+		RedstoneArt.box(self,Vector3.ZERO,Vector3(0.07,0.07,0.12),Color("d3c6a4"))
+		_orient()
+		return
 	# A drowned's thrown trident flies as its own three-pronged shape.
 	if item_id == VillageContent.TRIDENT:
 		RedstoneArt.box(self,Vector3.ZERO,Vector3(0.04,0.04,1.1),Color("7c9590"))
@@ -70,7 +74,7 @@ func _physics_process(delta: float) -> void:
 			queue_free()
 		return
 	if life > 30: queue_free(); return
-	velocity.y -= 12*delta
+	velocity.y -= (2.0 if item_id == AntiqueArms.SHOT else 12.0)*delta
 	var motion: Vector3 = velocity*delta
 	var steps: int = maxi(1,ceili(motion.length()/0.08))
 	for step in steps:
@@ -81,6 +85,7 @@ func _physics_process(delta: float) -> void:
 			if flame:
 				var hit: Dictionary = game.world.raycast(position,motion.normalized(),motion.length()+0.1)
 				if not hit.is_empty(): Campfires.ignite(game.world,hit.pos)
+			if item_id == AntiqueArms.SHOT: queue_free(); return
 			stuck = true
 			life = 0.0
 			game.sound_at("thud",position,1.4)
@@ -107,7 +112,7 @@ func _physics_process(delta: float) -> void:
 					Jukeboxes.arrow_killed(mob,shooter_kind,was_alive)
 					# `sniper_duel`: a player's arrow killing a skeleton from at least
 					# fifty blocks away.
-					if from_player and mob.kind == "skeleton" and was_alive and not is_inf(launch_point.x) and launch_point.distance_to(position) >= 50.0:
+					if item_id != AntiqueArms.SHOT and from_player and mob.kind == "skeleton" and was_alive and not is_inf(launch_point.x) and launch_point.distance_to(position) >= 50.0:
 						game.achievements.award("sniper_duel")
 					mob.knock *= 1+punch*0.6
 					if hit_mobs.size() > piercing: queue_free(); return

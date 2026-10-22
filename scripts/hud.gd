@@ -190,8 +190,9 @@ func show_title() -> void:
 	start_button = _button(layer,"Play / choose a world  →",Rect2(origin+Vector2(0,title_size*0.5+217),Vector2(minf(340,size.x-90),56)),show_worlds)
 	start_button.add_theme_font_size_override("font_size",19)
 	_button(layer,"Create a new world",Rect2(origin+Vector2(0,title_size*0.5+285),Vector2(minf(340,size.x-90),44)),show_new_world)
-	_label(layer,"SURVIVAL & CREATIVE  ·  YOUR OWN WORLDS",origin+Vector2(0,title_size*0.5+351),11,MUTED)
-	_label(layer,"VOXEY    ·    SINGLE PLAYER    ·    INFINITE HORIZONS",Vector2(38,size.y-40),11,MUTED)
+	_button(layer,"Multiplayer",Rect2(origin+Vector2(0,title_size*0.5+338),Vector2(164,40)),show_multiplayer)
+	_button(layer,"Character",Rect2(origin+Vector2(176,title_size*0.5+338),Vector2(164,40)),show_character)
+	_label(layer,"VOXEY    ·    PLAY TOGETHER    ·    INFINITE HORIZONS",Vector2(38,size.y-40),11,MUTED)
 	var version_tag := _panel(layer,Rect2(Vector2(size.x-224,20),Vector2(186,32)),Color(0.08,0.08,0.08,0.6))
 	_label(version_tag,"v"+Game.VERSION+"  ·  "+Game.VERSION_NAME,Vector2(14,7),13,ACCENT)
 	var tag := _panel(layer,Rect2(Vector2(size.x-290,size.y-96),Vector2(254,58)),Color(0.12,0.12,0.12,0.75))
@@ -242,7 +243,7 @@ func show_pause() -> void:
 	_clear()
 	screen = "pause"
 	_dim()
-	var panel := _fitted_panel(Vector2(480,580))
+	var panel := _fitted_panel(Vector2(480,660))
 	_label(panel,"TAKE A BREATHER",Vector2(34,26),12,ACCENT)
 	_label(panel,"A moment of quiet.",Vector2(34,49),30)
 	_label(panel,"v"+Game.VERSION+" "+Game.VERSION_NAME+"    ·    "+game.world_name,Vector2(34,93),13,MUTED)
@@ -280,14 +281,18 @@ func show_pause() -> void:
 	actions.add_theme_constant_override("h_separation",12)
 	actions.add_theme_constant_override("v_separation",12)
 	panel.add_child(actions)
-	for action in [["Field guide",show_guide],["Achievements",show_achievements]]:
+	for action in [["Field guide",show_guide],["Achievements",show_achievements],["Multiplayer",show_multiplayer],["Character",show_character],["Server settings" if game.network.active() else "Game settings",show_world_settings]]:
 		var button := _button(actions,action[0],Rect2(0,0,200,43),action[1])
 		button.custom_minimum_size = Vector2(200,43)
 	if not game.touch:
 		var button := _button(actions,"Fullscreen",Rect2(0,0,200,43),game.toggle_fullscreen)
 		button.custom_minimum_size = Vector2(200,43)
-	_button(panel,"Save & return to title",Rect2(34,464,412,46),game.return_to_title)
-	_label(panel,"World edits and inventory autosave every 45 seconds.",Vector2(34,534),12,MUTED)
+	if game.network.active() and not game.network.client():
+		_button(panel,"Copy IP",Rect2(34,511,150,33),func():
+			DisplayServer.clipboard_set(game.network.join_address()); game.toast("IP and port copied."))
+		_label(panel,game.network.join_address(),Vector2(200,518),14,MUTED)
+	_button(panel,"Save & return to title",Rect2(34,552,412,46),game.return_to_title)
+	_label(panel,"World edits and inventory autosave every 45 seconds.",Vector2(34,622),12,MUTED)
 
 func show_achievements() -> void:
 	_clear()
@@ -346,6 +351,7 @@ func show_guide() -> void:
 	text_value += "\n\nMUSIC & MECHANISMS\nRight-click a note block to tune it, punch to play, or trigger it with redstone. Leave air above it; the material below chooses the instrument. Right-click a jukebox with a disc to insert it, then right-click again to eject it. Wooden buttons last 1.5 seconds and respond to arrows; stone buttons last one second. Stone plates detect living creatures; wood and weighted plates also detect physical objects.\n\nMUSIC CREDITS\n"+Jukeboxes.CREDITS.replace(". ",".\n\n")
 	text_value += "\n\nFARMLAND & CROPS\nHoe dirt, grass or paths with clear air above, then plant wheat seeds, carrots, potatoes or beetroot seeds. Nearby water hydrates farmland; wet soil grows crops faster. Soil dries gradually after water is removed, and empty dry beds return to dirt. Bone meal advances growth stages. Harvest mature crops and save seeds to replant. A rare poisonous potato is unsafe to eat and cannot be planted.\n\nGOLEMS\nPlace a carved pumpkin or jack-o'-lantern last on two stacked snow blocks to make a snow golem, or on four iron blocks arranged as a T to make an iron golem. Iron golems defend against monsters; use iron ingots to repair damage. Shear a snow golem to remove its pumpkin. Snow golems throw snowballs and leave snow trails; protect them from water, rain and hot biomes."
 	text_value += "\n\nPUMPKINS & MELONS\nPlant their seeds on farmland and leave adjacent dirt or grass for fruit. Harvest the fruit while keeping its stem planted. Use shears on a pumpkin's side to carve it and collect four seeds. A carved pumpkin above a torch makes a jack-o'-lantern. Equip a carved pumpkin in the helmet slot to avoid provoking Endermen with your gaze.\n\nHONEY\nLook for nests in oak and birch trees, or craft a hive with six planks and three honeycombs. Flowers nearby allow daytime production in dry weather. Use a bottle or shears on a full hive; a lit campfire below it prevents retaliation. Honey bottles return their glass when eaten or crafted. Honey blocks cushion falls and carry adjoining blocks with pistons; honey and slime do not stick to each other.\n\nAMETHYST & SPYGLASSES\nUnderground geodes contain crystals. Mine mature clusters with a pickaxe for shards; the budding blocks grow new crystals and cannot be collected. Four shards around glass make two tinted glass, which blocks light. Craft one shard above two copper ingots for a spyglass, then hold right-click or Z to zoom. Touch players hold Use."
+	text_value += "\n\nSTEAM & FLINTLOCKS\nCoal-fired generators store steam. Place bellows with a generator behind them and pipes in front; power the bellows with redstone. Pipes feed steam furnaces and ore grinders. Grind raw metals into four powders, then smelt each into an ingot. Use a screwdriver to turn bellows and frame engines (including up/down). Ctrl + right-click attaches blocks to machines.\n\nBuild vehicles from machine frames: frames attach neighboring cargo, generators and machines. Power the frame engine and bellows with redstone; the engine moves the whole assembly in its facing direction, up to 256 blocks. Keep frames clear of the ground. Obstacles stop it, and passengers ride with the platform.\n\nCraft a musket, flintlock pistol, blunderbuss or bayonet at a table. Right-click to fire; each shot uses one musket shot and one gunpowder. Weapons reload automatically while carried. Eight musket shots cost four iron nuggets."
 	var guide_text := Label.new()
 	guide_text.text = text_value; guide_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	guide_text.custom_minimum_size.x = 700
@@ -366,7 +372,7 @@ func show_inventory(kind: String = "hand", data: Dictionary = {}) -> void:
 	var panel := _fitted_panel(Vector2(1100,616+extra))
 	inventory_panel = panel
 	_label(panel,"YOUR SATCHEL",Vector2(28,22),12,ACCENT)
-	_label(panel,{"hand":"A little ingenuity.","table":"The crafting table.","furnace":"Into the fire.","brewing":"A little alchemy.","chest":data.get("label","One large chest." if tall else "Room for everything.")}[kind],Vector2(28,44),28)
+	_label(panel,{"hand":"A little ingenuity.","table":"The crafting table.","furnace":"Into the fire.","steam":Nodes.title(data.get("device",SteamMachines.GENERATOR)),"brewing":"A little alchemy.","chest":data.get("label","One large chest." if tall else "Room for everything.")}[kind],Vector2(28,44),28)
 	_button(panel,"×",Rect2(1029,22,43,40),game.resume)
 	if game.gamemode=="creative":
 		_compact_button(panel,"Recipes",Rect2(24,94,136,28),func(): catalog_mode=false; _populate_recipes())
@@ -396,6 +402,7 @@ func show_inventory(kind: String = "hand", data: Dictionary = {}) -> void:
 	preview.size = Vector2(668,194+extra)
 	panel.add_child(preview)
 	if kind in ["hand","table"]: _recipe_preview()
+	elif kind == "steam": _steam_preview()
 	elif kind == "furnace": _furnace_preview()
 	elif kind == "brewing": _brewing_preview()
 	else: _chest_preview()
@@ -617,6 +624,22 @@ func _brewing_preview() -> void:
 	furnace_label = _label(preview,"",Vector2(0,132),13,MUTED)
 	_label(preview,"Water + wart → awkward. Add an ingredient, then redstone or glowstone dust.\nGunpowder → splash. Dragon breath → lingering. One blaze powder fuels 20 batches.",Vector2(0,157),12,MUTED,640)
 
+func _steam_preview() -> void:
+	var device: int = station_data.device
+	_label(preview,"STEAM MACHINERY",Vector2.ZERO,12,ACCENT)
+	if device == SteamMachines.GENERATOR:
+		_label(preview,"COAL",Vector2(0,31),11,MUTED)
+		_station_slot(0,Vector2(0,55),Vector2(64,64))
+		_label(preview,"Generator → powered bellows → iron pipes → machines.\nBurns coal or charcoal. Steam is stored in the generator.",Vector2(112,45),14,MUTED,535)
+	else:
+		_label(preview,"ORE / RAW ORE" if device == SteamMachines.GRINDER else "INPUT",Vector2(0,31),11,MUTED)
+		_station_slot(0,Vector2(0,55),Vector2(64,64))
+		_label(preview,"→",Vector2(105,70),27,ACCENT)
+		_label(preview,"OUTPUT",Vector2(160,31),11,MUTED)
+		_station_slot(2,Vector2(160,55),Vector2(64,64))
+		_label(preview,"Four powders per raw ore.\nSmelt each powder into one resource." if device == SteamMachines.GRINDER else "Powered by steam pipes.\nNo fuel needed in this furnace.",Vector2(300,55),14,MUTED,340)
+	furnace_label = _label(preview,str(station_data.get("status","Connect steam through powered bellows.")),Vector2(0,146),13,MUTED)
+
 func _furnace_preview() -> void:
 	_label(preview,"SMELTING",Vector2.ZERO,12,ACCENT)
 	var labels: Array = ["INPUT","FUEL","OUTPUT"]
@@ -709,6 +732,7 @@ func _offhand_click() -> void:
 	refresh_slots()
 
 func _slot_click(index: int, is_station: bool, right: bool, is_grid: bool = false, is_armor: bool = false) -> void:
+	if not is_grid and not is_armor and game.network != null and game.network.station_click(index,is_station,right,shift_mode or Input.is_physical_key_pressed(KEY_SHIFT)): return
 	if split_mode: right = true
 	var source: Array = game.player.armor_slots if is_armor else (game.inventory.grid if is_grid else (station_data.slots if is_station else game.inventory.slots))
 	if index < 0 or index >= source.size(): return
@@ -716,7 +740,7 @@ func _slot_click(index: int, is_station: bool, right: bool, is_grid: bool = fals
 	# `mcl_furnaces.give_xp`: withdrawing from a furnace's output pays the experience
 	# its smelts accumulated. The source pays the whole stored count on any take, so
 	# only the before/after count of the output slot matters.
-	var smelted_before: int = int(slot.get("count",0)) if is_station and station == "furnace" and index == 2 else -1
+	var smelted_before: int = int(slot.get("count",0)) if is_station and (station == "furnace" or station == "steam" and station_data.device == SteamMachines.FURNACE) and index == 2 else -1
 	if is_armor and game.gamemode != "creative" and Inventory.enchantment(slot,"Curse of Binding") > 0: game.toast("Curse of Binding prevents removing this armor."); return
 	if not is_station and not is_grid and not is_armor and index == game.survival.open_pouch_index: return
 	if not is_station and not is_grid and not is_armor and index >= Inventory.BASE_SLOTS and PortableStorage.contains_kind(cursor,false): game.toast("Pouches cannot contain other pouches."); return
@@ -725,6 +749,7 @@ func _slot_click(index: int, is_station: bool, right: bool, is_grid: bool = fals
 	if is_armor and cursor.id != 0 and Nodes.armor_piece(cursor.id) != index: return
 	if is_armor and cursor.count > 1 and slot.id != 0 and (slot.id != cursor.id or slot.get("data",{}) != cursor.get("data",{})):
 		game.player.equip_armor(cursor); return
+	if is_station and station == "steam" and not SteamMachines.accepts(station_data,index,cursor.id): return
 	if is_station and station == "brewing" and not Brewing.accepts(index,cursor.id): return
 	if is_station and station == "furnace" and not FurnaceRules.accepts(station_data.slots,index,cursor.id): return
 	if (Input.is_physical_key_pressed(KEY_SHIFT) or shift_mode) and cursor.id == 0 and slot.id != 0:
@@ -737,11 +762,12 @@ func _slot_click(index: int, is_station: bool, right: bool, is_grid: bool = fals
 			if slot.count == 0: slot.id = 0; slot.wear = 0; slot.erase("data")
 		elif Nodes.is_armor(slot.id) and game.player.armor_slots[Nodes.armor_piece(slot.id)].id == 0:
 			game.player.equip_armor(slot)
-		elif station in ["chest","brewing","furnace"]:
+		elif station in ["chest","brewing","furnace","steam"]:
 			if station_data.get("equipped",-1) >= 0:
 				var offset: int = game.inventory.pouch_offset(station_data.equipped)
 				if index >= offset and index < offset+station_data.slots.size(): return
 			for destination_index in station_data.slots.size():
+				if station == "steam" and not SteamMachines.accepts(station_data,destination_index,slot.id): continue
 				if station == "brewing" and not Brewing.accepts(destination_index,slot.id): continue
 				if station == "furnace" and not FurnaceRules.accepts(station_data.slots,destination_index,slot.id): continue
 				var destination: Dictionary = station_data.slots[destination_index]
@@ -858,6 +884,8 @@ func toast(message: String) -> void:
 	toast_time = 4.0
 
 func _process(delta: float) -> void:
+	if player_list_open and screen != "game": show_player_list(false)
+	if is_instance_valid(network_status_label) and game.network != null: network_status_label.text = game.network.status
 	toast_time = maxf(0,toast_time-delta)
 	flash = maxf(0,flash-delta)
 	if screen == "title" and is_instance_valid(start_button):
@@ -866,8 +894,10 @@ func _process(delta: float) -> void:
 	elapsed_refresh += delta
 	if elapsed_refresh > 0.25:
 		elapsed_refresh=0
+		if player_list_open: rebuild_player_list()
 		if screen=="inventory":
 			refresh_slots()
+			if is_instance_valid(furnace_label) and station == "steam": furnace_label.text = str(station_data.get("status","Connect steam through powered bellows."))
 			if is_instance_valid(furnace_label) and station == "brewing": furnace_label.text = "Brewing %d%% · Fuel: %d / 20 batches"%[int(station_data.get("progress",0)*10),int(station_data.get("fuel_batches",0))]
 			if is_instance_valid(furnace_label) and station == "furnace": furnace_label.text="Smelting  %d%%  ·  Fuel remaining: %ds" % [int(station_data.progress/8.0*100),int(station_data.burn)] if station_data.burn>0 else "Add ore or food, then coal, charcoal, wood or a lava bucket."
 	# The in-game overlay is redrawn only when something it shows has changed.
@@ -1375,3 +1405,168 @@ func _trade_icon(parent: Control, id: int, count: int, at: Vector2, data: Dictio
 	_update_icon(icon,{"id":id,"count":1,"wear":0,"data":data},false)
 	icon.tooltip_text = Nodes.title(id)+(str(data.enchantments) if data.has("enchantments") else "")
 	_label(parent,"×%d"%count,at+Vector2(45,12),14,TEXT)
+
+var network_status_label: Label
+
+func show_multiplayer() -> void:
+	_clear(); screen = "multiplayer"; _dim()
+	var panel := _fitted_panel(Vector2(680,580))
+	_label(panel,"PLAY TOGETHER",Vector2(30,24),12,ACCENT)
+	_label(panel,"Multiplayer",Vector2(30,49),30)
+	_label(panel,"Host your current world, or join a friend's server.",Vector2(30,96),15,MUTED)
+	_label(panel,"Server address",Vector2(30,143),13,MUTED)
+	var address := LineEdit.new(); address.text = "127.0.0.1"; address.placeholder_text = "Host IP or hostname"
+	address.position = Vector2(30,167); address.size = Vector2(400,38); panel.add_child(address)
+	_label(panel,"UDP port",Vector2(460,143),13,MUTED)
+	var port := SpinBox.new(); port.min_value = 1024; port.max_value = 65535; port.value = game.network.server_port if game.network.active() else VoxeyNetwork.DEFAULT_PORT
+	port.position = Vector2(460,167); port.size = Vector2(185,38); panel.add_child(port)
+	var host_button := _button(panel,"Host this world",Rect2(30,228,295,45),func():
+		if game.network.host(int(port.value)) == OK: show_pause()
+		else: show_multiplayer())
+	host_button.disabled = game.network.active() or game.state in ["title","loading"]
+	var join_button := _button(panel,"Join server",Rect2(350,228,295,45),func():
+		if game.state != "title": game.save_game()
+		game.network.join(address.text,int(port.value))
+		if is_instance_valid(network_status_label): network_status_label.text = game.network.status)
+	join_button.disabled = game.network.active()
+	network_status_label = _label(panel,game.network.status,Vector2(30,303),15,ACCENT,610)
+	if game.network.active() and not game.network.client():
+		_label(panel,"LOCAL IP — SHARE WITH PLAYERS ON YOUR NETWORK",Vector2(30,348),12,ACCENT)
+		var addresses: PackedStringArray = VoxeyNetwork.local_ip_addresses()
+		if addresses.is_empty(): addresses.append("127.0.0.1")
+		var chooser := OptionButton.new(); chooser.position = Vector2(30,373); chooser.size = Vector2(270,40)
+		for ip_address in addresses: chooser.add_item(ip_address)
+		panel.add_child(chooser)
+		chooser.item_selected.connect(func(index: int): game.network.share_address = chooser.get_item_text(index))
+		_label(panel,"Escape menu → Copy IP\ncopies the full IP:port address",Vector2(320,376),14,MUTED)
+		_label(panel,"Listening on all interfaces. For internet play, forward UDP port %d.\nUp to 16 players. Other local addresses are available in the dropdown."%game.network.server_port,Vector2(30,435),14,MUTED,610)
+	else:
+		_label(panel,"Hosting listens on 0.0.0.0 (all network interfaces).\nYour local IP and Copy IP button appear when hosting starts.\nFor internet play, forward the UDP port to the host.\nOpen a world first to enable hosting. Up to 16 players.",Vector2(30,350),14,MUTED,610)
+	_button(panel,"Disconnect",Rect2(30,510,190,43),func():
+		if game.network.client(): game.return_to_title()
+		else: game.network.stop(); show_multiplayer()).disabled = not game.network.active()
+	_button(panel,"Back",Rect2(455,510,190,43),func():
+		if game.state == "title": show_title()
+		else: show_pause())
+
+func show_character() -> void:
+	_clear(); screen = "character"; _dim()
+	var panel := _fitted_panel(Vector2(720,610))
+	_label(panel,"YOUR CHARACTER",Vector2(30,24),12,ACCENT)
+	_label(panel,"Make it yours.",Vector2(30,49),30)
+	var draft: Dictionary = game.network.appearance.duplicate()
+	var viewport := SubViewport.new(); viewport.size = Vector2i(280,400)
+	viewport.own_world_3d = true; viewport.transparent_bg = true
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	var preview_box := SubViewportContainer.new(); preview_box.position = Vector2(25,112)
+	preview_box.size = Vector2(280,400); preview_box.stretch = true; panel.add_child(preview_box); preview_box.add_child(viewport)
+	var scene := Node3D.new(); viewport.add_child(scene)
+	var camera := Camera3D.new(); scene.add_child(camera); camera.position = Vector3(2,1.6,-4); camera.fov = 34
+	camera.look_at(Vector3(0,1.1,0)); camera.current = true
+	var light := DirectionalLight3D.new(); light.rotation_degrees = Vector3(-35,-30,0); light.light_energy = 1.4; scene.add_child(light)
+	var ambient := WorldEnvironment.new(); ambient.environment = Environment.new()
+	ambient.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	ambient.environment.ambient_light_color = Color.WHITE; ambient.environment.ambient_light_energy = 0.65; scene.add_child(ambient)
+	var holder := Node3D.new(); scene.add_child(holder)
+	var rebuild: Callable = func():
+		for child in holder.get_children(): holder.remove_child(child); child.queue_free()
+		holder.add_child(CharacterSkin.model(draft,false))
+	rebuild.call()
+	_label(panel,"Display name",Vector2(345,110),13,MUTED)
+	var name_field := LineEdit.new(); name_field.text = draft.name; name_field.max_length = 24
+	name_field.position = Vector2(345,134); name_field.size = Vector2(335,37); panel.add_child(name_field)
+	name_field.text_changed.connect(func(value: String): draft.name = value)
+	var names: Array = ["Skin","Hair","Shirt","Trousers","Boots"]
+	for i in CharacterSkin.COLORS.size():
+		var key: String = CharacterSkin.COLORS[i]
+		_label(panel,names[i],Vector2(345,196+i*47),15)
+		var picker := ColorPickerButton.new(); picker.color = Color(draft[key]); picker.edit_alpha = false
+		picker.position = Vector2(530,187+i*47); picker.size = Vector2(150,36); panel.add_child(picker)
+		picker.color_changed.connect(func(value: Color): draft[key] = value.to_html(false); rebuild.call())
+	var hat := CheckButton.new(); hat.text = "Wear a hat"; hat.button_pressed = draft.hat
+	hat.position = Vector2(338,432); panel.add_child(hat)
+	hat.toggled.connect(func(value: bool): draft.hat = value; rebuild.call())
+	var slim := CheckButton.new(); slim.text = "Slim build"; slim.button_pressed = draft.slim
+	slim.position = Vector2(525,432); panel.add_child(slim)
+	slim.toggled.connect(func(value: bool): draft.slim = value; rebuild.call())
+	_label(panel,"Your choices are saved on this computer\nand shared with players on your server.",Vector2(345,485),13,MUTED)
+	_button(panel,"Save character",Rect2(345,543,335,42),func():
+		var cleaned: Dictionary = CharacterSkin.clean(draft)
+		if not CharacterSkin.save_profile(game.saves.root_path,cleaned): game.toast("Could not save character."); return
+		game.network.appearance = cleaned
+		game.player._make_hand(game.inventory.held().id)
+		game.toast("Character saved.")
+		if game.state == "title": show_title()
+		else: show_pause())
+	_button(panel,"Cancel",Rect2(30,543,275,42),func():
+		if game.state == "title": show_title()
+		else: show_pause())
+
+var player_list_open: bool = false
+var player_list_panel: Panel
+
+func show_player_list(visible_value: bool) -> void:
+	player_list_open = visible_value
+	if is_instance_valid(player_list_panel): player_list_panel.queue_free(); player_list_panel = null
+	if visible_value: rebuild_player_list()
+
+func rebuild_player_list() -> void:
+	if is_instance_valid(player_list_panel): player_list_panel.queue_free()
+	var roster: Dictionary = game.network.players if game.network.active() else {1:{"skin":game.network.appearance}}
+	var ids: Array = roster.keys(); ids.sort()
+	var height: float = minf(size.y-70,86+ids.size()*38)
+	player_list_panel = _panel(layer,Rect2(Vector2((size.x-440)/2,30),Vector2(440,height)),Color("333333"))
+	player_list_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_label(player_list_panel,"PLAYERS  ·  %d / %d"%[ids.size(),game.network.player_limit if game.network.active() else 1],Vector2(22,20),17,ACCENT)
+	var scroll := ScrollContainer.new(); scroll.position = Vector2(20,58); scroll.size = Vector2(400,height-68)
+	player_list_panel.add_child(scroll)
+	var rows := VBoxContainer.new(); rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL; scroll.add_child(rows)
+	var own: int = game.network.multiplayer.get_unique_id() if game.network.active() else 1
+	for id in ids:
+		var appearance: Dictionary = CharacterSkin.clean(roster[id].get("skin",{}))
+		var row := HBoxContainer.new(); row.custom_minimum_size.y = 35; rows.add_child(row)
+		var swatch := ColorRect.new(); swatch.color = Color(appearance.shirt); swatch.custom_minimum_size = Vector2(24,24); row.add_child(swatch)
+		var text := Label.new(); text.text = appearance.name+("  (you)" if id == own else "")+("  · host" if id == 1 and game.network.active() else "")
+		text.add_theme_font_size_override("font_size",17); row.add_child(text)
+
+func show_world_settings() -> void:
+	_clear(); screen = "world_settings"; _dim()
+	var panel := _fitted_panel(Vector2(700,640))
+	var read_only: bool = game.network.client()
+	var draft: Dictionary = game.network.settings_snapshot()
+	_label(panel,"SERVER SETTINGS" if game.network.active() else "GAME SETTINGS",Vector2(30,24),12,ACCENT)
+	_label(panel,"Your world, your rules.",Vector2(30,49),30)
+	_label(panel,"Only the host can change these settings." if read_only else "Changes apply to this world and are saved immediately.",Vector2(30,96),14,MUTED)
+	_label(panel,"World name",Vector2(30,141),15)
+	var title := LineEdit.new(); title.text = draft.name; title.max_length = 64; title.editable = not read_only
+	title.position = Vector2(280,131); title.size = Vector2(385,37); panel.add_child(title)
+	title.text_changed.connect(func(value: String): draft.name = value)
+	for spec in [["Game mode","gamemode",["Survival","Creative"],1 if draft.gamemode == "creative" else 0],["Difficulty","difficulty",["Easy","Normal","Hard"],draft.difficulty]]:
+		var y: float = 187 if spec[1] == "gamemode" else 235
+		_label(panel,spec[0],Vector2(30,y+8),15)
+		var choice := OptionButton.new(); choice.position = Vector2(280,y); choice.size = Vector2(385,36); choice.disabled = read_only
+		for option in spec[2]: choice.add_item(option)
+		choice.select(spec[3]); panel.add_child(choice)
+		var key: String = spec[1]
+		choice.item_selected.connect(func(index: int): draft[key] = ("creative" if index == 1 else "survival") if key == "gamemode" else index)
+	_label(panel,"Time of day",Vector2(30,291),15)
+	var time := HSlider.new(); time.position = Vector2(280,295); time.size = Vector2(385,24)
+	time.min_value = 0; time.max_value = 0.9999; time.step = 0.01; time.value = fposmod(game.day_time,1); time.editable = not read_only
+	panel.add_child(time); time.value_changed.connect(func(value: float): draft.day_time = value)
+	var labels: Dictionary = {"keepInventory":"Keep inventory on death","signsEditable":"Allow editing other players' signs","mobGriefing":"Allow mobs to change blocks"}
+	var i: int = 0
+	for key in GameRules.DEFAULTS:
+		var toggle := CheckButton.new(); toggle.text = labels.get(key,key); toggle.button_pressed = draft.rules[key]; toggle.disabled = read_only
+		toggle.position = Vector2(24,342+i*47); toggle.size.x = 645; panel.add_child(toggle)
+		var rule_name: String = key
+		toggle.toggled.connect(func(value: bool): draft.rules[rule_name] = value)
+		i += 1
+	if game.network.active():
+		_label(panel,"Player limit",Vector2(30,501),15)
+		var limit := SpinBox.new(); limit.min_value = 1; limit.max_value = VoxeyNetwork.MAX_PLAYERS; limit.value = game.network.player_limit; limit.editable = not read_only
+		limit.position = Vector2(280,490); limit.size = Vector2(385,38); panel.add_child(limit)
+		limit.value_changed.connect(func(value: float): draft.max_players = int(value))
+	_button(panel,"Back",Rect2(30,568,220,43),show_pause)
+	var save := _button(panel,"Apply settings",Rect2(280,568,385,43),func():
+		if GameRules.apply_settings(game,draft): game.toast("Settings saved."); show_pause())
+	save.disabled = read_only

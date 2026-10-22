@@ -21,6 +21,7 @@ var edits: Dictionary = {}
 # caught when its column is read; either rebuilds the index from `edits`.
 var edit_columns: Dictionary = {}
 var edit_count: int = 0
+var interest_centers: Array[Vector2i] = []
 var stations: Dictionary = {}
 # The stations updated every frame (cauldrons, campfires and composters), in
 # `stations` order. Generated chests and spawners pile up in `stations` as the
@@ -128,15 +129,19 @@ func _process(delta: float) -> void:
 	if center != desired:
 		desired = center
 		generation_queue.clear()
-		for z in range(-radius,radius+1):
-			for x in range(-radius,radius+1):
-				var c: Vector2i = center+Vector2i(x,z)
-				if WorldBounds.horizontal(Vector3i(c.x*16,0,c.y*16)) and not columns.has(c): generation_queue.append(c)
+		for focus in [center]+interest_centers:
+			for z in range(-radius,radius+1):
+				for x in range(-radius,radius+1):
+					var c: Vector2i = focus+Vector2i(x,z)
+					if WorldBounds.horizontal(Vector3i(c.x*16,0,c.y*16)) and not columns.has(c) and c not in generation_queue: generation_queue.append(c)
 		# Pop the nearest request from the end. The queue changes only when the
 		# player crosses a column boundary or changes view distance.
 		generation_queue.sort_custom(func(a: Vector2i,b: Vector2i): return a.distance_squared_to(center) > b.distance_squared_to(center))
 		for c in columns.keys():
-			if maxi(absi(c.x-center.x),absi(c.y-center.y)) > radius + 1: _unload(c)
+			var keep: bool = false
+			for focus in [center]+interest_centers:
+				if maxi(absi(c.x-focus.x),absi(c.y-focus.y)) <= radius+1: keep = true; break
+			if not keep: _unload(c)
 	var level: int = floori(target.y/16.0)
 	if level != mesh_level or radius != mesh_radius:
 		mesh_level = level; mesh_radius = radius
@@ -216,7 +221,7 @@ func _process(delta: float) -> void:
 		Beacons.update(self,delta)
 		for entry in stations_of("composter"):
 			if loaded_at(Vector3(entry[1])): Composters.step(entry[2],delta)
-		if get_parent() != null and get_parent().has_method("playing") and get_parent().playing(): circuits.update(delta)
+		if get_parent() != null and get_parent().has_method("playing") and (get_parent().playing() or (get_parent().state == "inventory" and get_parent().hud.station == "steam") or (get_parent().network != null and get_parent().network.active() and not get_parent().network.client())): circuits.update(delta)
 		tick += delta
 		if tick >= 1.0:
 			tick = 0.0
@@ -230,6 +235,8 @@ func record_edit(p: Vector3i, id: int) -> void:
 		edit_columns[column].append(p)
 		edit_count += 1
 	edits[p] = id
+	var owner: Node = get_parent()
+	if owner != null and owner.get("network") != null: owner.network.local_edit(p,id)
 
 func column_edits(column: Vector2i) -> Array:
 	if edit_count != edits.size(): _reindex_edits()
@@ -928,6 +935,7 @@ func collision_boxes(p: Vector3i) -> Array:
 	if Doors.is_door(id): return Doors.boxes(id)
 	if Trapdoors.is_trapdoor(id): return Trapdoors.boxes(id)
 	if Barriers.is_barrier(id): return Barriers.world_boxes(self,p,true)
+	if id in SteamMachines.BLOCKS: return SteamMachines.boxes(id)
 	if id == VillageContent.CAULDRON: return Cauldrons.boxes()
 	# A chain is a sixteenth of a block wide, so it must not block movement like a
 	# full cube. Without this it would be an invisible wall down the middle of a tile.
@@ -995,7 +1003,7 @@ func raycast(origin: Vector3, direction: Vector3, reach: float = 5.0, liquids: b
 	for iteration in 128:
 		var id: int = node_at(cell)
 		if id != Nodes.AIR and id not in [Nodes.NETHER_PORTAL,Nodes.END_PORTAL] and (liquids or not Fluids.liquid(id)):
-			if RedstoneInputs.is_device(id) or BuildingShapes.is_shape(id) or Fluids.flowing(id) or Campfires.is_campfire(id) or Barriers.is_barrier(id) or RedstoneSensors.is_detector(id) or Trapdoors.is_trapdoor(id) or SnowCover.is_snow(id) or Doors.is_door(id) or FoodFeatures.is_cake(id) or Signs.is_sign(id) or CropFarming.is_crop(id) or Farmland.is_soil(id) or FruitCrops.is_stem(id) or Amethyst.is_crystal(id) or PointedDripstone.is_stage(id):
+			if id in SteamMachines.BLOCKS or RedstoneInputs.is_device(id) or BuildingShapes.is_shape(id) or Fluids.flowing(id) or Campfires.is_campfire(id) or Barriers.is_barrier(id) or RedstoneSensors.is_detector(id) or Trapdoors.is_trapdoor(id) or SnowCover.is_snow(id) or Doors.is_door(id) or FoodFeatures.is_cake(id) or Signs.is_sign(id) or CropFarming.is_crop(id) or Farmland.is_soil(id) or FruitCrops.is_stem(id) or Amethyst.is_crystal(id) or PointedDripstone.is_stage(id):
 				var hit: Dictionary = shape_hit(cell,origin,direction,reach)
 				if not hit.is_empty(): return hit
 			else: return {"pos":cell,"normal":normal,"id":id,"distance":distance,"point":origin+direction*distance}
@@ -1016,6 +1024,7 @@ func shape_hit(p: Vector3i, origin: Vector3, direction: Vector3, reach: float) -
 	var boxes: Array = [AABB(Vector3.ZERO,Vector3(1,1.0 if Fluids.base(node_at(p+Vector3i.UP)) == Fluids.base(id) else Fluids.height(id),1))] if Fluids.flowing(id) else BuildingShapes.boxes(BuildingShapes.world_mask(self,p))
 	if Campfires.is_campfire(id): boxes = Campfires.boxes(id)
 	if Barriers.is_barrier(id): boxes = Barriers.world_boxes(self,p,false,true)
+	if id in SteamMachines.BLOCKS: boxes = SteamMachines.boxes(id)
 	if RedstoneSensors.is_detector(id): boxes = RedstoneSensors.boxes(id)
 	if Amethyst.is_crystal(id): boxes = Amethyst.boxes(id)
 	elif Copper.is_rod(id): boxes = Copper.boxes(id)
@@ -1232,6 +1241,7 @@ static func pair_key(a: Vector3i, b: Vector3i) -> String:
 	return station_key(primary)+"+"+station_key(b if primary == a else a)
 
 func get_station(p: Vector3i, kind: String) -> Dictionary:
+	if node_at(p) in SteamMachines.CONTAINERS: return SteamMachines.station(self,p)
 	if Campfires.is_campfire(node_at(p)): return Campfires.station(self,p)
 	if PortableStorage.is_shulker(node_at(p)): return PortableStorage.station(self,p)
 	if kind == "chest" and node_at(p) == Nodes.CHEST:

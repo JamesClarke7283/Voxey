@@ -2,6 +2,7 @@ class_name VillageArt
 extends RefCounted
 
 static func pixel(id: int, x: int, y: int, noise: Color) -> Color:
+	if id in SteamMachines.BLOCKS: return SteamMachines.pixel(id,x,y,noise)
 	if Beacons.is_beacon(id) or Beacons.is_beam(id): return Beacons.pixel(id,x,y,noise)
 	if Seagrass.is_seagrass(id): return Seagrass.pixel(id,x,y,noise)
 	if PointedDripstone.is_stage(id): return PointedDripstone.pixel(id,x,y,noise)
@@ -131,6 +132,7 @@ static func pixel(id: int, x: int, y: int, noise: Color) -> Color:
 	return noise
 
 static func mesh(out: Array, p: Vector3, id: int) -> void:
+	if id in SteamMachines.BLOCKS: SteamMachines.mesh(out,p,id); return
 	if Decor.is_pot(id) or Decor.is_stand(id): Decor.mesh(out,p,id); return
 	if id == Archaeology.POT: Archaeology.mesh(out,p,id); return
 	if Farmland.is_soil(id): Farmland.mesh(out,p,id); return

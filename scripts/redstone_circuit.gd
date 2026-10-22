@@ -16,7 +16,7 @@ const ONE_TICK_DETACH = true
 const SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.UP,Vector3i.DOWN,Vector3i.FORWARD,Vector3i.BACK]
 const HORIZONTAL = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]
 const FURNACES = [Nodes.FURNACE,VillageContent.SMOKER,VillageContent.BLAST_FURNACE]
-const CONTAINERS = [VillageContent.RECOVERY_CHEST,VillageContent.BREWING_STAND,TrappedChests.ID,Nodes.CHEST,Nodes.BOOKSHELF,Nodes.FURNACE,Nodes.DISPENSER,Nodes.DROPPER,Nodes.HOPPER,VillageContent.BARREL,VillageContent.SMOKER,VillageContent.BLAST_FURNACE]
+const CONTAINERS = [VillageContent.RECOVERY_CHEST,VillageContent.BREWING_STAND,TrappedChests.ID,Nodes.CHEST,Nodes.BOOKSHELF,Nodes.FURNACE,Nodes.DISPENSER,Nodes.DROPPER,Nodes.HOPPER,VillageContent.BARREL,VillageContent.SMOKER,VillageContent.BLAST_FURNACE]+SteamMachines.CONTAINERS
 var world: VoxelWorld
 var tracked: Dictionary = {}
 var power: Dictionary = {}
@@ -39,7 +39,7 @@ func _init(owner_world: VoxelWorld) -> void:
 	world = owner_world
 
 static func circuit_node(id: int) -> bool:
-	return Rails.is_rail(id) or id in Nodes.CIRCUIT_NODES or id == NoteBlocks.ID or id == VillageContent.BELL or RedstoneInputs.is_device(id) or RedstoneSensors.is_device(id) or Barriers.is_gate(id) or Trapdoors.is_trapdoor(id) or Doors.is_door(id) or Copper.is_bulb(id) or Copper.is_rod(id) or CommandBlocks.is_command_block(id)
+	return SteamMachines.is_device(id) or Rails.is_rail(id) or id in Nodes.CIRCUIT_NODES or id == NoteBlocks.ID or id == VillageContent.BELL or RedstoneInputs.is_device(id) or RedstoneSensors.is_device(id) or Barriers.is_gate(id) or Trapdoors.is_trapdoor(id) or Doors.is_door(id) or Copper.is_bulb(id) or Copper.is_rod(id) or CommandBlocks.is_command_block(id)
 
 func state(p: Vector3i) -> Dictionary:
 	var key: String = VoxelWorld.station_key(p)
@@ -53,11 +53,15 @@ func direction(p: Vector3i) -> Vector3i:
 func configure(p: Vector3i, d: Vector3i, support: Vector3i = Vector3i.DOWN) -> void:
 	state(p)["dir"] = [d.x,d.y,d.z]
 	state(p)["support"] = [support.x,support.y,support.z]
+	var game: Node = world.get_parent()
+	if game != null and game.get("network") != null and game.network.client() and not game.network.applying:
+		game.network.configure_node.rpc_id(1,p,d,support)
 	refresh(p)
 
 func register(p: Vector3i, id: int) -> void:
 	if VoxelWorld.load_hooks(id) & VoxelWorld.HOOK_CIRCUIT:
 		tracked[p] = id
+		SteamMachines.registered(world,p,id)
 		if RedstoneSensors.is_device(id): RedstoneSensors.registered(world,p,id)
 		if RedstoneInputs.is_device(id): RedstoneInputs.registered(world,p,id)
 		if id == NoteBlocks.ID: NoteBlocks.state(world,p)
@@ -139,13 +143,13 @@ func support_changed(p: Vector3i) -> void:
 func refresh(p: Vector3i) -> void:
 	if visuals.has(p): visuals[p].queue_free(); visuals.erase(p)
 	if not tracked.has(p) or not world.loaded_at(Vector3(p)): return
-	if int(tracked[p]) == NoteBlocks.ID or Barriers.is_gate(int(tracked[p])) or Trapdoors.is_trapdoor(int(tracked[p])) or Doors.is_door(int(tracked[p])) or Rails.is_rail(int(tracked[p])): return # These blocks use their world mesh.
+	if (SteamMachines.is_device(int(tracked[p])) and int(tracked[p]) not in [SteamMachines.BELLOWS,SteamMachines.ENGINE]) or int(tracked[p]) == NoteBlocks.ID or Barriers.is_gate(int(tracked[p])) or Trapdoors.is_trapdoor(int(tracked[p])) or Doors.is_door(int(tracked[p])) or Rails.is_rail(int(tracked[p])): return # These blocks use their world mesh.
 	var root: Node3D = RedstoneInputs.build(int(tracked[p]),state(p)) if RedstoneInputs.is_device(int(tracked[p])) else RedstoneArt.build(int(tracked[p]),state(p),int(power.get(p,0)))
 	root.position = Vector3(p)+Vector3(0.5,0,0.5)
 	var d := Vector3(direction(p))
 	if RedstoneInputs.is_device(int(tracked[p])): pass # Attachment is encoded in the mesh.
 	elif d.y == 0: root.rotation.y = atan2(-d.x,-d.z)
-	elif tracked[p] in [Nodes.PISTON,Nodes.STICKY_PISTON,Nodes.PISTON_HEAD,Nodes.OBSERVER,Nodes.DISPENSER,Nodes.DROPPER]:
+	elif tracked[p] in [Nodes.PISTON,Nodes.STICKY_PISTON,Nodes.PISTON_HEAD,Nodes.OBSERVER,Nodes.DISPENSER,Nodes.DROPPER,SteamMachines.BELLOWS,SteamMachines.ENGINE]:
 		root.position += Vector3.UP*0.5
 		root.rotation.x = PI/2.0*d.y
 		for child in root.get_children(): child.position.y -= 0.5
@@ -154,6 +158,9 @@ func refresh(p: Vector3i) -> void:
 
 func interact(p: Vector3i) -> bool:
 	var id: int = world.node_at(p)
+	var game: Node = world.get_parent()
+	if id in [Nodes.LEVER,Nodes.REPEATER,Nodes.COMPARATOR] and game != null and game.get("network") != null and game.network.client():
+		game.network.use_node.rpc_id(1,p); return true
 	if RedstoneInputs.is_button(id): return RedstoneInputs.use(world.get_parent(),{"pos":p,"id":id})
 	if RedstoneSensors.is_detector(id): return RedstoneSensors.toggle(world,p)
 	# The source's command block is used to open its command list, whether or not it is
@@ -185,6 +192,7 @@ func update(delta: float) -> void:
 		# One redstone tick, which `ONE_TICK_DETACH` measures in.
 		ticks += 1
 		step(0.1)
+		SteamMachines.step(world,0.1)
 		steps += 1
 
 func output(p: Vector3i, toward: Vector3i) -> int:
@@ -205,6 +213,7 @@ func output(p: Vector3i, toward: Vector3i) -> int:
 	if id == Nodes.REDSTONE_TORCH:
 		var a: Array = state(p).get("support",[0,-1,0])
 		if toward == Vector3i(a[0],a[1],a[2]): return 0
+	if SteamMachines.is_device(id): return 0
 	return int(state(p).get("out",0))
 
 func input_power(p: Vector3i, excluded: Vector3i = Vector3i.ZERO) -> int:
@@ -455,6 +464,10 @@ func hopper(p: Vector3i) -> bool:
 	if world.node_at(p+d) in FURNACES and d == Vector3i.DOWN and destination[2].count > 0: destination = []
 	elif world.node_at(p+d) in FURNACES: destination = [destination[0 if d == Vector3i.DOWN else 1]]
 	for slot in slots:
+		if world.node_at(p+d) in SteamMachines.CONTAINERS:
+			var target: Dictionary = SteamMachines.station(world,p+d)
+			if slot.id != 0 and SteamMachines.accepts(target,0,slot.id) and insert_one([target.slots[0]],slot): consume_one(slot); return true
+			continue
 		if PortableStorage.is_shulker(world.node_at(p+d)) and not PortableStorage.accepts(PortableStorage.station(world,p+d),slot): continue
 		if world.node_at(p+d) == VillageContent.COMPOSTER:
 			if d == Vector3i.DOWN and Composters.add(world.get_station(p+d,"composter"),slot.id): consume_one(slot); return true
@@ -487,6 +500,8 @@ func hopper(p: Vector3i) -> bool:
 		if Composters.level(compost) == 8 and insert_one(slots,{"id":Nodes.BONE_MEAL,"count":1,"wear":0}):
 			Composters.harvest(compost); return true
 	var above: Array = container(p+Vector3i.UP)
+	if world.node_at(p+Vector3i.UP) in SteamMachines.CONTAINERS:
+		above = [] if world.node_at(p+Vector3i.UP) == SteamMachines.GENERATOR else [above[2]]
 	if world.node_at(p+Vector3i.UP) in FURNACES:
 		# `mcl_furnaces`'s `on_hopper_out`: the source pulls the output **and** a
 		# non-fuel item left in the fuel slot, so an item that cannot burn is not
@@ -569,6 +584,9 @@ func dispense(p: Vector3i, projectile: bool) -> void:
 		if not projectile and (world.node_at(p+d) in CONTAINERS or PortableStorage.is_shulker(world.node_at(p+d))):
 			if PortableStorage.is_shulker(world.node_at(p+d)) and not PortableStorage.accepts(PortableStorage.station(world,p+d),slot): return
 			var destination: Array = container(p+d)
+			if world.node_at(p+d) in SteamMachines.CONTAINERS:
+				var target: Dictionary = SteamMachines.station(world,p+d)
+				destination = [target.slots[0]] if SteamMachines.accepts(target,0,slot.id) else []
 			if world.node_at(p+d) in FURNACES:
 				var eligible: Array = []
 				var index: int = 0 if d == Vector3i.DOWN else 1

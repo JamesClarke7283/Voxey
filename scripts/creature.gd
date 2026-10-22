@@ -1358,6 +1358,9 @@ func add_bonus(group: String, amount: float) -> float:
 	return amount*armor_factor(group)
 
 func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> void:
+	if game.network != null and game.network.client():
+		game.network.hit_mob(self,damage,reason)
+		return
 	# A summoning boss cannot be hurt while it rises, as the source's `_spawning`
 	# counter arranges, and the armoured phase halves incoming arrow damage.
 	if spawn_invulnerable > 0.0: return

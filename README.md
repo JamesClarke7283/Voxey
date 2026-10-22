@@ -1,6 +1,6 @@
 # Voxey
 
-An original, single-player voxel survival game built in Godot 4.7. Inspired by Luanti / Mineclonia and Minecraft, with procedural pixel textures and a native desktop interface.
+An original voxel survival game for solo play and hosted multiplayer, built in Godot 4.7. Inspired by Luanti / Mineclonia and Minecraft, with procedural pixel textures and a native desktop interface.
 
 Open `project.godot` in Godot and press **F5**, or run:
 
@@ -9,6 +9,14 @@ godot --path .
 ```
 
 Choose **Play / choose a world**, create a named world or select an existing one, and choose **Survival** or **Creative** before entering.
+
+## Multiplayer and custom characters
+
+Host a world on `0.0.0.0` with up to 16 players, copy your local IP and port from the Escape menu, or join a friend's server. Customize your character with a live 3D preview. See the [multiplayer and character guide](docs/gameplay/multiplayer-and-skins.md) for hosting, joining, skins, and dedicated-server commands.
+
+## Steam machinery and flintlocks
+
+Craft muskets, flintlock pistols, blunderbusses, and bayonets. Coal-fired generators and redstone-powered bellows send steam through iron pipes to furnaces, ore grinders with fourfold raw-ore output, and engines that move frame vehicles of up to 256 blocks. See the [workshop and vehicle guide](docs/gameplay/steam-and-firearms.md) for recipes, controls, and setup.
 
 ## Playing
 
@@ -23,6 +31,7 @@ Choose **Play / choose a world**, create a named world or select an existing one
 | Right mouse | Place, interact, eat, till, plant, wear armor, or light TNT |
 | Hold Z or right mouse with a spyglass | Zoom in |
 | E | Inventory, crafting grid, and searchable recipe guide |
+| Hold Tab | List players |
 | 1–9 / mouse wheel | Select hotbar slot |
 | Q | Throw one held item; in inventory, drop one carried or hovered item |
 | F / double Space | Toggle Creative flight |
@@ -260,7 +269,7 @@ Voxey includes three dimensions, redstone simulation, villages and trading, brew
 
 ## Validation
 
-Latest validation: **9,595 checks passed** across nine suites, with no failures or script errors. Rendered checks include `tests/farm_golem_tour.gd`, `tests/nature_tour.gd`, `tests/mechanism_tour.gd`, `tests/home_tour.gd` and `tests/travel_tour.gd`; all use isolated temporary saves. Source comparisons and remaining differences are tracked in the [parity ledger](docs/mineclonia-parity.md).
+Latest validation: **9,741 gameplay checks passed**, plus skin validation and separate host/client multiplayer integration checks. Rendered checks include `tests/farm_golem_tour.gd`, `tests/nature_tour.gd`, `tests/mechanism_tour.gd`, `tests/home_tour.gd` and `tests/travel_tour.gd`; all use isolated temporary saves. Source comparisons and remaining differences are tracked in the [parity ledger](docs/mineclonia-parity.md).
 
 On Linux/macOS with Godot on `PATH`:
 

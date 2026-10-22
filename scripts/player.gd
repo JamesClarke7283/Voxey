@@ -571,6 +571,8 @@ func use() -> void:
 			return
 	if Screwdriver.is_screwdriver(held) and not target.is_empty():
 		if Screwdriver.turn(game,target.pos,Screwdriver.ROTATE_FACE): return
+	if AntiqueArms.fire(game): return
+	if SteamMachines.use(game,target): return
 	if Candles.use(game,target): return
 	if game.boats.use(): return
 	if RedstoneInputs.use(game,target): return
@@ -948,7 +950,7 @@ func use() -> void:
 		if RedstoneCircuit.circuit_node(place_id):
 			var forward: Vector3 = -camera.global_basis.z
 			var axis: int = 0 if absf(forward.x) > absf(forward.z) else 2
-			if place_id in [Nodes.PISTON,Nodes.STICKY_PISTON,Nodes.DISPENSER,Nodes.DROPPER,Nodes.OBSERVER] and absf(forward.y) > 0.75: axis = 1
+			if place_id in [Nodes.PISTON,Nodes.STICKY_PISTON,Nodes.DISPENSER,Nodes.DROPPER,Nodes.OBSERVER,SteamMachines.BELLOWS,SteamMachines.ENGINE] and absf(forward.y) > 0.75: axis = 1
 			var d := Vector3i.ZERO; d[axis] = int(signf(forward[axis]))
 			if place_id == Nodes.HOPPER: d = -target.normal
 			game.world.circuits.configure(destination,d,support)
@@ -1044,8 +1046,8 @@ func _make_hand(id: int) -> void:
 		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		hand.add_child(instance)
 	else:
-		_add_hand_box(Vector3(0,-0.17,0.15),Vector3(0.19,0.46,0.19),Color("c29470"))
-		_add_hand_box(Vector3(0,-0.34,0.15),Vector3(0.2,0.2,0.2),Color("526d58"))
+		_add_hand_box(Vector3(0,-0.17,0.15),Vector3(0.19,0.46,0.19),Color(game.network.appearance.skin) if game.network != null else Color("c29470"))
+		_add_hand_box(Vector3(0,-0.34,0.15),Vector3(0.2,0.2,0.2),Color(game.network.appearance.shirt) if game.network != null else Color("526d58"))
 
 func _add_hand_box(pos: Vector3, size_value: Vector3, color: Color) -> void:
 	var instance := MeshInstance3D.new()

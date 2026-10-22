@@ -5,6 +5,8 @@ const SaveStore = preload("res://scripts/world_store.gd")
 const SAVE_VERSION = 3
 const SAVE_VERSIONS = [1,2,3]
 const MOD_ENTRY = preload("res://scripts/voxey_mods.gd")
+var server_on_load: int = 0
+var network: VoxeyNetwork
 var world: VoxelWorld
 var player: VoxeyPlayer
 var inventory := Inventory.new()
@@ -117,6 +119,10 @@ func _ready() -> void:
 	achievements = VoxeyAchievements.new(self)
 	saves = SaveStore.new()
 	identity = PlayerIdentity.new(saves.root_path)
+	network = VoxeyNetwork.new()
+	network.name = "Network"; network.game = self
+	network.appearance = CharacterSkin.load_profile(saves.root_path)
+	add_child(network)
 	_migrate_legacy_save()
 	RenderingServer.set_default_clear_color(Color("9dbac0"))
 	atlas = Art.make_atlas()
@@ -162,6 +168,24 @@ func _ready() -> void:
 		add_child(controls)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_load_mods()
+	call_deferred("_server_command_line")
+
+func _server_command_line() -> void:
+	var args: PackedStringArray = OS.get_cmdline_user_args()
+	if "--server" not in args: return
+	var seed_text: String = "8675309"
+	var world_id: String = ""
+	var mode: String = "survival"
+	server_on_load = VoxeyNetwork.DEFAULT_PORT
+	for arg in args:
+		if arg.begins_with("--port="): server_on_load = int(arg.get_slice("=",1))
+		if arg.begins_with("--seed="): seed_text = arg.get_slice("=",1)
+		if arg.begins_with("--world="): world_id = arg.get_slice("=",1)
+		if arg == "--creative": mode = "creative"
+	Engine.max_fps = 60
+	if world_id.is_empty(): start_new(seed_text,"Multiplayer server",mode)
+	else: enter_world(world_id,mode)
+
 
 func _load_mods() -> void:
 	MOD_ENTRY.load_all(self,[ProjectSettings.globalize_path("res://mods"),
@@ -249,6 +273,7 @@ func playing() -> bool:
 func _process(delta: float) -> void:
 	if save_task >= 0 and WorkerThreadPool.is_task_completed(save_task): finish_background_save()
 	if world == null: return
+	if network != null: network.update(delta)
 	Jukeboxes.update(world,delta)
 	maps.update()
 	if state == "loading" and not is_instance_valid(shader_warmup): _warm_shaders()
@@ -256,7 +281,13 @@ func _process(delta: float) -> void:
 	if state == "loading" and world.area_ready(world.target): _finish_loading()
 	if state != "loading" and is_instance_valid(shader_warmup): shader_warmup.queue_free(); shader_warmup = null
 	if state != "title" and state != "loading": world.target = player.position
+	if network != null and network.client() and state != "loading":
+		world.target = player.position
+		_update_day()
+		AntiqueArms.update(self,delta)
+		return
 	if playing():
+		AntiqueArms.update(self,delta)
 		Dungeons.update(world,delta)
 		boats.update(delta)
 		Farming.update_world(self,delta)
@@ -526,6 +557,12 @@ func _finish_loading() -> void:
 	Minecarts.restore(self,world.adventure_state.get("carts",{}))
 	player.camera.make_current()
 	resume()
+	if server_on_load > 0:
+		var error: Error = network.host(server_on_load)
+		print(network.status)
+		if error == OK: print("Join address: "+network.join_address())
+		server_on_load = 0
+		if error != OK: push_error(network.status)
 	toast("Welcome to Voxey. Tap the bag button to craft, or pause for the field guide." if touch else "Welcome to Voxey. Press E to craft, or Esc for the field guide.")
 	spawn_timer=5
 	save_game()
@@ -555,6 +592,7 @@ func _safe_spawn(near: Vector3) -> Vector3:
 	return Vector3(8.5,world.generator.terrain_height(8,8)+8,8.5)
 
 func resume() -> void:
+	if network != null: network.station_open = false
 	if state == "sign" and has_meta("sign_editor"): remove_meta("sign_editor")
 	hud.return_cursor()
 	state="playing"
@@ -572,17 +610,20 @@ func pause() -> void:
 	hud.show_pause()
 
 func open_inventory(kind: String = "hand", p: Vector3i = Vector3i.ZERO) -> void:
+	if network != null:
+		network.station_pos = p; network.station_open = kind in ["chest","furnace","brewing","steam"]
 	state="inventory"
 	world.active=false
 	# Furnace simulation continues while its screen is open, but the player and mobs pause.
-	if kind in ["furnace","brewing"]: world.active=true
+	if kind in ["furnace","brewing","steam"]: world.active=true
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
 	if is_instance_valid(controls): controls.hide_all()
-	hud.show_inventory(kind,world.get_station(p,kind) if kind in ["chest","furnace","brewing"] else {})
+	hud.show_inventory(kind,SteamMachines.station(world,p) if kind == "steam" else (world.get_station(p,kind) if kind in ["chest","furnace","brewing"] else {}))
 
 func return_to_title() -> void:
 	hud.return_cursor()
 	save_game()
+	if network != null: network.stop()
 	state="title"
 	world.active=false
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
@@ -641,6 +682,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.button_index==MOUSE_BUTTON_WHEEL_DOWN: inventory.selected=posmod(inventory.selected+1,9); hud.refresh_slots()
 
 func break_node(p: Vector3i, id: int, tool: int) -> void:
+	if network != null and network.client() and not network.applying:
+		network.request_break(p,id,tool)
+		return
 	# Seagrass is a rooted node: digging it restores its surface block, and only
 	# shears yield the item, as the source's `_mcl_shears_drop` requires.
 	if Kelp.break_node(self,p,id,tool): return
@@ -1223,6 +1267,7 @@ func has_save() -> bool:
 	return not saves.list_worlds().is_empty()
 
 func save_game(path: String = "", background: bool = false) -> bool:
+	if network != null and network.client(): return false
 	if state in ["title","loading"]: return false
 	finish_background_save()
 	var world_save: bool = path.is_empty()
@@ -1238,6 +1283,8 @@ func save_game(path: String = "", background: bool = false) -> bool:
 		dimensions[dimension] = snapshot
 	else: dimension_states[dimension] = snapshot
 	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":snapshot.get("edits",[]),"growth":snapshot.growth,"stations":snapshot.stations,"block_states":snapshot.block_states,"adventure":snapshot.adventure,"inventory":inventory.slots.slice(0,Inventory.BASE_SLOTS),"pouches":inventory.pouch_slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"homes":player_homes.duplicate(true),"gamerules":game_rules.duplicate(),"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"nutrition":Hunger.snapshot(player),"ender_storage":ender_storage.duplicate(true),"effects":survival.effect_snapshot(),"armor":player.armor_slots,"offhand":player.offhand_slot,"time":day_time,"experience":experience,"journal":journal_step,"drops":snapshot.drops,"arrows":snapshot.arrows,"leads":snapshot.leads,"animals":snapshot.animals,"dimension":dimension,"dimensions":dimensions,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
+	data["difficulty"] = difficulty
+	data["server_settings"] = {"max_players":network.player_limit}
 	data["maps"] = maps.snapshot()
 	data["inhabited"] = RegionalDifficulty.snapshot(self)
 	if background:
@@ -1349,6 +1396,8 @@ func load_world_data(data: Dictionary) -> void:
 		Netherite.migrate_wear(data)
 		data["version"] = 3
 	game_rules = GameRules.restore(data.get("gamerules",{}))
+	difficulty = clampi(int(data.get("difficulty",1)),0,2)
+	if network != null and not network.client(): network.player_limit = clampi(int(data.get("server_settings",{}).get("max_players",VoxeyNetwork.MAX_PLAYERS)),1,VoxeyNetwork.MAX_PLAYERS)
 	pending_save=data
 	active_world_id=String(data.get("world_id",active_world_id))
 	world_name=String(data.get("name","New world"))
@@ -1451,7 +1500,7 @@ func _setup_sounds() -> void:
 		# never built and every play was a silent no-op.
 		"drip":0.25,"fuse":1.6,"rocket":1.2,"splash":0.3,"portal":0.6,"guardian":0.5,
 		# `mcl_experience`: the orb pickup chime and the level-up flourish.
-		"orb":0.15,"levelup":0.4}
+		"orb":0.15,"levelup":0.4,"musket":0.5}
 	for kind in lengths:
 		var duration: float = lengths[kind]
 		var sample := AudioStreamWAV.new()
@@ -1521,6 +1570,7 @@ func _setup_sounds() -> void:
 				"totem": value=sin(t*TAU*520.0)*0.35+sin(t*TAU*780.0)*0.2; envelope=minf(t*40.0,1.0)*pow(1.0-progress,1.5)
 				"wither": value=sin(t*TAU*(80.0-t*40.0))*0.5+rumble*2.0; envelope=minf(t*8.0,1.0)*pow(1.0-progress,1.2)
 				"wither_shoot": value=sin(t*TAU*300.0)*0.3+rumble*1.5; envelope=minf(t*30.0,1.0)*pow(1.0-progress,2.0)
+				"musket": value=noise*0.75+rumble*2.0; envelope=pow(1.0-progress,3.5)
 				"arrow": value=bright*0.7; envelope=minf(t*60.0,1.0)*pow(1.0-progress,2.5)
 				# `mcl_criticals_hit`: a short bright crack for a falling critical.
 				"crit": value=bright*0.9+sin(t*TAU*1400.0)*0.25; envelope=minf(t*90.0,1.0)*pow(1.0-progress,2.0)
@@ -1760,6 +1810,7 @@ func execute_command(command: String) -> String:
 	var parts: PackedStringArray=command.strip_edges().trim_prefix("/").split(" ",false)
 	var response: String=""
 	if parts.is_empty(): return ""
+	if network != null and network.client() and parts[0].to_lower() in ["gamemode","time","weather"]: return "Only the host can change world settings."
 	match parts[0].to_lower():
 		"gamemode":
 			if parts.size()!=2 or not set_gamemode(parts[1].to_lower()): response="Usage: /gamemode survival | creative"
@@ -1842,6 +1893,7 @@ func execute_command(command: String) -> String:
 			for mob in creatures.get_children(): Farming.forget(mob); mob.queue_free()
 			response="Removed %d creatures." % removed
 		_: response="Unknown command. Type /help for available commands."
+	if network != null and parts[0].to_lower() in ["gamemode","time"]: network.publish_settings()
 	console_messages.append("> "+command)
 	console_messages.append(response)
 	while console_messages.size()>60: console_messages.pop_front()
@@ -1893,6 +1945,9 @@ func dimension_snapshot(deferred: bool = false) -> Dictionary:
 	return snapshot
 
 func travel_dimension(destination: String, respawning: bool = false) -> void:
+	if network != null and network.active():
+		toast("Disconnect multiplayer before changing dimensions.")
+		return
 	var retained_effects: Dictionary = survival.effect_snapshot()
 	if destination == dimension or destination not in ["overworld","nether","end"]: return
 	boats.dismount(false)
@@ -2044,10 +2099,14 @@ func drop_stack(slot: Dictionary, amount: int = 1) -> bool:
 	var origin: Vector3 = player.position+Vector3.UP*1.2
 	var ahead: Vector3 = origin+forward*0.4
 	if not world.intersects(ahead,0.1,0.2): origin = ahead
-	var drop := spawn_drop(origin,int(slot.id),count,int(slot.wear),slot.get("data",{}))
-	if drop == null: return false
-	drop.velocity = forward*5.0+Vector3.UP*1.5
-	drop.pickup_delay = 1.5
+	if network != null and network.client():
+		var stack: Dictionary = slot.duplicate(true); stack.count = count
+		network.drop_item.rpc_id(1,stack,origin,forward)
+	else:
+		var drop := spawn_drop(origin,int(slot.id),count,int(slot.wear),slot.get("data",{}))
+		if drop == null: return false
+		drop.velocity = forward*5.0+Vector3.UP*1.5
+		drop.pickup_delay = 1.5
 	slot.count -= count
 	if slot.count == 0: slot.clear(); slot.merge({"id":0,"count":0,"wear":0})
 	inventory.changed.emit()
@@ -2059,6 +2118,10 @@ func close_inventory() -> void:
 	resume()
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.physical_keycode == KEY_TAB and (playing() or not event.pressed):
+		hud.show_player_list(event.pressed)
+		get_viewport().set_input_as_handled()
+		return
 	if state == "sign" and event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
 		Signs.cancel(self); get_viewport().set_input_as_handled(); return
 	if state == "title" and hud.screen == "delete_world" and event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:

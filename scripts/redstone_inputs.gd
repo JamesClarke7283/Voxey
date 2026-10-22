@@ -146,7 +146,8 @@ static func use(game: Node3D, target: Dictionary) -> bool:
 	if target.is_empty() or not is_button(int(target.get("id",0))): return false
 	if Input.is_physical_key_pressed(KEY_CTRL) or (game.touch and is_instance_valid(game.controls) and game.controls.sneak_held): return false
 	if game.target_mob() != null: return false
-	press(game.world,target.pos)
+	if game.get("network") != null and game.network.client(): game.network.use_node.rpc_id(1,target.pos)
+	else: press(game.world,target.pos)
 	return true
 
 static func press(world: VoxelWorld, p: Vector3i) -> bool:
@@ -208,7 +209,7 @@ static func actor_record(game: Node3D, actor: Node3D) -> Dictionary:
 	if not is_instance_valid(actor) or actor.is_queued_for_deletion(): return {}
 	var pos: Vector3 = actor.global_position
 	var box: AABB; var living: bool = false
-	if actor == game.player:
+	if actor == game.player or actor is NetworkAvatar:
 		if game.boats != null and game.boats.ridden() or game.survival != null and is_instance_valid(game.survival.mount): return {}
 		living = true; box = AABB(pos-Vector3(0.29,0,0.29),Vector3(0.58,1.8,0.58))
 	elif actor is Creature:
@@ -240,6 +241,7 @@ static func actor_record(game: Node3D, actor: Node3D) -> Dictionary:
 static func entity_index(world: VoxelWorld, plates: Array = []) -> Dictionary:
 	var game: Node3D = world.get_parent(); var result: Dictionary = {}
 	var actors: Array = [game.player]
+	if game.get("network") != null and game.network.active() and not game.network.client(): actors.append_array(game.network.avatars.values())
 	for container in [game.creatures,game.drops,game.entities]:
 		if is_instance_valid(container): actors.append_array(container.get_children())
 	var low := Vector3i(2147483647,2147483647,2147483647); var high := -low

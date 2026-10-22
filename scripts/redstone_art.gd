@@ -15,6 +15,7 @@ static func box(root: Node3D, at: Vector3, size: Vector3, color: Color, glow: fl
 	return part
 
 static func build(id: int, state: Dictionary = {}, level: int = 0) -> Node3D:
+	if SteamMachines.is_device(id): return SteamMachines.direction_marker(id,state)
 	if RedstoneSensors.is_device(id): return RedstoneSensors.build(id,state,level)
 	var root := Node3D.new()
 	var on: bool = state.get("out",0) > 0 or state.get("powered",false)

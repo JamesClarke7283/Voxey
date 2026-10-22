@@ -11,7 +11,7 @@ extends RefCounted
 # these are never resized or replaced, so any thread may read them and sees
 # either the old entry or the new one. A worker computes an entry the table does
 # not have yet in its View and hands it back to the main thread with its job.
-const LIMIT = 12288
+const LIMIT = 16384
 const KNOWN = 1
 const SOLID = 1 << 1
 const TRANSPARENT = 1 << 2
@@ -131,7 +131,7 @@ static func compute(id: int) -> int:
 	if Fluids.replaceable(id): bits |= REPLACEABLE
 	if Fluids.base(id) == Nodes.WATER: bits |= BASE_WATER
 	elif Fluids.base(id) == Nodes.LAVA: bits |= BASE_LAVA
-	if Nodes.uncached_solid(id) and not (Farmland.is_soil(id) or Amethyst.is_crystal(id) or FoodFeatures.is_cake(id) or Doors.is_door(id) or SnowCover.is_snow(id) or Trapdoors.is_trapdoor(id) or Barriers.is_barrier(id) or BuildingShapes.is_shape(id) or Campfires.is_campfire(id) or id == VillageContent.CAULDRON or RedstoneSensors.is_detector(id)): bits |= BOX
+	if Nodes.uncached_solid(id) and not (Farmland.is_soil(id) or Amethyst.is_crystal(id) or FoodFeatures.is_cake(id) or Doors.is_door(id) or SnowCover.is_snow(id) or Trapdoors.is_trapdoor(id) or Barriers.is_barrier(id) or BuildingShapes.is_shape(id) or Campfires.is_campfire(id) or id == VillageContent.CAULDRON or RedstoneSensors.is_detector(id) or id in SteamMachines.BLOCKS): bits |= BOX
 	bits |= mesh_kind(id,false) << MESH_SHIFT
 	bits |= mesh_kind(id,true) << EXTERNAL_SHIFT
 	return bits

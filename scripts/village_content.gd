@@ -383,8 +383,30 @@ const BLOCKS = [
 	701,
 	11418,11419,11420,11421,11422,11423,11424,11425,
 	11602,
+	12000,12001,12002,12003,12004,12005,12006,
 ]
 const DATA = {
+	12000:SteamMachines.DATA[12000],
+	12001:SteamMachines.DATA[12001],
+	12002:SteamMachines.DATA[12002],
+	12003:SteamMachines.DATA[12003],
+	12004:SteamMachines.DATA[12004],
+	12005:SteamMachines.DATA[12005],
+	12006:SteamMachines.DATA[12006],
+	12010:SteamMachines.DATA[12010],
+	12011:SteamMachines.DATA[12011],
+	12012:SteamMachines.DATA[12012],
+	12013:SteamMachines.DATA[12013],
+	12014:SteamMachines.DATA[12014],
+	12015:SteamMachines.DATA[12015],
+	12016:SteamMachines.DATA[12016],
+	12017:SteamMachines.DATA[12017],
+	12018:SteamMachines.DATA[12018],
+	12100:AntiqueArms.DATA[12100],
+	12101:AntiqueArms.DATA[12101],
+	12102:AntiqueArms.DATA[12102],
+	12103:AntiqueArms.DATA[12103],
+	12104:AntiqueArms.DATA[12104],
 	9300:Rails.DATA[9300],
 	9320:Rails.DATA[9320],
 	9321:Rails.DATA[9321],
@@ -1831,6 +1853,8 @@ static func recipes(inv: Inventory) -> void:
 	Bookshelves.recipes(inv)
 	NetherBlocks.recipes(inv)
 	RawOres.recipes(inv)
+	SteamMachines.recipes(inv)
+	AntiqueArms.recipes(inv)
 	GlassColors.recipes(inv)
 	TrappedChests.recipes(inv)
 	for pair in [[Nodes.FLOWER,DYE_RED],[Nodes.BONE_MEAL,DYE_WHITE],[INK_SAC,DYE_BLACK],[Nodes.LAPIS,DYE_BLUE],[COCOA_BEANS,DYE_BROWN],[Nodes.CACTUS,DYE_GREEN]]: inv._recipe(Nodes.title(pair[1]),pair[1],1,[pair[0]],1)

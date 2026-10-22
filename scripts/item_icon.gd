@@ -44,7 +44,7 @@ func _draw() -> void:
 			for point in face.points: points.append(center+point*scale_value)
 			for point in face.uv: uv.append((face.tile*16+point*15+Vector2.ONE*0.5)/Vector2(Art.atlas_texture.get_size()))
 			draw_polygon(points,PackedColorArray([face.shade]),uv,Art.atlas_texture)
-	elif RedstoneSensors.is_device(item_id) or item_id in Nodes.SMALL_CIRCUITS or item_id == Nodes.TORCH:
+	elif item_id in [SteamMachines.PIPE,SteamMachines.FRAME] or RedstoneSensors.is_device(item_id) or item_id in Nodes.SMALL_CIRCUITS or item_id == Nodes.TORCH:
 		var extent: float = maxf(16,roundf(minf(size.x,size.y)*0.75/16.0)*16.0)
 		draw_texture_rect(ItemArt.texture(item_id),Rect2(center-Vector2.ONE*extent*0.5,Vector2.ONE*extent),false,tint)
 	elif Nodes.placeable(item_id) or item_id in [Nodes.WATER,Nodes.BEDROCK,Nodes.RIPE_WHEAT]:

@@ -455,6 +455,8 @@ static func clean_slot(slot, allow_pouches: bool = true, allow_shulkers: bool = 
 		if id in [Nodes.WRITABLE_BOOK,Nodes.WRITTEN_BOOK]:
 			metadata["title"] = str(raw.get("title","Untitled")).left(64)
 			metadata["text"] = str(raw.get("text","")).left(12000)
+		if AntiqueArms.is_gun(id) and (raw.get("reload_remaining") is float or raw.get("reload_remaining") is int):
+			metadata["reload_remaining"] = clampf(float(raw.reload_remaining),0,AntiqueArms.STATS[id].reload)
 		if result.id == VillageContent.CROSSBOW:
 			var arrow: int = int(raw.get("loaded_arrow",Nodes.AIR))
 			if arrow == Nodes.ARROW_ITEM or VillageContent.DATA.get(arrow,{}).get("family","") == "arrow":
