@@ -14,6 +14,14 @@ A session shares the host's current dimension. Disconnect before changing dimens
 
 Hold **Tab** during play to list connected players, with your own name and the host marked.
 
+Aim at another player within four blocks and **right-click** to give them one held item, or **Ctrl + right-click** to give the held stack. Items go directly into their inventory and retain names, enchantments, and other metadata. If their inventory is full, the items are returned. You can also throw items with **Q** for another player to collect. Item physics and pickup continue while the host has the Escape menu open.
+
+Host and guests must run the same updated game build. Mining uses the miner's own tool and receives an authoritative block result from the host.
+
+Block changes are ordered by the host and periodically reconciled around each player. Mining and building continue to work when guests explore beyond the host's view distance; edits received during loading are retained when terrain appears. Rejected placements are corrected, and guests render the host's block changes without running a second copy of its block physics.
+
+Player motion is sent 20 times a second; creature and item snapshots are sent 10 times a second. Remote motion uses Luanti's interpolation algorithm translated into GDScript, including bounded extrapolation during packet loss. Background block repair uses acknowledged, bounded batches. Inventory transactions and world snapshots use separate channels, with revision checks to prevent older snapshots from undoing a chest transfer. Both host and guests need protocol 4. See [networking implementation and attribution](../networking-luanti.md).
+
 ## World and server settings
 
 Open the Escape menu and choose **Game settings** in local play or **Server settings** in multiplayer. Change the world name, Survival/Creative mode, difficulty, time of day, and the supported game rules: keep inventory on death, allow editing signs, and mob griefing. The host can also change the player limit (1–16); lowering it does not disconnect existing players. Guests can view settings but only the host can change them. Settings are saved with the world and shared with connected players.
@@ -34,4 +42,4 @@ Choose **Character** from the title or pause screen. Change your display name, s
 
 ## Verification
 
-`./tests/run_tests.sh` runs gameplay regressions, including the steam machinery tests. `./tests/run_network_tests.sh` launches separate host and guest processes to verify binding, joining, shared blocks and chests, avatar appearance, copyable local addresses, and reconnecting. `tests/character_tour.gd` and `tests/steam_tour.gd` provide windowed visual checks.
+`./tests/run_tests.sh` runs gameplay regressions, including the steam machinery tests. `./tests/run_network_tests.sh` checks inventory transfers and reconnecting, then launches a host and two guests to verify mining in both directions, visible terrain meshes, edits during joining, rejection correction, stale updates, distant exploration, and chunk reloading. Use `--inventory` or `--world-sync` to run one group. `tests/character_tour.gd` and `tests/steam_tour.gd` provide windowed visual checks.

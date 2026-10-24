@@ -456,6 +456,7 @@ func _process(delta: float) -> void:
 		use()
 
 func mine(delta: float) -> void:
+	if game.network != null and game.network.client() and not game.network.pending_breaks.is_empty(): return
 	var held: int = game.inventory.held().id
 	if target.pos != mining_pos or held != mining_tool:
 		mining = 0
@@ -491,7 +492,7 @@ func mine(delta: float) -> void:
 		if game.world.node_at(target.pos) != target.id: Hunger.exhaust(self,Hunger.DIG)
 		mining = 0.0
 		crack_stage = -1
-		if game.gamemode!="creative": game.inventory.damage_tool()
+		if game.gamemode!="creative" and not game.network.client(): game.inventory.damage_tool()
 
 # Mineclonia `mcl_offhand.get_offhand`: the second hand's contents. Shields,
 # totems and placeable items consult it when the main hand cannot serve, which is
@@ -553,6 +554,11 @@ func _shear_sheep(sheep: Creature) -> void:
 	if game.gamemode != "creative": game.inventory.damage_tool()
 
 func use() -> void:
+	if game.network.client() and not game.network.pending_breaks.is_empty(): return
+	var recipient: int = game.network.target_player() if game.network != null else 0
+	if recipient != 0 and game.network.pass_held(recipient,Input.is_physical_key_pressed(KEY_CTRL)):
+		swing = 1
+		return
 	var held: int = game.inventory.held().id
 	# Mineclonia shears are a use/right-click action on the aimed sheep. Handle
 	# the animal before a block behind it, including already-sheared sheep.

@@ -6,6 +6,7 @@ var target_yaw: float = 0.0
 var appearance: Dictionary = {}
 var body: Node3D
 var initial: bool = true
+var motion := NetworkMotion.new()
 
 func set_appearance(value: Dictionary) -> void:
 	var clean: Dictionary = CharacterSkin.clean(value)
@@ -17,9 +18,10 @@ func set_appearance(value: Dictionary) -> void:
 
 func move_to(at: Vector3, yaw: float) -> void:
 	destination = at; target_yaw = yaw
-	if initial or position.distance_to(at) > 12:
-		position = at; rotation.y = yaw; initial = false
+	motion.update(at,yaw)
+	position = motion.current; rotation.y = motion.current_yaw; initial = false
 
 func _process(dt: float) -> void:
-	position = position.lerp(destination,minf(1,dt*15))
-	rotation.y = lerp_angle(rotation.y,target_yaw,minf(1,dt*15))
+	motion.advance(dt)
+	position = motion.current
+	rotation.y = motion.current_yaw

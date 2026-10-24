@@ -924,7 +924,8 @@ func _overlay_state() -> Array:
 	var at: Vector3 = player.position
 	var held: Dictionary = game.inventory.held()
 	var target: Dictionary = player.target
-	return [size,game.dimension,int(at.x),int(at.y),int(at.z),at.y < 0,at.y < -32,player.underwater,PumpkinHelmet.worn(player),game.day_number(),game.time_name(),game.daylight > 0.4,target.get("id",-1),target.get("pos",Vector3i.ZERO),held.id,held.get("data",{}).get("custom_name",""),game.gamemode,player.health,player.hunger,player.flying,player.gliding,game.xp_level(),game.xp_progress(),player.armor_points(),player.breath,game.journal_step,game.touch]
+	var recipient: int = game.network.target_player()
+	return [recipient,size,game.dimension,int(at.x),int(at.y),int(at.z),at.y < 0,at.y < -32,player.underwater,PumpkinHelmet.worn(player),game.day_number(),game.time_name(),game.daylight > 0.4,target.get("id",-1),target.get("pos",Vector3i.ZERO),held.id,held.get("data",{}).get("custom_name",""),game.gamemode,player.health,player.hunger,player.flying,player.gliding,game.xp_level(),game.xp_progress(),player.armor_points(),player.breath,game.journal_step,game.touch]
 
 # The powder snow frost, drawn as a vignette that deepens with the source's stage.
 # Stage 1 is a faint icy edge, stage 2 spreads further in, and stage 3 closes over
@@ -974,6 +975,12 @@ func _draw() -> void:
 		draw_style_box(_drawn_style(Color(0.12,0.12,0.12,0.76)),Rect2(size.x-217,24,193,45))
 		draw_circle(Vector2(size.x-193,46),7,Color("e8cc80") if game.daylight>0.4 else Color("bdcede"))
 		draw_string(font,Vector2(size.x-175,51),time_label,HORIZONTAL_ALIGNMENT_LEFT,-1,12,TEXT)
+		var recipient: int = game.network.target_player()
+		if recipient != 0 and game.inventory.held().id != 0:
+			var name_text: String = CharacterSkin.clean(game.network.players[recipient].get("skin",{})).name
+			var hint: String = "Use: give 1 to "+name_text if game.touch else "RMB: give 1 to "+name_text+"  ·  Ctrl + RMB: give stack"
+			var hint_width: float = font.get_string_size(hint,HORIZONTAL_ALIGNMENT_LEFT,-1,13).x
+			draw_string(font,Vector2(center.x-hint_width/2,center.y+43),hint,HORIZONTAL_ALIGNMENT_LEFT,-1,13,TEXT)
 		if not player.target.is_empty():
 			var node_name: String = Nodes.title(player.target.id)
 			var width: float = font.get_string_size(node_name,HORIZONTAL_ALIGNMENT_LEFT,-1,15).x+36

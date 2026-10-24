@@ -31,7 +31,7 @@ func _ready() -> void:
 	add_child(mesh_instance)
 
 func _physics_process(delta: float) -> void:
-	if not game.playing(): return
+	if not game.playing() and not (game.network.active() and not game.network.client() and game.state not in ["title","loading"]): return
 	if Engine.is_in_physics_frame():
 		step_delta += delta
 		if Engine.get_process_frames() == step_frame and step_delta < 1.0/30.0: return
@@ -49,13 +49,15 @@ func _physics_process(delta: float) -> void:
 	if ItemPhysics.step(self,delta): return
 	rotation.y += delta
 	mesh_instance.position.y = sin(age*3)*0.04
+	if game.network.active() and not game.network.client() and age > 0.6 and pickup_delay <= 0:
+		if game.network.collect_drop(self,delta): return
 	var destination: Vector3 = game.player.position+Vector3.UP*0.8
 	var distance: float = position.distance_to(destination)
 	# The magnet runs when the item fits either hand: the source's pickup fills the
 	# offhand first, so a full backpack must not block a pickup that the offhand
 	# can take — which is `core.item_pickup`'s whole point.
 	var room: int = game.inventory.capacity(item_id,wear,data)+ItemPhysics.offhand_room(game,self)
-	if age > 0.6 and pickup_delay <= 0 and distance < 2.4 and room >= amount:
+	if not game.network.active() and age > 0.6 and pickup_delay <= 0 and distance < 2.4 and room >= amount:
 		position = position.move_toward(destination,delta*8)
 		if distance < 0.65:
 			# Source `core.item_pickup`: the **offhand** is filled first, and only

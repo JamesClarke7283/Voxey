@@ -58,13 +58,14 @@ func configure(p: Vector3i, d: Vector3i, support: Vector3i = Vector3i.DOWN) -> v
 		game.network.configure_node.rpc_id(1,p,d,support)
 	refresh(p)
 
-func register(p: Vector3i, id: int) -> void:
+func register(p: Vector3i, id: int, visual_only: bool = false) -> void:
 	if VoxelWorld.load_hooks(id) & VoxelWorld.HOOK_CIRCUIT:
 		tracked[p] = id
-		SteamMachines.registered(world,p,id)
-		if RedstoneSensors.is_device(id): RedstoneSensors.registered(world,p,id)
-		if RedstoneInputs.is_device(id): RedstoneInputs.registered(world,p,id)
-		if id == NoteBlocks.ID: NoteBlocks.state(world,p)
+		if not visual_only:
+			SteamMachines.registered(world,p,id)
+			if RedstoneSensors.is_device(id): RedstoneSensors.registered(world,p,id)
+			if RedstoneInputs.is_device(id): RedstoneInputs.registered(world,p,id)
+			if id == NoteBlocks.ID: NoteBlocks.state(world,p)
 	else: tracked.erase(p)
 	refresh(p)
 

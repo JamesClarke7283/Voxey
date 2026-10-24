@@ -2156,7 +2156,8 @@ func drop_stack(slot: Dictionary, amount: int = 1) -> bool:
 	if not world.intersects(ahead,0.1,0.2): origin = ahead
 	if network != null and network.client():
 		var stack: Dictionary = slot.duplicate(true); stack.count = count
-		network.drop_item.rpc_id(1,stack,origin,forward)
+		var carried: Dictionary = network.inventory_snapshot(); carried["drop_from_cursor"] = is_same(slot,hud.cursor)
+		network.drop_item.rpc_id(1,stack,origin,forward,player.position,carried)
 	else:
 		var drop := spawn_drop(origin,int(slot.id),count,int(slot.wear),slot.get("data",{}))
 		if drop == null: return false

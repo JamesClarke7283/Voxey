@@ -76,6 +76,7 @@ var sky_log: Array[Vector2i] = []
 var sky_log_start: int = 0
 var tick: float = 0.0
 var active: bool = true
+var network_replica: bool = false
 var last_mesh_ms: float = 0.0
 
 func configure(seed_number: int, atlas: Texture2D, dimension_name: String = "overworld") -> void:
@@ -136,7 +137,7 @@ func _process(delta: float) -> void:
 					if WorldBounds.horizontal(Vector3i(c.x*16,0,c.y*16)) and not columns.has(c) and c not in generation_queue: generation_queue.append(c)
 		# Pop the nearest request from the end. The queue changes only when the
 		# player crosses a column boundary or changes view distance.
-		generation_queue.sort_custom(func(a: Vector2i,b: Vector2i): return a.distance_squared_to(center) > b.distance_squared_to(center))
+		generation_queue.sort_custom(func(a: Vector2i,b: Vector2i): return _focus_distance(a,center) > _focus_distance(b,center))
 		for c in columns.keys():
 			var keep: bool = false
 			for focus in [center]+interest_centers:
@@ -154,7 +155,7 @@ func _process(delta: float) -> void:
 		pending.erase(job.coord)
 		NodeInfo.learn(job.info)
 		if job.gen.world_seed == seed_value and job.gen.dimension == dimension: generator_pool.append(job.gen)
-		if maxi(absi(job.coord.x-center.x), absi(job.coord.y-center.y)) <= radius+1:
+		if column_in_range(job.coord,center):
 			_apply_column(job.result)
 		if Time.get_ticks_usec() - started > 5000: break
 	for job in remesh_jobs.duplicate():
@@ -162,7 +163,9 @@ func _process(delta: float) -> void:
 		WorkerThreadPool.wait_for_task_completion(job.task)
 		remesh_jobs.erase(job)
 		NodeInfo.learn(job.info)
-		if blocks.has(job.coord): _apply_mesh(job.coord,job.result)
+		# A column may unload and reload while its old mesh is still building.
+		# Never attach that result to the new block, or overwrite a newer edit.
+		if blocks.has(job.coord) and blocks[job.coord].root == job.root and not dirty.has(job.coord): _apply_mesh(job.coord,job.result)
 		if Time.get_ticks_usec() - started > 7000: break
 	var remesh_slots: int = maxi(2,generation_slots)
 	while remesh_jobs.size() < remesh_slots and not dirty.is_empty():
@@ -185,7 +188,7 @@ func _process(delta: float) -> void:
 	while jobs.size() < generation_slots and not generation_queue.is_empty():
 		var nearest: Vector2i = generation_queue.pop_back()
 		if not columns.has(nearest) and not pending.has(nearest): _queue_column(nearest)
-	if active:
+	if active and not network_replica:
 		fluids.update(delta)
 		Campfires.update(self,delta)
 		Cauldrons.update(self,delta)
@@ -228,7 +231,17 @@ func _process(delta: float) -> void:
 			_simulate()
 			PointedDripstone.simulate(self,1.0)
 
-func record_edit(p: Vector3i, id: int) -> void:
+func column_in_range(column: Vector2i, center: Vector2i) -> bool:
+	for focus in [center]+interest_centers:
+		if maxi(absi(column.x-focus.x),absi(column.y-focus.y)) <= radius+1: return true
+	return false
+
+func _focus_distance(column: Vector2i, center: Vector2i) -> int:
+	var nearest: int = column.distance_squared_to(center)
+	for focus in interest_centers: nearest = mini(nearest,column.distance_squared_to(focus))
+	return nearest
+
+func record_edit(p: Vector3i, id: int, previous: int = -1) -> void:
 	if not edits.has(p) and edit_count == edits.size():
 		var column := Vector2i(floori(p.x/16.0),floori(p.z/16.0))
 		if not edit_columns.has(column): edit_columns[column] = []
@@ -236,7 +249,7 @@ func record_edit(p: Vector3i, id: int) -> void:
 		edit_count += 1
 	edits[p] = id
 	var owner: Node = get_parent()
-	if owner != null and owner.get("network") != null: owner.network.local_edit(p,id)
+	if owner != null and owner.get("network") != null: owner.network.local_edit(p,id,previous)
 
 func column_edits(column: Vector2i) -> Array:
 	if edit_count != edits.size(): _reindex_edits()
@@ -278,7 +291,7 @@ func _remeshing(coord: Vector3i) -> bool:
 func _start_remesh(coord: Vector3i) -> void:
 	var snapshot: PackedInt32Array = _snapshot(coord)
 	var info: NodeInfo.View = NodeInfo.view()
-	var job: Dictionary = {"coord":coord, "result":[], "info":info}
+	var job: Dictionary = {"coord":coord, "root":blocks[coord].root, "result":[], "info":info}
 	# Player edits jump ahead of terrain generation in the worker pool.
 	job.task = WorkerThreadPool.add_task(func(): job.result = BlockMesher.build(snapshot,true,info),true,"Remesh map block")
 	remesh_jobs.append(job)
@@ -426,6 +439,18 @@ func _apply_column(result: Dictionary) -> void:
 		if blocks.has(b) and blocks[b].data[local_index(p)] != edits[p]:
 			blocks[b].data[local_index(p)] = edits[p]
 			_mark_dirty(p)
+	if network_replica:
+		# Only the host runs load-time support checks, fluid reactions and loot
+		# generation. A guest needs the visual registrations, not a second simulation.
+		var visible_cells: Dictionary = result.get("special",{}).duplicate()
+		for p in nearby_edits: visible_cells[p] = true
+		for p in visible_cells:
+			if not loaded_at(Vector3(p)): continue
+			var id: int = node_at(p)
+			if load_hooks(id) & HOOK_CIRCUIT: circuits.register(p,id,true)
+			if Torches.has_light(id): get_parent().add_torch(p)
+		column_loaded.emit()
+		return
 	var carts: Dictionary = result.get("corridors",{}).get("carts",{})
 	# Generated leaves and plants are supported as generated. Only an edit within
 	# reach can change that: leaf support is searched within six nodes, a plant
@@ -743,6 +768,32 @@ func area_ready(p: Vector3) -> bool:
 func loaded_at(p: Vector3) -> bool:
 	return columns.has(Vector2i(floori(p.x/16.0),floori(p.z/16.0)))
 
+# Network replicas apply the host's final cells, without running destruction,
+# falling, piston or fluid hooks again in a different order on every peer.
+# Persist even unloaded cells so a generation job can reconcile its snapshot.
+func apply_network_edit(p: Vector3i, id: int, previous: int = -1) -> void:
+	if not WorldBounds.horizontal(p) or p.y <= generator.min_y() or p.y >= generator.max_y(): return
+	record_edit(p,id,previous)
+	var b: Vector3i = block_coord(p)
+	if not blocks.has(b):
+		if not loaded_at(Vector3(p)) or p.y < generator.terrain_ceiling(): return
+		if id == Nodes.AIR: return
+		_create_air_block(b)
+	var old_id: int = blocks[b].data[local_index(p)]
+	if old_id == id: return
+	blocks[b].data[local_index(p)] = id
+	node_writes += 1
+	_sky_changed(Vector2i(b.x,b.z))
+	_mark_dirty(p)
+	for dx in range(-1,2):
+		for dz in range(-1,2): dirty[block_coord(p+Vector3i(dx,0,dz))] = true
+	if not RedstoneCircuit.preserves(old_id,id): block_states.erase(station_key(p))
+	circuits.register(p,id,true)
+	var owner: Node = get_parent()
+	if owner != null and owner.has_method("remove_torch"):
+		if Torches.has_light(old_id): owner.remove_torch(p)
+		if Torches.has_light(id): owner.add_torch(p)
+
 func set_node(p: Vector3i, id: int) -> bool:
 	var b: Vector3i = block_coord(p)
 	if not WorldBounds.horizontal(p) or p.y <= generator.min_y() or p.y >= generator.max_y(): return false
@@ -750,6 +801,11 @@ func set_node(p: Vector3i, id: int) -> bool:
 		if p.y < generator.terrain_ceiling() or not loaded_at(Vector3(p)): return false
 		_create_air_block(b)
 	var old_id: int = blocks[b].data[local_index(p)]
+	if network_replica:
+		# Predictions use the same visual-only path as confirmed edits. Running
+		# support physics here would send extra edits and create duplicate loot.
+		apply_network_edit(p,id,old_id)
+		return true
 	if old_id != id and old_id in [VillageContent.COMPOSTER,VillageContent.CAULDRON]: stations.erase(station_key(p))
 	if old_id != id: _sky_changed(Vector2i(b.x,b.z))
 	blocks[b].data[local_index(p)] = id
@@ -771,7 +827,7 @@ func set_node(p: Vector3i, id: int) -> bool:
 	if (NodeInfo.of(id)|NodeInfo.of(old_id)) & NodeInfo.FUEL:
 		for side in Fire.SIDES: Fire.track(self,p+side)
 	circuits.changed(p,old_id,id,_near(p) & NEAR_OBSERVER != 0)
-	record_edit(p,id)
+	record_edit(p,id,old_id)
 	if id == Nodes.SUGAR_CANE or id == Nodes.CACTUS and node_at(p+Vector3i.DOWN) != Nodes.CACTUS or WoodTypes.is_sapling(id) or not CropFarming.is_crop(id) and VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3: growth[p] = 0.0
 	else: growth.erase(p)
 	_mark_dirty(p)
