@@ -53,6 +53,11 @@ static func food_effects(player: VoxeyPlayer, id: int, chance: float = -1.0) -> 
 		PotionEffects.apply(player,"nausea",15,2)
 	elif id == VillageContent.SPIDER_EYE:
 		PotionEffects.apply(player,"poison",5)
+	elif id == Trials.ENCHANTED_APPLE:
+		PotionEffects.apply(player,"fire_resistance",300)
+		PotionEffects.apply(player,"resistance",300)
+		PotionEffects.apply(player,"absorption",120,4)
+		PotionEffects.apply(player,"regeneration",20,2)
 	elif id == Nodes.GOLDEN_APPLE:
 		PotionEffects.apply(player,"absorption",120)
 		PotionEffects.apply(player,"regeneration",5,2)

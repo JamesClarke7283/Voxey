@@ -4,9 +4,16 @@ extends RefCounted
 const CHEST_FIRST = 1250
 const JUNGLE = 1260
 const JUNGLE_CHEST = 1261
-const ORDINARY = [837,839,841,1260,838,840]
-const CHESTS = [1250,1252,1254,1261,1251,1253]
+const ORDINARY = [837,839,841,1260,838,840,13530,13532,13534,BambooWood.RAFT]
+const CHESTS = [1250,1252,1254,1261,1251,1253,13531,13533,13535,BambooWood.CHEST_RAFT]
+const MATERIALS = [Nodes.PLANKS,6035,6067,6099,6131,6163,13004,13036,13068,BambooWood.PLANKS]
 const DATA = {
+	13530:{"name":"Cherry boat","color":"e6b7bd","stack":1,"family":"boat"},
+	13531:{"name":"Cherry chest boat","color":"e6b7bd","stack":1,"family":"chest_boat"},
+	13532:{"name":"Mangrove boat","color":"87553c","stack":1,"family":"boat"},
+	13533:{"name":"Mangrove chest boat","color":"87553c","stack":1,"family":"chest_boat"},
+	13534:{"name":"Pale oak boat","color":"ded4c2","stack":1,"family":"boat"},
+	13535:{"name":"Pale oak chest boat","color":"ded4c2","stack":1,"family":"chest_boat"},
 	1260:{"name":"Jungle boat","color":"b88661","stack":1,"family":"boat"},
 	1261:{"name":"Jungle chest boat","color":"b88661","stack":1,"family":"chest_boat"},
 	1250:{"name":"Oak chest boat","color":"b7955e","stack":1,"family":"chest_boat"},
@@ -30,12 +37,12 @@ static func is_passenger(mob: Creature) -> bool: return mob.has_meta("boat_key")
 
 static func recipes(inv: Inventory) -> void:
 	for i in ORDINARY.size():
-		var p: int = WoodTypes.PLANKS[i]
+		var p: int = MATERIALS[i]
 		inv._recipe(Nodes.title(ORDINARY[i]),ORDINARY[i],1,[p,0,p,p,p,p],3,"table")
 		inv._recipe(Nodes.title(CHESTS[i]),CHESTS[i],1,[Nodes.CHEST,ORDINARY[i]],1,"hand")
 
 static func can_ride(mob: Creature) -> bool:
-	if mob == null or mob.is_queued_for_deletion() or mob.health <= 0 or is_passenger(mob): return false
+	if mob == null or mob.is_queued_for_deletion() or mob.health <= 0 or is_passenger(mob) or MobJockeys.vehicle(mob) != null: return false
 	# These local counterparts explicitly disable can_ride_boat in mobs_mc.
 	if mob.kind in ["end_crystal","ender_dragon","ghast","spider","iron_golem","horse","magma_cube"]: return false
 	if mob.kind == "slime" and mob is ExpeditionCreature and mob.slime_size != 1: return false
@@ -72,7 +79,7 @@ static func clean_record(value: Variant) -> Dictionary:
 	return result
 
 func spawn(id: int, pos: Vector3, yaw: float = 0, metadata: Dictionary = {}) -> BoatEntity:
-	if not is_boat(id) or not pos.is_finite() or not game.world.loaded_at(pos) or game.world.intersects(pos,0.5,0.55): return null
+	if not is_boat(id) or not pos.is_finite() or not game.world.loaded_at(pos) or hull_blocked(game.world,id,pos): return null
 	for boat in active.values():
 		if is_instance_valid(boat) and not boat.removed and boat.position.distance_to(pos) < 1.05: return null
 	var serial: int = int(Farming.number(game.world.adventure_state.get("boat_serial",0),0,2147483646))
@@ -84,6 +91,18 @@ func spawn(id: int, pos: Vector3, yaw: float = 0, metadata: Dictionary = {}) -> 
 	var entry: Dictionary = clean_record({"id":id,"position":[pos.x,pos.y,pos.z],"yaw":yaw,"item_data":metadata})
 	records()[key] = entry
 	return _wake(key,entry)
+
+static func hull(id: int) -> AABB:
+	return BambooWood.raft_hull() if BambooWood.is_raft(id) else AABB(Vector3(-0.5,0,-0.5),Vector3(1,0.55,1))
+
+static func selection(id: int) -> AABB:
+	if BambooWood.is_raft(id): return AABB(Vector3(-0.7,0,-0.7),Vector3(1.4,0.3,1.4))
+	return AABB(Vector3(-0.7,-0.15,-0.7),Vector3(1.4,0.9 if is_chest(id) else 0.7,1.4))
+
+static func hull_blocked(world: VoxelWorld, id: int, pos: Vector3) -> bool:
+	var box: AABB = hull(id)
+	var center: Vector3 = box.position+Vector3(box.size.x/2.0,0,box.size.z/2.0)
+	return world.intersects(pos+center,box.size.x/2.0,box.size.y,box.size.z/2.0)
 
 func _wake(key: String, entry: Dictionary) -> BoatEntity:
 	var saved_rider: bool = entry.get("rider",false)
@@ -138,6 +157,7 @@ func hibernate(boat: BoatEntity) -> void:
 		Farming.remember(mob)
 		if mob is VillageMob or mob is SnowGolem: mob.store_record()
 		if mob is NetherResident: mob.ensure_record(); mob.store_record()
+		MobJockeys.remove_pair(mob)
 		mob.queue_free(); boat.passenger = null
 	active.erase(boat.key); boat.queue_free()
 
@@ -191,7 +211,7 @@ func drive(delta: float, direction: Vector3) -> void:
 		player.survival_timer = 0
 		if player.underwater and not game.survival.effects.has("water_breathing"):
 			player.breath = maxf(0,player.breath-1.0/(1+Enchantments.worn(player,"Respiration")))
-			if player.breath <= 0: player.hurt(2,true)
+			if player.breath <= 0: player.hurt(2,true,Vector3.INF,"drown")
 		else: player.breath = minf(10,player.breath+3)
 
 func target() -> BoatEntity:
@@ -206,7 +226,8 @@ func target() -> BoatEntity:
 	var nearest: BoatEntity
 	for boat in active.values():
 		if not is_instance_valid(boat) or boat.removed or boat.is_queued_for_deletion(): continue
-		var box := AABB(boat.position+Vector3(-0.7,-0.15,-0.7),Vector3(1.4,0.9 if is_chest(boat.item_id) else 0.7,1.4))
+		var bounds: AABB = selection(boat.item_id)
+		var box := AABB(boat.position+bounds.position,bounds.size)
 		var point: Variant = box.intersects_ray(origin,direction)
 		if point is Vector3 and origin.distance_to(point) < distance:
 			distance = origin.distance_to(point); nearest = boat

@@ -47,14 +47,14 @@ static func supported(world: VoxelWorld, p: Vector3i) -> bool:
 	return false
 
 static func harvest(id: int, slot: Dictionary) -> Array:
-	if not is_snow(id) or Nodes.tool_kind(int(slot.get("id",0))) != 2: return []
-	return [[BASE,layers(id)]] if Inventory.enchantment(slot,"Silk Touch") > 0 else [[Nodes.SNOWBALL,layers(id)+1]]
+	return Harvesting.harvest(id,slot).get("drops",[]) if is_snow(id) else []
 
 static func drop(world: VoxelWorld, p: Vector3i, id: int) -> void:
 	if not is_snow(id) or world.node_at(p) != id: return
 	if world.set_node(p,Nodes.AIR):
 		var game: Node = world.get_parent()
-		if game != null and game.has_method("spawn_drop"): game.spawn_drop(Vector3(p)+Vector3(0.5,height(id)*0.5,0.5),Nodes.SNOWBALL,layers(id)+1)
+		if game != null and game.has_method("spawn_drop"):
+			for entry in Harvesting.harvest(id,{"id":-1}).get("drops",[]): game.spawn_drop(Vector3(p)+Vector3(0.5,height(id)*0.5,0.5),entry[0],entry[1])
 
 static func try_place(game: Node3D, target: Dictionary) -> bool:
 	var held: Dictionary = game.inventory.held()

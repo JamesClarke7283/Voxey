@@ -7,6 +7,7 @@ var velocity := Vector3.ZERO
 var age: float = 0.0
 var returning: bool = false
 var consumed: bool = true
+var hit_mobs: Array = []
 
 func _ready() -> void:
 	var color := Color("79c0ba")
@@ -30,7 +31,7 @@ func _physics_process(delta: float) -> void:
 		if Inventory.enchantment(stack,"Loyalty"): returning = true
 		else: drop()
 		return
-	velocity.y -= 12*delta
+	velocity.y -= 24*delta
 	var motion: Vector3 = velocity*delta; var steps: int = maxi(1,ceili(motion.length()/0.08))
 	for i in steps:
 		var next: Vector3 = position+motion/steps
@@ -40,16 +41,23 @@ func _physics_process(delta: float) -> void:
 			impact(); return
 		position = next
 		for mob in game.creatures.get_children():
-			if not mob.is_queued_for_deletion() and position.distance_to(mob.center()) < mob.width+0.25:
+			if not hit_mobs.has(mob.get_instance_id()) and not mob.is_queued_for_deletion() and position.distance_to(mob.center()) < mob.width+0.25:
+				hit_mobs.append(mob.get_instance_id())
 				var damage: float = 8
 				if Fluids.water(game.world.node_at(Vector3i(mob.position.floor()))) or mob.kind == "turtle": damage += Inventory.enchantment(stack,"Impaling")*2.5
-				mob.hit(damage,position-velocity)
+				var was_alive: bool = mob.health > 0
+				if MobBows.handles(mob.kind): MobBows.struck_by(mob,game.player)
+				if mob.kind == "pillager": MobCrossbows.struck_by(mob,game.player)
+				mob.hit(damage,position-velocity,"trident",0,game.player)
+				MobBows.killed_by(mob,game.player,"trident",was_alive)
 				# `a_throwaway_joke`: hit a creature with a thrown trident.
 				game.achievements.award("a_throwaway_joke")
 				if Inventory.enchantment(stack,"Channeling") and game.survival.weather() == "thunder" and game.world.open_sky(Vector3i(mob.position.floor())):
 					PotionEffects.apply(mob,"burning",8); mob.hit(5)
 					for y in 18: game.puff(mob.position+Vector3.UP*(y+1),Color("e4efff"),1,0.05)
-				impact(); return
+				velocity *= -0.175
+				if velocity.length() > 0.01: look_at(position+velocity,Vector3.RIGHT if absf(velocity.normalized().y) > 0.99 else Vector3.UP)
+				return
 	if velocity.length() > 0.01: look_at(position+velocity,Vector3.RIGHT if absf(velocity.normalized().y) > 0.99 else Vector3.UP)
 
 func impact() -> void:

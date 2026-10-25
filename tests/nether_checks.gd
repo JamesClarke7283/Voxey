@@ -1,7 +1,18 @@
 extends RefCounted
 
+static func load_paused(suite: SceneTree, game: Node3D, game_processing: bool, world_processing: bool) -> bool:
+	# Lifecycle callers freeze simulation. Loading still needs Game._process to
+	# finish the new world and restore its saved entities before we inspect it.
+	game.set_process(true); game.world.set_process(true)
+	var deadline: int = Time.get_ticks_msec()+60000
+	while game.state == "loading" and Time.get_ticks_msec() < deadline: await suite.process_frame
+	var loaded: bool = game.state != "loading"
+	game.pause(); game.set_process(game_processing); game.world.set_process(world_processing)
+	return loaded
+
 static func run(suite: SceneTree, game: Node3D) -> void:
 	game.pause()
+	var game_processing: bool = game.is_processing(); var world_processing: bool = game.world.is_processing()
 	var old_slots: Array = game.inventory.slots.duplicate(true)
 	var old_selected: int = game.inventory.selected
 	var old_offhand: Dictionary = game.player.offhand_slot.duplicate(true)
@@ -37,27 +48,31 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.state = "playing"; drop._physics_process(0.01); game.state = "paused"
 	suite.check(drop.is_queued_for_deletion() and game.inventory.count_item(Nodes.ARROW_ITEM) == 65,"pickup fills compatible stacks and uses free inventory space")
 	var arrow: Arrow = game.spawn_arrow(game.player.position+Vector3(3,0.4,0),Vector3.ZERO)
-	arrow.set_physics_process(false); arrow.stuck = true; arrow.life = 599
+	arrow.set_physics_process(false); arrow.stuck = true; arrow.life = 59
 	game.state = "playing"; arrow._physics_process(0.5); game.state = "paused"
-	suite.check(not arrow.is_queued_for_deletion(),"grounded arrow persists until ten active minutes")
-	game.state = "playing"; arrow._physics_process(0.5); game.state = "paused"
-	suite.check(arrow.is_queued_for_deletion(),"grounded arrow expires at ten minutes")
+	suite.check(not arrow.is_queued_for_deletion(),"embedded arrow persists until one active minute")
+	game.state = "playing"; arrow._physics_process(0.5001); game.state = "paused"
+	suite.check(arrow.is_queued_for_deletion(),"embedded arrow expires after one minute")
 	arrow = game.spawn_arrow(game.player.position+Vector3(0.3,0.5,0),Vector3.ZERO)
 	arrow.set_physics_process(false); arrow.stuck = true
 	var before_count: int = game.inventory.count_item(Nodes.ARROW_ITEM)
-	game.state = "playing"; arrow._physics_process(0.01); game.state = "paused"
+	game.state = "playing"; arrow._physics_process(0.25)
+	var pickup: ItemDrop = game.drops.get_children().back(); pickup.age = 1; pickup.position = game.player.position+Vector3.UP*0.8; pickup._physics_process(0)
+	game.state = "paused"
 	suite.check(arrow.is_queued_for_deletion() and game.inventory.count_item(Nodes.ARROW_ITEM) == before_count+1,"both enemy and player ground arrows can be recovered")
 	var skeleton: Creature = game.spawn_creature("skeleton",game.player.position+Vector3(0,0,-8))
 	skeleton.set_physics_process(false)
 	skeleton.model.rotation.y = 0
-	suite.check(not skeleton.facing_player(),"skeleton cannot shoot a player behind its model")
+	suite.check(not skeleton.facing_player(),"the initial skeleton model faces away from the player")
 	var shots_before: int = game.entities.get_child_count()
 	game.state = "playing"; skeleton._physics_process(0.01); game.state = "paused"
-	suite.check(game.entities.get_child_count() == shots_before,"skeleton physics does not fire backward while turning")
+	suite.check(game.entities.get_child_count() == shots_before,"the skeleton begins drawing instead of firing on its first turn")
 	skeleton.model.rotation.y = PI
 	suite.check(skeleton.facing_player(),"skeleton may shoot after facing the player")
+	skeleton.bow_ai.using = 1.0
 	game.state = "playing"; skeleton._physics_process(0.01); game.state = "paused"
-	suite.check(game.entities.get_child_count() == shots_before+1,"facing skeleton fires from its bow after turning")
+	suite.check(game.entities.get_child_count() == shots_before+1,"skeleton fires after facing its target and completing the source draw")
+	Farming.forget(skeleton)
 	skeleton.free()
 	for d in VoxelWorld.SIDES:
 		game.world.set_node(p,Nodes.LAVA)
@@ -110,9 +125,9 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.world.set_node(p,Nodes.ENCHANTING_TABLE)
 	for slot in game.inventory.slots: slot.clear(); slot.merge({"id":0,"count":0,"wear":0})
 	game.inventory.add_item(95); game.inventory.add_item(Nodes.LAPIS,8)
-	game.experience = 1395 # Level 34, enough to exercise all tiers.
+	game.experience = 0
 	var xp: float = game.experience
-	suite.check(not game.enchant_item(0,3,p) and game.experience == xp and game.inventory.count_item(Nodes.LAPIS) == 8,"missing bookshelves block enchanting without spending XP or lapis")
+	suite.check(not game.enchant_item(0,3,p) and game.experience == xp and game.inventory.count_item(Nodes.LAPIS) == 8,"insufficient levels block enchanting without spending XP or lapis")
 	for x in range(-2,3):
 		for z in range(-2,3):
 			if maxi(absi(x),absi(z)) == 2: game.world.set_node(p+Vector3i(x,0,z),Nodes.BOOKSHELF)
@@ -124,7 +139,9 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 		for z in range(-1,2):
 			if x != 0 or z != 0: game.world.set_node(p+Vector3i(x,0,z),Nodes.AIR)
 	suite.check(game.bookshelf_power(p) == 15,"fifteen unobstructed bookshelves provide maximum enchanting power")
-	suite.check(game.enchant_item(0,3,p) and game.inventory.count_item(Nodes.LAPIS) == 5 and game.experience < xp and Inventory.enchantment(game.inventory.slots[0],"Efficiency") == 3,"tier III enchanting spends three lapis and three levels and upgrades the actual tool")
+	game.experience = 1395 # Source level 30.
+	var offer: Dictionary = load("res://tests/enchanting_checks.gd").seed_offer(game,game.inventory.slots[0],15,2)
+	suite.check(game.enchant_item(0,3,p,offer.token) and game.inventory.count_item(Nodes.LAPIS) == 5 and game.experience == ExperienceCurve.total(27) and game.inventory.slots[0].data.enchantments == offer.enchantments,"tier III enchanting spends three lapis and three levels and applies its actual generated offer")
 	xp = game.experience
 	suite.check(not game.enchant_item(0,1,p) and game.experience == xp,"re-enchanting an enchanted item cannot spend resources")
 	game.inventory.slots[1] = {"id":Nodes.WRITABLE_BOOK,"count":1,"wear":0,"data":{"title":"Cave notes","text":"Lava below.\nBring water."}}
@@ -155,37 +172,32 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var saved_item: Dictionary = game.inventory.slots[0].duplicate(true)
 	game.spawn_drop(Vector3(p)+Vector3(4,0,0),Nodes.ARROW_ITEM,1,0,{},597)
 	arrow = game.spawn_arrow(Vector3(p)+Vector3(4,0.2,0),Vector3.ZERO)
-	arrow.stuck = true; arrow.life = 590; arrow.set_physics_process(false)
+	arrow.stuck = true; arrow.life = 59; arrow.set_physics_process(false)
+	arrow.blocked_by = "Deflector"; arrow.deflected = true
 	suite.check(game.save_game("user://nether_check.json"),"enchantments, books and grounded arrows save")
 	var saved: Dictionary = game.read_save("user://nether_check.json")
 	suite.check(Inventory.clean_slot(saved.inventory[0]) == saved_item and saved.inventory[2].data.text == "A saved draft","saved item metadata retains enchantments and book text")
-	suite.check(saved.arrows.size() == 1 and saved.arrows[0].life == 590,"save preserves grounded arrow age")
+	suite.check(saved.arrows.any(func(row): return row.get("stuck",false) and row.life == 59 and row.get("blocked_by","") == "Deflector"),"save preserves the embedded arrow's age alongside in-flight projectiles")
 	game.player.position = Vector3(p)+Vector3(0.5,1.01,3.5)
 	game.travel_dimension("nether")
-	var deadline: int = Time.get_ticks_msec()+30000
-	while game.state == "loading" and Time.get_ticks_msec() < deadline: await suite.process_frame
-	game.pause()
-	suite.check(game.dimension == "nether" and game.world.dimension == "nether" and not game.world.intersects(game.player.position),"portal travel streams the Nether and creates a safe arrival")
+	var loaded: bool = await load_paused(suite,game,game_processing,world_processing)
+	suite.check(loaded and game.dimension == "nether" and game.world.dimension == "nether" and not game.world.intersects(game.player.position),"portal travel streams the Nether and creates a safe arrival")
 	var nether_edit := Vector3i(game.player.position.floor())+Vector3i(3,0,0)
 	game.world.set_node(nether_edit,Nodes.GOLD_BLOCK)
 	game.travel_dimension("overworld")
-	deadline = Time.get_ticks_msec()+30000
-	while game.state == "loading" and Time.get_ticks_msec() < deadline: await suite.process_frame
-	game.pause()
-	suite.check(game.world.node_at(p) == Nodes.ENCHANTING_TABLE and game.inventory.slots[0] == saved_item,"returning to the Overworld restores edits and keeps enchanted inventory")
+	loaded = await load_paused(suite,game,game_processing,world_processing)
+	suite.check(loaded and game.world.node_at(p) == Nodes.ENCHANTING_TABLE and game.inventory.slots[0] == saved_item,"returning to the Overworld restores edits and keeps enchanted inventory")
 	suite.check(game.dimension_states.nether.edits.any(func(entry): return int(entry[3]) == Nodes.GOLD_BLOCK),"Nether edits are stored independently from Overworld edits")
 	game.save_game("user://nether_check.json")
 	saved = game.read_save("user://nether_check.json")
 	suite.check(saved.dimensions.has("overworld") and saved.dimensions.has("nether"),"both dimensions persist in one world save")
 	game.load_world_data(saved)
-	deadline = Time.get_ticks_msec()+30000
-	while game.state == "loading" and Time.get_ticks_msec() < deadline: await suite.process_frame
-	game.pause()
-	suite.check(game.inventory.slots[0] == saved_item and game.inventory.slots[2].data.text == "A saved draft","loading a saved world restores enchanted gear and written text")
+	loaded = await load_paused(suite,game,game_processing,world_processing)
+	suite.check(loaded and game.inventory.slots[0] == saved_item and game.inventory.slots[2].data.text == "A saved draft","loading a saved world restores enchanted gear and written text")
 	var restored_arrow: bool = false
 	for entity in game.entities.get_children():
-		if entity is Arrow and entity.stuck and entity.life > 580: restored_arrow = true
-	suite.check(restored_arrow,"loading a world restores stuck arrows without resetting their lifetime")
+		if entity is Arrow and entity.stuck and entity.life > 58 and entity.blocked_by == "Deflector" and entity.deflected: restored_arrow = true
+	suite.check(restored_arrow,"loading a world restores stuck arrows without resetting their lifetime or deflection provenance")
 	for kind in ["sheep","cow","pig","chicken","piglin","magma_cube"]:
 		var mob: Creature = game.spawn_creature(kind,game.player.position+Vector3(3,0,0))
 		mob.set_physics_process(false)

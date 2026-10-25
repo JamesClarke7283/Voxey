@@ -208,14 +208,16 @@ static func try_place(game: Node3D, target: Dictionary) -> bool:
 	game.sound("place"); game.player.swing = 1
 	return true
 
-static func break_node(game: Node3D, p: Vector3i, id: int, tool: int, exploded: bool = false) -> bool:
+static func break_node(game: Node3D, p: Vector3i, id: int, tool: int, exploded: bool = false, credit_player: bool = true) -> bool:
 	if not is_door(id): return false
 	var partner: Vector3i = other(p,id)
 	var paired: bool = matching_pair(game.world,p,id)
 	if not game.world.set_node(p,Nodes.AIR): return true
 	if paired: game.world.set_node(partner,Nodes.AIR)
 	if exploded or game.gamemode != "creative" and Nodes.harvestable(id,tool): game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,item(id),1,0,Copper.drop_metadata(game.world,p))
-	game._break_particles(p,id); game.sound("break"); game.progress("gather"); game.api.emit_node_broken(p,id)
+	game._break_particles(p,id); game.sound("break")
+	if credit_player: game.progress("gather")
+	game.api.emit_node_broken(p,id)
 	return true
 
 static func migrate_at(world: VoxelWorld, p: Vector3i) -> void:

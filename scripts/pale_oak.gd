@@ -129,7 +129,7 @@ static func bone_meal_moss(world: VoxelWorld, p: Vector3i, rng: RandomNumberGene
 # overworld blocks it names; the mod's own list also has moss and mycelium variants
 # that Voxey does not have.
 static func converts_to_moss(id: int) -> bool:
-	return id in [Nodes.GRASS,Nodes.DIRT,Nodes.STONE,Nodes.COBBLE,LushCaves.MOSS,VillageContent.SWAMP_GRASS]
+	return id in [Nodes.GRASS,Nodes.DIRT,Nodes.STONE,Nodes.COBBLE,LushCaves.MOSS,VillageContent.SWAMP_GRASS,13602,13604]
 
 # --- eyeblossom --------------------------------------------------------------
 

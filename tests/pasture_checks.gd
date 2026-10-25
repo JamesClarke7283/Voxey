@@ -1,5 +1,7 @@
 extends RefCounted
 
+# Above the crop and farmer fixtures so their saved roofs cannot shade this plot.
+
 static func winning_seed(chance: int) -> int:
 	var rng := RandomNumberGenerator.new()
 	for candidate in range(20000):
@@ -10,12 +12,12 @@ static func winning_seed(chance: int) -> int:
 static func run(suite: SceneTree, game: Node3D) -> void:
 	game.pause(); game.world.active = false; game.world.set_process(false); game.set_process(false)
 	game.player.set_process(false); game.player.set_physics_process(false)
-	game.player.position = Vector3(8.5,476.01,10.5); game.daylight = 1.0
+	game.player.position = Vector3(8.5,2801.01,10.5); game.daylight = 1.0
 	var world: VoxelWorld = game.world
 	for x in range(4,15):
 		for z in range(4,15):
-			for y in range(472,481): world.set_node(Vector3i(x,y,z),Nodes.AIR)
-	var p := Vector3i(8,475,8); var source: Vector3i = p+Vector3i.RIGHT
+			for y in range(2797,2806): world.set_node(Vector3i(x,y,z),Nodes.AIR)
+	var p := Vector3i(8,2800,8); var source: Vector3i = p+Vector3i.RIGHT
 	world.set_node(p,Nodes.DIRT)
 	suite.check(Pasture.state(world).cells.has(p),"new exposed dirt enters the pasture simulation index")
 	suite.check(not Pasture.spread(world,p),"isolated dirt cannot create grass without an existing nearby source")
@@ -86,7 +88,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	Pasture.column_loaded(world,column,candidates)
 	# A large ABM snapshot must be spread over frames even when nodes are cheap.
 	var scan_positions: Array = []
-	for i in 1000: scan_positions.append(Vector3i(4+i%10,472+(i/100),4+(i/10)%10))
+	for i in 1000: scan_positions.append(Vector3i(4+i%10,2797+(i/100),4+(i/10)%10))
 	var pending_scan: Dictionary = {"cells":scan_positions,"cursor":0,"spread":false,"decay":false}
 	data.scans = [pending_scan]; data.spread_clock = 0; data.decay_clock = 0
 	Pasture.update(world,0)
@@ -95,24 +97,24 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	suite.check(data.scans.is_empty() and pending_scan.cursor == 1000,"bounded pasture scans finish every candidate without dropping work")
 	# Daylight is absent here, and a full wall prevents a torch lighting grass.
 	game.daylight = 0.0
-	var distant_torch := Vector3i(5,476,8)
+	var distant_torch := Vector3i(5,2801,8)
 	world.set_node(distant_torch+Vector3i.DOWN,Nodes.STONE); world.set_node(distant_torch,Nodes.TORCH)
 	for z in range(1,16):
-		for y in range(474,490): world.set_node(Vector3i(7,y,z),Nodes.STONE)
+		for y in range(2799,2815): world.set_node(Vector3i(7,y,z),Nodes.STONE)
 	start = Time.get_ticks_usec(); var blocked_light: int = Pasture.light(world,p+Vector3i.UP)
 	print("PASTURE BLOCKED LIGHT MS: ",(Time.get_ticks_usec()-start)/1000.0)
 	suite.check(blocked_light < 9,"opaque walls stop nearby artificial light from enabling pasture spread")
 	world.set_node(distant_torch,Nodes.AIR)
 	for z in range(1,16):
-		for y in range(474,490): world.set_node(Vector3i(7,y,z),Nodes.AIR)
+		for y in range(2799,2815): world.set_node(Vector3i(7,y,z),Nodes.AIR)
 	game.daylight = 1.0
 	for x in range(-7,24):
-		for z in range(-7,24): world.set_node(Vector3i(x,478,z),Nodes.STONE)
+		for z in range(-7,24): world.set_node(Vector3i(x,2803,z),Nodes.STONE)
 	start = Time.get_ticks_usec(); var roof_light: int = Pasture.light(world,p+Vector3i.UP)
 	print("PASTURE COVERED SKY LIGHT MS: ",(Time.get_ticks_usec()-start)/1000.0)
 	suite.check(roof_light < 9,"a broad roof prevents sufficient skylight reaching the pasture")
 	for x in range(-7,24):
-		for z in range(-7,24): world.set_node(Vector3i(x,478,z),Nodes.AIR)
+		for z in range(-7,24): world.set_node(Vector3i(x,2803,z),Nodes.AIR)
 	world.set_node(source,Nodes.GRASS); world.set_node(p,Nodes.DIRT)
 	Pasture.spread(world,p); data.spread_clock = 22; data.decay_clock = 7
 	suite.check(game.save_game("user://pasture_check.json"),"regrown pasture saves as normal world block edits")

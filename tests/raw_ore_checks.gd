@@ -12,24 +12,19 @@ static func run(suite: Object, game: Node3D) -> void:
 	suite.check(Nodes.smelt_result(RawOres.RAW_IRON) == Nodes.IRON and Nodes.smelt_result(RawOres.RAW_GOLD) == Nodes.GOLD and Nodes.smelt_result(RawOres.RAW_COPPER) == Nodes.COPPER,"each raw ore smelts into its ingot")
 	suite.check(Nodes.smelt_result(Nodes.DEEP_COPPER_ORE) == Nodes.COPPER,"deepslate copper ore still smelts into copper")
 	# Copper ore rolls the source's two-to-five count and widens with Fortune.
-	# Source `mcl_core.fortune_drop_ore`: the multiplier's chance is
-	# `1 - 2/(fortune+2)`, which at Fortune 0 is exactly zero, so an unenchanted
-	# pickaxe always yields the ore's base drop of two.
-	var plain: int = RawOres.harvest(Nodes.COPPER_ORE,{"id":Nodes.TOOLS,"count":1,"wear":0})[0][1]
-	suite.check(plain == 2,"an unenchanted pickaxe yields the source's base two raw copper")
+	var plain: int = RawOres.harvest(Nodes.COPPER_ORE,{"id":Nodes.TOOLS+5,"count":1,"wear":0})[0][1]
+	suite.check(plain >= 2 and plain <= 5,"an unenchanted stone pickaxe uses the source two-to-five raw copper table")
+	suite.check(RawOres.harvest(Nodes.COPPER_ORE,{"id":Nodes.TOOLS,"count":1,"wear":0}).is_empty(),"a wooden pickaxe cannot harvest copper ore")
 	var rolls: Dictionary = {}
 	var only_raw: bool = true
 	for i in 400:
-		var entry: Array = RawOres.harvest(Nodes.COPPER_ORE,{"id":Nodes.TOOLS,"count":1,"wear":0,"data":{"enchantments":{"Fortune":3}}})[0]
+		var entry: Array = RawOres.harvest(Nodes.COPPER_ORE,{"id":Nodes.TOOLS+5,"count":1,"wear":0,"data":{"enchantments":{"Fortune":3}}})[0]
 		if entry[0] != RawOres.RAW_COPPER: only_raw = false
 		rolls[entry[1]] = true
-	# The source multiplies the ore's base drop of two by `random(2, 1 + fortune)`
-	# when its chance `1 - 2/(fortune + 2)` passes, so Fortune 3 yields either the
-	# untouched base of two (the 40% miss) or an even count from four to eight.
-	suite.check(only_raw and rolls.has(2) and rolls.size() >= 2 and rolls.keys().all(func(v): return v == 2 or (v >= 4 and v <= 8 and v % 2 == 0)),"Fortune multiplies the base copper drop by the source's discrete uniform roll")
-	var lucky: Array = RawOres.harvest(Nodes.COPPER_ORE,{"id":Nodes.TOOLS,"count":1,"wear":0,"data":{"enchantments":{"Fortune":3}}})[0]
-	suite.check(lucky[0] == RawOres.RAW_COPPER and lucky[1] >= 1,"Fortune widens the copper roll")
-	suite.check(RawOres.harvest(Nodes.IRON_ORE,{"id":Nodes.TOOLS,"count":1,"wear":0}).is_empty(),"only copper ore has its own count table")
+	suite.check(only_raw and rolls.size() >= 4 and rolls.keys().all(func(v): return v >= 2 and v <= 20),"Fortune multiplies the independently rolled copper count by the source distribution")
+	var lucky: Array = RawOres.harvest(Nodes.COPPER_ORE,{"id":Nodes.TOOLS+5,"count":1,"wear":0,"data":{"enchantments":{"Fortune":3}}})[0]
+	suite.check(lucky[0] == RawOres.RAW_COPPER and lucky[1] >= 2,"Fortune keeps the raw copper item")
+	suite.check(RawOres.harvest(Nodes.IRON_ORE,{"id":Nodes.TOOLS+5,"count":1,"wear":0}).is_empty(),"the legacy raw-ore wrapper only owns copper; shared harvesting owns iron and gold")
 	# Blocks exist and pair with their raw items.
 	suite.check(RawOres.RAW_IRON == 11300 and RawOres.RAW_IRON_BLOCK == 11303 and RawOres.COPPER_NUGGET == 11306,"raw ore ids match the allocated block")
 	var all_ok: bool = true

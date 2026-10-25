@@ -21,20 +21,21 @@ extends RefCounted
 # rather than falling as a plant.
 
 const FIRST = VillageContent.SEAGRASS_FIRST
-# The supported surfaces, in the source's own order.
-# Voxey has no red sand, so six of the source's seven surfaces exist here.
+# Preserve the six existing saved node IDs; red sand uses a separate free ID.
+const RED_SAND_NODE = 13707
 const SURFACES = [Nodes.DIRT,Nodes.SAND,Nodes.GRAVEL,
-	VillageContent.PRISMARINE,VillageContent.PRISMARINE_BRICK,VillageContent.PRISMARINE_DARK]
-const NAMES = ["dirt","sand","gravel","prismarine","prismarine_brick","prismarine_dark"]
+	VillageContent.PRISMARINE,VillageContent.PRISMARINE_BRICK,VillageContent.PRISMARINE_DARK,ShapeMaterials.RED_SAND]
+const NAMES = ["dirt","sand","gravel","prismarine","prismarine_brick","prismarine_dark","redsand"]
 
 static func is_seagrass(id: int) -> bool: return index(id) >= 0
 static func index(id: int) -> int:
+	if id == RED_SAND_NODE: return 6
 	var i: int = id-FIRST
-	return i if i >= 0 and i < SURFACES.size() else -1
+	return i if i >= 0 and i < 6 else -1
 static func surface(id: int) -> int: return SURFACES[index(id)] if is_seagrass(id) else 0
 static func for_surface(surface_id: int) -> int:
 	var i: int = SURFACES.find(surface_id)
-	return FIRST+i if i >= 0 else 0
+	return RED_SAND_NODE if i == 6 else FIRST+i if i >= 0 else 0
 static func title(id: int) -> String: return "Seagrass"
 static func color(id: int) -> Color: return Color("4f8f5a")
 

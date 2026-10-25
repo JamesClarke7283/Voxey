@@ -15,6 +15,13 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	suite.check(offers == 297 and valid,"all 297 source trade offers resolve to valid items and prices")
 	suite.check(VillageContent.LEVELS == [0,10,70,150,250],"profession XP thresholds match local Mineclonia")
 	for id in VillageContent.BLOCKS:
+		if Banners.is_banner(id):
+			var banner_pos := Vector3i(8,1900+id,8)
+			game.world.set_node(banner_pos,id)
+			var model: Node3D = Banners.display_model(game.world,banner_pos)
+			suite.check(Nodes.exists(id) and model.get_child_count() == 3 and model.get_child(2).material_override.albedo_texture != null,Nodes.title(id)+" has its cloth and support display model")
+			model.free(); game.world.set_node(banner_pos,Nodes.AIR)
+			continue
 		suite.check(Nodes.exists(id) and Nodes.tile(id,0) >= 0 and Nodes.tile(id,0) < 137+VillageContent.BLOCKS.size()+WoodTypes.TEXTURES.size() and not Art.build_node_mesh(id).get_surface_count() == 0,Nodes.title(id)+" has a registered voxel mesh")
 	var column: Dictionary = gen.generate_column(Vector2i(floori(village.center.x/16.0),floori(village.center.z/16.0)),{})
 	var wide: bool = false
@@ -32,7 +39,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	suite.check(person.xp == 2 and sell.uses == 1,"trading spends stock and earns villager XP")
 	var before: Array = game.inventory.slots.duplicate(true)
 	suite.check(not game.villages.transaction(person,sell,true).is_empty() and before == game.inventory.slots and sell.uses == 1,"failed trades leave payment and stock untouched")
-	person.reputations[game.player_id] = 0
+	person.gossips[game.player_id] = {}
 	for slot in game.inventory.slots: slot.merge({"id":Nodes.STONE,"count":64,"wear":0},true)
 	game.inventory.slots[0] = {"id":Nodes.GRAIN,"count":21,"wear":0}
 	before = game.inventory.slots.duplicate(true)
@@ -43,7 +50,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var gravel: Dictionary = fletcher.offers[2]
 	game.inventory = Inventory.new(); game.inventory.add_item(VillageContent.EMERALD,1); game.inventory.add_item(Nodes.GRAVEL,10)
 	suite.check(game.villages.transaction(fletcher,gravel,true).is_empty() and game.inventory.count_item(Nodes.FLINT) == 10 and game.inventory.count_item(Nodes.GRAVEL) == 0,"two-input flint trade consumes emerald and ten gravel")
-	person.reputations[game.player_id] = 0; sell.uses = sell.stock; var xp: int = person.xp
+	person.gossips[game.player_id] = {}; sell.uses = sell.stock; var xp: int = person.xp
 	suite.check(not game.villages.transaction(person,sell,true).is_empty() and person.xp == xp,"sold-out offers cannot trade")
 	game.villages.restock(person,100,person.restock_day)
 	suite.check(sell.uses == 0 and person.restocks == 1 and sell.demand == sell.stock,"workplace restocks reset stock and increase demand for sold-out offers")
@@ -56,7 +63,9 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	suite.check(sell.uses == 1,"villagers have only two restocks per working day")
 	var novice: Dictionary = game.villages.make_record("test-cleric","cleric",Vector3(p),p,p,p)
 	game.inventory = Inventory.new(); game.inventory.add_item(Nodes.ROTTEN_FLESH,32)
-	suite.check(game.villages.transaction(novice,novice.offers[0],true).is_empty() and novice.level == 2,"cleric's source 12-XP trade unlocks Apprentice")
+	suite.check(game.villages.transaction(novice,novice.offers[0],true).is_empty() and novice.level == 1 and novice.levelup_in == 2,"cleric's source 12-XP trade schedules the Apprentice promotion")
+	VillagerTrading.advance(novice,2)
+	suite.check(novice.level == 2,"the Apprentice tier unlocks after the source two-second delay")
 	game.player.position = Vector3(p)+Vector3.RIGHT*2
 	game.state = "trading"; game.villages.trading_key = novice.key
 	game.hud.show_trading(novice.key)
@@ -70,16 +79,16 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	for invalid_arrow in [Nodes.AIR,Nodes.STONE,-1,999999]:
 		var invalid: Dictionary = Inventory.clean_slot({"id":VillageContent.CROSSBOW,"count":1,"data":{"custom_name":"Scout","loaded_arrow":invalid_arrow,"charge":1.0}})
 		suite.check(invalid.get("data",{}) == {"custom_name":"Scout"},"crossbow cleaning discards invalid ammunition and charge: "+str(invalid_arrow))
-	game.inventory = Inventory.new(); game.gamemode = "survival"
+	game.inventory = Inventory.new(); game.gamemode = "survival"; game.state = "playing"
 	game.inventory.add_item(VillageContent.CROSSBOW,1,2,{"custom_name":"Scout","enchantments":{"Quick Charge":3}})
 	game.inventory.add_item(VillageContent.POISON_ARROW,2)
-	game.survival.fire_crossbow()
+	load("res://tests/crossbow_checks.gd").load_full(game)
 	game.inventory.restore(JSON.parse_string(JSON.stringify(game.inventory.slots)))
 	suite.check(game.inventory.held().get("data",{}).get("loaded_arrow",0) == VillageContent.POISON_ARROW and game.inventory.count_item(VillageContent.POISON_ARROW) == 1,"loading and restoring an enchanted crossbow preserves its arrow and consumes one round")
-	game.inventory.held().data.charge = 0
-	game.survival.fire_crossbow()
+	var before_crossbow_wear: int = Durability.normalized(game.inventory.held())
+	CrossbowUse.fire(game.player)
 	game.inventory.restore(JSON.parse_string(JSON.stringify(game.inventory.slots)))
-	suite.check(game.inventory.held().get("data",{}) == {"custom_name":"Scout","enchantments":{"Quick Charge":3}} and game.inventory.held().wear == 3,"fired enchanted crossbows restore safely without loaded_arrow and retain their name and enchantments")
+	suite.check(not CrossbowUse.loaded(game.inventory.held()) and game.inventory.held().data.custom_name == "Scout" and game.inventory.held().data.enchantments == {"Quick Charge":3} and Durability.normalized(game.inventory.held()) == before_crossbow_wear+510,"fired enchanted crossbows restore unloaded while retaining their name, enchantments and exact wear")
 	for entity in game.entities.get_children():
 		if entity is Arrow: entity.free()
 	game.world.set_node(p+Vector3i.DOWN,Nodes.FARMLAND)

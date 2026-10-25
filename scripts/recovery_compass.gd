@@ -24,7 +24,7 @@ extends RefCounted
 const ID = 11600
 
 const DATA = {
-	11600:{"name":"Recovery compass","color":"a9e6e8","family":"compass","stack":1,"glint":true,
+	11600:{"name":"Recovery compass","color":"a9e6e8","family":"compass","stack":64,"glint":true,
 		"source_node":"mcl_compass:compass_recovery"},
 }
 

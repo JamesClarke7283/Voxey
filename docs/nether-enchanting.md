@@ -33,23 +33,17 @@ Mine lapis lazuli ore below Y 22 for 4–9 lapis. Earn XP from mining ores, kill
 
 Right-click the placed enchanting table and choose equipment from your inventory:
 
-| Tier | Required level | Required bookshelves | Cost |
-| --- | --- | --- | --- |
-| I | 1 | 0 | 1 lapis + 1 level |
-| II | 10 | 5 | 2 lapis + 2 levels |
-| III | 30 | 15 | 3 lapis + 3 levels |
+Three random offers show an enchantment hint and rolled level requirement. Available offers cost one, two or three lapis and the same number of levels. Fifteen unobstructed bookshelves provide maximum power; lower shelf counts can still produce any offer slot. A choice may be empty. Offers stay cached per player, item type and shelf count until a successful enchantment.
 
-Bookshelves must sit two blocks away horizontally, at table height or one block above, with an empty block between shelf and table. Up to 15 shelves contribute. Creative bypasses XP and lapis costs.
-
-Tools receive Efficiency (faster appropriate-tool mining), swords Sharpness (additional melee damage), bows Power (additional arrow damage), and armor Protection (additional defense, capped at 80% total damage reduction). All receive Unbreaking, reducing durability use. Each item can be enchanted once; properties appear in inventory tooltips and a purple mark identifies enchanted gear.
+Bookshelves must sit two blocks away horizontally, at table height or one block above, with their matching cell empty. Creative waives XP but still requires and consumes lapis. Enchanting preserves tool wear and names; books split one enchanted copy from a stack. Existing enchanted items cannot be enchanted again at the table. [Source notes and remaining differences](enchanting-source.md). Properties appear in inventory tooltips and a purple mark identifies enchanted gear.
 
 ## Books and leather
 
 - Three sugar cane across a crafting table produce three paper.
 - Three paper plus one leather, in any arrangement, make a book. Cows always drop 1–2 leather.
 - Three books between two rows of planks make a bookshelf.
-- A book, feather, and charcoal, in any arrangement, make a writable book. Charcoal serves as ink in Voxey.
-- Hold a writable book and right-click to edit its title and up to 12,000 characters. Drafts update automatically; normal world saves persist them. Signing locks the text and produces a written book.
+- A book, feather and ink sac, in any arrangement, make a writable book.
+- Hold a writable book and right-click to write. The text limit is 12,800 using the source’s UTF-8 accounting. Drafts update automatically; normal world saves persist them. Signing records the title, author and date, locks the text and produces a written book.
 
 Each book owns its own text. Moving it through the cursor, chest, hotbar, ground, or a save retains that text. Written books can be read with right-click.
 
@@ -57,7 +51,7 @@ Each book owns its own text. Moving it through the cursor, chest, hotbar, ground
 
 A dropped stack stays at its physical location unless your inventory can accept the entire stack, including compatible partially filled slots. Items with distinct properties do not merge. A full bag therefore cannot pull items toward the player.
 
-Arrows collide using short physics steps to prevent passing through thin walls. Arrows stuck in the world can be picked up from nearby when there is inventory space. They last ten active minutes after impact. Saved arrows retain their age and orientation; saving and loading does not restart the timer. Ordinary drops retain their existing five-minute lifetime; arrow item drops last ten minutes.
+Arrows use swept collision checks, source drag and liquid slowdown. Nearby embedded arrows become collectible items, including when the inventory is full. They last one active minute after impact and fall when their support is removed. Saved arrows retain flight or embedded state, age, velocity, metadata and orientation; saving and loading does not restart the timer. See [arrow flight](arrow-flight-source.md). Ordinary drops retain their existing five-minute lifetime; arrow item drops last ten minutes.
 
 ## Validation and quick checks
 

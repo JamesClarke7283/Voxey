@@ -81,6 +81,9 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	var whole_save: Dictionary = game.read_save(path)
 	player.offhand_slot = {"id":0,"count":0,"wear":0}
 	game.set_process(true); game.load_world_data(whole_save)
+	var deadline: int = Time.get_ticks_msec()+60000
+	while game.state == "loading" and Time.get_ticks_msec() < deadline: await t.process_frame
+	t.check(game.state != "loading","the second-hand save completes an actual world reload")
 	t.check(player.offhand_id() == VillageContent.SHIELD,"the second hand's item survives a save and reload")
 	t.check(int(player.offhand_slot.wear) == 7,"the second hand's wear survives too")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

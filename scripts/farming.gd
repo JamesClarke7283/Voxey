@@ -8,7 +8,7 @@ const COOLDOWN = 300.0
 const GROW_TIME = 1200.0
 const COLOR_MIXES = {"blue+green":"cyan","black+white":"grey","blue+white":"light_blue","green+white":"lime","pink+purple":"magenta","red+yellow":"orange","red+white":"pink","blue+red":"purple","grey+white":"silver"}
 const FOODS = {
-	"cow":[Nodes.GRAIN],"sheep":[Nodes.GRAIN],
+	"cow":[Nodes.GRAIN],"mooshroom":[Nodes.GRAIN],"sheep":[Nodes.GRAIN],
 	"pig":[VillageContent.CARROT,VillageContent.POTATO,VillageContent.BEETROOT],
 	"chicken":[Nodes.SEEDS,VillageContent.BEETROOT_SEEDS,FruitCrops.PUMPKIN_SEEDS,FruitCrops.MELON_SEEDS],
 	"rabbit":[VillageContent.CARROT,VillageContent.GOLDEN_CARROT],
@@ -30,11 +30,15 @@ const NO_FOLLOW = ["hoglin"]
 static func supports(kind: String) -> bool: return FOODS.has(kind)
 
 static func saved_kind(kind: String, custom_name: String) -> bool:
+	if MobArmor.handles(kind): return true
 	# A tamed or fed cat and a tamed parrot are kept; their records say so.
 	if kind in [Cats.KIND,Parrots.KIND]: return true
 	return supports(kind) or not custom_name.is_empty() and not Equines.is_equine(kind) and kind not in ["horse","ender_dragon","end_crystal","villager","iron_golem","snow_golem","piglin","piglin_brute","silverfish","turtle","phantom","breeze","pillager"] and Creature.KINDS.has(kind)
 
 static func managed(mob: Creature) -> bool:
+	if mob.get_meta("jockey_owned",false) or mob.get_meta("jockey_trial_owner",false): return false
+	if mob.has_meta("trial_key"): return false
+	if MobArmor.handles(mob.kind): return true
 	if supports(mob.kind): return true
 	if Cats.keeps(mob) or Parrots.keeps(mob): return true
 	# The horse family is saved by `VillageSurvival.animal_snapshot` instead.
@@ -55,14 +59,19 @@ static func register(mob: Creature) -> void:
 		mob.game.world.adventure_state["farm_serial"] = serial
 	remember(mob)
 
-static func state(mob: Creature) -> Dictionary:
-	return {"kind":mob.kind,"farm_id":mob.farm_id,"position":[mob.position.x,mob.position.y,mob.position.z],"yaw":mob.model.rotation.y,
+static func state(mob: Creature, include_jockey: bool = true) -> Dictionary:
+	var value: Dictionary = {"kind":mob.kind,"farm_id":mob.farm_id,"position":[mob.position.x,mob.position.y,mob.position.z],"yaw":mob.model.rotation.y,
 		"health":mob.health,"custom_name":mob.custom_name,"growth":mob.growth_remaining,"love":mob.love_time,"cooldown":mob.breed_cooldown,
 		"sheared":mob.sheared,"sheep_color":mob.sheep_color,"grazing":mob.grazing,"graze_consumed":mob.graze_consumed,"wool_timer":mob.wool_timer,"egg_timer":mob.egg_timer,"effects":PotionEffects.snapshot(mob),
 		"slime_size":mob.slime_size if mob is ExpeditionCreature and mob.kind == "slime" else 0,"crystal_key":mob.crystal_key if mob is ExpeditionCreature else "",
 		"saddled":mob.saddled if mob is RuralAnimal else false,"persistent":mob.has_meta("persistent"),
 		"axolotl_colour":Axolotls.colour(mob) if Axolotls.is_axolotl(mob.kind) else "",
-		"cat":Cats.snapshot(mob) if Cats.is_cat(mob.kind) else {},"parrot":Parrots.snapshot(mob) if Parrots.is_parrot(mob.kind) else {},"wolf":Wolves.snapshot(mob) if Wolves.is_wolf(mob.kind) else {}}
+		"cat":Cats.snapshot(mob) if Cats.is_cat(mob.kind) else {},"parrot":Parrots.snapshot(mob) if Parrots.is_parrot(mob.kind) else {},"wolf":Wolves.snapshot(mob) if Wolves.is_wolf(mob.kind) else {},"bow":MobBows.snapshot(mob) if MobBows.handles(mob.kind) else {},"mob_armor":MobArmor.snapshot(mob) if MobArmor.handles(mob.kind) else {},"weapon_state":MobWeapons.snapshot(mob) if MobWeapons.handles(mob.kind) else {}}
+	value.zombie_traits = ZombieTraits.snapshot(mob)
+	value.baby = MobBabies.baby(mob); value.chicken_jockey = mob.get_meta("chicken_jockey",false)
+	value.jockey = MobJockeys.snapshot(mob) if include_jockey else {}
+	if mob.kind == MooshroomStew.KIND: value.mooshroom = MooshroomStew.snapshot(mob)
+	return value
 
 static func remember(mob: Creature) -> void:
 	if not managed(mob) or mob.is_queued_for_deletion() or mob.health <= 0: return
@@ -86,6 +95,12 @@ static func number(value: Variant, fallback: float, high: float) -> float:
 	return clampf(float(value),0,high)
 
 static func restore_state(mob: Creature, entry: Dictionary) -> void:
+	if mob.kind == MooshroomStew.KIND: MooshroomStew.restore(mob,entry.get("mooshroom",{}))
+	MobBabies.restore(mob,entry)
+	ZombieTraits.restore(mob,entry.get("zombie_traits",{}))
+	if MobArmor.handles(mob.kind): MobArmor.restore(mob,entry.get("mob_armor",{}))
+	if MobBows.handles(mob.kind): MobBows.restore(mob,entry.get("bow",{}))
+	if MobWeapons.handles(mob.kind): MobWeapons.restore(mob,entry.get("weapon_state",{}))
 	if mob is ExpeditionCreature:
 		mob.crystal_key = str(entry.get("crystal_key",""))
 		if mob.kind == "slime": mob.set_slime_size(clampi(int(number(entry.get("slime_size"),2,4)),1,4))
@@ -106,7 +121,8 @@ static func restore_state(mob: Creature, entry: Dictionary) -> void:
 	if mob is RuralAnimal and mob.kind == "pig" and bool(entry.get("saddled",false)): PigRiding.equip_saddle(mob)
 	mob.sheared = bool(entry.get("sheared",false)) and mob.kind == "sheep"
 	mob.wool_timer = number(entry.get("wool_timer"),100,160)
-	mob.egg_timer = number(entry.get("egg_timer"),randi_range(300,600),600)
+	var egg_time: Variant = entry.get("egg_timer")
+	mob.egg_timer = -1.0 if (egg_time is float or egg_time is int) and is_finite(float(egg_time)) and float(egg_time) < 0 else number(egg_time,randi_range(300,600),600)
 	restore_coat(mob,entry)
 	var yaw: Variant = entry.get("yaw",0)
 	mob.model.rotation.y = float(yaw) if (yaw is float or yaw is int) and is_finite(float(yaw)) else 0.0
@@ -119,6 +135,7 @@ static func restore_state(mob: Creature, entry: Dictionary) -> void:
 	if supports(mob.kind): resize(mob)
 	for part in mob.wool_parts: part.visible = not mob.sheared
 	NameTags.refresh(mob)
+	if mob.kind == "chicken": MobJockeys.restore(mob,entry)
 
 static func resolve(game: Node3D, key: String) -> Creature:
 	var mob: Creature = active(game,key)
@@ -128,7 +145,7 @@ static func resolve(game: Node3D, key: String) -> Creature:
 	var location: Dictionary = WorldBounds.clean_location({"dimension":game.dimension,"position":saved.get("position")})
 	if location.is_empty() or number(saved.get("health"),1,10000) <= 0: records(game).erase(key); return null
 	var entry: Dictionary = saved.duplicate(true)
-	mob = game.spawn_creature(entry.kind,VillageLife.vec(location.position),key)
+	mob = game.spawn_creature(entry.kind,VillageLife.vec(location.position),key,{"baby":bool(entry.get("baby",false)),"jockey":false})
 	if mob == null: return null
 	restore_state(mob,entry)
 	remember(mob)
@@ -153,9 +170,10 @@ static func sleep_if_unloaded(mob: Creature) -> bool:
 	# A kind the source lets despawn (the axolotl) goes rather than sleeps, unless
 	# it was bred, bucketed or named, which the source marks `persistent`.
 	if mob.info().get("can_despawn",false) and not mob.has_meta("persistent") and mob.custom_name.is_empty():
-		forget(mob); mob.queue_free(); return true
+		forget(mob); MobJockeys.remove_pair(mob,true); mob.queue_free(); return true
 	remember(mob)
 	mob.game.leads.hibernate(mob)
+	MobJockeys.remove_pair(mob)
 	mob.queue_free()
 	return true
 
@@ -179,6 +197,7 @@ static func use(game: Node3D, mob: Creature) -> bool:
 		mob.growth_remaining *= 0.9; consumed = true
 	elif mob.breed_cooldown <= 0 and mob.love_time <= 0:
 		mob.love_time = LOVE_TIME; consumed = true
+		if mob.kind == "chicken": mob.set_meta("persistent",true)
 	if not consumed:
 		# The source's `feed_tame` returns **false** when it ate nothing, and
 		# `pig.lua`:162-170 relies on that: the click then falls through to the
@@ -214,6 +233,7 @@ static func tick(mob: Creature, delta: float) -> void:
 	if mob.love_time > 0 and floorf(mob.love_time) != floorf(maxf(0,mob.love_time-delta)):
 		mob.game.puff(mob.center()+Vector3.UP*0.2,Color("ef7c8f"),2,0.8)
 	mob.love_time = maxf(0,mob.love_time-delta)
+	if MobJockeys.rider(mob) != null: return
 	if mob.growth_remaining > 0 or mob.love_time <= 0 or mob.breed_cooldown > 0 or Wolves.is_wolf(mob.kind) and (Wolves.sitting(mob) or not Wolves.tamed(mob)):
 		mob.farm_mate = ""; mob.mate_time = 0; return
 	var mate: Creature = active(mob.game,mob.farm_mate)

@@ -28,7 +28,11 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var player_physics: bool = game.player.is_physics_processing()
 	game.player.set_process(false); game.player.set_physics_process(false)
 	game.daylight = 0.05
-	var p := Vector3i(8,508,8); var lamp: Vector3i = p+Vector3i.RIGHT
+	var p := Vector3i(240,508,240); var lamp: Vector3i = p+Vector3i.RIGHT
+	for column_x in range(floori((p.x-1)/16.0),floori((p.x+1)/16.0)+1):
+		for column_z in range(floori((p.z-1)/16.0),floori((p.z+1)/16.0)+1):
+			var sample := Vector3(column_x*16+8,p.y,column_z*16+8)
+			if not world.loaded_at(sample): world._apply_column(world.generator.generate_column(Vector2i(column_x,column_z),world.edits))
 	game.player.position = Vector3(p)+Vector3(0.5,2.0,0.5)
 	var station_key: String = world.station_key(lamp)
 	var had_station: bool = world.stations.has(station_key)

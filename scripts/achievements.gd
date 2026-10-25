@@ -35,7 +35,7 @@ const DEFINITIONS = [
 	# The source award set's remaining reachable titles, each triggered by a system
 	# Voxey already runs. `reward_xp` is carried through as the existing `xp` field.
 	{"id":"hero_of_the_village","title":"Hero of the Village","description":"Successfully defend a village from a raid.","goal":0,"xp":100},
-	{"id":"serious_dedication","title":"Serious Dedication","description":"Use a Netherite ingot to upgrade a diamond tool or armor.","goal":0,"xp":0},
+	{"id":"serious_dedication","title":"Serious Dedication","description":"Upgrade a diamond hoe to a Netherite hoe.","goal":0,"xp":0},
 	{"id":"enchanter","title":"Enchanter","description":"Enchant an item at an enchanting table.","goal":0,"xp":0},
 	{"id":"local_brewery","title":"Local Brewery","description":"Brew a potion.","goal":0,"xp":0},
 	{"id":"what_a_deal","title":"What A Deal!","description":"Trade with a villager.","goal":0,"xp":0},
@@ -67,10 +67,10 @@ const DEFINITIONS = [
 	{"id":"a_throwaway_joke","title":"A Throwaway Joke","description":"Throw a trident at a creature and hit it.","goal":0,"xp":0},
 	{"id":"return_to_sender","title":"Return to Sender","description":"Deflect a ghast fireball and slay a ghast.","goal":0,"xp":50},
 	{"id":"crafting_a_new_look","title":"Crafting a New Look","description":"Apply an armor trim at a smithing table.","goal":0,"xp":0},
-	{"id":"smithing_with_style","title":"Smithing with Style","description":"Apply eight different armor trims.","goal":8,"xp":0},
+	{"id":"smithing_with_style","title":"Smithing with Style","description":"Apply Spire, Snout, Rib, Ward, Silence, Vex, Tide and Wayfinder trims.","goal":8,"xp":0},
 	{"id":"obsidian_challenge","title":"Ice Bucket Challenge","description":"Obtain a block of obsidian.","goal":0,"xp":0},
 	{"id":"hot_stuff","title":"Hot Stuff","description":"Fill a bucket with lava.","goal":0,"xp":0},
-	{"id":"sniper_duel","title":"Sniper Duel","description":"Kill a skeleton with an arrow from at least 50 blocks away.","goal":0,"xp":50},
+	{"id":"sniper_duel","title":"Sniper Duel","description":"Kill a skeleton or stray with an arrow or trident from over 20 blocks away.","goal":0,"xp":50},
 	{"id":"who_is_cutting_onions","title":"Who is Cutting Onions?","description":"Obtain a crying obsidian block.","goal":0,"xp":0},
 	# The source award set's three remaining titles that map onto systems Voxey runs.
 	{"id":"not_quite_nine_lives","title":"Not Quite \"Nine\" Lives","description":"Charge a respawn anchor to its maximum.","goal":0,"xp":0},
@@ -145,22 +145,29 @@ func _definition(id: String) -> Dictionary:
 func to_save() -> Dictionary:
 	return {"unlocked":unlocked.keys(),"counters":counters,"distinct":distinct}
 
-func from_save(data: Dictionary) -> void:
-	unlocked.clear()
-	counters.clear()
-	if not data is Dictionary: return
-	for id in data.get("unlocked",[]):
-		if _definition(String(id)).id == String(id): unlocked[String(id)] = true
-	var counters_data: Dictionary = data.get("counters",{})
-	if counters_data is Dictionary:
-		for id in counters_data:
-			if _definition(String(id)).id == String(id): counters[String(id)] = int(counters_data[id])
-	# Distinct-key goals keep their seen set, so a reload does not re-count trims.
-	distinct.clear()
-	var distinct_data: Dictionary = data.get("distinct",{})
-	if distinct_data is Dictionary:
-		for id in distinct_data:
-			if _definition(String(id)).id != String(id): continue
+static func clean_save(raw: Variant) -> Dictionary:
+	var result: Dictionary = {"unlocked":[],"counters":{},"distinct":{}}
+	if not raw is Dictionary: return result
+	var valid: Dictionary = {}
+	for definition in DEFINITIONS: valid[definition.id] = true
+	if raw.get("unlocked") is Array:
+		for id in raw.unlocked:
+			if id is String and valid.has(id) and id not in result.unlocked: result.unlocked.append(id)
+	if raw.get("counters") is Dictionary:
+		for id in raw.counters:
+			if valid.has(id) and (raw.counters[id] is int or raw.counters[id] is float): result.counters[id] = maxi(0,int(raw.counters[id]))
+	if raw.get("distinct") is Dictionary:
+		for id in raw.distinct:
+			if not valid.has(id) or not raw.distinct[id] is Dictionary: continue
 			var seen: Dictionary = {}
-			for key in distinct_data[id]: seen[String(key)] = true
-			distinct[String(id)] = seen
+			for key in raw.distinct[id]:
+				if key is String and key.length() <= 64 and seen.size() < 128: seen[key] = true
+			result.distinct[id] = seen
+	return result
+
+func from_save(data: Dictionary) -> void:
+	var clean: Dictionary = clean_save(data)
+	unlocked.clear()
+	for id in clean.unlocked: unlocked[id] = true
+	counters = clean.counters
+	distinct = clean.distinct

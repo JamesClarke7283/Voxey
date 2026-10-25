@@ -142,14 +142,6 @@ static func drop_for(ore_id: int) -> int:
 # Source `mcl_copper/nodes.lua` copper ore drop table: `max_items = 1` with rarity
 # 4 -> 5, 3 -> 4, 2 -> 3, default 2, under `mcl_core.fortune_drop_ore`
 # (a discrete uniform min..1+fortune with chance 1 - 2/(fortune+2)).
-static func harvest(id: int, slot: Dictionary) -> Array:
+static func harvest(id: int, slot: Dictionary, rng: RandomNumberGenerator = null) -> Array:
 	if id != Nodes.COPPER_ORE and id != Nodes.DEEP_COPPER_ORE: return []
-	var fortune: int = Inventory.enchantment(slot,"Fortune")
-	# Source `mcl_core.fortune_drop_ore` with the copper ore's own table: the base
-	# drop is `raw_copper 2`, and a **discrete uniform multiplier** of
-	# `random(min_count = 2, max_count + fortune = 1 + fortune)` replaces it with
-	# chance `1 - 2 / (fortune + 2)`. At Fortune 0 the chance is zero, so the count
-	# is always the base two rather than one.
-	var count: int = 2
-	if randf() < 1.0-2.0/(fortune+2): count *= randi_range(2,1+fortune)
-	return [[RAW_COPPER,count]]
+	return Harvesting.harvest(id,slot,EnchantRolls.new(1,rng) if rng != null else null).get("drops",[])

@@ -35,15 +35,17 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	suite.check(chest_found,"bastion treasure chest is present in generated terrain")
 	var arrival: Vector3 = Vector3(center)+Vector3(0.5,1.01,7.5)
 	game.player_homes[game.player_id] = {"dimension":"nether","position":[arrival.x,arrival.y,arrival.z],"yaw":0,"pitch":0}
+	game.set_process(true)
+	game.world.set_process(true)
 	game.teleport_home()
 	var deadline: int = Time.get_ticks_msec()+60000
 	while game.state == "loading" and Time.get_ticks_msec()<deadline: await suite.process_frame
 	game.pause(); game.gamemode = "creative"
-	suite.check(game.dimension == "nether" and game.world.node_at(chest_pos) == Nodes.CHEST,"bastion travel streams the actual structure")
+	suite.check(game.dimension == "nether" and game.world.node_at(chest_pos) == Nodes.CHEST,"bastion travel streams the actual structure: "+game.dimension+" state "+game.state+" node "+str(game.world.node_at(chest_pos))+" at "+str(chest_pos))
 	var storage: Dictionary = game.world.get_station(chest_pos,"chest")
 	var before: Array = storage.slots.duplicate(true)
 	game.world._structure_loot(chest_pos)
-	suite.check(storage.label == "Bastion treasure" and storage.slots == before,"generated bastion chests receive loot once without restocking on access")
+	suite.check(storage.get("label","") == "Bastion treasure" and storage.slots == before,"generated bastion chests receive loot once without restocking on access")
 	Bastions.populate(game)
 	var piglin: NetherResident; var brute: NetherResident; var inhabitants: int = 0
 	for mob in game.creatures.get_children():

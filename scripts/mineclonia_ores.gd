@@ -73,30 +73,19 @@ static func _clusters(gen: TerrainGenerator, index: int, rule: Dictionary, cy: i
 	gen.ore_cluster_cache[key] = buckets
 	return buckets
 
-# Source scatter rules carry a biome filter, and two families name biomes Voxey's
-# generator **cannot produce**: `Mesa*` (the source's badlands, one gold rule) and
-# `DripstoneCave*` (a *cave* biome, nine copper rules). `TerrainGenerator.biome`
-# classifies the surface and returns only `Sunwash desert`, `Frostpine highlands`,
-# `Swamp`, `Willow shores` and `Oakwood meadow`, so those ten rules never place.
-# That is the faithful outcome rather than a bug to paper over: Voxey's caves have
-# no biome identity, so enabling the dripstone-hosted copper everywhere would be the
-# source's *badlands* and *surface* distributions leaking into every cave, and
-# Voxey has no badlands at all. The set is named here so a reader sees the gap
-# instead of an unreachable string comparison, and `unrepresentable` is asserted by
-# the parity checks.
-#
-# `ExtremeHills*` maps onto Frostpine highlands because that is Voxey's mountain
-# analogue, which is the same kind of substitution `WoodTypes.natural_species`
-# already makes for the tree families.
-const UNREPRESENTABLE = ["Mesa","DripstoneCave"]
+# Source scatter rules carry a canonical biome filter. The selected surface
+# biome now comes from the source noise/LUT; Voxey's cave volume still has no
+# biome identity, so the nine `DripstoneCave*` copper bands remain unreachable.
+# `ExtremeHills*` is a legacy source spelling that resolves through BiomeMap.
+const UNREPRESENTABLE = ["DripstoneCave"]
 
 static func biome_matches(name: String, biomes: Array) -> bool:
 	if biomes.is_empty(): return true
-	var first: String = str(biomes[0])
-	if first.begins_with("ExtremeHills"): return name == "Frostpine highlands"
+	for filter in biomes:
+		if BiomeMap.allows(str(filter),name): return true
 	for prefix in UNREPRESENTABLE:
-		if first.begins_with(prefix): return false
-	return biomes.has(name)
+		if str(biomes[0]).begins_with(prefix): return false
+	return false
 
 # The source rules a caller can never see fire, so the gap is inspectable rather
 # than invisible. Returns the rule dictionaries.

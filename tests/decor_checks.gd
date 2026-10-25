@@ -132,6 +132,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	plot(game,ground)
 	for parent in [Archaeology.SUSPICIOUS_SAND,Archaeology.SUSPICIOUS_GRAVEL]:
 		world.set_node(ground,parent)
+		Archaeology.set_structure(world,ground,"desert_temple" if parent == Archaeology.SUSPICIOUS_SAND else "ocean_ruins_cold")
 		game.inventory.restore([]); game.inventory.add_item(Archaeology.BRUSH,1); game.inventory.selected = 0
 		t.check(Archaeology.strokes(world,ground) == 0,"a fresh suspicious node has no strokes")
 		# One stroke rolls and fixes the loot without completing the node.
@@ -145,7 +146,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 		# Brush until completion; the minimum is four strokes.
 		var strokes: int = 1
 		var worn_before: int = game.inventory.held().wear
-		for i in 40:
+		for i in 256:
 			Archaeology.brush(game,{"pos":ground,"normal":Vector3i.UP,"id":parent,"distance":1.0,"point":Vector3(ground)+Vector3.ONE*0.5})
 			strokes += 1
 			if world.node_at(ground) != parent: break
@@ -175,23 +176,24 @@ static func run(t: SceneTree, game: Node3D) -> void:
 
 	# --- loot tables --------------------------------------------------------
 	for parent in [Archaeology.SUSPICIOUS_SAND,Archaeology.SUSPICIOUS_GRAVEL]:
+		var loot_type: String = "desert_temple" if parent == Archaeology.SUSPICIOUS_SAND else "ocean_ruins_cold"
 		var rng := RandomNumberGenerator.new(); rng.seed = 606
 		var seen: Dictionary = {}
 		var counts_ok: bool = true
 		var in_range: bool = true
 		for i in 900:
-			var roll: Array = Archaeology.loot(parent,rng)
+			var roll: Array = Archaeology.loot(parent,rng,loot_type)
 			if roll.is_empty(): continue
 			seen[roll[0][0]] = true
 			var entry_id: int = roll[0][0]
 			var count: int = roll[0][1]
 			var bounds_ok: bool = false
-			for entry in Archaeology.table(parent):
+			for entry in Archaeology.table_for(parent,loot_type):
 				if int(entry.id) == entry_id: bounds_ok = count >= int(entry.min) and count <= int(entry.max)
 			in_range = in_range and bounds_ok
-		t.check(seen.size() == Archaeology.table(parent).size(),"every weighted entry of the "+("sand" if parent == Archaeology.SUSPICIOUS_SAND else "gravel")+" table is reachable")
+		t.check(seen.size() == Archaeology.table_for(parent,loot_type).size(),"every weighted entry of the "+("sand" if parent == Archaeology.SUSPICIOUS_SAND else "gravel")+" table is reachable")
 		t.check(in_range,"every loot count stays inside its source min and max")
-		t.check(Archaeology.total_weight(parent) > 0,"the loot table has a nonzero total weight")
+		t.check(Archaeology.total_weight(parent,loot_type) > 0,"the loot table has a nonzero total weight")
 
 	# --- decorated pot ------------------------------------------------------
 	plot(game,ground)

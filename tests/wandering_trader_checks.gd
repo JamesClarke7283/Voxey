@@ -5,6 +5,8 @@ extends RefCounted
 # and the same trading panel a villager uses.
 static func run(suite: Object, game: Node3D) -> void:
 	suite.check(WanderingTraders.LIFE_TIMER == 1200.0,"a trader lives for the source's twenty minutes")
+	var red_sand: Array = WanderingTraders.ORDINARY.filter(func(row): return row.give[0] == ShapeMaterials.RED_SAND)
+	suite.check(red_sand.size() == 1 and red_sand[0].give == [ShapeMaterials.RED_SAND,3,3] and red_sand[0].cost == [[VillageContent.EMERALD,1,1]] and red_sand[0].stock == 6,"Source wandering traders sell three red sand for one emerald, six times")
 	suite.check(WanderingTraders.ESCORT_COUNT == 2,"a trader arrives with the source's two llamas")
 	suite.check(WanderingTraders.SPAWN_CHANCE_MIN == 25 and WanderingTraders.SPAWN_CHANCE_MAX == 75 and WanderingTraders.SPAWN_ROLL == 10,"the spawner uses the source's rising chance and one-in-ten roll")
 	suite.check(Creature.KINDS.has("wandering_trader") and Creature.KINDS.has("trader_llama"),"both kinds are registered so spawn_creature and /spawn can build them")
@@ -12,6 +14,7 @@ static func run(suite: Object, game: Node3D) -> void:
 	# The pool shape: nine offers, each with a cost and a give.
 	var rng := RandomNumberGenerator.new(); rng.seed = 4242
 	var offers: Array = WanderingTraders.make_offers(rng)
+	suite.check(offers.all(func(offer): return offer.get("reward_xp",true) == false),"wandering offers disable player XP rewards as in the source")
 	suite.check(offers.size() == 9,"a trader's pool is the source's nine offers")
 	var valid: bool = true
 	for offer in offers:
@@ -35,6 +38,15 @@ static func run(suite: Object, game: Node3D) -> void:
 	game.villages.open(trader)
 	suite.check(game.state == "trading","right-clicking a trader opens the trading panel")
 	game.resume()
+	var held_inventory: Array = game.inventory.slots.duplicate(true); var before_orbs: int = XpOrbs.orb_count(game)
+	game.inventory.restore([]); PotionEffects.apply(game.player,"hero_of_village",10,1)
+	var selected: Dictionary = record.offers[0]
+	for cost in selected.cost: game.inventory.add_item(int(cost[0]),int(cost[1]))
+	var unchanged: bool = true; var priced: Array = game.villages.costs(record,selected)
+	for i in priced.size(): unchanged = unchanged and priced[i][1] == selected.cost[i][1]
+	suite.check(unchanged,"Hero of the Village does not alter a wandering trader's base prices")
+	suite.check(game.villages.transaction(record,selected,true).is_empty() and XpOrbs.orb_count(game) == before_orbs and record.xp == 0 and record.reputations.is_empty(),"wandering transactions give neither player XP nor villager XP or gossip")
+	PotionEffects.clear_one(game.player,"hero_of_village"); game.inventory.restore(held_inventory)
 	# A trader never counts as a village resident, so it must not enter the people list.
 	suite.check(not game.villages.state().people.has(trader.person_key),"a trader is not a village resident")
 	# Retiring marks it dead, and a restore skips a dead record.

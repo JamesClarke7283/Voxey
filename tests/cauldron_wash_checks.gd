@@ -121,7 +121,7 @@ static func run(suite: Object, game: Node3D) -> void:
 	suite.check(layers.size() == 1 and str(layers[0].get("pattern","")) == "border" and int(layers[0].get("color",-1)) == 0,"only the banner's topmost layer was removed")
 	suite.check(CauldronWash.wash(game,p,station,banner) and Banners.layers(banner).is_empty() and Cauldrons.level(station) == 1,"a second wash removes the remaining layer")
 	suite.check(not CauldronWash.can_wash(banner.id,banner),"a plain banner has nothing to wash")
-	suite.check(not CauldronWash.wash(game,p,station,banner) and Cauldrons.level(station) == 1,"washing a plain banner spends no water")
+	suite.check(CauldronWash.wash(game,p,station,banner) and Cauldrons.level(station) == 0,"the source spends water even when washing a plain banner")
 
 	# --- an unusable cauldron -------------------------------------------------
 	Cauldrons.set_contents(station,0,"water")

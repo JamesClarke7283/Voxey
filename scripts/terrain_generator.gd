@@ -12,6 +12,11 @@ const INDEXED = NodeInfo.PASTURE|NodeInfo.SPECIAL|NodeInfo.BASE_WATER|NodeInfo.B
 var ore_cache: Dictionary = {}
 var ore_cluster_cache: Dictionary = {}
 var dungeon_cache: Dictionary = {}
+var well_cache: Dictionary = {}
+var trail_cache: Dictionary = {}
+var trail_templates: Dictionary = {}
+var trial_cache: Dictionary = {}
+var trial_templates: Dictionary = {}
 var corridor_cache: Dictionary = {}
 var treasure_cache: Dictionary = {}
 var ruin_cache: Dictionary = {}
@@ -42,6 +47,8 @@ var detail := FastNoiseLite.new()
 var climate := FastNoiseLite.new()
 var caves := FastNoiseLite.new()
 
+var biome_selector: MinecloniaBiomeSelector
+
 func _init(seed_value: int = 8675309, dimension_name: String = "overworld") -> void:
 	dimension = dimension_name
 	world_seed = seed_value
@@ -56,6 +63,7 @@ func _init(seed_value: int = 8675309, dimension_name: String = "overworld") -> v
 	caves.seed = seed_value + 532
 	caves.frequency = 0.065
 	caves.fractal_octaves = 2
+	if dimension_name == "overworld": biome_selector = MinecloniaBiomeSelector.new(seed_value)
 
 func min_y() -> int:
 	return floor_y
@@ -78,20 +86,20 @@ func terrain_height(x: int, z: int) -> int:
 	return clampi(int(25.0 + continental * 23.0 + detail.get_noise_2d(x, z) * 5.0), 7, 48)
 
 func biome(x: int, z: int) -> String:
-	if dimension == "end": return "The End" if Vector2(x,z).length() < 160 else "End highlands"
+	if dimension == "end": return "TheEnd" if Vector2(x,z).length() < 160 else "EndHighlands"
 	if dimension == "nether":
 		var n: float = climate.get_noise_2d(x,z)
-		if n < -0.22: return "Warped forest"
-		if n < -0.07: return "Soul sand valley"
-		if n > 0.22: return "Crimson forest"
-		if n > 0.07: return "Basalt deltas"
-		return "Nether wastes"
-	var c: float = climate.get_noise_2d(x, z)
-	if c > 0.28: return "Sunwash desert"
-	if c < -0.35: return "Frostpine highlands"
-	if c > -0.24 and c < 0.24 and hills.get_noise_2d(x,z) < -0.12 and terrain_height(x,z) in range(19,28): return "Swamp"
-	if hills.get_noise_2d(x,z) < -0.18: return "Willow shores"
-	return "Oakwood meadow"
+		if n < -0.22: return "WarpedForest"
+		if n < -0.07: return "SoulSandValley"
+		if n > 0.22: return "CrimsonForest"
+		if n > 0.07: return "BasaltDeltas"
+		return "NetherWastes"
+	# A two-argument query is a surface query: use Voxey's generated surface depth.
+	var y: int = clampi(terrain_height(x,z),min_y(),terrain_ceiling()-1)
+	return biome_selector.index_biomes_block(x,y,z)
+
+func biome_climate(x: int, y: int, z: int) -> Dictionary:
+	return biome_selector.sample_climate(x,y,z)
 
 func hash_at(x: int, y: int, z: int) -> int:
 	var h: int = (x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ world_seed
@@ -105,11 +113,9 @@ func hash_at(x: int, y: int, z: int) -> int:
 # level, so the surface node is checked rather than assumed.
 func bamboo_grove(data: PackedInt32Array, base_x: int, base_z: int, wx: int, wz: int, h: int, decoration: int, desert: bool, snowy: bool) -> bool:
 	if decoration >= 5 or desert or snowy: return false
-	if climate.get_noise_2d(wx,wz) <= 0.05: return false
-	# Any warm region, which is where the source's biome modifier places bamboo. The
-	# swamp regions here sit below sea level, and this call happens only above the
-	# sea, so a warm meadow or shore is where a grove can actually stand.
-	if biome(wx,wz) not in ["Swamp","Willow shores","Oakwood meadow"]: return false
+	# Any jungle region, which is where the source's biome modifier places bamboo,
+	# plus the swamp stand-in whose warm surface still hosts a grove here.
+	if not BiomeMap.allows("#is_jungle",biome(wx,wz)) and biome(wx,wz) != "Swamp": return false
 	if data[(wx-base_x)+(wz-base_z)*18+h*324] not in [Nodes.GRASS,Nodes.DIRT]: return false
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash_at(wx,120,wz)
@@ -140,7 +146,7 @@ func bamboo_grove(data: PackedInt32Array, base_x: int, base_z: int, wx: int, wz:
 
 # `info` is the node lookup for this job; worker jobs bring a NodeInfo snapshot.
 # Only map blocks whose level lies within `mesh_levels` get render surfaces.
-func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false, info: NodeInfo.View = null, mesh_levels: Vector2i = ALL_LEVELS) -> Dictionary:
+func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false, info: NodeInfo.View = null, mesh_levels: Vector2i = ALL_LEVELS, cocoa_facings: Dictionary = {}, pot_plants: Dictionary = {}) -> Dictionary:
 	# An 18-node halo gives the mesher complete boundary information. Trees are
 	# seeded in world coordinates, including roots outside the requested column.
 	var data := PackedInt32Array()
@@ -181,9 +187,11 @@ func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false,
 					var structure_id: int = WorldStructures.stronghold_node(Vector3i(wx,y,wz),stronghold)
 					if structure_id >= 0: deep[x+z*18+(y-min_y())*324] = structure_id
 			var h: int = terrain_height(wx, wz)
-			var c: float = climate.get_noise_2d(wx, wz)
-			var desert: bool = c > 0.28
-			var snowy: bool = c < -0.35
+			var biome_name: String = biome(wx,wz)
+			var surface_climate: Dictionary = biome_climate(wx,h,wz)
+			var surface_temperature: float = float(surface_climate.temperature)
+			var desert: bool = surface_temperature >= 1.5
+			var snowy: bool = surface_temperature < 0.15
 			for y in maxi(h + 1, SEA + 1):
 				var id: int = Nodes.AIR
 				if y > h: id = Nodes.WATER
@@ -201,7 +209,7 @@ func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false,
 						elif stone_variant > 981: id = Nodes.GRAVEL
 				data[x + z * 18 + y * 324] = id
 			if snowy and h > SEA+1: data[x+z*18+(h+1)*324] = SnowCover.BASE
-			if biome(wx,wz) == "Swamp":
+			if biome_name == "Swamp":
 				if h > SEA: data[x+z*18+h*324] = VillageContent.MUD if hash_at(wx/3,93,wz/3)%5 == 0 else VillageContent.SWAMP_GRASS
 				if h < SEA and hash_at(wx,94,wz)%21 == 0: data[x+z*18+(SEA+1)*324] = VillageContent.LILY_PAD
 			if h < SEA-2 and not snowy and hash_at(wx,95,wz)%11 == 0:
@@ -279,6 +287,7 @@ func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false,
 		IceSpikes.decorate(self,coord,data,deep,biome(coord.x*16+8,coord.y*16+8))
 		Dripstones.decorate(self,coord,data,deep)
 	if dimension == "nether": Bastions.overlay(self,coord,data)
+	var wells: Dictionary = DesertWells.overlay(self,coord,data,deep)
 	var dungeons: Dictionary = Dungeons.overlay(self,coord,data,deep)
 	# Corridors carve last and report separately, so a chest or spawner that both
 	# systems want keeps its dungeon identity rather than being overwritten.
@@ -309,12 +318,24 @@ func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false,
 	# the only source of the sculk catalyst the death spread needs.
 	var hermitages: Dictionary = AncientHermitage.overlay(self,coord,data,deep)
 	Amethyst.overlay(self,coord,data,deep)
+	var trials: Dictionary = TrialChambers.overlay(self,coord,data,deep)
+	var trails: Dictionary = TrailRuins.overlay(self,coord,data,deep)
 	for p in edits:
 		var lx: int = p.x - base_x
 		var lz: int = p.z - base_z
 		if lx >= 0 and lx < 18 and lz >= 0 and lz < 18 and p.y >= min_y() and p.y < terrain_ceiling():
 			if p.y < 0: deep[lx+lz*18+(p.y-min_y())*324] = edits[p]
 			else: data[lx + lz * 18 + p.y * 324] = edits[p]
+	# Trial pots carry generated metadata that is installed only after the first
+	# mesh. Index those plants by block now; saved pot state wins after edits.
+	var generated_pot_plants: Dictionary = {}
+	if not map_only:
+		for p in trials.get("states",{}):
+			var plant: int = int(trials.states[p].get("pot_plant",0))
+			if plant == 0: continue
+			var block := Vector3i(p.x >> 4,p.y >> 4,p.z >> 4)
+			if not generated_pot_plants.has(block): generated_pot_plants[block] = {}
+			generated_pot_plants[block][VoxelWorld.local_index(p)] = plant
 	var blocks: Array = []
 	var special: Dictionary = {}
 	var reactive: Dictionary = {}
@@ -379,7 +400,7 @@ func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false,
 					var cell := Vector3i(coord.x*16+x,by*16+y,coord.y*16+z)
 					if bits & NodeInfo.PASTURE:
 						if id != Nodes.DIRT or flags[center+324] & NodeInfo.COVER == 0:
-							if Pasture.is_grass(id) or id == Nodes.DIRT: pasture_cells[cell] = true
+							if Pasture.is_grass(id) or id == Nodes.DIRT or SoilVariants.spreading(id): pasture_cells[cell] = true
 							elif id not in [Campfires.UNLIT,Campfires.SOUL_UNLIT]:
 								var light_block := Vector3i(coord.x,by,coord.y)
 								if not pasture_lights.has(light_block): pasture_lights[light_block] = {}
@@ -405,8 +426,12 @@ func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false,
 						if fluid == NodeInfo.BASE_LAVA and neighbor & (NodeInfo.BASE_WATER|NodeInfo.FUEL) or fluid == NodeInfo.BASE_WATER and neighbor & NodeInfo.BASE_LAVA:
 							reactive[cell] = id
 		if by < mesh_levels.x or by > mesh_levels.y: blocks.append({"y":by,"data":compact})
-		else: blocks.append({"y":by,"data":compact, "surfaces":BlockMesher.build(padded,true,info,flags)})
-	return {"coord":coord, "blocks":blocks,"special":special,"reactive":reactive,"flowing":flowing,"pasture_cells":pasture_cells,"pasture_lights":pasture_lights,"dungeons":dungeons,"corridors":corridors,"treasure":treasure,"ruins":ruins,"wrecks":wrecks,"temples":temples,"portals":portals,"jungles":jungles,"outposts":outposts,"igloos":igloos,"witches":witches,"monuments":monuments,"cabins":cabins,"hermitages":hermitages}
+		else:
+			var block := Vector3i(coord.x,by,coord.y)
+			var block_pot_plants: Dictionary = generated_pot_plants.get(block,{}).duplicate()
+			block_pot_plants.merge(pot_plants.get(block,{}),true)
+			blocks.append({"y":by,"data":compact, "surfaces":BlockMesher.build(padded,true,info,flags,cocoa_facings.get(block,{}),block_pot_plants)})
+	return {"coord":coord, "blocks":blocks,"special":special,"reactive":reactive,"flowing":flowing,"pasture_cells":pasture_cells,"pasture_lights":pasture_lights,"dungeons":dungeons,"corridors":corridors,"treasure":treasure,"ruins":ruins,"wrecks":wrecks,"temples":temples,"portals":portals,"jungles":jungles,"outposts":outposts,"igloos":igloos,"witches":witches,"monuments":monuments,"cabins":cabins,"hermitages":hermitages,"trials":trials,"trails":trails,"wells":wells}
 
 # The column forms below write exactly what the per-node functions return, but
 # compute everything that depends only on x and z once per column.
@@ -429,11 +454,11 @@ func nether_column(data: PackedInt32Array, column: int, x: int, z: int) -> void:
 	var region: String = biome(x,z)
 	var floor_id: int = Nodes.NETHERRACK
 	match region:
-		"Soul sand valley": floor_id = Nodes.SOUL_SAND
-		"Warped forest": floor_id = Nodes.WARPED_NYLIUM
-		"Crimson forest": floor_id = Nodes.CRIMSON_NYLIUM
-		"Basalt deltas": floor_id = Nodes.BASALT
-	var rock: int = Nodes.BASALT if region == "Basalt deltas" else Nodes.NETHERRACK
+		"SoulSandValley": floor_id = Nodes.SOUL_SAND
+		"WarpedForest": floor_id = Nodes.WARPED_NYLIUM
+		"CrimsonForest": floor_id = Nodes.CRIMSON_NYLIUM
+		"BasaltDeltas": floor_id = Nodes.BASALT
+	var rock: int = Nodes.BASALT if region == "BasaltDeltas" else Nodes.NETHERRACK
 	var qx: int = posmod(x,160)-60
 	var qz: int = posmod(z,160)-60
 	var fortress: bool = absi(qx) <= 28 and absi(qz) <= 28 and (absi(qx) <= 3 or absi(qz) <= 3 or absi(qx) <= 9 and absi(qz) <= 9)
@@ -445,11 +470,11 @@ func nether_column(data: PackedInt32Array, column: int, x: int, z: int) -> void:
 	var pillar: bool = bridge_area and fx in [45,46,74,75] and (fz == 57 or fz == 61)
 	var lavafall: bool = hash_at(x/2,90,z/2)%173 == 0
 	var glow: bool = hash_at(x/3,80,z/3)%13 == 0
-	var warped: bool = region == "Warped forest"
+	var warped: bool = region == "WarpedForest"
 	var tree_ground: int = -1000
 	var stem_column: bool = false
 	var cap_column: bool = false
-	if warped or region == "Crimson forest":
+	if warped or region == "CrimsonForest":
 		var rx: int = floori(float(x)/7)*7+3
 		var rz: int = floori(float(z)/7)*7+3
 		var ground_y: int = terrain_height(rx,rz)
@@ -485,10 +510,10 @@ func nether_node(x: int, y: int, z: int, ores: bool = true, metrics: Dictionary 
 	if y <= floor_y or y >= roof or (y > 10 and absf(caves.get_noise_3d(x,y*0.7,z)) > 0.49):
 		if y == floor_y:
 			match region:
-				"Soul sand valley": return Nodes.SOUL_SAND
-				"Warped forest": return Nodes.WARPED_NYLIUM
-				"Crimson forest": return Nodes.CRIMSON_NYLIUM
-		if region == "Basalt deltas": return Nodes.BASALT
+				"SoulSandValley": return Nodes.SOUL_SAND
+				"WarpedForest": return Nodes.WARPED_NYLIUM
+				"CrimsonForest": return Nodes.CRIMSON_NYLIUM
+		if region == "BasaltDeltas": return Nodes.BASALT
 		return Nodes.NETHERRACK
 	if y <= 13: return Nodes.LAVA
 	var fx: int = posmod(x,160)
@@ -501,15 +526,15 @@ func nether_node(x: int, y: int, z: int, ores: bool = true, metrics: Dictionary 
 	# Lavafalls descend from the roof into the lava sea.
 	if hash_at(x/2,90,z/2)%173 == 0: return Nodes.LAVA
 	if y >= roof-2 and hash_at(x/3,80,z/3)%13 == 0: return Nodes.GLOWSTONE
-	if region in ["Warped forest","Crimson forest"]:
+	if region in ["WarpedForest","CrimsonForest"]:
 		var rx: int = floori(float(x)/7)*7+3
 		var rz: int = floori(float(z)/7)*7+3
 		var ground_y: int = terrain_height(rx,rz)
 		if ground_y > 13 and hash_at(rx,83,rz)%3 != 0:
-			var stem: int = Nodes.WARPED_STEM if region == "Warped forest" else Nodes.CRIMSON_STEM
+			var stem: int = Nodes.WARPED_STEM if region == "WarpedForest" else Nodes.CRIMSON_STEM
 			if x == rx and z == rz and y > ground_y and y <= ground_y+4: return stem
 			if absi(x-rx) <= 2 and absi(z-rz) <= 2 and y in [ground_y+4,ground_y+5]:
-				return Nodes.SHROOMLIGHT if hash_at(x,y,z)%5 == 0 else (Nodes.WARPED_NYLIUM if region == "Warped forest" else Nodes.CRIMSON_NYLIUM)
+				return Nodes.SHROOMLIGHT if hash_at(x,y,z)%5 == 0 else (Nodes.WARPED_NYLIUM if region == "WarpedForest" else Nodes.CRIMSON_NYLIUM)
 	return Nodes.AIR
 
 # Negative levels extend old worlds without shifting terrain or player builds.

@@ -8,8 +8,7 @@ extends RefCounted
 # damage modifier that fires when a hit would take the holder to zero or below:
 #
 #   * The totem must be **wielded**, and the source checks the offhand when the
-#     main hand does not hold one. Voxey has no offhand, so the main hand is the
-#     only place it can be carried.
+#     main hand does not hold one. Both hands are supported.
 #   * The hit is replaced with **exactly 1 HP** — `math.max(0, hp - 1)` — so the
 #     holder is left at one health rather than the damage being cancelled.
 #   * **All effects are cleared first**, then three are applied: regeneration at

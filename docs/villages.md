@@ -39,3 +39,5 @@ Slimes spawn on swamp surfaces on dark nights, weighted by the moon phase, and b
 Smokers cook food faster and blast furnaces smelt ore faster. Campfires cook without added fuel. Barrels store items. Composters turn seven plant items into bone meal. Fill cauldrons with a bucket to bottle water three times. Lecterns store signed books. Looms make colored banners; cartography tables make maps; stonecutters convert stone variants; smithing tables repair gear. Item frames preserve the displayed item’s metadata.
 
 The fishing rod casts into water; reel in when bubbles appear. Boats launch on water and dismount with Ctrl. Read [alchemy and pouches](alchemy.md) for brewing, enchanted gear and portable storage.
+
+Trade generation, two-second promotions, regeneration and the restock boundary rules are documented in the [trade lifecycle comparison](villager-trading-source.md). Only unlocked offers appear; the next tier is rolled when its promotion completes. Wandering traders have limited stock and no XP or profession levels.

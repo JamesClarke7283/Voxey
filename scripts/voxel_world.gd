@@ -80,11 +80,14 @@ var network_replica: bool = false
 var last_mesh_ms: float = 0.0
 
 func configure(seed_number: int, atlas: Texture2D, dimension_name: String = "overworld") -> void:
+	TrialLoot.tables() # Initialize immutable source data before starting workers.
 	Jukeboxes.reset(self)
 	Dungeons.reset(self)
+	Trials.reset(self)
 	Copper.reset(self)
 	Copper.register_families()
 	WoodTypes.register_families()
+	Archaeology.configure_loot()
 	Weather.reset(self)
 	Conduits.reset(self)
 	Corals.reset(self)
@@ -96,12 +99,18 @@ func configure(seed_number: int, atlas: Texture2D, dimension_name: String = "ove
 	RedstoneOre.reset(self)
 	EndMud.reset(self)
 	LushCaveExtra.reset(self)
+	LushCaves.reset(self)
+	Decor.reset(self)
 	PaleOak.reset(self)
 	ZombieSiege.reset(self)
+	if has_meta("villager_beds"): remove_meta("villager_beds")
 	Archaeology.reset(self)
 	if has_meta("piston_support"): remove_meta("piston_support")
 	Farmland.reset(self)
 	CropFarming.reset(self)
+	NetherWartCrops.reset(self)
+	SweetBerryCrops.reset(self)
+	CocoaCrops.reset(self)
 	FruitCrops.reset(self)
 	Amethyst.reset(self)
 	Beehives.reset(self)
@@ -197,6 +206,9 @@ func _process(delta: float) -> void:
 		WoodTypes.update(self,delta)
 		Farmland.update(self,delta)
 		CropFarming.update(self,delta)
+		NetherWartCrops.update(self,delta)
+		SweetBerryCrops.update(self,delta)
+		CocoaCrops.update(self,delta)
 		FruitCrops.update(self,delta)
 		Amethyst.update(self,delta)
 		Beehives.update(self,delta)
@@ -217,9 +229,11 @@ func _process(delta: float) -> void:
 		if orb_owner != null and orb_owner.has_method("playing"): XpOrbs.update(orb_owner,delta)
 		EndMud.update(self,delta)
 		LushCaveExtra.update(self,delta)
+		LushCaves.update(self,delta)
 		var siege_owner: Node = get_parent()
 		if siege_owner != null and siege_owner.has_method("toast"): ZombieSiege.update(siege_owner,delta)
 		if siege_owner != null and siege_owner.has_method("toast"): PaleOak.update(siege_owner,delta)
+		if siege_owner != null and siege_owner.has_method("toast"): Decor.update(siege_owner,delta)
 		Kelp.update(self,delta)
 		Beacons.update(self,delta)
 		for entry in stations_of("composter"):
@@ -228,7 +242,7 @@ func _process(delta: float) -> void:
 		tick += delta
 		if tick >= 1.0:
 			tick = 0.0
-			_simulate()
+			_simulate(true)
 			PointedDripstone.simulate(self,1.0)
 
 func column_in_range(column: Vector2i, center: Vector2i) -> bool:
@@ -291,9 +305,11 @@ func _remeshing(coord: Vector3i) -> bool:
 func _start_remesh(coord: Vector3i) -> void:
 	var snapshot: PackedInt32Array = _snapshot(coord)
 	var info: NodeInfo.View = NodeInfo.view()
+	var cocoa_facings: Dictionary = CocoaCrops.facing_snapshot(self,Vector2i(coord.x,coord.z)).get(coord,{})
+	var pot_plants: Dictionary = Decor.plant_snapshot(self,Vector2i(coord.x,coord.z)).get(coord,{})
 	var job: Dictionary = {"coord":coord, "root":blocks[coord].root, "result":[], "info":info}
 	# Player edits jump ahead of terrain generation in the worker pool.
-	job.task = WorkerThreadPool.add_task(func(): job.result = BlockMesher.build(snapshot,true,info),true,"Remesh map block")
+	job.task = WorkerThreadPool.add_task(func(): job.result = BlockMesher.build(snapshot,true,info,PackedInt32Array(),cocoa_facings,pot_plants),true,"Remesh map block")
 	remesh_jobs.append(job)
 
 func in_mesh_range(level: int) -> bool:
@@ -334,8 +350,10 @@ func _queue_column(coord: Vector2i) -> void:
 	var info: NodeInfo.View = NodeInfo.view()
 	var job: Dictionary = {"coord":coord,"result":{},"info":info,"gen":gen}
 	var levels := Vector2i(mesh_level-radius,mesh_level+radius) if mesh_level != 999999 else TerrainGenerator.ALL_LEVELS
+	var cocoa_facings: Dictionary = CocoaCrops.facing_snapshot(self,coord)
+	var pot_plants: Dictionary = Decor.plant_snapshot(self,coord)
 	job.task = WorkerThreadPool.add_task(func():
-		job.result = gen.generate_column(coord,local_edits,false,info,levels)
+		job.result = gen.generate_column(coord,local_edits,false,info,levels,cocoa_facings,pot_plants)
 		job.result["edit_snapshot"] = local_edits,true,"Generate map blocks")
 	jobs.append(job)
 	pending[coord] = true
@@ -366,9 +384,12 @@ const HOOK_KELP = 1 << 20
 const HOOK_BEACON = 1 << 21
 const HOOK_LEAVES = 1 << 22
 const HOOK_LIT_ORE = 1 << 23
+const HOOK_BANNER = 1 << 24
+const HOOK_BOOKSHELF = 1 << 25
+const HOOK_WALL = 1 << 26
 # Registrations the worker's `special` index does not cover; an edit carrying
 # one is always registered when its column loads.
-const UNINDEXED_HOOKS = HOOK_LEGACY_DOOR|HOOK_LIT_ORE|HOOK_POWDER|HOOK_CHORUS|HOOK_CONDUIT|HOOK_CORAL|HOOK_PICKLE|HOOK_KELP|HOOK_BEACON
+const UNINDEXED_HOOKS = HOOK_WALL|HOOK_LEGACY_DOOR|HOOK_LIT_ORE|HOOK_POWDER|HOOK_CHORUS|HOOK_CONDUIT|HOOK_CORAL|HOOK_PICKLE|HOOK_KELP|HOOK_BEACON
 static var hook_memo: Dictionary = {}
 
 static func load_hooks(id: int) -> int:
@@ -382,8 +403,8 @@ static func load_hooks(id: int) -> int:
 	if Concrete.is_powder(id): hooks |= HOOK_POWDER
 	if EndMud.is_chorus_part(id): hooks |= HOOK_CHORUS
 	if Beehives.is_hive(id): hooks |= HOOK_HIVE
-	if Farmland.is_soil(id): hooks |= HOOK_SOIL
-	if CropFarming.is_crop(id): hooks |= HOOK_CROP
+	if Farmland.is_soil(id) or id == VillageContent.PATH: hooks |= HOOK_SOIL
+	if CropFarming.is_crop(id) or CocoaCrops.is_cocoa(id) or NetherWartCrops.is_wart(id) or SweetBerryCrops.is_bush(id): hooks |= HOOK_CROP
 	if FruitCrops.is_stem(id): hooks |= HOOK_STEM
 	if WoodTypes.is_sapling(id): hooks |= HOOK_SAPLING
 	if SnowCover.is_snow(id): hooks |= HOOK_SNOW
@@ -391,19 +412,23 @@ static func load_hooks(id: int) -> int:
 	if Archaeology.is_suspicious(id): hooks |= HOOK_SUSPICIOUS
 	if Fire.is_fire(id): hooks |= HOOK_FIRE
 	if Campfires.is_campfire(id): hooks |= HOOK_CAMPFIRE
-	if Signs.is_sign(id): hooks |= HOOK_SIGN
+	if Signs.is_any(id): hooks |= HOOK_SIGN
+	if Banners.is_banner(id): hooks |= HOOK_BANNER
+	if id == Bookshelves.ID: hooks |= HOOK_BOOKSHELF
 	if Conduits.is_conduit(id): hooks |= HOOK_CONDUIT
 	if Corals.is_coral(id): hooks |= HOOK_CORAL
 	if SeaPickles.is_pickle(id): hooks |= HOOK_PICKLE
 	if Kelp.is_kelp(id): hooks |= HOOK_KELP
 	if Beacons.is_beacon(id): hooks |= HOOK_BEACON
 	if WoodTypes.is_leaves(id): hooks |= HOOK_LEAVES
+	if Barriers.is_wall(id): hooks |= HOOK_WALL
 	if RedstoneOre.is_lit(id): hooks |= HOOK_LIT_ORE
 	hook_memo[id] = hooks
 	return hooks
 
 func _apply_column(result: Dictionary) -> void:
 	WoodTypes.restore_legacy(self)
+	Signs.restore_legacy(self)
 	var c: Vector2i = result.coord
 	_sky_changed(c)
 	var snow_updates: Dictionary = {}
@@ -411,6 +436,7 @@ func _apply_column(result: Dictionary) -> void:
 	var legacy_doors: Dictionary = {}
 	var input_updates: Dictionary = {}
 	var sign_updates: Dictionary = {}
+	var banner_updates: Dictionary = {}
 	var fruit_updates: Dictionary = {}
 	columns[c] = true
 	for entry in result.blocks:
@@ -439,6 +465,10 @@ func _apply_column(result: Dictionary) -> void:
 		if blocks.has(b) and blocks[b].data[local_index(p)] != edits[p]:
 			blocks[b].data[local_index(p)] = edits[p]
 			_mark_dirty(p)
+	if not network_replica:
+		TrialChambers.install(self,result)
+		TrailRuins.install(self,result)
+		DesertWells.install(self,result)
 	if network_replica:
 		# Only the host runs load-time support checks, fluid reactions and loot
 		# generation. A guest needs the visual registrations, not a second simulation.
@@ -481,6 +511,7 @@ func _apply_column(result: Dictionary) -> void:
 			leaf_cells.append(p); leaf_checks.append(not edit_zone.is_empty() and edit_zone.has(Vector3i(p.x >> 3,p.y >> 3,p.z >> 3)))
 			continue
 		if hooks & HOOK_CIRCUIT: circuits.register(p,id)
+		if hooks & HOOK_WALL: BarrierCatalog.loaded(self,p)
 		if hooks & HOOK_LEGACY_DOOR: legacy_doors[p] = true
 		if hooks & HOOK_INPUT: input_updates[p] = true
 		if id == SnowCover.BASE or snow_cells.has(p): SnowCover.registered(self,p,id)
@@ -496,8 +527,15 @@ func _apply_column(result: Dictionary) -> void:
 		if hooks & HOOK_HIVE: Beehives.registered(self,p)
 		if hooks & HOOK_SOIL: Farmland.registered(self,p,id)
 		if hooks & HOOK_CROP: CropFarming.registered(self,p,true)
+		if hooks & HOOK_CROP: NetherWartCrops.registered(self,p,true)
+		if hooks & HOOK_CROP: SweetBerryCrops.registered(self,p,true)
+		if hooks & HOOK_CROP: CocoaCrops.registered(self,p,true)
+		if LushCaves.is_vine(id): LushCaves.registered(self,p,id)
+		if LushCaveExtra.is_dripleaf_tipped(id) or LushCaveExtra.is_ceiling_plant(id): LushCaveExtra.registered(self,p,id)
 		if hooks & HOOK_STEM: FruitCrops.registered(self,p,true); fruit_updates[p] = true
 		if hooks & HOOK_SAPLING and not growth.has(p): growth[p] = 0.0
+		if VillageContent.is_bed(id): VillagerSocial.bed_changed(self,p)
+		if Trials.is_block(id): Trials.registered(self,p)
 		if id == Dungeons.SPAWNER:
 			# Corridor spawners carry their own mob; dungeon spawners fall back to
 			# the dungeon table.
@@ -521,11 +559,10 @@ func _apply_column(result: Dictionary) -> void:
 			else: _structure_loot(p,int(result.get("dungeons",{}).get("chests",{}).get(p,-1)))
 		# A suspicious node's loot is drawn from the table of the structure that
 		# placed it. The source tags each node with the structure's name and reads
-		# that structure's own table, which is where the sherds live; without the
-		# tag every node would draw from the generic sand or gravel list and the
-		# sherds would be unreachable in survival.
+		# that structure's own table, which is where the sherds live. Untagged
+		# nodes have no loot; wells and trails install their explicit seeds above.
 		if hooks & HOOK_SUSPICIOUS:
-			# Three structures place suspicious nodes, each with its own table.
+			# The older ruins and temples encode their tags in these dictionaries.
 			var placed_by: String = String(result.get("ruins",{}).get("suspicious",{}).get(p,
 				String(result.get("temples",{}).get("suspicious",{}).get(p,""))))
 			if not placed_by.is_empty(): Archaeology.set_structure(self,p,placed_by)
@@ -542,6 +579,8 @@ func _apply_column(result: Dictionary) -> void:
 		if hooks & HOOK_FIRE: Fire.track(self,p)
 		if hooks & HOOK_CAMPFIRE: Campfires.station(self,p)
 		if hooks & HOOK_SIGN: Signs.station(self,p); sign_updates[p] = true
+		if hooks & HOOK_BANNER: Banners.station(self,p); banner_updates[p] = true
+		if hooks & HOOK_BOOKSHELF: Bookshelves.clean_state(Bookshelves.state(self,p))
 		if id == VillageContent.CAULDRON: Cauldrons.station(self,p)
 		if hooks & HOOK_CONDUIT: Conduits.registered(self,p)
 		if hooks & HOOK_CORAL: Corals.registered(self,p,id)
@@ -608,6 +647,7 @@ func _apply_column(result: Dictionary) -> void:
 		var hooks: int = load_hooks(id)
 		var bits: int = NodeInfo.of(id)
 		if hooks & HOOK_CIRCUIT: circuits.register(p,id)
+		if hooks & HOOK_WALL: BarrierCatalog.loaded(self,p)
 		if hooks & HOOK_LEGACY_DOOR: legacy_doors[p] = true
 		if hooks & HOOK_INPUT: input_updates[p] = true
 		SnowCover.registered(self,p,id)
@@ -622,8 +662,15 @@ func _apply_column(result: Dictionary) -> void:
 		if hooks & HOOK_HIVE: Beehives.registered(self,p)
 		if hooks & HOOK_SOIL: Farmland.registered(self,p,id)
 		if hooks & HOOK_CROP: CropFarming.registered(self,p,true)
+		if hooks & HOOK_CROP: NetherWartCrops.registered(self,p,true)
+		if hooks & HOOK_CROP: SweetBerryCrops.registered(self,p,true)
+		if hooks & HOOK_CROP: CocoaCrops.registered(self,p,true)
+		if LushCaves.is_vine(id): LushCaves.registered(self,p,id)
+		if LushCaveExtra.is_dripleaf_tipped(id) or LushCaveExtra.is_ceiling_plant(id): LushCaveExtra.registered(self,p,id)
 		if hooks & HOOK_STEM: FruitCrops.registered(self,p,true); fruit_updates[p] = true
 		if hooks & HOOK_SAPLING and not growth.has(p): growth[p] = 0.0
+		if VillageContent.is_bed(id): VillagerSocial.bed_changed(self,p)
+		if Trials.is_block(id): Trials.registered(self,p)
 		if id == Dungeons.SPAWNER:
 			# Corridor spawners carry their own mob; dungeon spawners fall back to
 			# the dungeon table.
@@ -632,11 +679,10 @@ func _apply_column(result: Dictionary) -> void:
 		# so the structure chest branch of the generated-node loop cannot apply.
 		# A suspicious node's loot is drawn from the table of the structure that
 		# placed it. The source tags each node with the structure's name and reads
-		# that structure's own table, which is where the sherds live; without the
-		# tag every node would draw from the generic sand or gravel list and the
-		# sherds would be unreachable in survival.
+		# that structure's own table, which is where the sherds live. Untagged
+		# nodes have no loot; wells and trails install explicit seeds above.
 		if hooks & HOOK_SUSPICIOUS:
-			# Three structures place suspicious nodes, each with its own table.
+			# The older ruins and temples encode their tags in these dictionaries.
 			var placed_by: String = String(result.get("ruins",{}).get("suspicious",{}).get(p,
 				String(result.get("temples",{}).get("suspicious",{}).get(p,""))))
 			if not placed_by.is_empty(): Archaeology.set_structure(self,p,placed_by)
@@ -656,6 +702,8 @@ func _apply_column(result: Dictionary) -> void:
 		if hooks & HOOK_FIRE or bits & NodeInfo.BASE_LAVA: Fire.track(self,p)
 		if hooks & HOOK_CAMPFIRE: Campfires.station(self,p)
 		if hooks & HOOK_SIGN: Signs.station(self,p); sign_updates[p] = true
+		if hooks & HOOK_BANNER: Banners.station(self,p); banner_updates[p] = true
+		if hooks & HOOK_BOOKSHELF: Bookshelves.clean_state(Bookshelves.state(self,p))
 		if id == VillageContent.CAULDRON: Cauldrons.station(self,p)
 		if hooks & HOOK_CONDUIT: Conduits.registered(self,p)
 		if hooks & HOOK_CORAL: Corals.registered(self,p,id)
@@ -669,13 +717,23 @@ func _apply_column(result: Dictionary) -> void:
 	# so it must run outside the dictionary iteration above.
 	for p in snow_updates: SnowCover.changed(self,p)
 	for p in sign_updates: Signs.validate_support(self,p)
+	if not network_replica:
+		for p in banner_updates: Banners.validate_support(self,p)
 	for p in food_updates: FoodFeatures.changed(self,p)
 	for p in fruit_updates: FruitCrops.refresh(self,p)
 	Farmland.column_loaded(self,c)
 	CropFarming.column_loaded(self,c)
+	NetherWartCrops.column_loaded(self,c)
+	SweetBerryCrops.column_loaded(self,c)
+	CocoaCrops.column_loaded(self,c)
 	Amethyst.column_loaded(self,c)
 	Copper.column_loaded(self,c)
 	Sponges.column_loaded(self,c)
+	Composters.column_loaded(self,c)
+	Banners.column_loaded(self,c)
+	LushCaves.column_loaded(self,c)
+	LushCaveExtra.column_loaded(self,c)
+	Decor.column_loaded(self,c)
 	for p in legacy_doors: Doors.migrate_at(self,p)
 	for p in input_updates: RedstoneInputs.migrate_at(self,p)
 	for p in input_updates: RedstoneInputs.support_changed(self,p)
@@ -712,8 +770,12 @@ func _unload(c: Vector2i) -> void:
 	WoodTypes.unload(self,c)
 	Jukeboxes.unload(self,c)
 	Dungeons.unload(self,c)
+	Trials.unload(self,c)
 	Farmland.unload(self,c)
 	CropFarming.unload(self,c)
+	NetherWartCrops.unload(self,c)
+	SweetBerryCrops.unload(self,c)
+	CocoaCrops.unload(self,c)
 	FruitCrops.unload(self,c)
 	Amethyst.unload(self,c)
 	Beehives.unload(self,c)
@@ -723,6 +785,9 @@ func _unload(c: Vector2i) -> void:
 	RedstoneOre.unload(self,c)
 	EndMud.unload(self,c)
 	LushCaveExtra.unload(self,c)
+	LushCaves.unload(self,c)
+	Decor.unload(self,c)
+	VillagerSocial.bed_unload(self,c)
 	PaleOak.unload(self,c)
 	_sky_changed(c)
 	columns.erase(c)
@@ -782,6 +847,7 @@ func apply_network_edit(p: Vector3i, id: int, previous: int = -1) -> void:
 	var old_id: int = blocks[b].data[local_index(p)]
 	if old_id == id: return
 	blocks[b].data[local_index(p)] = id
+	if VillageContent.is_bed(id) or VillageContent.is_bed(old_id): VillagerSocial.bed_changed(self,p)
 	node_writes += 1
 	_sky_changed(Vector2i(b.x,b.z))
 	_mark_dirty(p)
@@ -809,6 +875,7 @@ func set_node(p: Vector3i, id: int) -> bool:
 	if old_id != id and old_id in [VillageContent.COMPOSTER,VillageContent.CAULDRON]: stations.erase(station_key(p))
 	if old_id != id: _sky_changed(Vector2i(b.x,b.z))
 	blocks[b].data[local_index(p)] = id
+	if VillageContent.is_bed(id) or VillageContent.is_bed(old_id): VillagerSocial.bed_changed(self,p)
 	node_writes += 1
 	# Hooks that look for particular nodes at or beside p are skipped when none
 	# is there (see `change_bits`). While a piston moves, several hooks defer
@@ -818,7 +885,9 @@ func set_node(p: Vector3i, id: int) -> bool:
 	Campfires.changed(self,p,old_id,id)
 	Dripping.changed(self,p,old_id,id)
 	Dungeons.changed(self,p,old_id,id)
+	Trials.changed(self,p,old_id,id)
 	WoodTypes.changed(self,p,old_id,id)
+	DryTerrain.changed(self,p)
 	Scaffolding.changed(self,p,old_id,id)
 	PointedDripstone.changed(self,p,old_id,id)
 	Pasture.changed(self,p)
@@ -828,10 +897,16 @@ func set_node(p: Vector3i, id: int) -> bool:
 		for side in Fire.SIDES: Fire.track(self,p+side)
 	circuits.changed(p,old_id,id,_near(p) & NEAR_OBSERVER != 0)
 	record_edit(p,id,old_id)
-	if id == Nodes.SUGAR_CANE or id == Nodes.CACTUS and node_at(p+Vector3i.DOWN) != Nodes.CACTUS or WoodTypes.is_sapling(id) or not CropFarming.is_crop(id) and VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3: growth[p] = 0.0
+	SoilVariants.changed(self,p,old_id)
+	LargePlants.changed(self,p,old_id,id)
+	HugeMushrooms.changed(self,p,old_id,id)
+	LushCaves.changed(self,p,old_id,id)
+	LushCaveExtra.changed(self,p,old_id,id)
+	if id == Nodes.SUGAR_CANE or id == Nodes.CACTUS and node_at(p+Vector3i.DOWN) != Nodes.CACTUS or WoodTypes.is_sapling(id) or not CropFarming.is_crop(id) and not CocoaCrops.is_cocoa(id) and not NetherWartCrops.is_wart(id) and not SweetBerryCrops.is_bush(id) and VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3: growth[p] = 0.0
 	else: growth.erase(p)
 	_mark_dirty(p)
 	if Barriers.is_wall(node_at(p+Vector3i.DOWN)): _mark_dirty(p+Vector3i.DOWN)
+	BarrierCatalog.changed(self,p,old_id,id)
 	if BuildingShapes.stair(old_id) or BuildingShapes.stair(id):
 		for dx in range(-1,2):
 			for dz in range(-1,2):
@@ -854,6 +929,9 @@ func set_node(p: Vector3i, id: int) -> bool:
 	Jukeboxes.changed(self,p,old_id,id)
 	Farmland.changed(self,p,old_id,id)
 	if not gated or (own|_near(p)) & NEAR_CROP: CropFarming.changed(self,p,old_id,id)
+	if not gated or (own|_near(p)) & NEAR_CROP: NetherWartCrops.changed(self,p,old_id,id)
+	if not gated or (own|_near(p)) & NEAR_CROP: SweetBerryCrops.changed(self,p,old_id,id)
+	if not gated or (own|_near(p)) & NEAR_CROP: CocoaCrops.changed(self,p,old_id,id)
 	if not gated or (own|_near(p)) & NEAR_STEM: FruitCrops.changed(self,p,old_id,id)
 	if not gated or change_bits(id) & OWN_AMETHYST or _near(p) & NEAR_CRYSTAL or Amethyst.tracks(self,p): Amethyst.changed(self,p,old_id,id)
 	# `supported_node`: a carpet left over air drops.
@@ -867,6 +945,8 @@ func set_node(p: Vector3i, id: int) -> bool:
 	if _near(p) & NEAR_RAIL: Rails.support_changed(self,p)
 	if id == Sponges.SPONGE or Sponges.tracks(self,p): Sponges.changed(self,p,old_id,id)
 	Decor.changed(self,p,old_id,id)
+	if old_id == Bookshelves.ID or id == Bookshelves.ID: Bookshelves.changed(self,p,old_id,id)
+	if not gated or (own|_near(p)) & NEAR_BANNER: Banners.changed(self,p,old_id,id)
 	return true
 
 # What the change hooks in `set_node` look for, by node id: kinds at or beside
@@ -888,6 +968,7 @@ const NEAR_CRYSTAL = 8192
 const OWN_AMETHYST = 16384
 const OWN_COPPER = 32768
 const OWN_POWDER = 65536
+const NEAR_BANNER = 131072
 static var change_memo: Dictionary = {}
 # Counts node writes, so a hook that changes nodes invalidates `_near`.
 var node_writes: int = 0
@@ -909,8 +990,9 @@ static func change_bits(id: int) -> int:
 	if Fluids.liquid(id): bits |= NEAR_LIQUID
 	if SnowCover.is_snow(id): bits |= NEAR_SNOW
 	if FoodFeatures.is_cake(id) or FoodFeatures.flower(id) or FoodFeatures.is_tall_grass(id): bits |= NEAR_FOOD
-	if Signs.is_sign(id): bits |= NEAR_SIGN
-	if CropFarming.is_crop(id): bits |= NEAR_CROP
+	if Signs.is_any(id): bits |= NEAR_SIGN
+	if Banners.is_banner(id): bits |= NEAR_BANNER
+	if CropFarming.is_crop(id) or CocoaCrops.is_cocoa(id) or NetherWartCrops.is_wart(id) or SweetBerryCrops.is_bush(id): bits |= NEAR_CROP
 	if FruitCrops.is_stem(id): bits |= NEAR_STEM
 	if Amethyst.is_crystal(id): bits |= NEAR_CRYSTAL
 	if Amethyst.tracked(id): bits |= OWN_AMETHYST
@@ -981,6 +1063,9 @@ func _snapshot(coord: Vector3i) -> PackedInt32Array:
 
 func collision_boxes(p: Vector3i) -> Array:
 	var id: int = node_at(p)
+	if LushCaveExtra.is_big_leaf(id): return LushCaveExtra.collision_boxes(id)
+	if CocoaCrops.is_cocoa(id): return CocoaCrops.world_boxes(self,p)
+	if Signs.is_hanging(id): return Signs.hanging_collision(id)
 	if Candles.is_candle(id): return Candles.boxes(id)
 	if Candles.is_cake(id): return Candles.boxes(Candles.FIRST)
 	if Farmland.is_soil(id): return Farmland.boxes(id)
@@ -991,8 +1076,11 @@ func collision_boxes(p: Vector3i) -> Array:
 	if Doors.is_door(id): return Doors.boxes(id)
 	if Trapdoors.is_trapdoor(id): return Trapdoors.boxes(id)
 	if Barriers.is_barrier(id): return Barriers.world_boxes(self,p,true)
+	if GrindstoneRepair.is_grindstone(id): return GrindstoneRepair.boxes(id)
+	if Stonecutting.is_cutter(id): return Stonecutting.boxes(id)
 	if id in SteamMachines.BLOCKS: return SteamMachines.boxes(id)
 	if id == VillageContent.CAULDRON: return Cauldrons.boxes()
+	if id == VillageContent.COMPOSTER: return Composters.boxes(get_station(p,"composter"))
 	# A chain is a sixteenth of a block wide, so it must not block movement like a
 	# full cube. Without this it would be an invisible wall down the middle of a tile.
 	if Lanterns.is_chain(id): return [AABB(Vector3(0.5-Lanterns.CHAIN_WIDTH,0,0.5-Lanterns.CHAIN_WIDTH),Vector3(Lanterns.CHAIN_WIDTH*2,1.0,Lanterns.CHAIN_WIDTH*2))]
@@ -1004,10 +1092,11 @@ func collision_boxes(p: Vector3i) -> Array:
 	if PointedDripstone.is_stage(id): return PointedDripstone.boxes(id)
 	return [AABB(Vector3.ZERO,Vector3.ONE)] if Nodes.solid(id) else []
 
-func intersects(pos: Vector3, half_width: float = 0.29, height: float = 1.8) -> bool:
-	var lo := Vector3i(floori(pos.x-half_width),floori(pos.y+0.002),floori(pos.z-half_width))
-	var hi := Vector3i(floori(pos.x+half_width),floori(pos.y+height-0.002),floori(pos.z+half_width))
-	var body := AABB(pos-Vector3(half_width,-0.002,half_width),Vector3(half_width*2,height-0.004,half_width*2))
+func intersects(pos: Vector3, half_width: float = 0.29, height: float = 1.8, half_depth: float = -1.0) -> bool:
+	if half_depth < 0: half_depth = half_width
+	var lo := Vector3i(floori(pos.x-half_width),floori(pos.y+0.002),floori(pos.z-half_depth))
+	var hi := Vector3i(floori(pos.x+half_width),floori(pos.y+height-0.002),floori(pos.z+half_depth))
+	var body := AABB(pos-Vector3(half_width,-0.002,half_depth),Vector3(half_width*2,height-0.004,half_depth*2))
 	# Read the shared trait table directly; a miss falls back to NodeInfo.
 	var traits: PackedInt32Array = NodeInfo.traits if NodeInfo.cached() else PackedInt32Array()
 	var known: int = traits.size()
@@ -1059,7 +1148,7 @@ func raycast(origin: Vector3, direction: Vector3, reach: float = 5.0, liquids: b
 	for iteration in 128:
 		var id: int = node_at(cell)
 		if id != Nodes.AIR and id not in [Nodes.NETHER_PORTAL,Nodes.END_PORTAL] and (liquids or not Fluids.liquid(id)):
-			if id in SteamMachines.BLOCKS or RedstoneInputs.is_device(id) or BuildingShapes.is_shape(id) or Fluids.flowing(id) or Campfires.is_campfire(id) or Barriers.is_barrier(id) or RedstoneSensors.is_detector(id) or Trapdoors.is_trapdoor(id) or SnowCover.is_snow(id) or Doors.is_door(id) or FoodFeatures.is_cake(id) or Signs.is_sign(id) or CropFarming.is_crop(id) or Farmland.is_soil(id) or FruitCrops.is_stem(id) or Amethyst.is_crystal(id) or PointedDripstone.is_stage(id):
+			if GrindstoneRepair.is_grindstone(id) or Stonecutting.is_cutter(id) or id in SteamMachines.BLOCKS or RedstoneInputs.is_device(id) or BuildingShapes.is_shape(id) or Fluids.flowing(id) or Campfires.is_campfire(id) or Barriers.is_barrier(id) or RedstoneSensors.is_detector(id) or Trapdoors.is_trapdoor(id) or SnowCover.is_snow(id) or Doors.is_door(id) or FoodFeatures.is_cake(id) or Signs.is_any(id) or Banners.is_banner(id) or CropFarming.is_crop(id) or CocoaCrops.is_cocoa(id) or NetherWartCrops.is_wart(id) or SweetBerryCrops.is_bush(id) or Farmland.is_soil(id) or FruitCrops.is_stem(id) or Amethyst.is_crystal(id) or PointedDripstone.is_stage(id) or id == DryTerrain.DEAD_BUSH:
 				var hit: Dictionary = shape_hit(cell,origin,direction,reach)
 				if not hit.is_empty(): return hit
 			else: return {"pos":cell,"normal":normal,"id":id,"distance":distance,"point":origin+direction*distance}
@@ -1079,12 +1168,17 @@ func shape_hit(p: Vector3i, origin: Vector3, direction: Vector3, reach: float) -
 	var id: int = node_at(p)
 	var boxes: Array = [AABB(Vector3.ZERO,Vector3(1,1.0 if Fluids.base(node_at(p+Vector3i.UP)) == Fluids.base(id) else Fluids.height(id),1))] if Fluids.flowing(id) else BuildingShapes.boxes(BuildingShapes.world_mask(self,p))
 	if Campfires.is_campfire(id): boxes = Campfires.boxes(id)
+	if GrindstoneRepair.is_grindstone(id): boxes = GrindstoneRepair.boxes(id)
+	elif Stonecutting.is_cutter(id): boxes = Stonecutting.boxes(id,false)
 	if Barriers.is_barrier(id): boxes = Barriers.world_boxes(self,p,false,true)
 	if id in SteamMachines.BLOCKS: boxes = SteamMachines.boxes(id)
 	if RedstoneSensors.is_detector(id): boxes = RedstoneSensors.boxes(id)
 	if Amethyst.is_crystal(id): boxes = Amethyst.boxes(id)
 	elif Copper.is_rod(id): boxes = Copper.boxes(id)
 	elif CropFarming.is_crop(id): boxes = CropFarming.boxes(id)
+	elif CocoaCrops.is_cocoa(id): boxes = CocoaCrops.world_boxes(self,p)
+	elif NetherWartCrops.is_wart(id): boxes = NetherWartCrops.boxes(id)
+	elif SweetBerryCrops.is_bush(id): boxes = SweetBerryCrops.boxes(id)
 	elif Farmland.is_soil(id): boxes = Farmland.boxes(id)
 	elif FruitCrops.is_stem(id): boxes = FruitCrops.boxes(id)
 	elif FoodFeatures.is_cake(id): boxes = FoodFeatures.boxes(id)
@@ -1096,7 +1190,9 @@ func shape_hit(p: Vector3i, origin: Vector3, direction: Vector3, reach: float) -
 	if Candles.is_candle(id): boxes = Candles.boxes(id)
 	if PointedDripstone.is_stage(id): boxes = PointedDripstone.boxes(id)
 	if Candles.is_cake(id): boxes = Candles.boxes(Candles.FIRST)
-	if Signs.is_sign(id): boxes = Signs.boxes(id)
+	if Signs.is_any(id): boxes = Signs.boxes(id)
+	if Banners.is_banner(id): boxes = Banners.boxes(Banners.station(self,p))
+	if id == DryTerrain.DEAD_BUSH: boxes = DryTerrain.boxes()
 	if RedstoneInputs.is_device(id): boxes = RedstoneInputs.boxes(id,circuits.state(p))
 	for box in boxes:
 		var low: Vector3 = Vector3(p)+box.position
@@ -1120,20 +1216,14 @@ func shape_hit(p: Vector3i, origin: Vector3, direction: Vector3, reach: float) -
 			nearest = {"pos":p,"normal":normal,"id":node_at(p),"distance":enter,"point":origin+direction*enter}
 	return nearest
 
-func _simulate() -> void:
+func _simulate(use_game_clock: bool = false) -> void:
 	Fire.update(self)
 	for p in growth.keys():
 		if not loaded_at(Vector3(p)): continue
 		growth[p] += 1.0
 		var id: int = node_at(p)
-		if CropFarming.is_crop(id): growth.erase(p); continue # Retire legacy crop timers after loading old saves.
-		if VillageContent.shape(id) == "crop" and growth[p] >= 30:
-			# Cocoa advances one stage at a time through its own three-stage ladder,
-			# since its ids are not laid out three-wide (`mcl_cocoas.grow`).
-			if VillageContent.is_cocoa(id):
-				var next: int = VillageContent.cocoa_next(id)
-				if next != 0: set_node(p,next)
-			elif VillageContent.DATA[id].stage < 3: set_node(p,id+1)
+		if CropFarming.is_crop(id) or CocoaCrops.is_cocoa(id) or NetherWartCrops.is_wart(id) or SweetBerryCrops.is_bush(id): growth.erase(p); continue # Retire legacy crop timers after loading old saves.
+		if VillageContent.shape(id) == "crop" and growth[p] >= 30 and VillageContent.DATA[id].stage < 3: set_node(p,id+1)
 		elif WoodTypes.is_sapling(id):
 			WoodTypes.sapling_tick(self,p)
 		elif Bamboo.is_bamboo(id) and growth[p] > 90:
@@ -1165,49 +1255,17 @@ func _simulate() -> void:
 				if owner != null and owner.has_method("toast"): owner.achievements.award("local_brewery")
 			continue
 		if s.get("kind","") != "furnace": continue
-		var input: Dictionary = s.slots[0]
-		var fuel: Dictionary = s.slots[1]
-		var output: Dictionary = s.slots[2]
-		var recipe: int = Nodes.smelt_result(input.id)
 		if Campfires.is_campfire(int(s.get("device",0))): continue
-		if s.get("device",0) == VillageContent.SMOKER and Nodes.food(recipe) <= 0: recipe = 0
-		if s.get("device",0) == VillageContent.BLAST_FURNACE and recipe not in [Nodes.IRON,Nodes.GOLD,Nodes.COPPER,VillageContent.EMERALD]: recipe = 0
-		if s.burn > 0: s.burn -= 1
-		if recipe == 0 or (output.id != 0 and output.id != recipe) or output.count >= 64: s.progress = 0.0; continue
-		if s.burn <= 0:
-			var burn: float = Nodes.fuel_time(fuel.id)
-			if burn == 0: continue
-			s.burn = burn
-			if fuel.id == Nodes.LAVA_BUCKET:
-				fuel.id = Nodes.BUCKET; fuel.count = 1; fuel.wear = 0
-			else:
-				fuel.count -= 1
-				if fuel.count <= 0: fuel.id = 0
-		s.progress += 2.0 if s.get("device",0) in [VillageContent.SMOKER,VillageContent.BLAST_FURNACE] else 1.0
-		if s.progress >= 8:
-			s.progress = 0.0
-			# Source `_mcl_cooking_replacements`: drying a wet sponge pours its
-			# water into an empty bucket sitting in the fuel slot.
-			var replacement: int = Sponges.cooking_replacement(input.id) if fuel.id == Nodes.BUCKET and fuel.count == 1 else 0
-			input.count -= 1
-			if replacement != 0:
-				fuel.id = replacement
-				fuel.wear = 0
-			if input.count <= 0: input.id = 0
-			output.id = recipe
-			output.count += 1
-			# `mcl_furnaces/init.lua`:407 stores one point of experience beside the
-			# output, paid out when the output is taken (`give_xp`, :99-111).
-			s["xp"] = int(s.get("xp",0))+FurnaceRules.XP_PER_SMELT
-			# `delicious_fish`: the source's award for cooking a fish.
-			if recipe in [VillageContent.COOKED_COD,VillageContent.COOKED_SALMON]:
-				var fish_owner: Node = get_parent()
-				if fish_owner != null and fish_owner.has_method("toast"): fish_owner.achievements.award("delicious_fish")
+		var input_id: int = int(s.slots[0].id)
+		var cooked: int = FurnaceRules.world_step(s,float(get_parent().day_time)*1200.0) if use_game_clock else FurnaceRules.step(s,1.0)
+		if cooked > 0 and input_id in [VillageContent.RAW_COD,VillageContent.RAW_SALMON]:
+			var fish_owner: Node = get_parent()
+			if fish_owner != null and fish_owner.has_method("toast"): fish_owner.achievements.award("delicious_fish")
 
 func can_plant_cane(p: Vector3i) -> bool:
 	var soil: Vector3i = p+Vector3i.DOWN
 	if node_at(soil) == Nodes.SUGAR_CANE: return true
-	if node_at(soil) not in [Nodes.DIRT,Nodes.GRASS,Nodes.SAND]: return false
+	if node_at(soil) not in [Nodes.DIRT,Nodes.GRASS,Nodes.SAND,ShapeMaterials.RED_SAND,SoilVariants.PODZOL,SoilVariants.MYCELIUM]: return false
 	for side in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
 		if Fluids.water(node_at(soil+side)): return true
 	return false
@@ -1297,6 +1355,9 @@ static func pair_key(a: Vector3i, b: Vector3i) -> String:
 	return station_key(primary)+"+"+station_key(b if primary == a else a)
 
 func get_station(p: Vector3i, kind: String) -> Dictionary:
+	if node_at(p) == VillageContent.SMITHING_TABLE: return Smithing.station(self,p)
+	if GrindstoneRepair.is_grindstone(node_at(p)): return GrindstoneRepair.station(self,p)
+	if Stonecutting.is_cutter(node_at(p)): return Stonecutting.station(self,p)
 	if node_at(p) in SteamMachines.CONTAINERS: return SteamMachines.station(self,p)
 	if Campfires.is_campfire(node_at(p)): return Campfires.station(self,p)
 	if PortableStorage.is_shulker(node_at(p)): return PortableStorage.station(self,p)
@@ -1306,6 +1367,9 @@ func get_station(p: Vector3i, kind: String) -> Dictionary:
 	var key: String = station_key(p)
 	if not stations.has(key): stations[key] = _new_station(kind,5 if kind == "brewing" else (3 if kind == "furnace" else (5 if node_at(p) == Nodes.HOPPER else (9 if node_at(p) in [Nodes.DISPENSER,Nodes.DROPPER] else (54 if node_at(p) == VillageContent.RECOVERY_CHEST else 27)))))
 	var state: Dictionary = stations[key]
+	if kind == "furnace": state.device = node_at(p)
+	state.books_only = node_at(p) == Nodes.BOOKSHELF
+	if state.books_only and not state.has("label"): state.label = "BOOKSHELF"
 	note_station(key,state)
 	return state
 
@@ -1331,7 +1395,7 @@ func detach_station(p: Vector3i, partner: Vector3i = Vector3i(99999,99999,99999)
 	var items: Array = []
 	var key: String = station_key(p)
 	if stations.has(key):
-		items.append_array(stations[key].slots)
+		items.append_array(stations[key].slots.slice(0,3) if stations[key].get("kind","") == "smithing" else (stations[key].slots.slice(0,2) if stations[key].get("kind","") == "grindstone" else (stations[key].slots.slice(0,1) if stations[key].get("kind","") == "stonecutter" else stations[key].slots)))
 		stations.erase(key)
 	if partner != p and partner != Vector3i(99999,99999,99999):
 		var shared: String = pair_key(p,partner)

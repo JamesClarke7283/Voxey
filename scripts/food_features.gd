@@ -19,7 +19,8 @@ const DATA = {
 }
 const FLOWERS = {POPPY:"night_vision",DANDELION:"saturation",OXEYE_DAISY:"regeneration"}
 # Keep the source metadata vocabulary, including legacy imported stew effects.
-const STEW_EFFECTS = {"night_vision":5.0,"saturation":0.5,"regeneration":8.0,"weakness":9.0,"fire_resistance":4.0,"blindness":8.0,"withering":8.0,"poison":12.0,"leaping":6.0}
+# Closed/open eyeblossom add nausea and blindness respectively; both last 8s.
+const STEW_EFFECTS = {"night_vision":5.0,"saturation":0.5,"regeneration":8.0,"weakness":9.0,"fire_resistance":4.0,"blindness":8.0,"withering":8.0,"poison":12.0,"leaping":6.0,"nausea":8.0}
 static var icons: Dictionary = {}
 
 # A candled cake (`mcl_candles:candle_cake`) is still a cake: it is eaten slice by
@@ -28,15 +29,31 @@ static func is_cake(id: int) -> bool: return id == CAKE or id >= SLICE_BASE and 
 static func slices(id: int) -> int: return 7 if id == CAKE or Candles.is_cake(id) else (id-SLICE_BASE+1 if is_cake(id) else 0)
 static func cake_id(count: int) -> int: return CAKE if count == 7 else (SLICE_BASE+count-1 if count > 0 else Nodes.AIR)
 static func title(id: int) -> String: return "Cake" if id == CAKE else "Cake (%d slices)"%slices(id)
-# The ten flower species added by `FlowersExtra` are flowers in every sense the
-# rest of the game means, so they join the same registry.
-static func flower(id: int) -> bool: return FLOWERS.has(id) or FlowersExtra.is_flower(id)
+
+# Source group:flower is a consumer query, not a suspicious-stew whitelist.
+# Large-flower tops and double herbs lack the group; the propagule and flowering
+# azalea have it despite not being simple flowers. Ground nodes include every
+# stage, which is what lets hives find them.
+static func flower(id: int) -> bool:
+	return FLOWERS.has(id) or FlowersExtra.is_flower(id) or FlowersExtra.is_ground(id) or PaleOak.is_eyeblossom(id) or id in LargePlants.BOTTOMS or id == WoodTypes.sapling_id(7) or id == LushCaveExtra.AZALEA_FLOWERING
+static func simple_flower(id: int) -> bool: return FLOWERS.has(id) or FlowersExtra.is_flower(id) or PaleOak.is_eyeblossom(id)
+static func stew_ingredient(id: int) -> bool: return simple_flower(id)
+static func stew_effect(id: int) -> String:
+	if FLOWERS.has(id): return str(FLOWERS[id])
+	if FlowersExtra.is_flower(id): return FlowersExtra.stew_effect(id)
+	if id == PaleOak.EYEBLOSSOM: return "nausea"
+	if id == PaleOak.EYEBLOSSOM_OPEN: return "blindness"
+	return ""
+static func stew_duration(id: int) -> float: return float(STEW_EFFECTS.get(stew_effect(id),0.0))
+static func stew_item(id: int) -> Dictionary:
+	var effect: String = stew_effect(id)
+	return {"id":VillageContent.SUSPICIOUS_STEW,"count":1,"wear":0,"data":{"effect":effect}} if not effect.is_empty() else {}
+static func stew_ingredients() -> Array: return FLOWERS.keys()+FlowersExtra.FLOWERS+[PaleOak.EYEBLOSSOM,PaleOak.EYEBLOSSOM_OPEN]
 # Tall grass is a plant like a flower, but not a flower: it has no stew effect and
 # no dye. The distinction matters because the source scatters both from one roll.
 static func is_tall_grass(id: int) -> bool: return id == TALL_GRASS
-# The small plants behave like tall grass for support and decoration.
 static func is_extra_plant(id: int) -> bool: return FlowersExtra.is_plant(id)
-static func plantlike(id: int) -> bool: return flower(id) or is_tall_grass(id)
+static func plantlike(id: int) -> bool: return flower(id) or is_tall_grass(id) or is_extra_plant(id)
 static func natural_flower(sample: int) -> int: return [POPPY,POPPY,DANDELION,OXEYE_DAISY][posmod(sample,4)]
 
 static func flower_pixel(id: int, x: int, y: int) -> Color:
@@ -98,10 +115,12 @@ static func changed(world: VoxelWorld, p: Vector3i) -> void:
 		var id: int = world.node_at(at)
 		if not world.loaded_at(Vector3(at)): continue
 		if is_cake(id) and not supported(world,at): world.set_node(at,Nodes.AIR)
-		elif (flower(id) or is_tall_grass(id)) and not Farmland.is_soil(world.node_at(at+Vector3i.DOWN)) and world.node_at(at+Vector3i.DOWN) not in [Nodes.DIRT,Nodes.GRASS]:
+		elif uses_placement_rule(id) and not soil_supported(world,at,id):
 			if world.set_node(at,Nodes.AIR):
 				var game: Node = world.get_parent()
-				if game != null and game.has_method("spawn_drop"): game.spawn_drop(Vector3(at)+Vector3.ONE*0.5,id,1)
+				var dropped: int = FlowersExtra.drop(id) if is_extra_plant(id) else id
+				var count: int = FlowersExtra.drop_count(id) if is_extra_plant(id) else 1
+				if game != null and dropped != 0 and count > 0 and game.has_method("spawn_drop"): game.spawn_drop(Vector3(at)+Vector3.ONE*0.5,dropped,count)
 
 static func use(game: Node3D, target: Dictionary) -> bool:
 	if target.is_empty() or not is_cake(int(target.id)): return false
@@ -128,27 +147,38 @@ static func try_place(game: Node3D, target: Dictionary) -> bool:
 		game.sound("place"); game.player.swing = 1; game.api.emit_node_placed(at,CAKE)
 	return true
 
-static func flower_supported(world: VoxelWorld, p: Vector3i) -> bool:
-	if not Farmland.is_soil(world.node_at(p+Vector3i.DOWN)) and world.node_at(p+Vector3i.DOWN) not in [Nodes.DIRT,Nodes.GRASS]: return false
+# Placement and support share soil hosts, but only placement checks light. An
+# unloaded support is left alone by the source's ABM; an unloaded destination is
+# never accepted for a new placement.
+static func uses_placement_rule(id: int) -> bool: return simple_flower(id) or is_tall_grass(id) or is_extra_plant(id)
+static func soil_supported(world: VoxelWorld, p: Vector3i, id: int) -> bool:
+	var below: Vector3i = p+Vector3i.DOWN
+	if not world.loaded_at(Vector3(below)): return true
+	var soil: int = world.node_at(below)
+	if soil == Nodes.AIR: return false
+	if is_extra_plant(id) or FlowersExtra.is_flower(id): return FlowersExtra.soil_ok(id,soil)
+	return soil in FlowersExtra.SOIL_FLOWER if simple_flower(id) or is_tall_grass(id) else false
+static func light_ok(world: VoxelWorld, p: Vector3i) -> bool:
 	# The source accepts artificial light eight, or unobstructed daytime sky.
 	if Pasture.block_light(world,p,8) >= 8: return true
 	if world.dimension != "overworld" or not world.loaded_at(Vector3(p)): return false
-	RedstoneSensors.natural_light(world,p) # Prepare the shared geometry cache.
+	RedstoneSensors.natural_light(world,p)
 	return RedstoneSensors._natural_light(world,p,14) >= 14
+static func placement_supported(world: VoxelWorld, p: Vector3i, id: int = -1) -> bool:
+	if id < 0: id = world.node_at(p)
+	if not uses_placement_rule(id) or not world.loaded_at(Vector3(p)) or not world.loaded_at(Vector3(p+Vector3i.DOWN)): return false
+	if not soil_supported(world,p,id): return false
+	var needs: bool = FlowersExtra.needs_light_on(id,world.node_at(p+Vector3i.DOWN)) if is_extra_plant(id) or FlowersExtra.is_flower(id) else true
+	return light_ok(world,p) if needs else true
+static func flower_supported(world: VoxelWorld, p: Vector3i) -> bool: return placement_supported(world,p)
 
+static func bone_meal_target(id: int) -> bool:
+	return (simple_flower(id) and id != FlowersExtra.WITHER_ROSE) or FlowersExtra.has_bone_meal(id)
 static func bone_meal(game: Node3D, p: Vector3i, rng: RandomNumberGenerator = null) -> bool:
 	var id: int = game.world.node_at(p)
-	if not flower(id): return false
-	var placed: bool = false
-	# Source scans grass under air within +/-3 XZ and +/-2 Y, then 20% each.
-	for x in range(p.x-3,p.x+4):
-		for z in range(p.z-3,p.z+4):
-			for y in range(p.y-2,p.y+3):
-				var soil := Vector3i(x,y,z)
-				if not game.world.loaded_at(Vector3(soil)) or game.world.node_at(soil) != Nodes.GRASS or game.world.node_at(soil+Vector3i.UP) != Nodes.AIR: continue
-				var roll: int = rng.randi_range(1,100) if rng != null else randi_range(1,100)
-				if roll <= 20: placed = game.world.set_node(soil+Vector3i.UP,id) or placed
-	return placed
+	if not bone_meal_target(id): return false
+	if simple_flower(id): return FlowersExtra.spread_flower(game.world,p,id,rng)
+	return FlowersExtra.bone_meal(game.world,p,rng)
 
 # Bone meal on a **grass block**, which is the source's `mcl_core.bone_meal_grass`.
 # This is a different rule from the flower spread above: it scans a 15x15 area and
@@ -181,15 +211,20 @@ static func bone_meal_grass(game: Node3D, p: Vector3i, rng: RandomNumberGenerato
 	return placed
 
 static func recipes(inv: Inventory) -> void:
+	# Ordinary mushroom stew already has its red+brown recipe in Inventory. The
+	# source uses two group:stew_mushroom entries, so only the two same-species
+	# combinations are added here (no duplicate mixed recipe).
+	inv._shapeless("Mushroom stew (red)",Nodes.MUSHROOM_STEW,1,[Nodes.BOWL,Nodes.RED_MUSHROOM,Nodes.RED_MUSHROOM])
+	inv._shapeless("Mushroom stew (brown)",Nodes.MUSHROOM_STEW,1,[Nodes.BOWL,Nodes.BROWN_MUSHROOM,Nodes.BROWN_MUSHROOM])
+	# The original thirteen flowers retain their exact effects. Each has three
+	# concrete recipes because Inventory has no generic stew-mushroom group key;
+	# shapeless matching covers grid order, so no reversed duplicate is needed.
 	for id in FLOWERS:
-		inv._shapeless("Suspicious stew ("+DATA[id].name.to_lower()+")",VillageContent.SUSPICIOUS_STEW,1,[Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM,Nodes.BOWL,id])
 		var dye: int = {POPPY:VillageContent.DYE_RED,DANDELION:VillageContent.DYE_YELLOW,OXEYE_DAISY:VillageContent.DYE_SILVER}[id]
 		inv._recipe(Nodes.title(dye),dye,1,[id],1)
-	# The added species use their own source dye colours and stew effects, which
-	# `FlowersExtra` carries from the reference.
-	for id in FlowersExtra.FLOWERS:
-		inv._shapeless("Suspicious stew ("+VillageContent.DATA[id].name.to_lower()+")",VillageContent.SUSPICIOUS_STEW,1,[Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM,Nodes.BOWL,id])
-		inv._recipe(Nodes.title(FlowersExtra.dye_of(id)),FlowersExtra.dye_of(id),1,[id],1)
+	for id in stew_ingredients():
+		for mushrooms in [[Nodes.RED_MUSHROOM,Nodes.RED_MUSHROOM],[Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM],[Nodes.BROWN_MUSHROOM,Nodes.BROWN_MUSHROOM]]:
+			inv._shapeless("Suspicious stew ("+Nodes.title(id).to_lower()+")",VillageContent.SUSPICIOUS_STEW,1,[mushrooms[0],mushrooms[1],Nodes.BOWL,id])
 
 static func clean_stew_data(raw: Dictionary) -> Dictionary:
 	var effect: String = str(raw.get("effect",""))
@@ -199,10 +234,10 @@ static func clean_stew_data(raw: Dictionary) -> Dictionary:
 static func craft_data(ingredients: Array) -> Dictionary:
 	for ingredient in ingredients:
 		if not ingredient is Dictionary: continue
-		var id: int = int(ingredient.get("id",0))
-		if FLOWERS.has(id): return {"effect":FLOWERS[id]}
-		if FlowersExtra.is_flower(id): return {"effect":FlowersExtra.stew_effect(id)}
+		var effect: String = stew_effect(int(ingredient.get("id",0)))
+		if not effect.is_empty(): return {"effect":effect}
 	return {}
+
 
 static func on_eat(player: VoxeyPlayer, id: int, data: Dictionary) -> void:
 	if id == Nodes.CHORUS_FRUIT:

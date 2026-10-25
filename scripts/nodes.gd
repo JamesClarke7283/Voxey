@@ -293,9 +293,9 @@ const NAMES = {
 	266:"Lava bucket",
 
 	0:"Air", 1:"Grass", 2:"Dirt", 3:"Stone", 4:"Sand", 5:"Water", 6:"Oak log", 7:"Oak leaves", 8:"Oak planks", 9:"Cobblestone",
-	10:"Coal ore", 11:"Iron ore", 12:"Diamond ore", 13:"Snow", 14:"Cactus", 15:"Crafting table", 16:"Furnace", 17:"Chest", 18:"Torch",
+	10:"Coal ore", 11:"Iron ore", 12:"Diamond ore", 13:"Snowy grass", 14:"Cactus", 15:"Crafting table", 16:"Furnace", 17:"Chest", 18:"Torch",
 	19:"Glass", 20:"Stone bricks", 21:"Farmland", 22:"Wheat seedling", 23:"Oak sapling", 24:"Bed", 25:"Obsidian", 26:"Gravel", 27:"Wildflower", 28:"Bedrock", 29:"Ripe wheat",
-	30:"Sandstone", 31:"Sandstone bricks", 32:"Ice", 33:"Snow block", 42:"Ladder", 43:"Bookshelf", 44:"Clay", 45:"Carved pumpkin", 46:"Pumpkin", 47:"Melon",
+	30:"Sandstone", 31:"Chiseled sandstone", 32:"Ice", 33:"Snow block", 42:"Ladder", 43:"Bookshelf", 44:"Clay", 45:"Carved pumpkin", 46:"Pumpkin", 47:"Melon",
 	34:"Gold ore", 35:"Copper ore", 36:"Gold node", 37:"Copper node", 38:"Iron node", 39:"Diamond node", 40:"TNT", 76:"Gold ingot", 77:"Copper ingot", 78:"Leather", 79:"Bone",
 	64:"Stick", 65:"Coal", 66:"Iron ingot", 67:"Diamond", 68:"Apple", 69:"Raw meat", 70:"Cooked meat", 71:"Wheat", 72:"Wheat seeds", 73:"Bread", 75:"Wool",
 	116:"Rotten flesh", 117:"Gunpowder", 118:"String", 119:"Bone meal",
@@ -552,6 +552,7 @@ static func all_ids() -> Array:
 	ids.erase(VillageContent.WOOL_WHITE)
 	ids.append_array([6200,6201,6202,6203,6204])
 	ids.append_array(WoodTypes.DOOR_ITEMS)
+	ids.append(BambooWood.TRAPDOOR)
 	ids.append_array(WoodTypes.TRAPDOOR_ITEMS)
 	ids.erase(IRON_DOOR_OPEN); ids.erase(VillageContent.WOODEN_DOOR_OPEN)
 	ids.append_array(WoodTypes.items())
@@ -580,6 +581,9 @@ static func all_ids() -> Array:
 # Saves from before the armor system stored the single chestplate as id 74;
 # saves from before the two-block bed stored a single bed node as id 24.
 static func migrate(id: int) -> int:
+	if id == 812: return 1386 # Cartographer's legacy Globe reward.
+	if id == 1106: return 1387 # Bastion's legacy Piglin reward.
+	id = Signs.migrate_item(id)
 	if id == VillageContent.WOOL_WHITE: return WOOL
 	if id == LEGACY_ARMOR: return ARMOR
 	if id == LEGACY_BED: return BED_FOOT
@@ -665,11 +669,13 @@ static func durability(id: int) -> int:
 	return 0
 
 static func max_stack(id: int) -> int:
+	if Banners.is_banner(id): return 16
+	if id == WRITTEN_BOOK: return 16
 	if Rails.is_cart(id): return 1
 	if Archaeology.is_brush(id) or id == Archaeology.POT or Decor.is_pot(id) or Decor.is_stand(id): return 1
 	if Signs.is_sign(id) or Signs.is_hanging(id): return 16
 	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("stack",1 if VillageContent.DATA[id].has("armor") else 64)
-	if id in [WRITABLE_BOOK,WRITTEN_BOOK,BOW,LAVA_BUCKET]: return 1
+	if id in [WRITABLE_BOOK,BOW,LAVA_BUCKET,FLINT_AND_STEEL]: return 1
 	if id in [EGG,SNOWBALL,ENDER_PEARL]: return 16
 	return 1 if is_tool_id(id) or is_armor(id) or id in [SHEARS,BUCKET,WATER_BUCKET,MILK_BUCKET,SADDLE,MUSHROOM_STEW] else 64
 
@@ -719,7 +725,7 @@ static func uncached_solid(id: int) -> bool:
 	if Archaeology.is_sherd(id) or Archaeology.is_brush(id): return false
 	if Copper.is_rod(id): return false
 	if RedstoneInputs.is_device(id): return false
-	if Signs.is_sign(id) or Signs.is_hanging(id): return false
+	if Signs.is_any(id): return Signs.hanging_wall(id)
 	if FoodFeatures.is_cake(id): return true
 	if Doors.is_door(id): return true
 	if SnowCover.is_snow(id): return SnowCover.layers(id) > 1
@@ -731,6 +737,8 @@ static func uncached_solid(id: int) -> bool:
 	# A vine is walkable in the source only in the sense that you can climb it, so it
 	# must not be solid: `walkable = false` is what stops a hanging strand blocking
 	# movement.
+	if CocoaCrops.is_cocoa(id): return true
+	if LushCaveExtra.is_big_leaf(id): return LushCaveExtra.walkable(id)
 	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("block",false) and VillageContent.shape(id) not in ["crop","plant","vine","door_open","carpet","banner","frame","painting","candle","lantern","brewing","chain"]
 	if custom_nodes.has(id): return not bool(custom_nodes[id].get("transparent",false))
 	return id not in [AIR,WATER,LAVA,NETHER_PORTAL,END_PORTAL,END_GATEWAY,END_ROD,SOUL_TORCH] and id not in SMALL_CIRCUITS and not uncached_plant(id) and id not in [TORCH,LADDER]
@@ -783,9 +791,11 @@ static func uncached_transparent(id: int) -> bool:
 # (`mcl_anvils/init.lua`:386), and unlike the others it also has
 # `crush_after_fall`, which `FallingNode.land` honours.
 static func falls(id: int) -> bool:
-	return id in [SAND, GRAVEL, SNOW_BLOCK] or Archaeology.is_suspicious(id) or Concrete.is_powder(id) or FallingDamage.is_anvil(id)
+	return id in [SAND, GRAVEL, SNOW_BLOCK,ShapeMaterials.RED_SAND] or Archaeology.is_suspicious(id) or Concrete.is_powder(id) or FallingDamage.is_anvil(id)
 
 static func placeable(id: int) -> bool:
+	if GrindstoneRepair.is_grindstone(id): return id == VillageContent.GRINDSTONE
+	if Stonecutting.is_cutter(id): return id == VillageContent.STONECUTTER
 	if NetherBlocks.is_soul_fire(id): return false
 	if id >= CrimsonPlants.CRIMSON_FUNGUS and id <= CrimsonPlants.WARPED_WART_BLOCK: return true
 	if id >= PaleOak.RESIN_BLOCK and id <= PaleOak.RESIN_CLUMP: return id != PaleOak.RESIN_CLUMP
@@ -797,7 +807,11 @@ static func placeable(id: int) -> bool:
 	if Decor.is_pot(id) or Decor.is_stand(id): return true
 	if Archaeology.is_suspicious(id): return true
 	if id == Archaeology.POT: return true
-	if Archaeology.is_sherd(id) or Archaeology.is_brush(id): return true
+	if FlowersExtra.is_plant(id): return not VillageContent.DATA[id].get("hidden",false)
+	if LushCaves.is_vine(id): return false
+	if HugeMushrooms.is_huge(id): return not HugeMushrooms.DATA[id].get("hidden",false)
+	if SoilVariants.hidden(id): return false
+	if Archaeology.is_sherd(id) or Archaeology.is_brush(id): return false
 	if Sponges.is_sponge(id): return id != Sponges.WET_RIVER
 	if Copper.is_hidden(id): return false
 	if Copper.is_copper_door_item(id) or Copper.is_copper_trapdoor_item(id): return true
@@ -827,6 +841,7 @@ static func placeable(id: int) -> bool:
 	if id in Torches.WALLS: return false
 	if id == WOOL: return true
 	if id == VillageContent.PAINTING: return false
+	if CocoaCrops.is_cocoa(id): return false
 	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("block",false) and VillageContent.shape(id) not in ["crop","bed_head","door_open","painting"]
 	if id in EXPANSION_NODES: return id not in [PISTON_HEAD,IRON_DOOR_OPEN,END_FRAME_EYE,END_PORTAL,END_GATEWAY,BLAZE_SPAWNER]
 	if id in DEEP_NODES: return true
@@ -890,9 +905,9 @@ static func hardness(id: int) -> float:
 	if Doors.is_door(id) or Doors.is_item(id): return 5.0 if Doors.iron(id) else 3.0
 	if SnowCover.is_snow(id): return 0.1
 	if Trapdoors.is_trapdoor(id): return 3.0 if Trapdoors.item(id) != Trapdoors.IRON else 5.0
-	if Barriers.is_barrier(id): return 2.0
+	if Barriers.is_barrier(id): return float(BarrierCatalog.info(id).get("hardness",2.0))
 	if Fluids.flowing(id): return INF
-	if BuildingShapes.is_shape(id): return hardness(BuildingShapes.material(id))
+	if BuildingShapes.is_shape(id): return float(ShapeCatalog.info(id).get("hardness",hardness(BuildingShapes.material(id))))
 	if VillageContent.DATA.has(id): return VillageContent.DATA[id].get("hardness",0.2 if VillageContent.shape(id) == "crop" else 1.5)
 	if id in [END_FRAME,END_FRAME_EYE,END_PORTAL,END_GATEWAY]: return INF
 	if id in SMALL_CIRCUITS: return 0.2
@@ -909,7 +924,8 @@ static func hardness(id: int) -> float:
 	if id in [IRON_BLOCK, DIAMOND_BLOCK]: return 5.0
 	if id == GOLD_BLOCK: return 3.0
 	if id == GLOWSTONE: return 0.4
-	if id in [STONE, COBBLE, FURNACE, BRICKS, SANDSTONE_BRICK, BOOKSHELF]: return 3.0
+	if id == SANDSTONE_BRICK: return 0.8
+	if id in [STONE, COBBLE, FURNACE, BRICKS, BOOKSHELF]: return 3.0
 	if id in [COAL_ORE, IRON_ORE, DIAMOND_ORE, GOLD_ORE, COPPER_ORE]: return 4.5
 	if id in [GOLD_NODE, COPPER_NODE, IRON_NODE, DIAMOND_NODE]: return 5.0
 	if id in [LOG, WORKBENCH, CHEST]: return 2.1
@@ -931,6 +947,8 @@ static func break_time(id: int, tool: int) -> float:
 	return hardness(id) / speed
 
 static func harvestable(id: int, tool: int) -> bool:
+	var source_name: String = ToolCapabilities.node_name(id)
+	if not source_name.is_empty(): return Harvesting.can_harvest_name(source_name,tool)
 	if Rails.is_rail(id): return true
 	if Archaeology.is_suspicious(id): return true
 	if id == Archaeology.POT or Decor.is_pot(id) or Decor.is_stand(id): return true
@@ -982,6 +1000,7 @@ static func ore_xp(id: int) -> int:
 	return 0
 
 static func drop(id: int) -> int:
+	if id == DryTerrain.DEAD_BUSH: return 0
 	# A seagrass node drops nothing; only shears yield its item.
 	if Seagrass.is_seagrass(id): return 0
 	# A sea pickle's drop is itself; its count carries the size.
@@ -1026,10 +1045,13 @@ static func drop(id: int) -> int:
 	if Copper.shape_id(id) != 0: return BuildingShapes.item(id)
 	if Farmland.is_soil(id): return DIRT
 	if CropFarming.is_crop(id): return CropFarming.seed_item(id)
+	if CocoaCrops.is_cocoa(id): return CocoaCrops.BEANS
+	if SweetBerryCrops.is_bush(id): return 0
 	if Amethyst.is_crystal(id) or id == Amethyst.BUDDING: return 0
 	if Beehives.is_hive(id): return 0
 	if FruitCrops.is_stem(id): return FruitCrops.seed_item(id)
 	if FruitCrops.is_pumpkin_head(id): return FruitCrops.canonical(id)
+	if Trials.is_block(id): return 0
 	if id == Dungeons.SPAWNER: return 0
 	if id in [ICE,DenseMaterials.PACKED_ICE,DenseMaterials.BLUE_ICE]: return 0
 	if DenseMaterials.is_bone(id): return DenseMaterials.BONE
@@ -1096,6 +1118,9 @@ static func food(id: int) -> int:
 	return {CHORUS_FRUIT:4,APPLE:4, RAW_MEAT:3, COOKED_MEAT:8, BREAD:5, ROTTEN_FLESH:4, PUMPKIN_PIE:8, MELON_SLICE:2, GOLDEN_APPLE:4, MUSHROOM_STEW:6}.get(id, 0)
 
 static func uncached_tile(id: int, face: int) -> int:
+	if HugeMushrooms.is_huge(id): return 137+VillageContent.BLOCKS.find(HugeMushrooms.render_texture(id,face))
+	if GrindstoneRepair.is_grindstone(id) and id != VillageContent.GRINDSTONE: return tile(VillageContent.GRINDSTONE,face)
+	if Stonecutting.is_cutter(id) and id != VillageContent.STONECUTTER: return tile(VillageContent.STONECUTTER,face)
 	if Rails.DATA.has(id): return 137+VillageContent.BLOCKS.find(Rails.item(id))
 	if Archaeology.DATA.has(id): return 137+VillageContent.BLOCKS.find(id)
 	if Decor.is_pot(id) or Decor.is_stand(id): return 137+VillageContent.BLOCKS.find(id)
@@ -1118,7 +1143,7 @@ static func uncached_tile(id: int, face: int) -> int:
 	if Trapdoors.is_trapdoor(id): return tile(Trapdoors.material(id),face)
 	if Barriers.is_barrier(id): return tile(Barriers.material(id),face)
 	if Fluids.flowing(id): return tile(Fluids.base(id),face)
-	if BuildingShapes.is_shape(id): return tile(BuildingShapes.material(id),face)
+	if BuildingShapes.is_shape(id): return BuildingShapes.tile(id,face)
 	if Torches.is_copper(id): return Torches.copper_tile()
 	if Torches.is_torch(id): return TORCH
 	if id == WOOL: id = VillageContent.WOOL_WHITE
@@ -1150,8 +1175,12 @@ static func uncached_tile(id: int, face: int) -> int:
 	return id
 
 static func smelt_result(id: int) -> int:
+	return FurnaceRules.recipe(id).id
+
+static func native_smelt_result(id: int) -> int:
 	if Sponges.is_wet(id): return Sponges.SPONGE
 	if id == BASALT: return Amethyst.SMOOTH_BASALT
+	if BambooWood.raw(id): return 0
 	if WoodTypes.is_log(id): return CHARCOAL
 	if id == DEEPSLATE_BRICKS: return Masonry.CRACKED_DEEP_BRICKS
 	# Source `_mcl_cooking_output = "mcl_core:stonebrickcracked"`.
@@ -1181,6 +1210,8 @@ static func pick_item(id: int) -> int:
 	if Copper.is_bulb(id) or Copper.is_rod(id): return Copper.item(id)
 	if Farmland.is_soil(id): return FARMLAND
 	if CropFarming.is_crop(id): return CropFarming.seed_item(id)
+	if CocoaCrops.is_cocoa(id): return CocoaCrops.BEANS
+	if SweetBerryCrops.is_bush(id): return SweetBerryCrops.BERRY
 	if Amethyst.is_crystal(id): return Amethyst.item(id)
 	if Beehives.is_hive(id): return Beehives.base_item(id)
 	if FruitCrops.is_stem(id): return FruitCrops.seed_item(id)
@@ -1199,10 +1230,15 @@ static func pick_item(id: int) -> int:
 	return id
 
 static func fuel_time(id: int) -> float:
+	return FurnaceRules.fuel(id).time
+
+static func native_fuel_time(id: int) -> float:
+	if id == DryTerrain.DEAD_BUSH: return 5.0
 	if Beehives.is_hive(id): return 15.0 if Beehives.level(id) == 0 else 0.0
-	if id in [NoteBlocks.ID,Jukeboxes.ID]: return 15.0
+	if id in [NoteBlocks.ID,Jukeboxes.ID,VillageContent.COMPOSTER]: return 15.0
 	if RedstoneInputs.is_device(id): return 5.0 if RedstoneInputs.is_button(id) and WoodTypes.is_planks(RedstoneInputs.material(id)) else (15.0 if WoodTypes.is_planks(RedstoneInputs.material(id)) else 0.0)
 	if WoodTypes.is_wood(id): return WoodTypes.fuel_time(id)
+	if id == BambooWood.MOSAIC: return 15.0
 	if Signs.is_sign(id) or Signs.is_hanging(id): return 10.0
 	if Doors.is_item(id): return 0.0 if Doors.iron(id) else 10.0
 	if Boats.is_boat(id): return 60.0

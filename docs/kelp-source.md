@@ -36,7 +36,7 @@ Digging a stalk drops **one kelp item per unit of height**, which is the source'
 ## Recorded source gaps
 
 - **No natural generation.** The source grows kelp on ocean floors, which Voxey does not generate; kelp is placed by hand and grows from there.
-- **Six surfaces, not seven.** Placement uses the same surface set as seagrass, so red sand is absent as it is there.
+All seven source placement surfaces are available, including red sand.
 - **The animated tip is drawn procedurally**, and the stalk's visual height in the world does not yet grow with the stored height — the node remains one block tall visually while its logical height, drops and growth all track correctly. Rendering the full column is the remaining visual gap.
 - **Downward-flowing water is not treated specially.** The source lets kelp grow in flowing water and converts the tip to a water source in that case; Voxey requires still water.
 - **The piston callbacks** (`surface_on_piston_move`) and the falling-node alternative are not wired, since Voxey's piston handling has its own path for plants.

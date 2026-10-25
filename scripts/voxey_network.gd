@@ -2,7 +2,7 @@ class_name VoxeyNetwork
 extends Node
 
 const DEFAULT_PORT = 24570
-const PROTOCOL = 4
+const PROTOCOL = 6
 const MAX_PLAYERS = 16
 const CHANNEL_COUNT = 6
 const MOTION_INTERVAL = 0.05
@@ -28,6 +28,9 @@ var session_ready: bool = false
 var timer: float = 0.0
 var state_timer: float = 0.0
 var appearance: Dictionary = CharacterSkin.DEFAULT.duplicate()
+var map_busy: bool = false
+var requested_maps: Dictionary = {}
+var map_waiters: Dictionary = {}
 var station_pos := Vector3i.ZERO
 var station_open: bool = false
 var station_busy: bool = false
@@ -67,6 +70,7 @@ var station_sequences: Dictionary = {}
 var last_stations: Dictionary = {}
 var last_states: Dictionary = {}
 var sent_profiles: Dictionary = {}
+var shield_equipment: Dictionary = {}
 var last_entities: Dictionary = {}
 var replica_sequences: Dictionary = {}
 
@@ -121,6 +125,7 @@ func stop() -> void:
 	world_revision = 0; edit_revisions.clear(); repair_timer = 0.0; edit_sequence = 0
 	pending_requests.clear(); pending_actions.clear()
 	station_open = false; station_busy = false; status = "Offline"
+	map_busy = false; requested_maps.clear(); map_waiters.clear()
 	inventory_revision = 0; inventory_sequence = 0; motion_sequence = 0
 	peer_motion_sequences.clear()
 	peer_revisions.clear(); peer_sequences.clear(); peer_bags.clear(); peer_identity.clear()
@@ -131,7 +136,7 @@ func stop() -> void:
 	replica_motion.clear(); ready_peers.clear(); loaded_announced = false
 	column_sync.clear(); column_revisions.clear(); column_transfers.clear()
 	last_stations.clear(); last_states.clear()
-	sent_profiles.clear(); last_entities.clear(); replica_sequences.clear()
+	sent_profiles.clear(); shield_equipment.clear(); last_entities.clear(); replica_sequences.clear()
 	if game != null and game.world != null:
 		game.world.network_replica = false
 		game.world.interest_centers.clear(); game.world.desired = Vector2i(999999,999999)
@@ -149,9 +154,11 @@ func _server_left() -> void:
 	status = "The server disconnected."; game.toast(status)
 
 func _peer_left(id: int) -> void:
+	LushCaveExtra.player_left(game.world,id)
 	players.erase(id)
 	ready_peers.erase(id); column_sync.erase(id); column_transfers.erase(id)
 	sent_profiles.erase(id)
+	shield_equipment.erase(id)
 	peer_motion_sequences.erase(id); peer_sequences.erase(id); peer_revisions.erase(id)
 	# Persisted bags survive reconnects in adventure_state, not as abandoned peers.
 	peer_bags.erase(id); peer_identity.erase(id)
@@ -168,6 +175,7 @@ func _peer_left(id: int) -> void:
 func remove_player(id: int, sequence: int) -> void:
 	received_roster = maxi(received_roster,sequence)
 	players.erase(id)
+	shield_equipment.erase(id)
 	if avatars.has(id):
 		if is_instance_valid(avatars[id]): avatars[id].queue_free()
 		avatars.erase(id)
@@ -193,6 +201,10 @@ func hello(protocol: int, skin: Dictionary, identity: String) -> void:
 		data.selected = saved.get("selected",0)
 		data.health = saved.get("health",20)
 		data.hunger = saved.get("hunger",20)
+		data.experience = saved.get("experience",0)
+		data.enchanting = saved.get("enchanting",{})
+		data.achievements = VoxeyAchievements.clean_save(saved.get("achievements",{}))
+		data.offhand = Inventory.clean_slot(saved.get("offhand",{}))
 	data["world_revision"] = world_revision
 	welcome.rpc_id(sender,data,players)
 	settings_changed.rpc_id(sender,settings_snapshot())
@@ -219,6 +231,7 @@ func world_ready() -> void:
 	state_sequence += 1
 	world_state.rpc_id(sender,game.world.stations,game.world.block_states,[],[],game.day_time,state_sequence,true)
 	entity_state.rpc_id(sender,entity_snapshot(),entity_sequence)
+	for id in shield_equipment: player_shields.rpc_id(sender,id,shield_equipment[id])
 
 func update(dt: float) -> void:
 	if not active(): return
@@ -243,8 +256,13 @@ func update(dt: float) -> void:
 	if timer < MOTION_INTERVAL: return
 	timer = fmod(timer,MOTION_INTERVAL)
 	var own: int = multiplayer.get_unique_id()
-	var record: Dictionary = {"skin":appearance,"position":game.player.position,"yaw":game.player.rotation.y,"motion":_next_motion_sequence()}
+	var record: Dictionary = {"skin":appearance,"position":game.player.position,"velocity":game.player.velocity,"yaw":game.player.rotation.y,"motion":_next_motion_sequence()}
 	players[own] = record
+	var equipment: Dictionary = _clean_shields({"main":game.inventory.held(),"offhand":game.player.offhand_slot,"raised":Shields.raised(game.player)})
+	if shield_equipment.get(own,{}) != equipment:
+		shield_equipment[own] = equipment
+		if client(): update_shields.rpc_id(1,equipment)
+		else: player_shields.rpc(own,equipment)
 	if client():
 		player_state.rpc_id(1,record)
 		if inventory_dirty or state_timer >= 1.0:
@@ -309,7 +327,9 @@ func player_state(record: Dictionary) -> void:
 	if sequence <= int(peer_motion_sequences.get(sender,-1)): return
 	peer_motion_sequences[sender] = sequence
 	var identity: String = players[sender].get("identity","")
-	players[sender] = {"position":at,"yaw":float(record.get("yaw",0)),"skin":CharacterSkin.clean(record.get("skin",{})),"identity":identity}
+	var velocity: Vector3 = record.get("velocity",Vector3.ZERO) if record.get("velocity",Vector3.ZERO) is Vector3 else Vector3.ZERO
+	if not velocity.is_finite(): velocity = Vector3.ZERO
+	players[sender] = {"position":at,"velocity":velocity.limit_length(100),"yaw":float(record.get("yaw",0)),"skin":CharacterSkin.clean(record.get("skin",{})),"identity":identity}
 	_update_avatar(sender)
 
 func _inventory_changed() -> void:
@@ -322,7 +342,7 @@ func _next_motion_sequence() -> int:
 func inventory_snapshot() -> Dictionary:
 	inventory_sequence += 1
 	game.inventory.sync_pouches()
-	return {"inventory":game.inventory.slots.slice(0,Inventory.BASE_SLOTS).duplicate(true),"pouches":game.inventory.pouch_slots.duplicate(true),"selected":game.inventory.selected,"cursor":game.hud.cursor.duplicate(true),"health":game.player.health,"hunger":game.player.hunger,"revision":inventory_revision,"sequence":inventory_sequence,"motion":_next_motion_sequence()}
+	return {"inventory":game.inventory.slots.slice(0,Inventory.BASE_SLOTS).duplicate(true),"pouches":game.inventory.pouch_slots.duplicate(true),"selected":game.inventory.selected,"cursor":game.hud.cursor.duplicate(true),"offhand":game.player.offhand_slot.duplicate(true),"health":game.player.health,"hunger":game.player.hunger,"experience":game.experience,"enchanting":game.enchanting_state.duplicate(true),"achievements":game.achievements.to_save(),"revision":inventory_revision,"sequence":inventory_sequence,"motion":_next_motion_sequence()}
 
 func send_inventory() -> void:
 	if not client() or not session_ready: return
@@ -347,13 +367,14 @@ func _resync_inventory(id: int) -> void:
 	peer_revisions[id] = int(peer_revisions.get(id,0))+1
 	var saved: Dictionary = game.world.adventure_state.get("network_players",{}).get(peer_identity.get(id,""),{})
 	var bag: Inventory = peer_bags[id]
-	inventory_resync.rpc_id(id,bag.slots,bag.pouch_slots,saved.get("cursor",{}),peer_revisions[id])
+	inventory_resync.rpc_id(id,bag.slots,bag.pouch_slots,saved.get("cursor",{}),peer_revisions[id],Inventory.clean_slot(saved.get("offhand",{})))
 
 @rpc("authority","call_remote","reliable",2)
-func inventory_resync(slots: Array, pouches: Array, cursor: Dictionary, revision: int) -> void:
+func inventory_resync(slots: Array, pouches: Array, cursor: Dictionary, revision: int, offhand: Dictionary = {}) -> void:
 	if not client() or revision < inventory_revision: return
 	inventory_revision = revision
 	game.inventory.restore(slots,pouches); game.hud.cursor = Inventory.clean_slot(cursor)
+	game.player.offhand_slot = Inventory.clean_slot(offhand)
 	send_inventory()
 
 func _persist_inventory(id: int, state: Dictionary = {}) -> void:
@@ -366,8 +387,46 @@ func _persist_inventory(id: int, state: Dictionary = {}) -> void:
 	record.inventory = bag.slots.slice(0,Inventory.BASE_SLOTS).duplicate(true)
 	record.pouches = bag.pouch_slots.duplicate(true); record.selected = bag.selected
 	record.cursor = Inventory.clean_slot(record.get("cursor",{}))
+	record.offhand = Inventory.clean_slot(record.get("offhand",{}))
 	record.health = clampf(float(record.get("health",20)),0,20); record.hunger = clampf(float(record.get("hunger",20)),0,20)
+	record.experience = maxf(0,float(record.get("experience",0)))
+	if not is_finite(record.experience): record.experience = 0
+	record.enchanting = Enchanting.restore(record.get("enchanting",{}))
+	record.achievements = VoxeyAchievements.clean_save(record.get("achievements",{}))
 	game.world.adventure_state.network_players[identity] = record
+
+# Appearance packets contain shield visuals only; they never change a player's
+# inventory or combat state. Unchanged designs are not resent with movement.
+static func _clean_shields(value: Dictionary) -> Dictionary:
+	var result: Dictionary = {"raised":bool(value.get("raised",false))}
+	for hand in ["main","offhand"]:
+		var raw: Variant = value.get(hand,{})
+		var item: Dictionary = Bookshelves.empty()
+		# Ordinary carried containers can have large nested inventories; the
+		# visual update never needs to traverse those on every movement tick.
+		if raw is Dictionary and (raw.get("id") is int or raw.get("id") is float) and Shields.is_shield(int(raw.id)):
+			item = Inventory.clean_slot(raw)
+			item.count = 1; item.wear = 0
+			var data: Dictionary = {}
+			if Shields.color(item) >= 0: data.shield_color = Shields.color(item); data.layers = Banners.layers(item)
+			item["data"] = data
+		result[hand] = item
+	return result
+
+@rpc("any_peer","call_remote","reliable")
+func update_shields(equipment: Dictionary) -> void:
+	if not active() or not multiplayer.is_server(): return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if not players.has(sender): return
+	var clean: Dictionary = _clean_shields(equipment)
+	shield_equipment[sender] = clean; _update_avatar(sender)
+	player_shields.rpc(sender,clean)
+
+@rpc("authority","call_remote","reliable")
+func player_shields(id: int, equipment: Dictionary) -> void:
+	if not client(): return
+	shield_equipment[id] = _clean_shields(equipment)
+	if players.has(id): _update_avatar(id)
 
 @rpc("authority","call_remote","unreliable_ordered",1)
 func player_roster(roster: Dictionary, sequence: int) -> void:
@@ -402,6 +461,7 @@ func _update_avatar(id: int) -> void:
 	if not avatars.has(id):
 		var avatar := NetworkAvatar.new(); game.add_child(avatar); avatar.set_meta("peer_id",id); avatars[id] = avatar
 	avatars[id].set_appearance(players[id].skin)
+	avatars[id].set_shields(shield_equipment.get(id,{}))
 	avatars[id].move_to(players[id].position,players[id].yaw)
 
 func local_edit(p: Vector3i, id: int, previous: int = -1) -> void:
@@ -436,7 +496,13 @@ func request_edit(p: Vector3i, id: int, at: Vector3, motion: int, request: int) 
 	_apply_edit(sender,p,id,request)
 
 func _apply_edit(sender: int, p: Vector3i, id: int, request: int) -> void:
-	if reachable(sender,p): game.world.set_node(p,id)
+	if reachable(sender,p) and game.world.set_node(p,id):
+		Farmland.placed(game.world,p)
+		if CocoaCrops.is_cocoa(id) and not game.world.block_states.get(VoxelWorld.station_key(p),{}).has(CocoaCrops.FACING_KEY):
+			var supports: Array = []
+			for side in CocoaCrops.SIDES:
+				if CocoaCrops.normal_jungle_log(game.world.node_at(p+side)): supports.append(side)
+			if supports.size() == 1: CocoaCrops.set_facedir(game.world,p,CocoaCrops.facedir_for(supports[0]))
 	_reply_edit(sender,p,request)
 
 func _reply_edit(sender: int, p: Vector3i, request: int) -> void:
@@ -480,8 +546,72 @@ func _flush_actions() -> void:
 
 func request_break(p: Vector3i, id: int, _tool: int) -> void:
 	if not pending_breaks.is_empty(): return
-	pending_breaks[p] = {"index":game.inventory.selected,"slot":game.inventory.held().duplicate(true),"time":Time.get_ticks_msec()}
+	pending_breaks[p] = {"index":game.inventory.selected,"slot":game.inventory.held().duplicate(true),"node":id,"time":Time.get_ticks_msec()}
 	break_block.rpc_id(1,p,id,game.player.position,inventory_snapshot())
+
+func request_banner_place(target: Dictionary, yaw: float) -> void:
+	if not client() or not session_ready: return
+	place_banner.rpc_id(1,target.pos,int(target.id),target.normal,yaw,game.player.position,inventory_snapshot())
+
+@rpc("any_peer","call_remote","reliable",2)
+func place_bookshelf(p: Vector3i, expected: int, normal: Vector3i, yaw: float, at: Vector3, data: Dictionary) -> void:
+	if not multiplayer.is_server(): return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if not is_finite(yaw) or absi(normal.x)+absi(normal.y)+absi(normal.z) != 1: return
+	if not _action_position(sender,at,int(data.get("motion",0))) or not reachable(sender,p): return
+	if not _receive_inventory(sender,data): _resync_inventory(sender); return
+	if game.world.loaded_at(Vector3(p)) and game.world.node_at(p) == expected:
+		var target: Dictionary = {"pos":p,"normal":normal}
+		if SnowCover.is_snow(expected): target["replace"] = p
+		Bookshelves.place(game,target,_bag(sender),yaw)
+	_persist_inventory(sender); _resync_inventory(sender)
+
+@rpc("any_peer","call_remote","reliable",2)
+func use_bookshelf(p: Vector3i, normal: Vector3i, hit: Vector3, at: Vector3, data: Dictionary) -> void:
+	if not multiplayer.is_server(): return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if not _action_position(sender,at,int(data.get("motion",0))) or not reachable(sender,p) or not hit.is_finite(): return
+	if not _receive_inventory(sender,data): _resync_inventory(sender); return
+	if game.world.loaded_at(Vector3(p)): Bookshelves.interact(game,p,normal,hit,_bag(sender))
+	_persist_inventory(sender); _resync_inventory(sender)
+
+@rpc("any_peer","call_remote","reliable",2)
+func turn_bookshelf(p: Vector3i, at: Vector3, data: Dictionary) -> void:
+	if not multiplayer.is_server(): return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if not _action_position(sender,at,int(data.get("motion",0))) or not reachable(sender,p): return
+	if not _receive_inventory(sender,data): _resync_inventory(sender); return
+	var bag: Inventory = _bag(sender)
+	if game.world.loaded_at(Vector3(p)) and game.world.node_at(p) == Bookshelves.ID and Screwdriver.is_screwdriver(int(bag.held().id)):
+		Bookshelves.rotate(game.world,p)
+		if game.gamemode != "creative": bag.damage_tool()
+	_persist_inventory(sender); _resync_inventory(sender)
+
+@rpc("any_peer","call_remote","reliable",2)
+func place_banner(p: Vector3i, expected: int, normal: Vector3i, yaw: float, at: Vector3, data: Dictionary) -> void:
+	if not multiplayer.is_server(): return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if not is_finite(yaw) or absi(normal.x)+absi(normal.y)+absi(normal.z) != 1: return
+	if not _action_position(sender,at,int(data.get("motion",0))) or not reachable(sender,p): return
+	if not _receive_inventory(sender,data): _resync_inventory(sender); return
+	if game.world.loaded_at(Vector3(p)) and game.world.node_at(p) == expected:
+		var target: Dictionary = {"pos":p,"id":expected,"normal":normal}
+		if SnowCover.is_snow(expected): target["replace"] = p
+		Banners.place(game,target,_bag(sender),yaw)
+	_persist_inventory(sender)
+	_resync_inventory(sender)
+
+@rpc("any_peer","call_remote","reliable",2)
+func rotate_banner(p: Vector3i, at: Vector3, data: Dictionary) -> void:
+	if not multiplayer.is_server(): return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if not _action_position(sender,at,int(data.get("motion",0))) or not reachable(sender,p): return
+	if not _receive_inventory(sender,data): _resync_inventory(sender); return
+	var bag: Inventory = _bag(sender)
+	if game.world.loaded_at(Vector3(p)) and Banners.is_banner(game.world.node_at(p)) and Screwdriver.is_screwdriver(int(bag.held().id)):
+		if Banners.rotate(game.world,p,Screwdriver.ROTATE_FACE) and game.gamemode != "creative": bag.damage_tool()
+	_persist_inventory(sender)
+	_resync_inventory(sender)
 
 func _action_position(id: int, at: Vector3, sequence: int) -> bool:
 	if not players.has(id) or not at.is_finite() or not WorldBounds.horizontal(Vector3i(at.floor())): return false
@@ -533,9 +663,9 @@ func break_result(p: Vector3i, actual: int, success: bool, revision: int) -> voi
 			for index in game.inventory.slots.size():
 				if index != int(pending.index): indices.append(index)
 			for index in indices:
-				if game.inventory.slots[index] == pending.slot:
+				if ToolCapabilities.same_mining_item(game.inventory.slots[index],pending.slot):
 					var selected: int = game.inventory.selected; game.inventory.selected = index
-					game.inventory.damage_tool(); game.inventory.selected = selected
+					ToolCapabilities.wear(game.inventory,int(pending.node)); game.inventory.selected = selected
 					break
 		game.sound("break"); game.progress("gather")
 		send_inventory()
@@ -652,6 +782,11 @@ func world_state(stations: Dictionary, states: Dictionary, removed_stations: Arr
 	for p in game.world.circuits.tracked:
 		var key: String = game.world.station_key(p)
 		if changed_states.has(key): game.world.circuits.refresh(p)
+	for key in changed_states:
+		var parts: PackedStringArray = String(key).split(",")
+		if parts.size() != 3: continue
+		var p := Vector3i(int(parts[0]),int(parts[1]),int(parts[2]))
+		if CocoaCrops.is_cocoa(game.world.node_at(p)): game.world._mark_dirty(p)
 
 @rpc("authority","call_remote","reliable",3)
 func entity_state(entries: Array, sequence: int) -> void:
@@ -686,10 +821,12 @@ func entity_snapshot() -> Array:
 		if not mob.is_queued_for_deletion(): result.append({"key":mob.get_instance_id(),"kind":mob.kind,"at":mob.position,"yaw":mob.rotation.y,"health":mob.health})
 	for drop in game.drops.get_children():
 		if not drop.is_queued_for_deletion(): result.append({"key":drop.get_instance_id(),"kind":"drop","at":drop.position,"stack":{"id":drop.item_id,"count":drop.amount,"wear":drop.wear,"data":drop.data}})
+	for orb in XpOrbs.orbs(game):
+		result.append({"key":orb.get_instance_id(),"kind":"xp_orb","at":orb.position,"xp":orb.xp})
 	return result
 
 func apply_entities(entries: Array, sequence: int = 0) -> void:
-	for local in game.creatures.get_children()+game.drops.get_children():
+	for local in game.creatures.get_children()+game.drops.get_children()+XpOrbs.orbs(game):
 		if not local.has_meta("network_id"): local.queue_free()
 	applying = true
 	var seen: Dictionary = {}
@@ -697,7 +834,9 @@ func apply_entities(entries: Array, sequence: int = 0) -> void:
 		var key: int = entry.key; seen[key] = true
 		if not replicas.has(key) or not is_instance_valid(replicas[key]):
 			var entity: Node3D
-			if entry.kind == "drop":
+			if entry.kind == "xp_orb":
+				entity = XpOrbs.spawn(game,entry.at,int(entry.xp),Vector3.ZERO)
+			elif entry.kind == "drop":
 				entity = game.spawn_drop(entry.at,entry.stack.id,entry.stack.count,entry.stack.wear,entry.stack.data)
 			else: entity = game.spawn_creature(entry.kind,entry.at)
 			if entity == null: continue
@@ -710,7 +849,8 @@ func apply_entities(entries: Array, sequence: int = 0) -> void:
 			replica_sequences[key] = sequence
 			motion.update(entry.at,float(entry.get("yaw",0.0)))
 		entity.position = motion.current
-		if entry.kind != "drop": entity.rotation.y = motion.current_yaw; entity.health = entry.health
+		if entry.kind == "xp_orb": entity.xp = int(entry.xp)
+		elif entry.kind != "drop": entity.rotation.y = motion.current_yaw; entity.health = entry.health
 		else:
 			entity.amount = int(entry.stack.count); entity.wear = int(entry.stack.wear); entity.data = entry.stack.data.duplicate(true)
 		if entry.kind == "drop" and game.playing() and game.player.position.distance_to(entry.at) < 2.0 and game.inventory.capacity(entry.stack.id,entry.stack.wear,entry.stack.data) >= entry.stack.count:
@@ -865,19 +1005,43 @@ func collect_drop(drop: ItemDrop, delta: float) -> bool:
 	if distance < 0.65 and _deliver(nearest,{"id":drop.item_id,"count":drop.amount,"wear":drop.wear,"data":drop.data}): drop.queue_free()
 	return true
 
-func hit_mob(mob: Node3D, damage: float, reason: String) -> void:
-	if mob.has_meta("network_id"): attack.rpc_id(1,int(mob.get_meta("network_id")),damage,reason)
+# XP orbs are host-simulated entities. Any living nearby player may collect
+# them, and only a host pickup emits an award (including Mending on the guest).
+func xp_player(id: int) -> Dictionary:
+	if id == 1: return {"position":game.player.position,"velocity":game.player.velocity,"health":game.player.health}
+	if not players.has(id) or not ready_peers.has(id): return {}
+	var saved: Dictionary = game.world.adventure_state.get("network_players",{}).get(peer_identity.get(id,""),{})
+	return {"position":players[id].position,"velocity":players[id].get("velocity",Vector3.ZERO),"health":float(saved.get("health",20))}
+func xp_collector(at: Vector3) -> int:
+	for id in players:
+		var player: Dictionary = xp_player(id)
+		if not player.is_empty() and float(player.health) > 0 and at.distance_to(player.position+Vector3.UP*XpOrbs.COLLECT_HEIGHT) < XpOrbs.MAGNET_RANGE: return id
+	return 0
+func award_xp(id: int, amount: int) -> void:
+	if amount <= 0 or not active() or not multiplayer.is_server(): return
+	if id == 1: XpOrbs.award(game,amount); return
+	if not ready_peers.has(id): return
+	var saved: Dictionary = game.world.adventure_state.get("network_players",{}).get(peer_identity.get(id,""),{})
+	_persist_inventory(id,{"experience":float(saved.get("experience",0))+amount})
+	collected_xp.rpc_id(id,amount)
+@rpc("authority","call_remote","reliable",2)
+func collected_xp(amount: int) -> void:
+	if not client(): return
+	XpOrbs.award(game,maxi(0,amount)); send_inventory()
+
+func hit_mob(mob: Node3D, damage: float, reason: String, armor_breach: int = 0) -> void:
+	if mob.has_meta("network_id"): attack.rpc_id(1,int(mob.get_meta("network_id")),damage,reason,armor_breach)
 
 @rpc("any_peer","call_remote","reliable")
-func attack(key: int, damage: float, reason: String) -> void:
+func attack(key: int, damage: float, reason: String, armor_breach: int = 0) -> void:
 	if not multiplayer.is_server() or not is_instance_id_valid(key) or not is_finite(damage): return
 	var mob: Object = instance_from_id(key)
 	var sender: int = multiplayer.get_remote_sender_id()
 	if not mob is Creature or mob.is_queued_for_deletion() or not reachable(sender,Vector3i(mob.position.floor()),100): return
-	mob.hit(clampf(damage,0,20),players[sender].position,reason)
+	mob.hit(clampf(damage,0,20),players[sender].position,reason,clampi(armor_breach,0,4))
 
 func station_click(index: int, is_station: bool, right: bool, shift: bool) -> bool:
-	if not client() or not station_open or game.hud.station not in ["chest","furnace","steam","brewing"]: return false
+	if not client() or not station_open or game.hud.station not in ["chest","furnace","steam","brewing","stonecutter","grindstone","smithing"]: return false
 	if station_busy: return true
 	if not is_station and not shift: return false
 	station_busy = true
@@ -885,16 +1049,20 @@ func station_click(index: int, is_station: bool, right: bool, shift: bool) -> bo
 	return true
 
 static func accepts_slot(s: Dictionary, kind: String, index: int, id: int) -> bool:
+	if s.get("books_only",false) and not Bookshelves.plain_allows(id): return false
 	if kind == "steam": return SteamMachines.accepts(s,index,id)
 	if kind == "furnace": return FurnaceRules.accepts(s.slots,index,id)
 	if kind == "brewing": return Brewing.accepts(index,id)
+	if kind == "stonecutter": return Stonecutting.accepts(index,id)
+	if kind == "grindstone": return GrindstoneRepair.accepts(index,id)
+	if kind == "smithing": return Smithing.accepts(index,id)
 	return id == 0 or Nodes.exists(id)
 
 @rpc("any_peer","call_remote","reliable",2)
 func station_action(p: Vector3i, kind: String, index: int, is_station: bool, right: bool, shift: bool, data: Dictionary) -> void:
 	if not multiplayer.is_server(): return
 	var sender: int = multiplayer.get_remote_sender_id()
-	if not reachable(sender,p) or kind not in ["chest","furnace","steam","brewing"] or game.world.node_at(p) not in RedstoneCircuit.CONTAINERS:
+	if not reachable(sender,p) or kind not in ["chest","furnace","steam","brewing","stonecutter","grindstone","smithing"] or (kind == "stonecutter" and not Stonecutting.is_cutter(game.world.node_at(p))) or (kind == "grindstone" and not GrindstoneRepair.is_grindstone(game.world.node_at(p))) or (kind == "smithing" and game.world.node_at(p) != VillageContent.SMITHING_TABLE) or (kind not in ["stonecutter","grindstone","smithing"] and game.world.node_at(p) not in RedstoneCircuit.CONTAINERS):
 		station_denied.rpc_id(sender); return
 	if not _receive_inventory(sender,data): station_denied.rpc_id(sender,false); return
 	var s: Dictionary = game.world.get_station(p,kind)
@@ -903,12 +1071,22 @@ func station_action(p: Vector3i, kind: String, index: int, is_station: bool, rig
 	var source: Array = s.slots if is_station else inv.slots
 	if index < 0 or index >= source.size(): station_denied.rpc_id(sender); return
 	var slot: Dictionary = source[index]
-	if shift and cursor.id == 0:
+	var furnace_output_before: int = int(s.slots[2].count) if kind == "furnace" and is_station and index == 2 else -1
+	var furnace_before: Array = s.slots.duplicate(true) if kind == "furnace" else []
+	var cut_before: Array = s.slots.duplicate(true) if kind == "stonecutter" else []
+	var grind_before: Array = s.slots.duplicate(true) if kind == "grindstone" else []
+	var smith_before: Array = s.slots.duplicate(true) if kind == "smithing" else []
+	var allowed: bool = not is_station or not s.get("books_only",false) or Bookshelves.plain_allows(int(slot.id)) and Bookshelves.plain_allows(int(cursor.id))
+	if not allowed:
+		pass # Still acknowledge an unchanged inventory so the guest UI unlocks.
+	elif shift and cursor.id == 0:
 		if is_station:
 			slot.count = inv.add_item(slot.id,slot.count,slot.wear,slot.get("data",{}))
 			if slot.count == 0: source[index] = {"id":0,"count":0,"wear":0}
 		else:
-			for n in s.slots.size():
+			if kind == "furnace": FurnaceRules.quick_move(s,slot)
+			if kind == "smithing": Smithing.quick_move(s,slot)
+			for n in ([] if kind in ["furnace","smithing"] else range(s.slots.size())):
 				if not accepts_slot(s,kind,n,slot.id): continue
 				while slot.id != 0 and slot.count > 0 and RedstoneCircuit.insert_one([s.slots[n]],slot):
 					RedstoneCircuit.consume_one(slot)
@@ -917,27 +1095,182 @@ func station_action(p: Vector3i, kind: String, index: int, is_station: bool, rig
 		cursor = slot.duplicate(true); cursor.count = count
 		slot.count -= count
 		if slot.count == 0: source[index] = {"id":0,"count":0,"wear":0}
-	elif not is_station or accepts_slot(s,kind,index,cursor.id):
+	elif not is_station or (Smithing.accepts(index,cursor) if kind == "smithing" else accepts_slot(s,kind,index,cursor.id)):
 		if slot.id == 0 or (slot.id == cursor.id and slot.get("data",{}) == cursor.get("data",{})):
 			var count: int = mini(1 if right else cursor.count,Nodes.max_stack(cursor.id)-int(slot.count))
+			if is_station and kind == "furnace": count = mini(count,FurnaceRules.allowed_count(s.slots,index,cursor))
 			if count > 0:
 				if slot.id == 0: source[index] = cursor.duplicate(true); source[index].count = 0
 				source[index].count += count; cursor.count -= count
 				if cursor.count == 0: cursor = {"id":0,"count":0,"wear":0}
 		elif not right:
-			var swap: Dictionary = source[index]; source[index] = cursor; cursor = swap
+			if not is_station or kind != "furnace" or FurnaceRules.allowed_count(s.slots,index,cursor) >= int(cursor.count):
+				var swap: Dictionary = source[index]; source[index] = cursor; cursor = swap
+	if kind == "stonecutter": Stonecutting.after_transfer(s,cut_before)
+	if kind == "grindstone":
+		var xp: int = GrindstoneRepair.after_transfer(s,grind_before)
+		if xp > 0: XpOrbs.throw_xp(game,Vector3(p)+Vector3.ONE*0.5,xp)
+	var smith_event: Dictionary = Smithing.after_transfer(s,smith_before) if kind == "smithing" else {}
+	peer_revisions[sender] = int(peer_revisions[sender])+1
+	var awarded_xp: int = FurnaceRules.take_xp(s) if furnace_output_before >= 0 and int(s.slots[2].count) < furnace_output_before else 0
+	if kind == "furnace" and furnace_before != s.slots: FurnaceRules.reset_clock(s,game.day_time*1200.0)
+	var saved_xp: float = float(game.world.adventure_state.get("network_players",{}).get(peer_identity.get(sender,""),{}).get("experience",0))
+	_persist_inventory(sender,{"cursor":cursor,"experience":saved_xp+awarded_xp})
+	state_sequence += 1
+	station_result.rpc_id(sender,p,inv.slots,inv.pouch_slots,cursor,s,int(peer_revisions[sender]),state_sequence,awarded_xp,smith_event)
+
+# A map ID and its immutable image belong to the hosting world. Clients request
+# existing records; only a server-side fill can allocate another ID.
+func request_map(id: String) -> bool:
+	if not client() or not session_ready or not id.is_valid_int() or int(id) < 0: return false
+	if requested_maps.has(id): return true
+	requested_maps[id] = true
+	map_request.rpc_id(1,id)
+	return true
+@rpc("any_peer","call_remote","reliable",2)
+func map_request(id: String) -> void:
+	if not multiplayer.is_server() or not id.is_valid_int() or int(id) < 0: return
+	var sender: int = multiplayer.get_remote_sender_id()
+	# A restored held map can request its image as loading ends, before the
+	# world-ready message arrives on the other channel. Map records are
+	# self-contained and safe to deliver once this player has joined.
+	if not players.has(sender): return
+	_send_map(sender,id)
+func _send_map(sender: int, id: String) -> void:
+	var record: Dictionary = game.maps.public_record(id)
+	map_record.rpc_id(sender,id,record)
+	if not record.is_empty() and str(record.png).is_empty():
+		if not map_waiters.has(id): map_waiters[id] = {}
+		map_waiters[id][sender] = true
+func map_ready(id: String) -> void:
+	if not active() or client() or not map_waiters.has(id): return
+	for sender in map_waiters[id]:
+		if players.has(sender): map_record.rpc_id(sender,id,game.maps.public_record(id))
+	map_waiters.erase(id)
+@rpc("authority","call_remote","reliable",2)
+func map_record(id: String, record: Dictionary) -> void:
+	if not client(): return
+	requested_maps[id] = true
+	game.maps.accept_remote(id,record)
+
+func map_action_request(kind: String, index: int) -> bool:
+	if not client() or not session_ready: return false
+	if map_busy: return true
+	map_busy = true
+	map_action.rpc_id(1,kind,index,game.survival.workstation_pos,game.player.position,inventory_snapshot())
+	return true
+@rpc("any_peer","call_remote","reliable",2)
+func map_action(kind: String, index: int, table_pos: Vector3i, at: Vector3, data: Dictionary) -> void:
+	if not multiplayer.is_server(): return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if kind not in ["fill","migrate","copy"] or not _action_position(sender,at,int(data.get("motion",0))) or not _receive_inventory(sender,data):
+		_resync_inventory(sender)
+		map_action_result.rpc_id(sender,false,kind,{},table_pos); return
+	var inv: Inventory = peer_bags[sender]
+	var item: Dictionary = {}
+	var success: bool = false
+	if index >= 0 and index < inv.slots.size():
+		if kind == "copy" and reachable(sender,table_pos) and game.world.node_at(table_pos) == VillageContent.CARTOGRAPHY_TABLE:
+			game.maps.ensure(inv.slots[index],at)
+			success = ExplorationMaps.copy_inventory(inv,index)
+			if success: item = inv.slots[index].duplicate(true)
+		elif index == inv.selected and kind in ["fill","migrate"]:
+			var result: Dictionary = game.maps.fill_inventory(inv,at,kind == "migrate")
+			if not result.is_empty():
+				item = result.item; success = true
+				if int(result.overflow) > 0: game.spawn_drop(at,item.id,int(result.overflow),0,item.data)
+	_persist_inventory(sender)
+	_resync_inventory(sender)
+	if success:
+		var id: String = str(item.get("data",{}).get("map",{}).get("id",""))
+		_send_map(sender,id)
+	map_action_result.rpc_id(sender,success,kind,item,table_pos)
+@rpc("authority","call_remote","reliable",2)
+func map_action_result(success: bool, kind: String, item: Dictionary, table_pos: Vector3i) -> void:
+	if not client(): return
+	map_busy = false
+	if not success:
+		game.toast("Map action could not be completed. Check the inputs and inventory space."); return
+	if kind in ["fill","migrate"]: game.maps.show_map(item)
+	elif kind == "copy" and game.state == "workstation": game.survival.show_station(table_pos,VillageContent.CARTOGRAPHY_TABLE)
+
+func smithing_open() -> bool:
+	if not client() or not station_open or game.hud.station != "smithing": return false
+	if station_busy: return true
+	station_busy = true
+	smithing_refresh.rpc_id(1,station_pos,inventory_snapshot())
+	return true
+@rpc("any_peer","call_remote","reliable",2)
+func smithing_refresh(p: Vector3i, data: Dictionary) -> void:
+	if not multiplayer.is_server(): return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if not reachable(sender,p) or game.world.node_at(p) != VillageContent.SMITHING_TABLE:
+		station_denied.rpc_id(sender); return
+	if not _receive_inventory(sender,data): station_denied.rpc_id(sender,false); return
+	var state: Dictionary = Smithing.station(game.world,p)
+	Smithing.refresh(state)
+	var inv: Inventory = peer_bags[sender]
+	var cursor: Dictionary = Inventory.clean_slot(data.get("cursor",{}))
 	peer_revisions[sender] = int(peer_revisions[sender])+1
 	_persist_inventory(sender,{"cursor":cursor})
 	state_sequence += 1
-	station_result.rpc_id(sender,p,inv.slots,inv.pouch_slots,cursor,s,int(peer_revisions[sender]),state_sequence)
+	station_result.rpc_id(sender,p,inv.slots,inv.pouch_slots,cursor,state,int(peer_revisions[sender]),state_sequence)
+
+func grindstone_open() -> bool:
+	if not client() or not station_open or game.hud.station != "grindstone": return false
+	if station_busy: return true
+	station_busy = true
+	grindstone_refresh.rpc_id(1,station_pos,inventory_snapshot())
+	return true
+@rpc("any_peer","call_remote","reliable",2)
+func grindstone_refresh(p: Vector3i, data: Dictionary) -> void:
+	if not multiplayer.is_server(): return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if not reachable(sender,p) or not GrindstoneRepair.is_grindstone(game.world.node_at(p)):
+		station_denied.rpc_id(sender); return
+	if not _receive_inventory(sender,data): station_denied.rpc_id(sender,false); return
+	var state: Dictionary = GrindstoneRepair.station(game.world,p)
+	GrindstoneRepair.refresh(state)
+	var inv: Inventory = peer_bags[sender]
+	var cursor: Dictionary = Inventory.clean_slot(data.get("cursor",{}))
+	peer_revisions[sender] = int(peer_revisions[sender])+1
+	_persist_inventory(sender,{"cursor":cursor})
+	state_sequence += 1
+	station_result.rpc_id(sender,p,inv.slots,inv.pouch_slots,cursor,state,int(peer_revisions[sender]),state_sequence)
+
+func stonecutting_select(name: String, fill: bool = false, opening: bool = false) -> bool:
+	if not client() or not station_open or game.hud.station != "stonecutter": return false
+	if station_busy: return true
+	station_busy = true
+	stonecutting_action.rpc_id(1,station_pos,name,fill,opening,inventory_snapshot())
+	return true
+@rpc("any_peer","call_remote","reliable",2)
+func stonecutting_action(p: Vector3i, name: String, fill: bool, opening: bool, data: Dictionary) -> void:
+	if not multiplayer.is_server(): return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if not reachable(sender,p) or not Stonecutting.is_cutter(game.world.node_at(p)):
+		station_denied.rpc_id(sender); return
+	if not _receive_inventory(sender,data): station_denied.rpc_id(sender,false); return
+	var state: Dictionary = Stonecutting.station(game.world,p)
+	if opening: Stonecutting.refresh(state)
+	elif fill: Stonecutting.fill(state)
+	else: Stonecutting.select(state,name)
+	var inv: Inventory = peer_bags[sender]
+	var cursor: Dictionary = Inventory.clean_slot(data.get("cursor",{}))
+	peer_revisions[sender] = int(peer_revisions[sender])+1
+	_persist_inventory(sender,{"cursor":cursor})
+	state_sequence += 1
+	station_result.rpc_id(sender,p,inv.slots,inv.pouch_slots,cursor,state,int(peer_revisions[sender]),state_sequence)
 
 @rpc("authority","call_remote","reliable",2)
-func station_result(p: Vector3i, inventory: Array, pouches: Array, cursor: Dictionary, s: Dictionary, revision: int, sequence: int) -> void:
+func station_result(p: Vector3i, inventory: Array, pouches: Array, cursor: Dictionary, s: Dictionary, revision: int, sequence: int, awarded_xp: int = 0, smith_event: Dictionary = {}) -> void:
 	if not client(): return
 	station_busy = false
 	if revision < inventory_revision: return
 	inventory_revision = revision
 	game.inventory.restore(inventory,pouches); game.hud.cursor = Inventory.clean_slot(cursor)
+	XpOrbs.award(game,maxi(0,awarded_xp))
+	Smithing.award(game,smith_event)
 	send_inventory()
 	var key: String = game.world.station_key(p)
 	# An earlier bulk snapshot may still be in flight on the world-state channel.
@@ -1026,6 +1359,17 @@ func _use_node(sender: int, p: Vector3i) -> void:
 	if not reachable(sender,p): return
 	if RedstoneInputs.is_button(game.world.node_at(p)): RedstoneInputs.press(game.world,p)
 	else: game.world.circuits.interact(p)
+
+@rpc("any_peer","call_remote","reliable",2)
+func use_trial(p: Vector3i, data: Dictionary) -> void:
+	if not multiplayer.is_server(): return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if not reachable(sender,p) or not game.world.loaded_at(Vector3(p)) or not Trials.is_vault(game.world.node_at(p)): return
+	if not _receive_inventory(sender,data): _resync_inventory(sender); return
+	var bag: Inventory = _bag(sender)
+	Trials.open_vault(game.world,p,Trials.identity(game,sender),bag.held(),game.gamemode == "creative")
+	_persist_inventory(sender)
+	_resync_inventory(sender)
 
 @rpc("any_peer","call_remote","reliable",2)
 func drop_item(stack: Dictionary, origin: Vector3, direction: Vector3, at: Vector3, data: Dictionary) -> void:

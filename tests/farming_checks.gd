@@ -255,4 +255,6 @@ static func coat_checks(suite: SceneTree, game: Node3D) -> void:
 	chicken._physics_process(0.25)
 	suite.check(dropped(game,Nodes.EGG) == eggs,"adult chickens do not lay before their saved timer expires")
 	chicken._physics_process(0.26)
-	suite.check(dropped(game,Nodes.EGG) == eggs+1 and chicken.egg_timer >= 300 and chicken.egg_timer <= 600,"adult chickens lay one collectible egg and reset to a source five-to-ten-minute interval")
+	suite.check(dropped(game,Nodes.EGG) == eggs+1 and chicken.egg_timer == -1,"adult chickens lay one collectible egg and clear the elapsed source timer")
+	chicken._physics_process(0.01)
+	suite.check(dropped(game,Nodes.EGG) == eggs+1 and chicken.egg_timer > 299 and chicken.egg_timer <= 600,"the next chicken step starts a new source five-to-ten-minute interval")

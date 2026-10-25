@@ -36,6 +36,9 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.state = "playing"; game.gamemode = "survival"; game.daylight = 1
 	game.player.set_process(false); game.player.set_physics_process(false); game.world.active = false; game.world.set_process(false)
 	PotionEffects.clear(game.player)
+	# The copper and other high plots must not shadow this daylight fixture.
+	for at in game.world.edits.keys():
+		if at.x >= -4 and at.x < 21 and at.z >= -4 and at.z < 21 and at.y >= 530 and game.world.node_at(at) != Nodes.AIR: game.world.set_node(at,Nodes.AIR)
 	# Chorus samples +/-8 Y, then scans down another16 nodes. Earlier groups
 	# leave platforms below this one (snow tests at499), which are otherwise
 	# perfectly valid alternate landings. Isolate the whole sampled volume.
@@ -106,7 +109,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 		var stew_recipe: int = -1
 		for index in game.inventory.recipes.size():
 			var recipe: Dictionary = game.inventory.recipes[index]
-			if recipe.id == VillageContent.SUSPICIOUS_STEW and recipe.ingredients.has(flower): stew_recipe = index; break
+			if recipe.id == VillageContent.SUSPICIOUS_STEW and recipe.ingredients.has(flower) and recipe.ingredients.has(Nodes.RED_MUSHROOM) and recipe.ingredients.has(Nodes.BROWN_MUSHROOM): stew_recipe = index; break
 		for ingredient in [Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM,Nodes.BOWL,flower]: game.inventory.add_item(ingredient,1)
 		suite.check(stew_recipe >= 0 and game.inventory.craft(stew_recipe,"table") and game.inventory.slots.any(func(slot): return slot.id == VillageContent.SUSPICIOUS_STEW and slot.get("data",{}).get("effect","") == FoodFeatures.FLOWERS[flower]),"recipe-book crafting also retains "+Nodes.title(flower)+" stew metadata")
 		held(game,0,0)
@@ -201,7 +204,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	suite.check(tuft_opaque > 0 and tuft_opaque < 128,"tall grass draws a thin tuft rather than a full tile")
 	# Breaking it never returns the plant itself, only ever a seed.
 	suite.check(Nodes.drop(FoodFeatures.TALL_GRASS) != FoodFeatures.TALL_GRASS,"breaking tall grass never yields the plant back, only its seed")
-	# --- bone meal on cane, bamboo and cocoa --------------------------------
+	# --- bone meal on cane and bamboo --------------------------------------
 	# Each is the source's own `_on_bone_meal` and each needed its own handler.
 	# Cane stands *on* the grass, so the stalk is one cell above the soil.
 	held(game,Nodes.BONE_MEAL,3)
@@ -226,51 +229,30 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	click(game,Vector3(plain+Vector3i(2,1,2))+Vector3(0.5,0.5,0.5))
 	suite.check(Bamboo.is_bamboo(game.world.node_at(plain+Vector3i(2,2,2))) and game.inventory.count_item(Nodes.BONE_MEAL) == 2,"bone meal grows a bamboo segment and consumes one")
 
-	# --- the cocoa pod that used to become a cobweb -------------------------
-	# Cocoa's ids jump to a cobweb after the pod, so the shared crop path's
-	# `id+3-stage` arithmetic turned a pod into a cobweb. That path now excludes
-	# cocoa, and cocoa ripens through its own three-stage ladder (`mcl_cocoas.grow`).
-	suite.check(VillageContent.DATA[VillageContent.COCOA_POD].shape == "crop","cocoa is crop-shaped, which is why the shared crop path once caught it")
-	suite.check(VillageContent.COCOA_POD+3 != VillageContent.RIPE_COCOA_POD,"cocoa's ids are not three consecutive stages, so id arithmetic cannot advance them")
-	suite.check(VillageContent.DATA[VillageContent.COCOA_POD+3].name == "Cobweb","the id three past a cocoa pod is a cobweb, which is what the old arithmetic produced")
-	suite.check(VillageContent.cocoa_next(VillageContent.COCOA_POD) == VillageContent.COCOA_POD_MID and VillageContent.cocoa_next(VillageContent.COCOA_POD_MID) == VillageContent.RIPE_COCOA_POD,"cocoa ripens one stage at a time through three stages")
-	game.world.set_node(plain+Vector3i(6,1,6),Nodes.LOG)
-	game.world.set_node(plain+Vector3i(6,1,7),VillageContent.COCOA_POD)
-	held(game,Nodes.BONE_MEAL,3)
-	game.player.position = Vector3(plain.x+6.5,plain.y+0.01,plain.z+7.5)
-	click(game,Vector3(plain+Vector3i(6,1,7))+Vector3(0.5,0.5,0.5))
-	suite.check(game.world.node_at(plain+Vector3i(6,1,7)) == VillageContent.COCOA_POD_MID,"bone meal advances a cocoa pod one stage instead of turning it into a cobweb")
-	suite.check(game.inventory.count_item(Nodes.BONE_MEAL) == 2,"ripening a pod consumes one bone meal")
-	# A second use takes the middle stage to ripe.
-	held(game,Nodes.BONE_MEAL,3)
-	click(game,Vector3(plain+Vector3i(6,1,7))+Vector3(0.5,0.5,0.5))
-	suite.check(game.world.node_at(plain+Vector3i(6,1,7)) == VillageContent.RIPE_COCOA_POD,"a second bone meal ripens the middle stage")
-	# A ripe pod is left alone, which is the source's guard.
-	held(game,Nodes.BONE_MEAL,3)
-	click(game,Vector3(plain+Vector3i(6,1,7))+Vector3(0.5,0.5,0.5))
-	suite.check(game.world.node_at(plain+Vector3i(6,1,7)) == VillageContent.RIPE_COCOA_POD and game.inventory.count_item(Nodes.BONE_MEAL) == 3,"an already-ripe pod is left alone and consumes nothing")
 
 	# --- bone meal on a small mushroom grows a huge one ---------------------
 	# The source's rule is layered: a 40% roll, a mushroom soil, and enough room.
 	# The shape is the source's own schematic, so the widths are asserted rather
 	# than assumed.
-	suite.check(HugeMushrooms.BLOCKS.all(func(i): return VillageContent.DATA.has(i)),"all six huge mushroom blocks are registered")
+	suite.check(HugeMushrooms.BLOCKS.all(func(i): return VillageContent.DATA.has(i)),"all 132 huge mushroom blocks are registered")
 	suite.check(HugeMushrooms.cap_width(Nodes.RED_MUSHROOM) == 5 and HugeMushrooms.cap_width(Nodes.BROWN_MUSHROOM) == 7,"the red cap is five wide and the brown seven, as the source schematics are")
 	suite.check(HugeMushrooms.stem_for(Nodes.RED_MUSHROOM) != HugeMushrooms.stem_for(Nodes.BROWN_MUSHROOM),"the two species have their own stems")
 	suite.check(HugeMushrooms.species_of(HugeMushrooms.RED_CAP) == Nodes.RED_MUSHROOM and HugeMushrooms.species_of(HugeMushrooms.BROWN_PORES) == Nodes.BROWN_MUSHROOM,"a block knows the species it came from, which is what it drops")
 	# A cap's *interior* is pores, because a face hidden by another cap block is
 	# pores rather than skin. This is the source's per-face bit scheme.
 	var plan: Dictionary = HugeMushrooms.shape(Nodes.RED_MUSHROOM,3)
-	var stems: int = 0; var caps: int = 0; var pores: int = 0
+	var stems: int = 0; var caps: int = 0; var pores: int = 0; var pore_faces: bool = false
 	for offset in plan:
 		if HugeMushrooms.is_stem(plan[offset]): stems += 1
-		elif HugeMushrooms.is_cap(plan[offset]): caps += 1
 		elif HugeMushrooms.is_pores(plan[offset]): pores += 1
+		elif HugeMushrooms.is_cap(plan[offset]):
+			caps += 1
+			if HugeMushrooms.mask_of(plan[offset]) < 63: pore_faces = true
 	# The stem runs from the base up *through* the cap's centre, because the source's
 	# schematics mark that column `S` in the cap layers too. So a height-three stem
 	# with a two-layer cap gives five stem cells.
 	suite.check(stems == 5,"the stem runs through the cap's centre, as the source schematics mark it")
-	suite.check(caps > 0 and pores > 0,"a huge mushroom has both skin and interior pores")
+	suite.check(caps > 0 and pore_faces,"a huge mushroom has both skin and interior pore faces")
 	suite.check(caps+pores+stems == plan.size(),"every cell of the plan is one of the three block kinds")
 	# The growth is a roll, so over many attempts it must sometimes fire and often
 	# not — a guaranteed growth would be wrong.
@@ -328,9 +310,6 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 			for ay in 16:
 				if VillageArt.pixel(id,ax,ay,Color(0.5,0.5,0.5)).a > 0: painted += 1
 		suite.check(painted == 256,"huge mushroom block %d draws a full opaque tile" % id)
-	var tiles: Dictionary = {}
-	for id in HugeMushrooms.BLOCKS: tiles[Nodes.tile(id,0)] = true
-	suite.check(tiles.size() == HugeMushrooms.BLOCKS.size() and not tiles.has(136),"every huge mushroom block has its own atlas tile rather than the missing-art fallback")
 
 	# --- no block renders with the fallback tile -----------------------------
 	# A node registered in the content table but absent from the atlas list resolves

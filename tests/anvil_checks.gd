@@ -31,7 +31,7 @@ static func run(suite: Object, game: Node3D) -> void:
 	var single: Dictionary = Anvils.material_repair({"id":Nodes.TOOLS,"count":1,"wear":span},1,Nodes.PLANKS)
 	suite.check(int(single.get("wear",-1)) == span-int(span*0.25),"one plank repairs only its own quarter")
 	suite.check(Anvils.repair_material(Nodes.TOOLS) == Nodes.PLANKS and Anvils.repair_material(Nodes.TOOLS+5) == Nodes.COBBLE,"the repair material follows the tool tier")
-	suite.check(Anvils.same_type_repair({"id":Nodes.TOOLS,"count":1,"wear":1000},{"id":Nodes.TOOLS,"count":1,"wear":1000}).get("bonus",0) == 2,"combining two tools costs two levels")
+	suite.check(Anvils.same_type_repair({"id":Nodes.TOOLS,"count":1,"wear":1000},{"id":Nodes.TOOLS,"count":1,"wear":1000}).get("bonus",0) == 2,"a tool repair improvement adds two levels")
 	# The damage ladder: three levels then destruction, and a 12% chance per use.
 	suite.check(Anvils.MAX_DAMAGE == 3 and Anvils.DAMAGE_CHANCE == 0.12,"three damage levels at the source's twelve percent")
 	var rng := RandomNumberGenerator.new(); rng.seed = 12345
@@ -88,7 +88,6 @@ static func damage_checks(suite: Object, game: Node3D) -> void:
 		if next < 0: survived = true
 		elif next == 1: advanced = true
 	suite.check(advanced and survived,"a use sometimes advances the damage and sometimes leaves the anvil intact")
-	suite.check(Anvils.use_damage(Anvils.MAX_DAMAGE-1,rng) >= Anvils.MAX_DAMAGE or true,"the ladder reaches destruction at its third level")
 	# A damaging roll at the last level must report destruction, so search for one
 	# rather than relying on a single unseeded draw.
 	var destroyed: bool = false

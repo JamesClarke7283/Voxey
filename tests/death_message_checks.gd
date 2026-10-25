@@ -150,26 +150,9 @@ static func run(suite: Object, game: Node3D) -> void:
 		print("death_message mismatch: ",entry.cause," Voxey=",entry.voxey," source=",entry.source)
 	print("death_message audit: causes with no source entry: ",report.unknown)
 
-	# The mismatches are the real finding: Voxey decides mitigation per call, and
-	# `bypass_armor` skips the totem (player.gd:952), so every armor-bypassing
-	# cause bypasses a totem while the source sets that flag for out_of_world alone.
-	suite.check(_mismatch(report,"void").is_empty(),"void matches the source exactly, flags and all")
-	suite.check(_mismatch(report,"sweet_berry").is_empty(),"sweet_berry matches the source")
-	suite.check(_mismatch(report,"mob").is_empty() and _mismatch(report,"anvil").is_empty() and _mismatch(report,"falling_node").is_empty(),"the ordinary hits match the source")
-	suite.check(_mismatch(report,"projectile").is_empty() and _mismatch(report,"explosion").is_empty(),"Voxey's projectile and explosion causes match the source's classification")
-	var plain: Dictionary = _mismatch(report,"generic")
-	suite.check(not plain.is_empty() and plain.source.bypasses_armor and not plain.voxey.bypasses_armor,"the source's generic bypasses armor while Voxey's default cause does not")
-	var starve: Dictionary = _mismatch(report,"starve")
-	suite.check(not starve.is_empty() and starve.voxey.bypasses_totem and not starve.source.bypasses_totem,"starve bypasses a totem in Voxey but not in the source")
-	var dropped: Dictionary = _mismatch(report,"fall")
-	suite.check(not dropped.is_empty() and dropped.voxey.bypasses_totem,"a fall bypasses a totem in Voxey, which the source does not set")
-	var wall: Dictionary = _mismatch(report,"in_wall")
-	suite.check(not wall.is_empty() and wall.voxey.bypasses_armor and wall.source.bypasses_armor,"in_wall bypasses armor in both, so only the totem differs")
-	var floor: Dictionary = _mismatch(report,"hot_floor")
-	suite.check(not floor.is_empty() and floor.source.is_fire and not floor.voxey.is_fire,"hot_floor is fire in the source but not classified as fire in Voxey")
-	var magic: Dictionary = _mismatch(report,"magic")
-	suite.check(not magic.is_empty() and magic.source.bypasses_armor and not magic.voxey.bypasses_armor,"the source's magic bypasses armor while Voxey's magic goes through it")
-	suite.check(not _mismatch(report,"thorns").is_empty(),"Voxey's thorns hit bypasses armor and a totem, which the source's thorns entry does not")
+	# The active damage adapter now consumes the source table for these reasons.
+	for cause in ["void","sweet_berry","mob","anvil","falling_node","projectile","explosion","generic","starve","fall","in_wall","hot_floor","magic","thorns"]:
+		suite.check(_mismatch(report,cause).is_empty(),cause+" uses the source damage flags")
 	# A cause with no source entry is reported as unknown and never as a mismatch.
 	var outside: Dictionary = DeathMessages.audit(["no_such_reason_at_all"])
 	suite.check(outside.known.is_empty() and outside.mismatched.is_empty() and outside.unknown == ["no_such_reason_at_all"],"a cause outside the source's table is unknown, not mismatched")

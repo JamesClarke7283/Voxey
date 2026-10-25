@@ -18,6 +18,43 @@ Host a world on `0.0.0.0` with up to 16 players, copy your local IP and port fro
 
 Craft muskets, flintlock pistols, blunderbusses, and bayonets. Coal-fired generators and redstone-powered bellows send steam through iron pipes to furnaces, ore grinders with fourfold raw-ore output, and engines that move frame vehicles of up to 256 blocks. See the [workshop and vehicle guide](docs/gameplay/steam-and-firearms.md) for recipes, controls, and setup.
 
+**Survival flora and soils:** podzol and mycelium now support snowy states, source spread/decay and their registered plant hosts; giant spruce creates podzol and wandering traders sell it. Cave vines grow harvestable glow berries, double grass and fern follow source drops and bone meal, flowerpots retain their plants, and dripleaf tips under each player independently. All 132 huge-mushroom cap/stem states are registered. Brown mooshrooms remember one stew flower, and water bottles turn dirt, coarse dirt or rooted dirt into mud. See [the parity notes](docs/mineclonia-parity.md) for these systems and the separate biome-generation work still in progress.
+
+**Biome foundation:** the canonical 64-biome registry, legacy aliases, structure filters, source climate noise and nearest-extent 3D biome selection are implemented, with 15,445 direct source comparisons. See [biome selection](docs/mineclonia-biome-selector-source.md); source terrain density, height/surface rules and natural feature dispatch remain in progress.
+
+
+**Trial chambers:** underground chambers now assemble from the reference’s room templates. Approach a trial spawner to fight its waves and earn keys; each player can claim a vault separately. An Ominous Bottle turns nearby trials ominous, opening a route to heavy cores, breeze rods, and the enchanted golden apple. Use `/locate trial_chambers` to find a chamber. See [the trial source notes](docs/trials-source.md) for remaining differences.
+
+**Trail ruins:** buried towers, roads and rooms now use the reference's templates. Find one with `/locate trail_ruins`, then brush marked gravel for common supplies or seven pottery sherds and the Wayfinder trim. Coarse dirt and dead bushes are also available. See [trail-ruin source notes](docs/trail-ruins-source.md).
+
+**Desert wells:** rare sandstone wells contain two buried suspicious-sand blocks. Brush them for Arms Up and Brewer sherds or the source's other well rewards. `/locate desert_well` finds a nearby well. All 23 pottery sherds now have their source acquisition routes. See [desert wells](docs/desert-wells-source.md).
+
+**Enchanting:** tables now generate three cached source-based offers, with exact bookshelf gaps, material enchantability, lapis costs and the source XP curve. Fishing and vault equipment share the same selection engine. See [enchanting](docs/enchanting-source.md).
+
+**Anvils:** select two inputs and preview the result and full level cost before applying it. Combining, material repairs, naming and prior-work penalties now follow the reference. See [anvil rules](docs/anvil-source.md).
+
+**Defensive enchantments:** Mending can repair either hand or equipped armor; armor Unbreaking and Thorns follow the reference. Armor and absorption now prevent unnecessary totem use. See [defensive enchantments](docs/defensive-enchantments-source.md).
+
+**Melee:** weapon damage, recharge, enchantment groups, criticals and punch wear now use the reference rules. Mace smashes include Density, Wind Burst, Breach and the fall-damage window. See [melee source notes](docs/melee-source.md).
+
+**Tool effects:** Haste, Fatigue and Conduit Power change registered tool capabilities. On a four-layer beacon, Ctrl + right-click toggles level II for the selected effect. Source digging times and wear now cover 1,026 of 1,068 unique catalog blocks, including placed door, copper, wood and colored-material variants. See [tool capabilities](docs/tool-capabilities-source.md) for the remaining native extensions.
+
+**Copper tools:** craft a copper pickaxe, axe, shovel, sword or hoe using copper ingots and sticks. They support enchantments and copper-ingot repair, and recycle into nuggets in furnaces or blast furnaces. Stripping logs, digging paths, tilling and scraping copper use the source's fixed action wear. See [copper tools](docs/copper-tools-source.md).
+
+**Furnaces:** source recipes and fuels now determine cooking time, output and device eligibility. Blast furnaces and smokers cook and burn fuel twice as fast; the recipe guide shows their supported inputs and fuel times. Smelt stone again for smooth stone, which is required to craft a blast furnace. See [furnaces](docs/furnaces-source.md).
+
+**Smithing:** choose equipment, a mineral and a template, then take the preview. Netherite upgrades preserve exact wear and metadata; armor trims use the registered minerals and patterns. Guest achievements persist across reconnects. See [smithing rules](docs/smithing-source.md).
+
+**Grindstone:** choose one enchanted item or two matching tools in the input slots, then take the preview to disenchant or repair them. Curses remain, and removed enchantments release physical XP. Floor, ceiling and wall mounting follow the reference. See [grindstone rules](docs/grindstone-source.md).
+
+**Stonecutter:** insert a material, select a cut, then take the result. All 349 source conversions use their registered yields, including waxed copper. Output previews consume material only when taken. See [stonecutter rules](docs/stonecutter-source.md).
+
+**Walls and fences:** all source material families are available. Walls change height and post shape with their neighbors, and gates respond to wind charges. See [barrier rules and save compatibility](docs/barriers-source.md).
+
+**Stairs and slabs:** all 124 registered source families are available, including colored concrete and wool, newer woods, lapis and smooth/red sandstone. Craft, recolor and stonecut them using the source recipes. See [shape registry notes](docs/shape-registry-source.md).
+
+**Harvesting:** registered tool requirements, Fortune, Silk Touch and shears now control ordinary block drops and ore XP. Copper needs a stone-or-better pick; gravel uses the source's Fortune odds; snow yields one snowball per layer. See [harvest rules](docs/harvesting-source.md).
+
 ## Playing
 
 | Input | Action |
@@ -50,7 +87,7 @@ Craft muskets, flintlock pistols, blunderbusses, and bayonets. Coal-fired genera
 
 **Mining feel:** holding the mouse button grows a crack overlay from the exact centre of every face of the node, in nine symmetric stages, while chips fly off the struck face. Sand and gravel are falling nodes: remove their support and they drop as entities until they land.
 
-**Armor:** leather, iron, golden, and diamond helmets, chestplates, leggings, and boots are crafted at a table with the classic patterns. Right-click a piece to wear it, or drop it into the armor column of the inventory screen (each slot accepts only its own piece; Shift-click a piece in your bag to equip it). Every point of defence absorbs 4% of damage, up to 80% for a full diamond set; pieces wear down with each hit and eventually break. Drowning, starving, and falling bypass armor. Worn armor is saved with the world and goes into the recovery chest on death.
+**Armor:** leather, copper, iron, golden and diamond helmets, chestplates, leggings and boots use the classic crafting patterns. Right-click to wear a piece, or put it in its armor slot. Protection depends on armor points, toughness and incoming damage; hits wear the pieces down. Equipment survives saves and goes into the recovery chest on death. Zombies and skeletons can wear armor too, acquire dropped pieces and receive them from dispensers. Helmets protect them from sunlight until they break. See [armor and mob equipment](docs/mob-armor-source.md).
 
 **Creatures:** sheep, cows, pigs, and chickens wander the surface by day; cows always drop 1–2 leather, chickens drop feathers. At night zombies, skeletons, spiders, and creepers spawn away from torchlight. Zombies groan and chase, skeletons keep their distance and shoot arrows, spiders leap and are neutral in daylight unless provoked, and creepers hiss, swell, and explode. Zombies and skeletons burn in sunlight. Craft shears from two iron ingots and right-click a sheep to clip its coat for wool — it regrows as the sheep grazes — and milk cows with an empty bucket. Creature calls, hurt sounds, hisses, and blasts are synthesized at startup and played positionally. Hostiles drop rotten flesh, bones, string, and gunpowder.
 
@@ -58,9 +95,17 @@ Craft muskets, flintlock pistols, blunderbusses, and bayonets. Coal-fired genera
 
 Water and lava now flow downward before spreading on support, and dependent flows drain when their source is removed. Water touching lava from any of the six sides converts the lava source to obsidian. Deep caves now generate lava and lapis ore. Mine obsidian with a diamond pickaxe; buckets collect and place water or lava sources.
 
-Craft an **enchanting table** from a book, two diamonds, and four obsidian. Right-click it, select equipment, and spend lapis plus XP levels. The HUD shows your current level and progress toward the next one. Bookshelves with a one-block air gap unlock stronger tiers. **Books** use three paper and one leather, in any arrangement; cows now always drop 1–2 leather. Combine a book, feather, and charcoal for a **writable book**. Right-click to write, close to keep a draft, or sign to make it read-only. Written text and enchantments stay attached through inventory moves, chests, drops, death, and saves. See [the Nether and enchanting guide](docs/nether-enchanting.md).
+Craft an **enchanting table** from a book, two diamonds, and four obsidian. Right-click it, select equipment, and spend lapis plus XP levels. The HUD shows your current level and progress toward the next one. Bookshelves with a one-block air gap unlock stronger tiers. **Books** use three paper and one leather, in any arrangement; cows now always drop 1–2 leather. Combine a book, feather, and ink sac for a **writable book**. Right-click to write, close to keep a draft, or sign to make it read-only. Written text and enchantments stay attached through inventory moves, chests, drops, death, and saves. See [the Nether and enchanting guide](docs/nether-enchanting.md).
 
-**Arrows and pickups:** skeletons wait until their bodies face their targets and fire forward from the bow. Grounded arrows from either side can be recovered and expire after ten active minutes; their age survives saving. Ground items are attracted only when the entire pickup fits in the inventory. Ordinary item drops still expire after five active minutes. Timers pause in menus and inactive dimensions.
+**Bows:** hold right-click, Z or touch Use to draw, then release to shoot. Full charge takes half a second. Drawing slows movement and narrows the view; the hand and hotbar show the pull stages. Charge, spread, Power, Infinity and bow wear follow the installed Mineclonia source. See [bow rules](docs/bows-source.md). Crossbows load when you release a full draw and fire with Attack. Loaded arrows stay in the item through storage and saves; see [crossbow rules](docs/crossbows-source.md).
+
+**Zombie behavior:** eligible zombies can break closed non-iron doors on Hard after twelve seconds. Damaged zombies on Hard can call reinforcements using the source spawn and chance rules; randomized attributes and reinforcement chances survive saves. They retaliate, alert nearby allies and visit claimed village workstations or beds at night. See [zombie behavior](docs/zombie-behavior-source.md) and [targets and village navigation](docs/zombie-targets-source.md).
+
+**Baby undead:** natural zombies, husks and drowned can appear as permanent baby variants. Some ride chickens, which they steer and keep through saves and conversions. See [baby undead and chicken jockeys](docs/baby-undead-source.md).
+
+**Mob weapons:** zombies can spawn with swords or shovels, and undead mobs can collect and drop real held items. Skeletons switch between melee weapons and bows; wither skeletons carry stone swords and inflict Wither. Equipment and partial bow draws survive saves. See [held weapons](docs/mob-weapons-source.md).
+
+**Arrows and pickups:** skeletons and strays draw, strafe and shoot with the source NPC timings, equipped bow enchantments and difficulty-based spread. Their bows persist through saves and can drop on death; see [skeleton bow combat](docs/mob-bows-source.md). Arrows now use source air drag, liquid slowdown and impact handling. They last two minutes in flight or one minute embedded, fall when their support is removed, and retain flight state through saves. Nearby recoverable arrows become collectible items; NPC-fired arrows cannot be picked up. See [arrow flight](docs/arrow-flight-source.md). Ground items are attracted only when the entire pickup fits in the inventory. Ordinary item drops still expire after five active minutes. Timers pause in menus and inactive dimensions.
 
 **New content and artwork:** enemies now have original pixel skins, articulated limbs, and clearer faces: a ragged zombie, a skeleton with an open rib cage and bow, an eight-legged spider with fangs, and a mottled creeper. Inventory icons use the block atlas; items share pixel silhouettes across inventory, pickups, and the player’s hand. Sixteen additional items and blocks include sugar cane, red/brown mushrooms, vines, red bricks, hay bales, mossy stone, coal blocks, terracotta, charcoal, bowls, mushroom stew, metal nuggets, and eggs. See [the content guide](docs/content.md) for gathering and recipes.
 
@@ -80,7 +125,7 @@ Craft an **enchanting table** from a book, two diamonds, and four obsidian. Righ
 
 **Trees and wood:** oak, spruce, birch, jungle, acacia and dark oak grow naturally and from saplings. Logs follow the face you place them on; right-click with an axe to strip them. Leaves can drop sticks, saplings and, for oak/dark oak, apples; shears or Silk Touch recover leaves. Natural unsupported leaves decay, while leaves you place remain. Use matching planks for each species’ stairs, slabs, fences, doors, trapdoors and boats. Ordinary recipes such as sticks, tables and chests accept mixed wood species.
 
-**Doors, signs and cake:** wooden doors open from either half; iron doors need redstone, which can power either half. Place matching doors beside one another for mirrored hinges. Craft an oak sign from six oak planks and a stick, write its text when placing it, and use dyes to color the lettering. `/gamerule signsEditable true` enables later editing. Place cake on a solid support and right-click to eat one of seven slices. Chorus fruit can teleport you to a nearby safe spot; craft suspicious stew with mushrooms, a bowl and a poppy, dandelion or oxeye daisy for its flower’s effect.
+**Doors, signs and cake:** wooden doors open from either half; iron doors need redstone, which can power either half. Place matching doors beside one another for mirrored hinges. Craft a sign from six matching planks and a stick, write its text when placing it, and use dyes to color the lettering. `/gamerule signsEditable true` enables later editing. Place cake on a solid support and right-click to eat one of seven slices. Chorus fruit can teleport you to a nearby safe spot; craft suspicious stew with mushrooms, a bowl and a poppy, dandelion or oxeye daisy for its flower’s effect.
 
 **Creative:** all items are available through the inventory's **All items** tab. Placement is unlimited, mining is fast, tools don't wear out, and survival damage is disabled. Flight still respects solid terrain. Switching modes keeps the same world and inventory.
 
@@ -159,7 +204,7 @@ Voxey includes three dimensions, redstone simulation, villages and trading, brew
 
 **Daylight detectors and targets:** use glass, quartz and wooden slabs to craft a detector. Right-click it to invert its output. Targets use a hay bale surrounded by redstone dust and emit a one-second pulse when hit; arrows and tridents score stronger signals near the bullseye. See [device rules](docs/redstone-sensors-source.md).
 
-**Buttons and pressure plates:** stone and polished blackstone buttons pulse for one second; the six classic wood buttons pulse for 1.5 seconds and can be triggered by arrows and tridents. Stone plates detect living entities, wood plates also detect physical objects, and gold/iron weighted plates vary their signal with the number of objects. Buttons attach to all six faces. See [source rules](docs/redstone-inputs-source.md).
+**Buttons and pressure plates:** stone and polished blackstone buttons pulse for one second; all wood buttons pulse for 1.5 seconds and can be triggered by arrows and tridents. Stone plates detect living entities, wood plates also detect physical objects, and gold/iron weighted plates vary their signal with the number of objects. Buttons attach to all six faces. See [source rules](docs/redstone-inputs-source.md).
 
 **Note blocks and jukeboxes:** right-click a note block to tune one of 25 notes, punch it to play, or trigger it with redstone. Its instrument depends on the block below; leave air above it. Insert a music disc into a jukebox by right-clicking, then right-click again to eject it. Disc identity determines comparator output. The eight music tracks retain their [original credits and licenses](assets/audio/jukebox/ATTRIBUTION.md).
 
@@ -169,7 +214,7 @@ Voxey includes three dimensions, redstone simulation, villages and trading, brew
 
 **Trapdoors:** six classic wood families and iron support upper/lower placement, four orientations, redstone and climbing while open. Six matching planks craft two wooden trapdoors; four iron ingots craft one iron trapdoor. Wooden trapdoors also open by hand. See [trapdoor rules](docs/trapdoors-source.md).
 
-**Boats:** place a boat, then right-click it to board. W/S row, A/D steer and Ctrl dismounts, leaving the boat in the world. Ordinary boats can carry an animal alongside you. Craft a chest above a boat for 27 cargo slots; Ctrl + right-click opens the cargo. Boats, cargo and passengers survive saves and unloading. See [boat rules](docs/boats-source.md).
+**Boats:** place a boat, then right-click it to board. W/S row, A/D steer and Ctrl dismounts, leaving the boat in the world. Ordinary boats can carry an animal alongside you. Craft a chest above a boat for 27 cargo slots; Ctrl + right-click opens the cargo. Oak, spruce, birch, jungle, acacia, dark oak, cherry, mangrove and pale oak have boats; bamboo has rafts. Boats, rafts, cargo and passengers survive saves and unloading. See [boat rules](docs/boats-source.md).
 
 **Totems:** carry a totem of undying in hand and it saves you from one lethal hit, leaving you at a single heart with regeneration, fire resistance and absorption. It is consumed in the process — except in creative — and it cannot save you from the void. See [totem rules](docs/totems-source.md).
 
@@ -179,9 +224,15 @@ Voxey includes three dimensions, redstone simulation, villages and trading, brew
 
 **Beacons:** build a pyramid of iron, gold, diamond, emerald or netherite blocks beneath a beacon to power it — one layer gives power 1, four complete layers give power 4. Power sets both the effects available (swiftness and haste at 1, up to regeneration at 4) and the range, which is ten blocks per power level plus ten. See [beacon rules](docs/beacons-source.md).
 
-**Banners:** emblazon banners with any of the 42 source patterns — 32 are crafted from a dye layout, and 10 special ones from paper plus an item such as a creeper head or an oxeye daisy. Apply a dye or pattern item to a placed banner to add a layer, up to six, or use one emblazoned banner on another to combine them. See [banner rules](docs/banners-source.md).
+**Banners:** use the visual loom or the crafting table for all 42 source patterns, up to the installed Mineclonia limit of twelve layers. Copy a design onto a plain banner of the same colour. Designs and names survive floor/wall placement, harvesting, storage and multiplayer; water cauldrons remove the top layer. See [banner rules](docs/banners-source.md).
 
-**Shields:** hold a shield with Ctrl held to block attacks from the front half of your view. Only mob, player, arrow, explosion, dragon-breath and trident hits are blocked — fire, void and starving still hurt. Hits of three or more damage wear the shield down. See [shield rules](docs/shields-source.md).
+**Chiseled bookshelves:** store six individual books in visible slots. Click the front to insert or retrieve a book; hoppers can insert and extract them. Books, authors and shelf facing survive movement, saves and multiplayer. Comparators report the last changed slot. See [bookshelf rules](docs/bookshelves-source.md).
+
+**Written books:** write and sign a book and quill, then copy it with one to eight blank books. Copies retain the title, author, date and contents; the original stack stays intact. Copies of copies cannot be copied again. See [writing and copying](docs/written-books-source.md).
+
+**Plain bookshelves:** store stacks of books in 27 slots. They accept all four book types and report fullness to comparators. Use a chiseled shelf for hopper transfers; the reference's plain shelves do not support them.
+
+**Shields:** hold a shield in either hand with Ctrl held to block incoming attacks. Ordinary arrows rebound, and tridents bounce on impact. Combine a plain shield with a banner to copy its colours and design while keeping the shield’s name, enchantments and damage. Only mob, player, arrow, explosion, dragon-breath and trident hits are blocked — fire, void and starving still hurt. Hits of three or more damage wear the shield down. See [shield rules](docs/shields-source.md).
 
 **Kelp:** plant kelp in water on dirt, sand, gravel or prismarine and it grows into a tall stalk over time. Cut any cell of its water away and the overgrown part breaks off and drops; digging a stalk yields one kelp per unit of its height. See [kelp rules](docs/kelp-source.md).
 
@@ -191,7 +242,7 @@ Voxey includes three dimensions, redstone simulation, villages and trading, brew
 
 **Powder snow:** some snow is not solid. Walk into powder snow and you sink in and start to freeze — the screen frosts over in three stages before it starts costing you health, and a bucket scoops it up. **Leather armour** stops the freeze completely, and powder snow puts out a burning mob. Mobs freeze too: seven seconds in slows one to a standstill, then it starts taking damage. See [powder snow](docs/powder-snow-source.md).
 
-**Bamboo:** grows wild in warm regions in uneven groves, five to sixteen blocks tall with leafy tips — or plant a shoot on grass and it grows one segment at a time to a height of its own. It needs light, so it stops in caves, and established stalks come in two thicknesses. Two bamboo stack into a stick; six around a string make six scaffolding. See [bamboo](docs/bamboo-source.md).
+**Bamboo:** grows wild in warm regions in uneven groves, five to sixteen blocks tall with leafy tips — or plant a shoot on grass and it grows one segment at a time to a height of its own. It needs light, so it stops in caves, and established stalks come in two thicknesses. Two bamboo stack into a stick; six around a string make six scaffolding. Nine stalks make a bamboo block, which strips with an axe and produces two planks. Bamboo has building parts, signs, mosaic blocks and rafts; two vertically stacked slabs make mosaic. Six stripped blocks with two chains make six hanging signs. See [bamboo](docs/bamboo-source.md).
 
 **Ice spikes:** the frozen Frostpine plains are scattered with cones of packed ice — small stubs and tall spikes, all tapering to a point. They stand only on snow, and only in the cold. See [ice spikes](docs/ice-spikes-source.md).
 
@@ -213,7 +264,7 @@ Voxey includes three dimensions, redstone simulation, villages and trading, brew
 
 **Infested blocks:** some stone is not stone. An infested block looks exactly like the real thing, and breaking one without Silk Touch lets a silverfish out at you. Silk Touch gives you the plain block instead, so a trap can never be carried home. See [infested blocks](docs/monster-eggs-source.md).
 
-**Pillager outposts:** wooden watchtowers guarded by a raiding party — five pillagers, three parrots and an iron golem. Climb the ladder for the chest: every outpost holds a crossbow. Parrots are new to the world too, and drop feathers. See [pillager outposts](docs/pillager-outposts-source.md).
+**Pillager outposts:** wooden watchtowers guarded by a raiding party — five pillagers, three parrots and an iron golem. Climb the ladder for the chest: every outpost holds a crossbow. Pillagers charge, aim and fire their equipped crossbows at players, villagers and golems, waiting for a clear shot. Their enchanted equipment and captain identity survive saves. See [pillager combat](docs/mob-crossbows-source.md) and [pillager outposts](docs/pillager-outposts-source.md). Parrots drop feathers.
 
 **Jungle temples:** mossy-cobble temples with a hidden vault under the floor. The treasure inside is a trapped chest, so opening it fires the dispensers beside it — take the loot and run. See [jungle temple rules](docs/jungle-temples-source.md).
 
@@ -251,11 +302,11 @@ Voxey includes three dimensions, redstone simulation, villages and trading, brew
 
 **Fireworks and heads:** craft firework rockets from paper and gunpowder to boost elytra flight — one, two or three gunpowder gives 2.2, 4.5 or 6 seconds of thrust along your look direction. Seven heads (zombie, creeper, human, skeleton, wither skeleton, piglin and dragon) place on the floor, a wall or the ceiling and all return the same item. A head drops only when a creeper charged by lightning kills the mob with its blast. See [firework rules](docs/fireworks-source.md) and [head rules](docs/heads-source.md).
 
-**Maps:** use an empty map to capture a fixed 128×128 terrain survey. Copies and framed maps retain that same snapshot when the world changes. Cartography tables offer copy/view actions for each carried map. Survey generation runs in the background. See [map rules](docs/maps-source.md).
+**Maps:** use an empty map to capture a fixed 128×128 terrain survey. Copies stack to 64 and framed maps retain that same snapshot when the world changes. Cartography tables offer copy/view actions for each carried map. Hosted players share the host’s saved map identities and images. Survey generation runs in the background. See [map rules](docs/maps-source.md).
 
 **Eggs and snow:** right-click to throw eggs or snowballs; block impacts sometimes hatch chicks, and snowballs hurt blazes. Shovel natural thin snow for snowballs, craft snow blocks from four balls, and craft six layers from three blocks. Place layers repeatedly to stack up to eight. Silk Touch preserves the layers; bright artificial light can melt single layers. See [throwing](docs/throwing-source.md) and [snow rules](docs/snow-cover-source.md).
 
-**Farmland and crops:** nearby water hydrates tilled soil, which dries gradually when water is removed. Wet farmland speeds crop growth; bone meal advances growth stages. Wheat, carrots and potatoes have eight stages, while beetroot has four. Harvest and replant from the source drop tables. See [farmland](docs/farmland-source.md) and [crop rules](docs/crop-farming-source.md).
+**Farmland and crops:** nearby water hydrates tilled soil, which dries gradually when water is removed. Wet farmland speeds crop growth; bone meal advances growth stages. Covered-soil checks run separately from hydration, and hosted farms continue while the host has Escape open. Wheat, carrots and potatoes have eight stages, while beetroot has four. [Cocoa](docs/cocoa-source.md), [nether wart](docs/nether-wart-source.md), and [sweet berries](docs/sweet-berries-source.md) use their own registered growth and harvest rules. [Azalea and rooted dirt](docs/azalea-source.md) include moss propagation, the source tree, and wandering-trade acquisition. See [farmland](docs/farmland-source.md) and [crop rules](docs/crop-farming-source.md).
 
 **Golems:** place a carved pumpkin or jack-o’-lantern last on two snow blocks or a T of four iron blocks. Repair damaged iron golems with ingots. Snow golems throw snowballs, leave trails, and can be sheared; protect them from water, rain and hot biomes. Their state persists through saves and unloading. See [source behavior](docs/golems-source.md).
 
@@ -269,7 +320,9 @@ Voxey includes three dimensions, redstone simulation, villages and trading, brew
 
 ## Validation
 
-Latest validation: **9,741 gameplay checks passed**, plus skin validation and separate host/client multiplayer integration checks. Rendered checks include `tests/farm_golem_tour.gd`, `tests/nature_tour.gd`, `tests/mechanism_tour.gd`, `tests/home_tour.gd` and `tests/travel_tour.gd`; all use isolated temporary saves. Source comparisons and remaining differences are tracked in the [parity ledger](docs/mineclonia-parity.md).
+Previous full validation: **9,741 gameplay checks passed**, plus skin validation and separate host/client multiplayer integration checks. Rendered checks include `tests/farm_golem_tour.gd`, `tests/nature_tour.gd`, `tests/mechanism_tour.gd`, `tests/home_tour.gd` and `tests/travel_tour.gd`; all use isolated temporary saves. Source comparisons and remaining differences are tracked in the [parity ledger](docs/mineclonia-parity.md).
+
+The specialized-farming batch adds **234 focused lifecycle checks** and **28 real Luanti comparisons**. `tests/special_crop_tour.gd` renders cocoa, wart, berry, azalea, and their inventory artwork to `/tmp/voxey-special-crop-shots/`.
 
 On Linux/macOS with Godot on `PATH`:
 
@@ -305,7 +358,7 @@ Offline play uses the fixed player identity `player`, with no player selector. H
 
 The [source-backed parity ledger](docs/mineclonia-parity.md) inventories 218 source modules. Full parity is not complete. The [world and Nether source comparison](docs/mineclonia-world-source.md) records implemented rules, tests and remaining differences, including ore generation and world limits.
 
-**Netherite:** mine ancient debris with a diamond pickaxe, smelt it into scrap, and combine four scrap with four gold for an ingot. Find upgrade templates in bastion treasure (`/locate bastion`). A smithing table upgrades diamond gear with one ingot and one template while retaining enchantments and wear. Duplicate a template with seven diamonds and netherrack. Netherite drops survive lava and fire.
+**Netherite:** mine ancient debris with an iron pickaxe or better, smelt it into scrap, and combine four scrap with four gold for an ingot. Find upgrade templates in bastion treasure (`/locate bastion`). A smithing table upgrades diamond gear with one ingot and one template while retaining enchantments and wear. Duplicate a template with seven diamonds and netherrack. Netherite drops survive lava and fire.
 
 **Bastions and piglins:** blackstone bastions have three treasure levels, piglins and a brute. Gold armor keeps unprovoked piglins peaceful; brutes still attack. Use a gold ingot on a piglin to barter. After six seconds it drops one of eighteen source-weighted rewards. Bastion residents, deaths and barter progress persist. The complete source layouts and AI are still being ported.
 
@@ -317,9 +370,13 @@ The [source-backed parity ledger](docs/mineclonia-parity.md) inventories 218 sou
 
 **Fire and navigation:** fire charges and flint and steel ignite blocks, portals and TNT. Water extinguishes fire; netherrack supports eternal flames. Use a compass on a lodestone to bind it, then use the compass to find that lodestone within its dimension. Bindings stay with the individual compass through inventory moves and saving.
 
+**Stonecutter:** insert a material, select a cut, then take the result. All 349 source conversions use their registered yields, including waxed copper. Output previews consume material only when taken. See [stonecutter rules](docs/stonecutter-source.md).
+
+**Walls and fences:** all source material families are available. Walls change height and post shape with their neighbors, and gates respond to wind charges. See [barrier rules and save compatibility](docs/barriers-source.md).
+
 **Stairs and slabs:** 60 material families provide 120 building items, with upper/lower slabs, double slabs, inverted stairs and automatic corners. Players walk up half-height steps, and targeting, mining and dropped models follow the actual shape. Natural tuff and eight additional masonry blocks support the deepslate/tuff crafting chains, and the four cut copper stages are shapes too. See [crafting and placement](docs/building-shapes.md).
 
 The [eating, daylight and fluid-flow update](docs/environment-update.md) records the previous environment fixes. Feature parity work resumed on 2026-09-16; the [source comparison and work queue](docs/parity-next-audit.md) distinguish implemented systems from remaining gaps.
 
 
-**Expanded survival systems:** [Hunger](docs/hunger-source.md) now tracks saturation and activity exhaustion, with food poisoning and golden-apple absorption. [Ender chests and shulker boxes](docs/storage-source.md) provide shared personal storage across dimensions and portable cargo with sixteen colors. [Composters](docs/composters-source.md) use source probabilities, maturation, comparator signals and hopper automation. [Cauldrons](docs/cauldrons-source.md) exchange water bottles, water buckets and lava buckets with visible fill levels. Exposed cauldrons collect rain — or powder snow where it is snowing; water extinguishes burning creatures and washes shulker dye while retaining cargo, and lava ignites creatures inside. Their source notes record remaining differences; full Mineclonia parity remains in progress.
+**Expanded survival systems:** [Hunger](docs/hunger-source.md) now tracks saturation and activity exhaustion, with food poisoning and golden-apple absorption. [Ender chests and shulker boxes](docs/storage-source.md) provide shared personal storage across dimensions and portable cargo with sixteen colors. [Composters](docs/composters-source.md) use source probabilities, hollow collision, maturation, comparator signals and hopper automation. Farmers collect supplies into saved inventories, compost surplus seeds and make bread at their workstations. Their [field activities](docs/farmer-fields-source.md) harvest mature crops, plant carried seeds and use bone meal. Villagers [share food and breed](docs/villager-social-source.md) through carried supplies, courtship and an available bed. Their [typed gossip](docs/villager-gossip-source.md) remembers trades, harm and cures, spreads during conversations, and affects prices and golem aggression. The [trade lifecycle](docs/villager-trading-source.md) generates newly unlocked offers, delays promotions by two seconds, and grants regeneration. Shared [enchantment eligibility](docs/enchanting-registry-source.md) now follows the loaded source registry while retaining existing saved enchants. [Cauldrons](docs/cauldrons-source.md) exchange water bottles, water buckets and lava buckets with visible fill levels. Exposed cauldrons collect rain — or powder snow where it is snowing; water extinguishes burning creatures and washes shulker dye while retaining cargo, and lava ignites creatures inside. Their source notes record remaining differences; full Mineclonia parity remains in progress.

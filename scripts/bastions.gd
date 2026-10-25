@@ -7,7 +7,7 @@ const CHISELED = 1102
 const GILDED = 1103
 const CRYING_OBSIDIAN = 1104
 const LODESTONE = 1105
-const PIGLIN_PATTERN = 1106
+const PIGLIN_PATTERN = 1387
 const MALL_DISC = 1107
 const RIB_TRIM = 1108
 const SNOUT_TRIM = 1109
@@ -30,7 +30,7 @@ const SPECIAL = [[LODESTONE,1,1,1,false],[RIB_TRIM,1,1,1,false],[SNOUT_TRIM,1,1,
 static func site(gen: TerrainGenerator, region: Vector2i) -> Dictionary:
 	if gen.hash_at(region.x,17291,region.y)%25 != 0: return {}
 	var center := Vector3i(region.x*80+8,0,region.y*80+8)
-	if not WorldBounds.horizontal(center) or gen.biome(center.x,center.z) == "Basalt deltas": return {}
+	if not WorldBounds.horizontal(center) or gen.biome(center.x,center.z) == "BasaltDeltas": return {}
 	center.y = maxi(15,gen.terrain_height(center.x,center.z))
 	return {"center":center,"key":"bastion:%d:%d"%[region.x,region.y]}
 

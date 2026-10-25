@@ -1,173 +1,133 @@
 class_name GrindstoneRepair
 extends RefCounted
 
-# Mineclonia ITEMS/mcl_grindstone/init.lua, GPL-3.0-or-later. Original GDScript
-# using the source as a behaviour reference.
-#
-# The grindstone's **repair** half. Voxey already disenchants one item at a time
-# in `VillageSurvival._equipment_work`; the source's other half combines two
-# damaged pieces of the same item into one:
-#
-# - `calculate_repair` (:133-137) sums the two pieces' *health* and adds a 5%
-#   bonus. The bonus multiplies the **second** term only, so which input is
-#   which is observable: `(MAX_WEAR - dur1) + (MAX_WEAR - dur2) * 1.05`.
-# - The combine condition (:139-144) is "both are `type == "tool"` and their
-#   enchant-name-stripped names match". In Minetopia armour and the elytra are
-#   registered with `core.register_tool` too, so "tool" covers armour and the
-#   elytra; in Voxey that is `Nodes.durability(id) > 0`. Names are compared with
-#   the `_enchanted` suffix removed, so two differently-enchanted pieces still
-#   combine, which Voxey's id comparison expresses exactly.
-# - `create_new_item` (:41-53) builds a **fresh** item: count 1, the new wear,
-#   and only the first input's `name` metadata. Enchantments, trims and the
-#   anvil's prior-work penalty are not carried over — the curses are re-applied
-#   afterwards by `transfer_curse` (:56-64), called for both inputs (:142-143),
-#   which is what the node's own help text means by "if both items have a
-#   different curse the curses will be combined" (:178).
-# - `calculate_xp` (:67-77) pays `math.random(7, 13) * level` per **non-curse**
-#   enchantment, and the take handler pays it for *both* inputs when both slots
-#   were occupied (:265), or for the single input on the disenchant path
-#   (:272, :276). Voxey's flat three points were a simplification of exactly
-#   this, so `xp_for` serves both halves.
-#
-# **Wear conversion.** The source stores wear on one fixed 0..65535 scale where
-# `MAX_WEAR` is the fully worn value; Voxey stores `slot.wear` in the item's own
-# units, with `Nodes.durability(id)` the value at which `Inventory.damage_tool`
-# destroys the item. `MAX_WEAR - wear` (the source's health) therefore becomes
-# `span - wear`, and the one clamp in the formula moves with it. The arithmetic
-# is otherwise the source's own expression, evaluated in doubles and truncated to
-# an integer afterwards, because the source hands `set_wear` a fractional number
-# and the engine stores an integer `u16` wear.
-#
-# **The output cap.** The source clamps the result to `MAX_WEAR`. Voxey's
-# `Nodes.durability(id)` *is* that value, but sitting exactly on it is a destroyed
-# item, so the cap is `span - 1`, the last usable wear (the elytra is already
-# treated that way at `player.gd:1015`). No pair of damaged pieces can reach it:
-# a piece with even one point of health left lands at least one wear below.
-
-# The source's `MAX_WEAR` (`init.lua:7`) is 65535 and plays the role Voxey gives
-# `Nodes.durability(id)`; no code here needs it, since every `MAX_WEAR` in the
-# source's formulas is the span of the item being repaired.
-# `calculate_repair`'s "Grindstone gives a 5% bonus to durability" (:134).
+# mcl_grindstone/init.lua (GPL-3.0-or-later), using its registered tool types,
+# exact 0..65535 wear, fresh metadata and three-slot callback lifecycle.
+static var source: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/grindstone.json"))
+const FIRST = 15400
+const LAST = 15422
 const BONUS = 1.05
-# `calculate_xp`'s "Add a bit of uniform randomisation": `math.random(7, 13)`.
 const XP_LOW = 7
 const XP_HIGH = 13
-
-# `calculate_xp`: `rng.randi_range` when a seeded generator is supplied, the
-# global generator otherwise, as the project's other ports do.
-static func roll(rng: RandomNumberGenerator, low: int, high: int) -> int:
-	return rng.randi_range(low,high) if rng != null else randi_range(low,high)
-
-# `def1.type == "tool" and def2.type == "tool" and name1 == name2`, with the
-# source's stripped-name comparison reduced to an id comparison because Voxey
-# keeps enchantments in metadata rather than in the item name. The source does
-# not test the wear here; requiring both pieces to be damaged is this project's
-# rule for its stations (`VillageSurvival._equipment_work`: "This item needs no
-# repair"), and a piece at full durability has nothing to contribute.
+static func empty() -> Dictionary: return {"id":0,"count":0,"wear":0}
+static func is_grindstone(id: int) -> bool: return id == VillageContent.GRINDSTONE or id >= FIRST and id <= LAST
+static func base(id: int) -> int: return VillageContent.GRINDSTONE if is_grindstone(id) else id
+static func facing(id: int) -> int: return id-FIRST+1 if id >= FIRST and id <= LAST else 0
+static func placed(param: int) -> int: return VillageContent.GRINDSTONE if posmod(param,24) == 0 else FIRST+posmod(param,24)-1
+static func rotate(id: int, mode: int) -> int: return placed(int(source.orientations[str(facing(id))].rotate[clampi(mode-1,0,1)]))
+static func profile(id: int) -> Dictionary: return source.profiles.get(str(id),{})
+static func tool(id: int) -> bool: return bool(profile(id).get("tool",Nodes.durability(id) > 0))
 static func compatible(a: Dictionary, b: Dictionary) -> bool:
-	var id: int = int(a.get("id",0))
-	if id == 0 or Nodes.migrate(id) != Nodes.migrate(int(b.get("id",0))): return false
-	if Nodes.durability(Nodes.migrate(id)) <= 0: return false
-	return int(a.get("wear",0)) > 0 and int(b.get("wear",0)) > 0
-
-# `calculate_repair(dur1, dur2)`: the health of both pieces plus the 5% bonus on
-# the second, clamped and truncated into a wear in `0 .. span - 1`.
-static func repair_wear(wear1: int, wear2: int, span: int) -> int:
-	if span <= 0: return 0
-	var health: float = float(span-wear1)+float(span-wear2)*BONUS
-	return clampi(int(float(span)-health),0,span-1)
-
-# The source's combine: a fresh stack of `a`'s item at the combined wear, with
-# `a`'s name, every curse from both inputs and no ordinary enchantment. Returns
-# `{}` when the two pieces are not compatible.
-#
-# `rng` keeps the caller's signature; the source's wear arithmetic draws no
-# random numbers, so it is unused.
-static func combine(a: Dictionary, b: Dictionary, rng: RandomNumberGenerator = null) -> Dictionary:
-	if not compatible(a,b): return {}
-	var id: int = Nodes.migrate(int(a.get("id",0)))
-	var result: Dictionary = {"id":id,"count":1,"wear":repair_wear(int(a.get("wear",0)),int(b.get("wear",0)),Nodes.durability(id))}
-	var data: Dictionary = {}
-	# `create_new_item` copies `name` from the **first** input only (:51).
-	var label: String = str(a.get("data",{}).get("custom_name",""))
-	if not label.is_empty(): data["custom_name"] = NameTags.bounded(label,50)
-	var curses: Dictionary = {}
-	for slot in [a,b]:
-		var enchants: Dictionary = slot.get("data",{}).get("enchantments",{})
-		for name in enchants:
-			if bool(Enchantments.DATA.get(name,{}).get("curse",false)): curses[name] = int(enchants[name])
-	if not curses.is_empty(): data["enchantments"] = curses
-	if not data.is_empty(): result["data"] = data
+	var id: int = int(a.get("id",0)); var other: int = int(b.get("id",0))
+	return id != 0 and other != 0 and tool(id) and tool(other) and str(profile(id).get("name",str(id))) == str(profile(other).get("name",str(other)))
+static func repair_wear(wear1: int, wear2: int, span: int = Durability.SCALE) -> int:
+	return clampi(int(float(span)-((span-wear1)+(span-wear2)*BONUS)),0,span)
+static func wear(slot: Dictionary) -> int:
+	if Nodes.durability(int(slot.get("id",0))) > 0: return Durability.normalized(slot)
+	return clampi(int(slot.get("data",{}).get("wear_normalized",0)),0,Durability.SCALE) if tool(int(slot.get("id",0))) else 0
+static func set_wear(slot: Dictionary, amount: int) -> void:
+	if Nodes.durability(int(slot.id)) > 0: Durability.set_normalized(slot,amount)
+	elif tool(int(slot.id)) and amount > 0:
+		if not slot.has("data"): slot.data = {}
+		slot.data.wear_normalized = clampi(amount,0,Durability.SCALE); slot.data.wear_display = int(slot.wear)
+static func fresh(id: int, original: Dictionary, wear: int = -1) -> Dictionary:
+	var result: Dictionary = {"id":id,"count":1,"wear":0}
+	var label: String = str(original.get("data",{}).get("custom_name",""))
+	if not label.is_empty(): result.data = {"custom_name":label}
+	if wear >= 0: set_wear(result,wear)
 	return result
-
-# `calculate_xp(stack)`: seven to thirteen points per level of every non-curse
-# enchantment stored on the piece. A name the enchantment table does not know is
-# not a curse, so it pays, exactly as `mcl_enchanting.is_curse` returning nil
-# does in the source.
-static func xp_for(slot: Dictionary, rng: RandomNumberGenerator = null) -> int:
+static func transfer_curses(original: Dictionary, result: Dictionary) -> void:
+	for name in original.get("data",{}).get("enchantments",{}):
+		if not bool(Enchantments.DATA.get(name,{}).get("curse",false)): continue
+		if not result.has("data"): result.data = {}
+		if not result.data.has("enchantments"): result.data.enchantments = {}
+		result.data.enchantments[name] = int(original.data.enchantments[name])
+		if result.id == Nodes.BOOK: result.id = VillageContent.ENCHANTED_BOOK
+static func combine(a: Dictionary, b: Dictionary, _rng: Variant = null) -> Dictionary:
+	if not compatible(a,b): return {}
+	var result: Dictionary = fresh(int(a.id),a,repair_wear(wear(a),wear(b)))
+	transfer_curses(a,result); transfer_curses(b,result)
+	return result
+static func disenchant(input: Dictionary) -> Dictionary:
+	var id: int = int(input.get("id",0))
+	var result: Dictionary = {}
+	if id == VillageContent.ENCHANTED_BOOK: result = fresh(Nodes.BOOK,input)
+	elif tool(id) and not input.get("data",{}).get("enchantments",{}).is_empty() and not str(profile(id).get("enchanted","")).is_empty():
+		result = fresh(id,input,wear(input))
+	if not result.is_empty(): transfer_curses(input,result)
+	return result
+static func xp_for(slot: Dictionary, rng: Variant = null) -> int:
 	var xp: int = 0
-	var enchants: Dictionary = slot.get("data",{}).get("enchantments",{})
-	for name in enchants:
-		var level: int = int(enchants[name])
-		if level > 0 and not bool(Enchantments.DATA.get(name,{}).get("curse",false)): xp += roll(rng,XP_LOW,XP_HIGH)*level
+	for name in slot.get("data",{}).get("enchantments",{}):
+		var level: int = int(slot.data.enchantments[name])
+		if level > 0 and not bool(Enchantments.DATA.get(name,{}).get("curse",false)):
+			xp += (randi_range(XP_LOW,XP_HIGH) if rng == null else (rng.randi_range(XP_LOW,XP_HIGH) if rng is RandomNumberGenerator else rng.integer(XP_LOW,XP_HIGH)))*level
 	return xp
-
-# The whole operation on two live inventory slots: both pieces are consumed, the
-# first becomes the repaired piece and the player is paid the sacrificed pair's
-# enchantment XP (:265). The slots must be the bag's own entries — GDScript
-# dictionaries are reference types, so the writes land in the inventory.
-static func use(game: Node3D, first: Dictionary, second: Dictionary) -> bool:
-	# The source's two inputs are two slots by construction; the same slot
-	# offered twice would consume itself and erase its own result.
-	if is_same(first,second) or not compatible(first,second): return false
-	var result: Dictionary = combine(first,second)
-	if result.is_empty(): return false
-	# XP is read from the pieces while they still carry their enchantments, and
-	# paid for both of them, which is the source's own order (:265).
-	var xp: int = xp_for(first)+xp_for(second)
-	if xp > 0: XpOrbs.throw_xp(game,game.player.position+Vector3.UP,xp)
-	second.count = int(second.count)-1
-	if int(second.count) <= 0:
-		second.clear(); second.merge({"id":0,"count":0,"wear":0})
-	first.clear(); first.merge(result)
-	game.inventory.changed.emit()
+static func station(world: VoxelWorld, p: Vector3i) -> Dictionary:
+	var key: String = VoxelWorld.station_key(p)
+	if not world.stations.has(key): world.stations[key] = VoxelWorld._new_station("grindstone",3)
+	return world.stations[key]
+static func refresh(state: Dictionary) -> void:
+	var a: Dictionary = state.slots[0]; var b: Dictionary = state.slots[1]
+	var result: Dictionary = combine(a,b) if a.id != 0 and b.id != 0 else disenchant(a if a.id != 0 else b)
+	state.slots[2] = empty() if result.is_empty() else result
+static func accepts(index: int, id: int, protected: bool = false) -> bool: return not protected and (index in [0,1] or id == 0)
+static func consume(state: Dictionary, index: int, amount: int) -> void:
+	state.slots[index].count = maxi(0,int(state.slots[index].count)-amount)
+	if state.slots[index].count == 0: state.slots[index] = empty()
+static func after_transfer(state: Dictionary, before: Array, rng: Variant = null) -> int:
+	if before[2].id != 0 and int(state.slots[2].count) < int(before[2].count):
+		var taken: int = int(before[2].count)-int(state.slots[2].count)
+		var amount: int = 1 if before[0].id != 0 and before[1].id != 0 else taken
+		var xp: int = 0
+		for index in 2:
+			if before[index].id != 0:
+				xp += xp_for(before[index],rng); consume(state,index,amount)
+		# Taking output does not run update_grindstone_slots in the source.
+		return xp
+	if before[0] != state.slots[0] or before[1] != state.slots[1]: refresh(state)
+	return 0
+static func take(state: Dictionary, rng: Variant = null) -> Dictionary:
+	var before: Array = state.slots.duplicate(true); var output: Dictionary = before[2].duplicate(true)
+	state.slots[2] = empty()
+	return {"item":output,"xp":after_transfer(state,before,rng)}
+static func boxes(id: int) -> Array:
+	var result: Array = []
+	for raw in source.orientations[str(facing(id))].boxes:
+		var low := Vector3(raw[0],raw[1],raw[2])+Vector3.ONE*0.5
+		var high := Vector3(raw[3],raw[4],raw[5])+Vector3.ONE*0.5
+		result.append(AABB(low,high-low))
+	return result
+static func mesh(out: Array, p: Vector3, id: int) -> void:
+	var shapes: Array = boxes(id)
+	for i in shapes.size():
+		var shape: AABB = shapes[i]
+		var tile: int = Nodes.tile(VillageContent.GRINDSTONE if i == 0 else Nodes.PLANKS,0)
+		BlockMesher._art_box(out,p+shape.get_center(),shape.size,tile,tile)
+static func placement(direction: Vector3i, offset: Vector3) -> int:
+	if direction.z == -1: return 4
+	if direction.z == 1: return 10
+	if direction.x == -1: return 13
+	if direction.x == 1: return 17
+	return (0 if absf(offset.z) > absf(offset.x) else 1)+(20 if direction.y == 1 else 0)
+static func try_place(game: Node3D, target: Dictionary) -> bool:
+	if int(game.inventory.held().id) != VillageContent.GRINDSTONE or target.is_empty(): return false
+	var p: Vector3i = target.get("replace",target.pos+target.normal)
+	var old: int = game.world.node_at(p)
+	if old != 0 and not Fluids.liquid(old) and not Nodes.plant(old): return true
+	var id: int = placed(placement(-Vector3i(target.normal),game.player.global_position-Vector3(p)))
+	var player := AABB(game.player.position-Vector3(0.29,0,0.29),Vector3(0.58,1.8,0.58))
+	for box in boxes(id):
+		if player.intersects(AABB(Vector3(p)+box.position,box.size)): return true
+	if game.world.set_node(p,id):
+		if game.gamemode != "creative": game.inventory.consume_selected()
+		game.api.emit_node_placed(p,id); game.sound("place"); game.player.swing = 1
 	return true
 
-# PARENT WIRING — the parent owns these central files. Exact lines:
-#
-# 1. `scripts/village_survival.gd` `_equipment_work` (currently line 436), the
-#    `GRINDSTONE` branch. Insert the repair half **before** the existing
-#    enchantment test, so a damaged pair repairs even with no enchantments, and
-#    replace the flat `game.experience += 3` with the source's XP:
-#
-#        if device == VillageContent.GRINDSTONE:
-#            # `mcl_grindstone/init.lua:139-144`: two damaged pieces of the same
-#            # item combine, paying XP for both (`:265`). The screen shows one
-#            # item at a time, so the partner is whatever else is carried.
-#            for partner_index in game.inventory.slots.size():
-#                if partner_index == index: continue
-#                if GrindstoneRepair.use(game,slot,game.inventory.slots[partner_index]): return true
-#            var xp: int = GrindstoneRepair.xp_for(slot)
-#            if slot.get("data",{}).get("enchantments",{}).is_empty(): game.toast("This item has no enchantments."); return false
-#            var kept: Dictionary = {}
-#            for enchant in slot.data.enchantments:
-#                if Enchantments.DATA.get(enchant,{}).get("curse",false): kept[enchant] = slot.data.enchantments[enchant]
-#            if kept == slot.data.enchantments: game.toast("Curses cannot be removed by a grindstone."); return false
-#            if kept.is_empty(): slot.data.erase("enchantments")
-#            else: slot.data.enchantments = kept
-#            if slot.id == VillageContent.ENCHANTED_BOOK and kept.is_empty(): slot.id = Nodes.BOOK
-#            if slot.data.is_empty(): slot.erase("data")
-#            game.experience += float(xp); game.inventory.changed.emit(); return true
-#
-#    (`xp` must be read before the enchantments are erased. The source pays per
-#    item taken, `init.lua:272`, 276; this branch still works on one slot in
-#    place, which is how Voxey's whole grindstone branch already behaves for a
-#    stack of enchanted books.)
-#
-# 2. Optional, `show_station` line 337 — say what the grindstone now does:
-#
-#        var description: String = "Repair with a matching damaged piece, or remove enchantments" if id == VillageContent.GRINDSTONE else ("Apply first compatible enchanted book · 1 XP level" if id == VillageContent.ANVIL else "Repair 25% · 1 matching material")
-#
-# 3. `scripts/inventory.gd` `clean_slot` — **no line is needed**. The result
-#    writes only `custom_name` and `enchantments`, and both are already in the
-#    metadata allow-list (lines 380 and 405).
+static func pixel(x: int, y: int, noise: Color) -> Color:
+	var radius: float = Vector2(x-7.5,y-7.5).length()
+	if radius < 1.6: return Color("65503c")
+	if radius < 2.6: return Color("bbb9b0")
+	if radius > 6.3 and radius < 7.7: return noise.darkened(0.24)
+	if radius > 4.1 and radius < 4.9: return noise.darkened(0.08)
+	return noise

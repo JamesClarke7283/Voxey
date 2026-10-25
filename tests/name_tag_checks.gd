@@ -8,8 +8,8 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.inventory.add_item(NameTags.ITEM,3)
 	suite.check(not NameTags.rename(game,0,"Daisy") and not game.inventory.held().has("data"),"anvil renaming requires one XP level and leaves items unchanged when unaffordable")
 	game.experience = 20
-	suite.check(NameTags.rename(game,0,"Daisy") and game.inventory.held().count == 3 and game.experience == 11,"anvil renames a whole stack for exactly one level")
-	suite.check(not NameTags.rename(game,0,"Daisy") and game.experience == 11,"unchanged names do not spend XP")
+	suite.check(NameTags.rename(game,0,"Daisy") and game.inventory.held().count == 3 and game.experience == 10,"anvil renames a whole stack for one level with fractional progress preserved")
+	suite.check(not NameTags.rename(game,0,"Daisy") and game.experience == 10,"unchanged names do not spend XP")
 	game.inventory.restore(JSON.parse_string(JSON.stringify(game.inventory.slots)))
 	suite.check(game.inventory.held().get("data",{}).get("custom_name","") == "Daisy","named tags survive inventory save serialization")
 	var cow: Creature = game.spawn_creature("cow",game.player.position+Vector3(2,0,0)); cow.set_physics_process(false)
@@ -35,13 +35,16 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.inventory.slots[1] = {"id":VillageContent.CROSSBOW,"count":1,"wear":7,"data":{"enchantments":{"Quick Charge":2}}}
 	NameTags.rename(game,1,"Scout")
 	suite.check(Inventory.clean_slot(game.inventory.slots[1]).data == {"custom_name":"Scout","enchantments":{"Quick Charge":2}} and game.inventory.slots[1].wear == 7,"renaming preserves unloaded-crossbow enchantments and durability")
-	game.survival.show_station(Vector3i.ZERO,VillageContent.ANVIL)
+	var anvil := Vector3i(8,52,8)
+	game.world.set_node(anvil+Vector3i.DOWN,Nodes.STONE); game.world.set_node(anvil,VillageContent.ANVIL)
+	game.survival.show_station(anvil,VillageContent.ANVIL)
 	var fields: Array = game.hud.find_children("ItemName","LineEdit",true,false)
 	var buttons: Array = game.hud.find_children("SetItemName","Button",true,false)
 	suite.check(fields.size() == 1 and buttons.size() == 1,"anvil opens an item selector and editable naming field")
 	if fields.size() == 1 and buttons.size() == 1:
 		fields[0].text = "Meadow"; buttons[0].pressed.emit()
 		suite.check(game.inventory.held().get("data",{}).get("custom_name","") == "Meadow","anvil Set name button executes the real rename transaction")
+		fields = game.hud.find_children("ItemName","LineEdit",true,false)
 		fields[0].text = "Enter key"; fields[0].text_submitted.emit(fields[0].text)
 		suite.check(game.inventory.held().get("data",{}).get("custom_name","") == "Enter key","anvil Enter key executes the same rename transaction")
 	game.experience = 7; game.gamemode = "survival"

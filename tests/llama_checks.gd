@@ -280,7 +280,7 @@ static func run(suite: Object, game: Node3D) -> void:
 	for child in game.drops.get_children(): child.free()
 
 	# --- spawning --------------------------------------------------------------------------------------
-	suite.check(is_equal_approx(Llamas.spawn_share("Frostpine highlands"),5.0/45.0) and Llamas.spawn_share("Oakwood meadow") == 0.0,"llamas spawn only in the highlands, at weight five")
+	suite.check(is_equal_approx(Llamas.spawn_share("WindsweptHills"),5.0/45.0) and Llamas.spawn_share("Meadow") == 0.0,"llamas spawn only in the highlands, at weight five")
 	var pack: Array = Llamas.spawn_pack(game,Vector3(arena)+Vector3(0.5,0,-10.5),rng)
 	suite.check(pack.size() >= 1 and pack.size() <= Llamas.PACK_MAX,"a pack is up to six llamas")
 

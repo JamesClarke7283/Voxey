@@ -23,13 +23,17 @@ static func run(suite: Object, game: Node3D) -> void:
 	# With no villagers nearby there is no heat, so no siege.
 	game.daylight = 0.0
 	suite.check(ZombieSiege.village_heat(game,game.player.position) == 0 and not ZombieSiege.choose_attack_point(game,rng).is_finite(),"a village with no residents produces no heat and so no siege")
-	# The heat score counts living records near a point.
+	# Only valid claimed POIs seed the source heat field.
 	var village: Dictionary = VillageGenerator.nearest(world.generator,game.player.position)
-	game.villages.make_record(village.key+"/siege","farmer",game.player.position,village.center,village.center,village.center)
-	suite.check(ZombieSiege.village_heat(game,game.player.position) >= 1,"a living resident near the point raises the heat score")
+	var bed := Vector3i(game.player.position.floor())
+	var before: int = world.node_at(bed)
+	world.set_node(bed,VillageContent.BED_RED)
+	game.villages.make_record(village.key+"/siege","farmer",game.player.position,bed,bed,bed)
+	suite.check(ZombieSiege.village_heat(game,game.player.position) == 6,"a living resident's claimed bed seeds six levels of POI heat")
 	var people: Dictionary = game.villages.state().people
-	people[people.keys()[0]].dead = true
+	people[village.key+"/siege"].dead = true
 	suite.check(ZombieSiege.village_heat(game,game.player.position) == 0,"a dead resident does not count towards the heat")
+	world.set_node(bed,before)
 	# The night guard makes the event one-shot.
 	suite.check(ZombieSiege.night_of(5,0.0) == 4 and ZombieSiege.night_of(5,0.8) == 5,"a night belongs to the day that started it")
 	# Ending the event clears its bookkeeping.

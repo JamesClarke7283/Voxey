@@ -114,9 +114,10 @@ func run() -> void:
 	game.world.set_node(p,Nodes.LOG)
 	game.inventory.selected=1
 	game.player.target={"pos":p,"normal":Vector3i.UP,"id":Nodes.LOG,"distance":2.0}
-	game.player.mine(Nodes.break_time(Nodes.LOG,0)*0.4)
+	var log_duration: float = ToolCapabilities.mining(Nodes.LOG,game.inventory.held(),game.player).time
+	game.player.mine(log_duration*0.4)
 	check(game.player.mining>0.39 and game.world.node_at(p)==Nodes.LOG,"partial mining retains node and advances cracks")
-	game.player.mine(Nodes.break_time(Nodes.LOG,0)*0.7)
+	game.player.mine(log_duration*0.7)
 	check(game.world.node_at(p)==Nodes.AIR and game.drops.get_child_count()>0,"completed mining removes node and spawns a pickup")
 	game.world.set_node(Vector3i(15,45,8),Nodes.PLANKS)
 	check(game.world.dirty.has(Vector3i(0,2,0)) and game.world.dirty.has(Vector3i(1,2,0)),"boundary edits invalidate both neighboring map block meshes")
@@ -135,8 +136,8 @@ func run() -> void:
 	var furnace: Dictionary=game.world.get_station(Vector3i(7,45,8),"furnace")
 	furnace.slots[0]={"id":Nodes.IRON_ORE,"count":2,"wear":0}
 	furnace.slots[1]={"id":Nodes.COAL,"count":1,"wear":0}
-	for i in 8: game.world._simulate()
-	check(furnace.slots[2].id==Nodes.IRON and furnace.slots[2].count==1 and furnace.slots[0].count==1,"furnace consumes fuel and smelts one iron in eight ticks")
+	for i in 10: game.world._simulate()
+	check(furnace.slots[2].id==Nodes.IRON and furnace.slots[2].count==1 and furnace.slots[0].count==1,"furnace consumes fuel and smelts one iron in ten ticks")
 	furnace.slots[2].count=64
 	for i in 10: game.world._simulate()
 	check(furnace.slots[0].count==1,"full furnace output does not destroy its input")
@@ -171,7 +172,7 @@ func run() -> void:
 	check(game.inventory.count_item(Nodes.DIAMOND)==3,"world reload restores inventory")
 	check(game.world.get_station(Vector3i(7,45,8),"furnace").slots[0].count==1,"world reload restores furnace state")
 	game.world.get_station(Vector3i(7,45,8),"furnace").slots[2].count=1
-	for i in 8: game.world._simulate()
+	for i in 10: game.world._simulate()
 	check(game.world.get_station(Vector3i(7,45,8),"furnace").slots[2].count==2,"restored furnace continues smelting after JSON type normalization")
 	check(game.execute_command("/gamemode creative")=="Game mode set to Creative." and game.gamemode=="creative","console switches to Creative mode")
 	var health_before: float=game.player.health
@@ -234,15 +235,15 @@ func run() -> void:
 	game.player.use()
 	check(game.player.armor_slots[1].id==Nodes.armor_id(1,1) and game.inventory.slots[2].id==0 and game.player.armor_points()==6,"right click wears a chestplate in its own slot")
 	game.player.damage_cooldown=0
-	game.player.hurt(10)
-	check(is_equal_approx(game.player.health,10.48) and game.player.armor_slots[1].wear==2,"iron chestplate uses source damage reduction and hit-based wear")
+	game.player.hurt(10,false,Vector3.INF,"mob")
+	check(is_equal_approx(game.player.health,10.48) and Durability.normalized(game.player.armor_slots[1])==546,"iron chestplate uses source damage reduction and hit-based wear")
 	game.player.damage_cooldown=0
 	game.player.hurt(10,true)
-	check(is_equal_approx(game.player.health,0.48) and game.player.armor_slots[1].wear==2,"bypassing damage ignores armor and does not wear it")
+	check(is_equal_approx(game.player.health,0.48) and Durability.normalized(game.player.armor_slots[1])==546,"bypassing damage ignores armor and does not wear it")
 	game.player.health=20
-	game.player.armor_slots[1].wear=Nodes.durability(Nodes.armor_id(1,1))-1
+	Durability.set_normalized(game.player.armor_slots[1],65535)
 	game.player.damage_cooldown=0
-	game.player.hurt(1)
+	game.player.hurt(1,false,Vector3.INF,"mob")
 	check(game.player.armor_slots[1].id==0,"armor breaks when its durability runs out")
 	game.open_inventory("hand")
 	game.hud.cursor={"id":Nodes.armor_id(2,0),"count":1,"wear":0}
@@ -368,6 +369,7 @@ func run() -> void:
 	while game.entities.get_child_count()==entities_before and Time.get_ticks_msec()<timeout: await process_frame
 	game.pause()
 	check(game.entities.get_child_count()>entities_before,"a skeleton with line of sight shoots arrows")
+	Farming.forget(skeleton)
 	skeleton.free()
 	for child in game.entities.get_children(): child.free()
 	var creeper: Creature=game.spawn_creature("creeper",game.player.position+Vector3(0,0,-1.6))
@@ -627,6 +629,8 @@ func run() -> void:
 	check(game.inventory.count_item(Nodes.MILK_BUCKET)==1 and game.achievements.is_unlocked("milkmaid"),"an empty bucket milks a cow")
 	Cow.free()
 	# Bow and arrows: firing consumes ammunition and spawns a player arrow.
+	var bow_state_before: String = game.state
+	game.state = "playing"
 	game.set_gamemode("survival")
 	game.player.position=game._safe_spawn(Vector3(feet.x+0.5,feet.y+2,feet.z+0.5))
 	game.player.target={}
@@ -635,11 +639,13 @@ func run() -> void:
 	var arrows_before: int=game.inventory.count_item(Nodes.ARROW_ITEM)
 	game.inventory.add_item(Nodes.ARROW_ITEM,2)
 	game.player.use()
+	BowUse.release(game.player,int(game.player.bow_draw.start)+BowUse.FULL_US)
 	check(game.inventory.count_item(Nodes.ARROW_ITEM)==arrows_before+1,"firing a bow consumes exactly one arrow")
 	check(game.entities.get_child_count()>0,"the bow spawns an arrow entity")
 	var player_arrow: Node3D=game.entities.get_child(game.entities.get_child_count()-1)
 	check(player_arrow.from_player,"player arrows are flagged to hit creatures, not the shooter")
 	player_arrow.free()
+	game.state = bow_state_before
 	game.inventory.slots[7]={"id":0,"count":0,"wear":0}
 	# Compass and clock answer with bearing and time.
 	game.inventory.slots[7]={"id":Nodes.COMPASS,"count":1,"wear":0}

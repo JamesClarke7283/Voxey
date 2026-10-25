@@ -204,25 +204,14 @@ static func grow(world: VoxelWorld, p: Vector3i, stages: int = 1, ignore_light: 
 	if not is_crop(id) or mature(id) or not supported(world,p): return false
 	var f: int = family(id); var meta: Dictionary = metadata(world,p)
 	var light: int = Pasture.light(world,p,14)
-	var count: int = int(meta.get("light_count",0)); var total: float = float(meta.get("light_total",0))
-	if count > 99: count = 51; total = ceilf(total/2.0)
-	else: count += 1
-	total += light; meta.light_count = count; meta.light_total = total
-	var mean: float = ceilf(total/count)
+	# Only the early, dry-soil branch consumes a random draw in the source.
 	var period: float = INTERVALS[f]*CHANCES[f]
-	var current: float = now(world); var last: float = float(meta.get("last_time",0))
-	if last < 1: last = current-period/10.0
-	elif is_equal_approx(last,current): current += period
-	var intervals: float = maxf(0,current-last)/period; meta.last_time = current
-	if low_speed:
-		if intervals < 1.01 and random(rng,0,9) > 0: return false
-		intervals /= 10.0
-	if not ignore_light and light < 10 and intervals < 1.5: return false
-	if intervals >= 1.5:
-		if mean < 0.1: return false
-		if mean < 10: intervals *= mean/10.0
-	var next: int = mini(STAGES[f].size(),stage(id)+stages+ceili(intervals))
-	return next > stage(id) and world.set_node(p,STAGES[f][next-1])
+	var last: float = float(meta.get("last_time",0)); var current: float = now(world)
+	var elapsed: float = period/10.0 if last < 1 else period if last == current else current-last
+	var roll: int = random(rng,0,9) if low_speed and elapsed/period < 1.01 else 0
+	var next: int = FarmingRules.growth(meta,stage(id),STAGES[f].size(),period,current,light,stages,ignore_light,low_speed,roll)
+	if next == stage(id): world.block_states.erase(VoxelWorld.station_key(p))
+	return next > 0 and world.set_node(p,STAGES[f][next-1])
 
 static func bone_meal(world: VoxelWorld, p: Vector3i, rng: RandomNumberGenerator = null) -> Dictionary:
 	var id: int = world.node_at(p)

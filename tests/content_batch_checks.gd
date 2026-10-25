@@ -30,7 +30,7 @@ static func core(suite: Object, game: Node3D) -> void:
 	# Raw ores: the ore drops the raw form and the raw form smelts back.
 	suite.check(Nodes.drop(Nodes.IRON_ORE) == RawOres.RAW_IRON and Nodes.drop(Nodes.GOLD_ORE) == RawOres.RAW_GOLD,"iron and gold ore drop raw ore")
 	suite.check(Nodes.smelt_result(RawOres.RAW_COPPER) == Nodes.COPPER,"raw copper smelts into copper")
-	suite.check(RawOres.harvest(Nodes.COPPER_ORE,{"id":Nodes.TOOLS,"count":1,"wear":0})[0][1] >= 2,"copper ore yields at least two raw copper")
+	suite.check(RawOres.harvest(Nodes.COPPER_ORE,{"id":Nodes.TOOLS+5,"count":1,"wear":0})[0][1] >= 2,"a stone pickaxe harvests at least two raw copper")
 	suite.check(Nodes.exists(RawOres.RAW_IRON_BLOCK) and Nodes.hardness(RawOres.RAW_IRON_BLOCK) == 5.0,"a block of raw iron exists at the source's hardness")
 	var nuggets := Inventory.new(); nuggets.add_item(RawOres.COPPER_NUGGET,9)
 	var ingot: int = -1

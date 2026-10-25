@@ -212,8 +212,8 @@ static func run(suite: Object, game: Node3D) -> void:
 	copy.free(); old_wolf.free(); odd.free()
 
 	# --- variants and spawning ---------------------------------------------------------------
-	suite.check(Wolves.variant_for_biome("Oakwood meadow") == "woods" and Wolves.variant_for_biome("Frostpine highlands") == "ashen" and Wolves.variant_for_biome("Swamp") == "pale","the coat follows the spawn biome")
-	suite.check(is_equal_approx(Wolves.spawn_share("Frostpine highlands"),8.0/48.0) and is_equal_approx(Wolves.spawn_share("Oakwood meadow"),5.0/45.0) and Wolves.spawn_share("Sunwash desert") == 0.0,"wolves spawn in taiga and forest at their source weights")
+	suite.check(Wolves.variant_for_biome("Forest") == "woods" and Wolves.variant_for_biome("SnowyTaiga") == "ashen" and Wolves.variant_for_biome("Swamp") == "pale","the coat follows the spawn biome")
+	suite.check(is_equal_approx(Wolves.spawn_share("SnowyTaiga"),8.0/48.0) and is_equal_approx(Wolves.spawn_share("Forest"),5.0/45.0) and Wolves.spawn_share("Desert") == 0.0,"wolves spawn in taiga and forest at their source weights")
 	suite.check(Wolves.spawn_allowed(world,arena+Vector3i(0,0,-10)) == false,"wolves do not spawn on stone")
 	world.set_node(arena+Vector3i(0,-1,-10),Nodes.GRASS)
 	suite.check(Wolves.spawn_allowed(world,arena+Vector3i(0,0,-10)),"wolves spawn on grass")

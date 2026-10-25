@@ -127,8 +127,12 @@ static func has_weather(world: VoxelWorld, p: Vector3i) -> bool:
 static func outdoor(world: VoxelWorld, p: Vector3i) -> bool:
 	return world.dimension == "overworld" and world.open_sky(p)
 
-static func rainy_biome(biome: String) -> bool: return biome not in ["Sunwash desert","Frostpine highlands"]
-static func snowy_biome(biome: String) -> bool: return biome == "Frostpine highlands"
+static func rainy_biome(biome: String) -> bool:
+	if BiomeMap.is_underground(biome): return false
+	var temperature: Variant = BiomeMap.temperature(biome)
+	return temperature != null and float(temperature) < 2.0
+static func snowy_biome(biome: String) -> bool:
+	return not BiomeMap.is_underground(biome) and BiomeMap.temperature(biome) != null and float(BiomeMap.temperature(biome)) < 0.15
 
 # Source `has_rain`: in the weather region, not arid, and able to see outdoors.
 static func has_rain(world: VoxelWorld, p: Vector3i) -> bool:
@@ -147,7 +151,8 @@ static func has_snow(world: VoxelWorld, p: Vector3i) -> bool:
 static func exposed_to_rain(world: VoxelWorld, p: Vector3i) -> bool:
 	if weather(world) not in ["rain","thunder"]: return false
 	if not has_weather(world,p): return false
-	if not rainy_biome(world.generator.biome(p.x,p.z)): return false
+	var biome: String = world.generator.biome(p.x,p.z)
+	if not rainy_biome(biome) or snowy_biome(biome): return false
 	return outdoor(world,p)
 
 # --- update -----------------------------------------------------------------
@@ -294,6 +299,7 @@ static func strike(world: VoxelWorld, rng: RandomNumberGenerator, at: Vector3 = 
 			continue
 		# Lightning is the source's `is_lightning` damage type rather than a punch, so it
 		# is not scaled by a mob's `armor` table.
+		if MooshroomStew.lightning(mob): continue
 		mob.hit(STRIKE_DAMAGE,strike_position,"lightning")
 	# Source sets fire at the strike cell when it is air and not over a liquid.
 	var above: Vector3i = cell+Vector3i.UP

@@ -42,18 +42,18 @@ static func run(suite: Object, game: Node3D) -> void:
 
 	# --- spawning substitution --------------------------------------------------
 	var husk_share: float = 80.0/99.0
-	suite.check(UndeadVariants.biome_variant("zombie","Sunwash desert",true,husk_share-0.001) == "husk","an outdoor desert zombie roll below 80/99 becomes a husk")
-	suite.check(UndeadVariants.biome_variant("zombie","Sunwash desert",true,husk_share+0.001) == "zombie","the remaining 19/99 stay zombies, as the desert zombie spawner's weight is 19")
-	suite.check(UndeadVariants.biome_variant("zombie","Sunwash desert",false,0.0) == "zombie","an indoor desert cell never spawns a husk, since the husk spawner requires open sky")
-	suite.check(UndeadVariants.biome_variant("zombie","Oakwood meadow",true,0.0) == "zombie","a husk never spawns outside the desert")
-	suite.check(UndeadVariants.biome_variant("skeleton","Frostpine highlands",true,0.799) == "stray","an outdoor cold-biome skeleton roll below 0.8 becomes a stray")
-	suite.check(UndeadVariants.biome_variant("skeleton","Frostpine highlands",true,0.8) == "skeleton","one in five cold-biome skeletons stays a skeleton")
-	suite.check(UndeadVariants.biome_variant("skeleton","Frostpine highlands",false,0.0) == "skeleton","a stray needs open sky")
-	suite.check(UndeadVariants.biome_variant("skeleton","Sunwash desert",true,0.0) == "skeleton","a stray never spawns outside the cold biome")
+	suite.check(UndeadVariants.biome_variant("zombie","Desert",true,husk_share-0.001) == "husk","an outdoor desert zombie roll below 80/99 becomes a husk")
+	suite.check(UndeadVariants.biome_variant("zombie","Desert",true,husk_share+0.001) == "zombie","the remaining 19/99 stay zombies, as the desert zombie spawner's weight is 19")
+	suite.check(UndeadVariants.biome_variant("zombie","Desert",false,0.0) == "zombie","an indoor desert cell never spawns a husk, since the husk spawner requires open sky")
+	suite.check(UndeadVariants.biome_variant("zombie","Plains",true,0.0) == "zombie","a husk never spawns outside the desert")
+	suite.check(UndeadVariants.biome_variant("skeleton","SnowyTaiga",true,0.799) == "stray","an outdoor cold-biome skeleton roll below 0.8 becomes a stray")
+	suite.check(UndeadVariants.biome_variant("skeleton","SnowyTaiga",true,0.8) == "skeleton","one in five cold-biome skeletons stays a skeleton")
+	suite.check(UndeadVariants.biome_variant("skeleton","SnowyTaiga",false,0.0) == "skeleton","a stray needs open sky")
+	suite.check(UndeadVariants.biome_variant("skeleton","Desert",true,0.0) == "skeleton","a stray never spawns outside the cold biome")
 	var hits: int = 0
 	var roll_rng := RandomNumberGenerator.new(); roll_rng.seed = 4242
 	for i in 2000:
-		if UndeadVariants.biome_variant("zombie","Sunwash desert",true,roll_rng.randf()) == "husk": hits += 1
+		if UndeadVariants.biome_variant("zombie","Desert",true,roll_rng.randf()) == "husk": hits += 1
 	suite.check(absf(float(hits)/2000.0-husk_share) < 0.04,"the husk share over two thousand rolls matches 80/99 (%d)" % hits)
 
 	# The drowned's ocean test, on a built water column well below sea level.
@@ -144,10 +144,10 @@ static func run(suite: Object, game: Node3D) -> void:
 			world.set_node(Vector3i(8+x,169,8+z),Nodes.STONE)
 			for y in range(170,176): world.set_node(Vector3i(8+x,y,8+z),Nodes.AIR)
 	var thrower: Creature = spawned("drowned",game,base)
-	thrower.set_meta("wield",VillageContent.TRIDENT)
+	MobWeapons.set_item(thrower,{"id":VillageContent.TRIDENT,"count":1,"wear":0})
 	suite.check(UndeadVariants.throws_trident(thrower),"a trident-armed drowned is a ranged attacker")
 	var plain: Creature = spawned("drowned",game,base+Vector3(2,0,0))
-	if plain.has_meta("wield"): plain.remove_meta("wield")
+	MobWeapons.set_item(plain,MobWeapons.empty_item())
 	suite.check(not UndeadVariants.throws_trident(plain),"an unarmed drowned is a melee attacker")
 	var spear: Node3D = UndeadVariants.throw_trident(game,thrower,base+Vector3(0,1,-6))
 	suite.check(spear is Arrow and spear.item_id == VillageContent.TRIDENT and not spear.recoverable,"a thrown trident is a projectile that cannot be picked up")
@@ -290,12 +290,8 @@ static func run(suite: Object, game: Node3D) -> void:
 		if body != null: body.free()
 	var armed_body: Creature = game.spawn_creature("drowned",Vector3(8.5,170.0,12.5))
 	armed_body.set_physics_process(false)
-	armed_body.set_meta("wield",VillageContent.TRIDENT)
-	UndeadVariants.refresh_held(armed_body)
-	var held: int = 0
-	for child in armed_body.arms[1].get_children():
-		if child.has_meta("held") and not child.is_queued_for_deletion(): held += 1
-	suite.check(held == 4,"a trident-armed drowned visibly holds its trident")
+	MobWeapons.set_item(armed_body,{"id":VillageContent.TRIDENT,"count":1,"wear":0})
+	suite.check(armed_body.held_weapon_model.visible and armed_body.held_weapon_model.mesh != null,"a trident-armed drowned visibly holds its actual equipped item")
 	armed_body.free()
 
 	for mob in game.creatures.get_children(): mob.free()

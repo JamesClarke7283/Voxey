@@ -1,5 +1,99 @@
 # Mineclonia next-feature audit
 
+
+2026-10-25 biome-selection follow-up: the [64-entry biome registry](biome-map-source.md), [default Overworld climate/depth sampler](mineclonia-noise-source.md) and [nearest-extent selector](mineclonia-biome-selector-source.md) now match canonical IDs, aliases, filters, the exact 7,593-leaf packed R-tree, signed seeds and forward/reverse queries. The numerical suite passes 623 checks, selector/integration 15,445 and the combined biome-affected lifecycle set 701. Source terrain density, height/surface rules, cave biome identity and natural feature dispatch remain open.
+
+2026-10-25 plant/soil lifecycle follow-up: [podzol and mycelium](soil-variants-source.md), [double plants](double-plants-source.md), [flowers and stew](flower-mechanics-source.md), [flowerpots](flowerpots-source.md), [cave vines](lush-caves-source.md), [dripleaf](dripleaf-source.md), [huge-mushroom cap states](huge-mushrooms-source.md), [mooshroom stew](mooshroom-stew-source.md) and [mud bottles](mud-bottle-source.md) now have source-backed registration, placement, interaction, support, persistence and worker mesh behavior. The focused batch passes 573 checks, with 312 additional food/fungus/weather checks. Canonical biome registry data is now available in [the biome map](biome-map-source.md); actual 3D biome selection and natural feature generation remain open.
+
+2026-10-25 specialized-farming follow-up: [cocoa](cocoa-source.md), [nether wart](nether-wart-source.md), [sweet berries](sweet-berries-source.md) and [azalea/rooted dirt](azalea-source.md) now have source-backed placement, growth, support, drops, persistence and acquisition. The fixtures pass 234 focused gameplay checks and 28 real Luanti comparisons. Natural lush-cave biome dispatch, podzol/mycelium and the wider plant/world gaps remain open.
+
+2026-10-24 maps follow-up: [persistent maps](maps-source.md) now use registered 64-item stacking, source hand replacement/overflow, engine marker rounding, source image orientation for new maps and a shared host registry. Copies and reconnects retain the original image, and guests never resurvey a missing host record. The installed cartography table has no source GUI; the native copy/view UI remains an extension. Native palette, PNG encoding and generated terrain remain documented adaptations.
+
+2026-10-24 smithing follow-up: [the source inventory workflow](smithing-source.md) replaces automatic bag selection and the invented ordinary-repair branch. It adds exact metadata/wear preservation, registered slot filters and sorter, source trimming and achievement requirements, and guest achievement persistence. Worn-armor trim rendering remains open; the cartography follow-up below covers the next workstation audit.
+
+2026-10-24 grindstone follow-up: [the source inventory workflow](grindstone-source.md) replaces automatic partner selection with two chosen inputs and virtual output. All 591 source cases, exact wear, fresh metadata, undamaged pairs, curse-only items and 24 mounted states are covered. Physical XP now synchronizes across hosted players. Remaining workstation audits should examine smithing and cartography rather than retaining the old direct-exchange shortcuts.
+
+2026-10-24 furnace follow-up: [registered cooking, fuel and inventory rules](furnaces-source.md) now replace the generic eight-second timer and output whitelist. The source fixture passes 38,046 comparisons, including progress retention/reset, game clocks, fast-furnace fuel consumption, manual versus sorter insertion and guest XP withdrawal. Smooth-stone outputs close the blast-furnace crafting dependency. Active-face presentation and the wider material/container gaps remain open.
+
+2026-10-24 copper follow-up: [copper tools and fixed action wear](copper-tools-source.md) adds all five registered tools, source recipes, capabilities, repair, enchantability, recycling and exact saved wear. Thirty crafting layouts, 35 material/tool wear increments and 384 real place callbacks are compared. Full enchantment effects, mob navigation and the other module gaps remain open.
+
+2026-10-24 enchantment-registry follow-up: [registered enchantment eligibility](enchanting-registry-source.md) replaces reconstructed defaults and guessed item groups with the completed Luanti registry. It covers 39 active definitions, 1,240 item bindings, book tradability, anvil eligibility, exact random draws and preserved legacy items. The source fixture contains 246,132 comparisons. Full enchantment effect parity remains open.
+
+2026-10-24 trading follow-up: [villager trade lifecycle](villager-trading-source.md) now covers all 297 trade rows, exact generated enchants, delayed tier activation, regeneration, restock boundaries, callback price refresh, preserved legacy offers and saved per-villager randomness. The source fixture has 5,104 checks. Full schedules, individual sleep and navigation remain open.
+
+2026-10-24 gossip follow-up: [villager gossip and prices](villager-gossip-source.md) now cover the five independent memories, source event amounts, listener cooldowns, daily decay, murder witnesses, cure rewards, price arithmetic and persistent migration. All 6,104 source comparisons pass. Complete schedules, individual sleep and navigation remain open; the following trade audit verifies the offer pool.
+
+2026-10-24 social follow-up: [villager food sharing and breeding](villager-social-source.md) now cover private food energy, physical item gifts, timed reciprocal courtship, free-bed claiming, child size, save migration and infection handling. There are 1,426 source comparisons. Typed gossip is covered by the later gossip batch; full social/play schedules, child biome appearances and source navigation remain open.
+
+2026-10-24 field-work follow-up: [farmer field activities](farmer-fields-source.md) now separate harvest and planting, consume carried seeds, apply carried bone meal, and dispatch weighted work activities. All 1,360 source activity/seed/order cases pass. Native navigation, full village schedules, food sharing and inventory-based breeding remain open.
+
+2026-10-24 farmer follow-up: [composters and farmer workstations](composters-source.md) now include source item chances, hollow collision, load-time maturation, private inventories, surplus-seed composting and bread crafts. The fixture compares 1,536 callback/geometry cases and 2,333 mapped item chances. Full farming activities and villager schedules remain open.
+
+2026-10-24 targeting follow-up: [zombie targets and village navigation](zombie-targets-source.md) now cover source target priorities/timers, group retaliation and alerts, zombified-piglin anger, invisibility, drowned restrictions, claimed-POI heat and bounded nighttime obstacle routes. There are 3,602 source comparisons. Combat/shelter navigation and multiplayer targeting remain open.
+
+2026-10-24 zombie follow-up: [zombie attributes, doors and reinforcements](zombie-behavior-source.md) now include source spawn attributes and health maxima, Hard-only door breaking, bounded reinforcement attempts and chance attenuation. There are 2,676 source comparisons. The targeting batch adds village pacing and group retaliation; full navigation remains open.
+
+2026-10-24 baby/jockey follow-up: [baby undead and chicken jockeys](baby-undead-source.md) now cover natural baby rolls, permanent child properties, source jockey decisions, mounted movement, egg suppression, conversion/cure, equipment and joint persistence. Complete natural-spawn packs and other jockey species and multiplayer fields remain open.
+
+2026-10-24 weapon follow-up: [undead held weapons](mob-weapons-source.md) now include zombie sword/shovel generation, source item selection and drops, enchanted melee, skeleton bow/melee switching, wither-skeleton equipment and persistent weapon state. The real-engine fixture compares 2,079 cases. Full melee path scheduling and punch animation, player knockback, baby/jockey variants, other weapon-bearing families and multiplayer equipment remain open.
+
+2026-10-24 armor follow-up: [mob armor and copper equipment](mob-armor-source.md) now provide generated gear, armor pickup and dispenser equipment, source protection/Thorns, sunlight helmets and persistent armor for the supported undead families. The actual material table now includes player-usable copper armor. Other mob families, movement enchantments and multiplayer equipment remain open. The later weapon batch covers held-item pickup for these undead families.
+
+2026-10-24 skeleton follow-up: [skeleton and stray bows](mob-bows-source.md) now use source draw/cooldown timing, strafing, target selection, enchanted equipped bows, NPC arrow parameters and saved weapon state. Actual kill callbacks correct Sniper Duel. Later armor and weapon batches cover equipment, pickup and melee switching. Navigation, jockeys, full knockback and multiplayer remain open.
+
+2026-10-24 pillager follow-up: [NPC crossbow combat and equipment](mob-crossbows-source.md) now use the source charge/aim/fire cycle, firing speed and spread, target selection, enchanted weapons and drops. Loaded NPC items, partial charge and captain identity survive saves. The movement controller, patrol/raid target locks, full knockback and network synchronization remain open.
+
+2026-10-24 arrow follow-up: [flight, impacts and recovery](arrow-flight-source.md) now include drag, liquid effects, support release, source lifetimes, attached visuals and in-flight persistence. Full mob knockback, crossbow AI and network projectile authority are still open.
+
+2026-10-24 crossbow follow-up: [held loading, Attack firing and saved chambers](crossbows-source.md) now follow actual source control callbacks. Quick Charge, Multishot rotation, Piercing, collectability, wear and the recipe are compared. Remaining work includes full arrow simulation, remote synchronization and mob crossbow AI.
+
+2026-10-24 bow follow-up: [draw/release, charge, movement/FOV, spread, ammunition and bow wear](bows-source.md) now follow 2,304 measured source cases. Crossbow loading/Multishot now have a subsequent source-backed comparison; remaining projectile/network behavior is still open.
+
+2026-10-24 shield follow-up: [banner decoration and pattern rewards](shields-source.md) now preserve shield damage, enchantments and names. Both hands, drops, frames and remote avatars render the design; the second hand survives reconnects. Globe/Piglin reward IDs reach the loom. Arrow/trident reflection, the measured shield-angle expression and normalized shield wear now have real-engine comparisons. Full projectile/input rules and the newer source bastion generator remain open.
+
+2026-10-24 book follow-up: [written books](written-books-source.md) now retain
+the original stack when copied and preserve author, date and generation. Signing,
+UTF-8 limits and copying pass 1,330 source cases. [Chiseled bookshelves](bookshelves-source.md)
+have source-verified slot, hopper, comparator and recovery behavior. Ordinary
+bookshelf manual restrictions and exclusion from automatic transfers match 21
+additional source cases.
+
+2026-10-24 harvest follow-up: [registered harvest rules](harvesting-source.md) now drive generic useful drops, Fortune, Silk Touch, shears and XP. Real-handler comparisons cover 90,597 eligibility decisions and 35,139 drop results. Specialized removal callbacks and other environmental paths remain open.
+
+2026-10-24 digging mapping follow-up: [tool capabilities](tool-capabilities-source.md) now map 1,026/1,068 unique catalog blocks and 3,398 native IDs to actual source registrations, including placed states. The remaining 42 catalog entries are explicitly classified native extensions or legacy stand-ins. Two real-engine suites cover 44,240 dig results. Harvest/drop logic, non-digging interactions and the other parity work below remain open.
+
+2026-10-24 tool-effects follow-up: [tool capabilities](tool-capabilities-source.md) provide live Haste, source Fatigue/Conduit Power transformations, item/hand caches and a four-layer beacon's amplified primary mode.
+
+2026-10-24 melee follow-up: [player melee and mace](melee-source.md) now use registered damage groups, elapsed punch intervals, integer capability conversion, source criticals, punch wear and mace callbacks. Player attacks no longer double-count grouped bonuses. Complete mob-equipment, projectile and attack-speed effect parity remain open.
+
+2026-10-24 defensive follow-up: [Mending, armor Unbreaking and Thorns](defensive-enchantments-source.md) now use real-engine wear fixtures, both-hand Mending selection and source damage flags. Armor/absorption/totem ordering and exact-wear persistence are implemented. Other combat and mob-equipment gaps remain.
+
+2026-10-24 anvil follow-up: [anvil operations](anvil-source.md) now use source
+combination factors, prior work, repair arithmetic and consumption, with atomic
+previewed transactions and correct XP levels. The remaining native interface
+and wear-representation differences are documented.
+
+2026-10-24 enchanting follow-up: [source enchanting offers](enchanting-source.md)
+now replace the explicit enchantment picker. Source weights, powers, eligibility,
+bookshelf gaps, cached offers, level/lapis costs and XP curves are implemented.
+Fishing/vault loot uses the same engine; disk and hosted-player reconnects
+preserve offers. Remaining enchantment effects still need work; anvil costs and repairs now have their own source implementation.
+
+2026-10-24 well follow-up: [desert wells](desert-wells-source.md) now supply Arms Up
+and Brewer. All 23 pottery sherds have their source acquisition routes; the
+native well geometry is verified against all sixteen source placement cases.
+
+2026-10-24 archaeology follow-up: [trail ruins](trail-ruins-source.md) now use all
+14 source templates and their gravel processors. Seven rare sherds and Wayfinder
+are obtainable there. Source loot tables are exported; desert wells now supply the final two sherds.
+
+2026-10-24 follow-up: [trial chambers, spawners and vaults](trials-source.md) now have
+an implemented survival path based on the current checkout's room templates and
+loot tables. The older absence findings below are historical; the source notes
+record the remaining engine and presentation differences.
+
+2026-10-24 material follow-up: [bamboo wood and rafts](bamboo-source.md), the remaining eligible tree boats, and [all twelve sign materials](signs-source.md) now work. Hanging signs have rendering and interaction hooks; old sign/copper ID collisions have a metadata-backed migration. The historical wood/sign gaps below are superseded by those source notes.
+
 Implementation follow-up: the travel/building batch now covers [persistent regional maps](maps-source.md), [boats and chest boats](boats-source.md), [oak/iron trapdoors](trapdoors-source.md), [throwable eggs/snowballs](throwing-source.md), and [eight snow layers](snow-cover-source.md). Their source notes record implemented acceptance checks and remaining dependencies. The following home/wood batch adds [six renewable classic trees](wood-source.md), [paired doors](doors-source.md), [oak signs](signs-source.md), and [cake/chorus/stew](food-features-source.md). The music/mechanisms batch adds [buttons and pressure plates](redstone-inputs-source.md), [note blocks](note-blocks-source.md), [compressed ice and bone blocks](dense-materials-source.md), [jukeboxes and records](jukebox-source.md), and [cave dungeons and spawners](dungeons-source.md). The crops/honey/crystals batch adds [pumpkin and melon farming](fruit-crops-source.md), [hives and honey](beehives-source.md), [amethyst geodes](amethyst-source.md), and the [spyglass](spyglass-source.md). The subsequent farming/golem batch adds [wet/dry farmland](farmland-source.md), [source staple crops](crop-farming-source.md) and [constructed iron/snow golems](golems-source.md). The inspection findings below describe the state before those implementations.
 
 
@@ -23,7 +117,7 @@ Effort estimates below are rough **focused engineering days**, including integra
 | Priority / effort | System and current evidence | Reference | Concrete completion boundary and hooks | Principal risk |
 | --- | --- | --- | --- | --- |
 | P0 / 2–4 days | **Hunger: partial.** `player.gd` directly subtracts fractional hunger for movement, jumping and time; regeneration begins at 16 hunger; `eating.gd` adds food points. No saved saturation or exhaustion fields at baseline. Hold-to-eat delay/cancellation already exist. | `PLAYER/mcl_hunger/{init,api,hunger,holdeat}.lua`; item nutrition in `ITEMS/mcl_farming/*.lua`, `ITEMS/mcl_mobitems/init.lua`, `ITEMS/mcl_core/craftitems.lua`, `ITEMS/mcl_ocean/kelp.lua` | Port exhaustion thresholds and sources, saturation-first loss, food saturation, regeneration/starvation conditions, food exceptions and effects. Hooks: `player.gd` movement/damage, `eating.gd`, `Nodes.food`, `game.gd` save/load/reset, HUD. Acceptance: compare source threshold transitions and exact food examples, save with nonzero hidden values, and old-save defaults. | Alters every survival session; source difficulty assumptions must be explicit. Avoid applying exhaustion twice across movement/hit hooks. |
-| P1 / 1–2 days | **Composters: partial.** `VillageSurvival.use()` turns any seven accepted items into bone meal immediately; the list is narrow. No level signal or hopper support. | `ITEMS/mcl_composters/init.lua`; per-item `compostability` in item registrations | Implement source chance classes, consumption on failed rolls, levels 0–8, one-second 7→8 maturation, ready harvest, visible level, comparator output and top/bottom hopper rules. Recipe uses seven wooden slabs. Hooks: a dedicated rules module, `village_survival.gd`, `voxel_world.gd` active simulation, `redstone_circuit.gd`, `village_art.gd`, recipe catalog. | Capacity-safe automatic output, state surviving unload, and existing farmer interactions. Detailed delegation scope follows below. |
+| Completed workstation follow-up | **Composters: core integration implemented.** Source probabilities, maturation, hollow collision, comparator/hopper support, private inventories and farmer work are covered. | `ITEMS/mcl_composters/init.lua`; `ENTITIES/mobs_mc/villager.lua`; per-item compostability | Field farming/fertilizing is covered by the later batch. Continue with food sharing and inventory-based breeding. | Existing crop schedules and native food-point behavior still need reconciliation with the source AI. |
 | P1 / 2–4 days | **Cauldrons: partial.** Current cauldron accepts a water bucket and returns up to three bottled portions. It cannot receive bottled water or fill a bucket; level is station metadata with limited visual behavior. | `ITEMS/mcl_cauldrons/init.lua`; `ITEMS/mcl_buckets/init.lua`; weather fill hooks | First close a full ordinary-water loop: empty/1/2/3 states, bottle insertion/extraction, bucket insertion/extraction, correct consumption/overflow, extinguishing and comparator levels; verify source liquid variants before claiming module completion. Hooks: `VillageSurvival.use`, station persistence, `RedstoneCircuit`, `VillageArt`. | Source includes liquid distinctions that Voxey fluids do not represent; do not collapse river water/lava/snow into ordinary water unnoticed. |
 | P1 / 2–4 days | **Sponges: implemented** ([source notes](sponges-source.md)) — the 7x7x7 absorption volume and tie-break, wet/dry states, the one-second sweep, Nether and furnace drying with the fuel-slot bucket replacement. Still open: a survival acquisition path, because the checkout's only sources are an elder guardian and an ocean monument room. | `ITEMS/mcl_sponges/init.lua`; source acquisition via `ENTITIES/mobs_mc/guardian_elder.lua` and relevant structure registrations | Implement source-connected absorption, wet/dry state, neighbor-water activation, Nether placement drying, furnace drying and fuel-slot bucket replacement. Add a source-backed survival acquisition path, or mark the batch mechanics-only pending the ocean progression batch. Hooks: `Fluids`, `VoxelWorld.set_node`, `Nodes.smelt_result`, furnace tick and item rules. | No elder guardian/ocean monument loop yet; without acquisition, sponge mechanics do not establish complete survival parity. Source also distinguishes river water. |
 | P1 / 3–5 days | **Fishing: partial.** `VillageSurvival.fish()` uses a five-fish/ink roll plus an independent enchanted-book chance, a 5–14 second wait and fixed 2 XP. There is no source treasure/junk table or full bobber physics. | `ITEMS/mcl_fishing/{init,items}.lua` | Port source catch categories, weighted loot, enchantment/condition effects, waiting/bite timing, durability, and cast/reel behavior. Use the actual local source conditions rather than assuming Minecraft's open-water rules. Hooks: `fish`, survival `update`, `Enchantments.random_book`, item/drop metadata. | Table outputs depend on presently absent content; preserve source-weight probability rather than deleting absent entries without disclosure. |
@@ -56,30 +150,21 @@ Effort estimates below are rough **focused engineering days**, including integra
 
 These are not candidates for wholesale replacement; they need source-rule comparisons and targeted corrections.
 
-- **Combat/equipment/enchanting:** `player.gd`, `enchantments.gd`, `arrow.gd`, `trident_projectile.gd`, `VillageSurvival.equipment_work`. Netherite/armor work has explicit prior evidence. Shields raise while held and are carried in the [second hand](offhand-source.md). The table offers explicit enchantment choices and anvils have simplified costs, documented as adaptations in [the alchemy reference](mineclonia-alchemy-source.md). Source files include `ITEMS/mcl_shields/init.lua`, `HUD/mcl_offhand/init.lua`, `ITEMS/mcl_enchanting/engine.lua`, `ITEMS/mcl_anvils/init.lua` and `PLAYER/mcl_criticals/init.lua`. Review exact attack/cooldown/critical and damage-reason rules before changing all combat.
+- **Combat/equipment/enchanting:** `player.gd`, `enchantments.gd`, `arrow.gd`, `trident_projectile.gd`, `VillageSurvival.equipment_work`. Netherite/armor work has explicit prior evidence. Shields raise while held and are carried in the [second hand](offhand-source.md). The table now uses cached random source offers and the source XP curve; see [enchanting](enchanting-source.md). Anvil costs, repairs and names now follow [source anvil rules](anvil-source.md). Source files include `ITEMS/mcl_shields/init.lua`, `HUD/mcl_offhand/init.lua`, `ITEMS/mcl_enchanting/engine.lua`, `ITEMS/mcl_anvils/init.lua` and `PLAYER/mcl_criticals/init.lua`. Review exact attack/cooldown/critical and damage-reason rules before changing all combat.
 - **Villagers:** all 297 source trade offers and 13 professions are represented, with restocking, demand, reputation and breeding. That does not close source pathfinding, gossip, infection/cure, wandering traders, biome appearance, profession schedules or golem spawning. Compare `ENTITIES/mobs_mc/villager.lua`, `villager_zombie.lua`, `wandering_trader.lua`, `iron_golem.lua` and `ENVIRONMENT/mcl_zombie_sieges/init.lua` against `VillageLife`, `VillageMob` and source-backed trade tests.
 - **Fluids/fire:** downward flows, ranges, renewal/reactions and ignition/spread already have source-focused modules/tests. Remaining comparisons include river water, source waterlogging coverage, flowing-surface geometry, lava dimension timing, block replacement groups, exact fire timers and biome/rain behavior. Start with `CORE/mcl_liquids/init.lua`, `ITEMS/mcl_fire/init.lua` and existing `docs/environment-update.md`.
 - **Food/farming:** multiple crops, cane, cocoa, kelp, bone meal and soups exist. Crop stages/timing/soil/light, farmland hydration/trampling, fruit stems, source food special effects, placed cake portions and suspicious-stew metadata need individual reviews. `CAKE` currently appears as an edible item in `VillageContent`, not proof of the source placed-cake state machine.
 - **Storage/logistics:** chests/double chests/barrels/hoppers and brewing/furnace data exist. Ender chests and source shulker-box inventory loops were not found; pouches are an additional Voxey system, not a substitute for either. Source: `ITEMS/mcl_chests/init.lua`, `ITEMS/mcl_hoppers/init.lua`.
 - **Achievements:** `VoxeyAchievements.DEFINITIONS` contains 16 original achievements. Source achievements and event triggers are substantially broader (`HUD/mcl_achievements/init.lua`). Existing UI/storage can host additions, but unlock conditions need event-level tests.
 
-## Recommended next delegation: complete composter behavior
+## Farmer follow-up after workstation integration
 
-This is the strongest next isolated batch because its acquisition ingredients, crop resources, active tick, persistence and automation are already present. It closes meaningful farming/automation gaps without requiring a new mob or large world structure.
-
-Suggested ownership: one implementer owns a new `scripts/composters.gd` and `tests/composter_checks.gd`; integration changes to `village_survival.gd`, `voxel_world.gd`, `redstone_circuit.gd`, recipes and visuals are coordinated with the parent. Avoid editing the same dispatcher concurrently with other workstation or inventory batches.
-
-Source-exact rules observed in `ITEMS/mcl_composters/init.lua`:
-
-1. Empty level is 0; seven successful compost rolls reach level 7. Each accepted item is consumed in survival even when its roll fails. Non-compostable items and full composters consume nothing. Creative preserves the held item.
-2. Source success is `chance >= random(1, 100)`. Supported ingredients should derive their percentage from source item definitions. Examples: seeds, kelp and sweet berries 30%; cactus/vines/melon slices 50%; wheat, apples, carrots, potatoes, beetroot and small mushrooms 65%; bread/cookies/hay/baked potatoes 85%; pumpkin pie/cake 100%.
-3. Level 7 starts a one-second timer and then becomes harvest-ready level 8. Source reload handling restarts the level-7 timer; choose equivalent loaded-time behavior and document it. Do not instantly harvest level 7.
-4. Harvesting ready compost produces one bone meal and empties the composter. Source player harvest spawns a world item; direct-inventory delivery would be an adaptation.
-5. Comparator output equals 0–8. Input from a hopper above accepts one eligible item per transfer attempt below level 7. A hopper below extracts only ready bone meal. A full destination must not consume compost.
-6. Source farmer auto-cycle intentionally differs from manual behavior: adding to a full composter can first empty it and create bone meal. Port only when integrating farmer inventory behavior; otherwise leave the missing farmer branch explicit.
-7. Survival recipe is seven wood slabs; breaking drops an empty composter. The compost level needs visible feedback in the block, not only toast text.
-
-Minimum meaningful checks: every chance boundary using deterministic rolls; accepted-failure consumption; invalid/full/creative behavior; exact one-second readiness; no output duplication on repeated interactions; save/unload/reload at partial/full/ready; comparator states; input direction; full output hopper; breaking/replacing state reset; recipe uses slabs; manual visual pass at empty/partial/ready. Preserve pre-existing composter saves by mapping their stored 0–6 levels and explicitly migrating old ready level 7.
+The composter transaction and workstation inventory work above supersedes the
+original composter implementation proposal. Remaining villager work should
+compare the source's `farm`, `fertilize_farmland`, food sharing and breeding
+methods with the native field and food-point behavior. Keep the source's seed
+consumption, crop drops, movement limits, activity timers and inventory capacity;
+do not treat the new workstation integration as complete villager AI.
 
 ## Source limitations and preserved Voxey adaptations
 
@@ -89,4 +174,4 @@ Minimum meaningful checks: every chance boundary using deterministic rolls; acce
 - Preserve colored pouches, recovery chests, fixed offline `player` identity, per-player-keyed homes/reputation, single-player native Godot UI and original art. Their intentional differences are documented in the repository. No multiplayer/server promise should be inferred from the compatibility/core modules without a separate architecture scope.
 - Copying source registration data or translated code requires retaining the established Mineclonia attribution/license workflow. The existing audit hashes and `docs/licenses/` provide the starting point; original Voxey art can remain original.
 
-This audit added documentation only and did not run gameplay tests. The listed findings come from direct code inspection and should be updated when each corresponding implementation batch lands.
+The original audit added documentation only and did not run gameplay tests. Implementation follow-ups now report the checks they actually execute, including 39 canonical biome-registry checks and the plant/soil lifecycle counts above.

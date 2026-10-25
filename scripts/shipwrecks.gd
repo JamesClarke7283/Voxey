@@ -139,9 +139,7 @@ static func bury(gen: TerrainGenerator, state: Dictionary, sample: Callable, rng
 		var at := Vector3i(x,surf,z)
 		var id: int = int(sample.call(at))
 		# The source's search covers sand, gravel, grass, mycelium and podzol.
-		# Voxey has no mycelium or podzol block, so the surfaces it does have are
-		# used, which is recorded in the source notes.
-		if id in [Nodes.SAND,Nodes.GRAVEL,Nodes.GRASS,Nodes.DIRT]:
+		if id in [Nodes.SAND,Nodes.GRAVEL,Nodes.GRASS,Nodes.DIRT,SoilVariants.MYCELIUM,SoilVariants.PODZOL]:
 			chosen = at
 			found = true
 			break

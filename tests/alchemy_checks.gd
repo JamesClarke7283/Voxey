@@ -101,9 +101,10 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.inventory = Inventory.new(); game.gamemode = "survival"; game.experience = 1000
 	var book: Dictionary = {"id":VillageContent.ENCHANTED_BOOK,"count":1,"wear":0,"data":{"enchantments":{"Sharpness":4}}}
 	game.inventory.slots[0] = book.duplicate(true); game.inventory.slots[1] = book.duplicate(true)
+	game.survival.workstation_pos = Vector3i(8,52,8)
+	game.world.set_node(game.survival.workstation_pos+Vector3i.DOWN,Nodes.STONE)
+	game.world.set_node(game.survival.workstation_pos,VillageContent.ANVIL)
 	suite.check(game.survival.equipment_work(0,VillageContent.ANVIL) and Inventory.enchantment(game.inventory.slots[0],"Sharpness") == 5 and game.inventory.slots[1].id == 0,"two identical books combine without confusing the source and target")
-	game.inventory.slots[0] = {"id":Nodes.BOW,"count":1,"wear":10,"data":{"enchantments":{"Mending":1,"Curse of Vanishing":1}}}
-	suite.check(game.survival.equipment_work(0,VillageContent.GRINDSTONE) and Inventory.enchantment(game.inventory.slots[0],"Mending") == 0 and Inventory.enchantment(game.inventory.slots[0],"Curse of Vanishing") == 1,"grindstone removes ordinary enchantments while retaining curses")
 	game.inventory.slots[0] = {"id":Nodes.BOW,"count":1,"wear":10,"data":{"enchantments":{"Mending":1}}}
 	suite.check(Enchantments.mend(game,3) == 0 and game.inventory.slots[0].wear == 4,"mending repairs two durability per XP point")
 	var helmet: int = Nodes.armor_id(1,0)
@@ -155,45 +156,46 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.pause()
 
 	# Combat behavior uses the same potion and enchantment definitions as inventory metadata.
-	game.gamemode = "survival"; game.inventory = Inventory.new(); game.player.health = 20
+	game.gamemode = "survival"; game.inventory = Inventory.new(); game.player.health = 20; game.state = "playing"
 	var origin := Vector3(8.5,51.0,8.5)
 	var zombie: Creature = game.spawn_creature("zombie",origin); zombie.set_physics_process(false)
 	PotionEffects.apply_item(zombie,VillageContent.HEALING_POTION)
 	suite.check(zombie.health == 16,"healing potion damages undead by the source amount")
 	game.inventory.slots[0] = {"id":sword,"count":1,"wear":0,"data":{"enchantments":{"Smite":5}}}
-	# Smite V adds twelve and a half damage as an `undead`-grouped bonus, which the
-	# zombie's own `undead = 90` cuts to eleven and a quarter — so the total is the
-	# sword's ten plus that, not the flat twenty-two an unscaled bonus would give.
-	var smite_total: float = Enchantments.melee(game.player,zombie)
-	suite.check(is_equal_approx(smite_total,21.25),"Smite V adds its undead-grouped bonus, scaled by the zombie's own armor")
+	game.player.velocity = Vector3.ZERO; game.player.sprinting = false; game.player.melee_elapsed = 3
+	PotionEffects.clear(game.player)
+	var smite_before: float = zombie.health
+	MeleeCombat.attack(game.player,zombie)
+	suite.check(is_equal_approx(smite_before-zombie.health,17.1),"Smite V and the source sword damage each pass through the zombie's armor once")
 	zombie.free()
 	var spider: Creature = game.spawn_creature("spider",origin); spider.set_physics_process(false)
 	game.inventory.slots[0].data.enchantments = {"Bane of Arthropods":3}
-	Enchantments.melee(game.player,spider)
+	game.player.melee_elapsed = 3
+	MeleeCombat.attack(game.player,spider)
 	suite.check(PotionEffects.level(spider,"slowness") == 4,"Bane of Arthropods applies Slowness IV")
 	spider.free()
 	var bow: Dictionary = {"id":Nodes.BOW,"count":1,"wear":0,"data":{"enchantments":{"Infinity":1,"Flame":1,"Punch":2}}}
 	game.inventory.slots[0] = bow; game.inventory.add_item(Nodes.ARROW_ITEM,1)
 	game.player.use()
+	BowUse.release(game.player,int(game.player.bow_draw.start)+500000)
 	var infinite_shot: Arrow
 	for entity in game.entities.get_children():
 		if entity is Arrow and not entity.is_queued_for_deletion(): infinite_shot = entity
 	suite.check(infinite_shot != null and not infinite_shot.recoverable and infinite_shot.flame and infinite_shot.punch == 2 and game.inventory.count_item(Nodes.ARROW_ITEM) == 1,"Infinity keeps its arrow while Flame and Punch reach the fired projectile")
 	if infinite_shot != null: infinite_shot.free()
 	game.inventory.slots[0] = {"id":VillageContent.CROSSBOW,"count":1,"wear":0,"data":{"enchantments":{"Quick Charge":3,"Multishot":1}}}
-	game.survival.fire_crossbow()
-	suite.check(is_equal_approx(game.inventory.slots[0].data.charge,0.5),"Quick Charge III reduces crossbow loading to half a second")
-	game.inventory.slots[0].data.charge = 0
+	suite.check(CrossbowUse.full_time(game.inventory.held()) == 510000,"Quick Charge III reduces crossbow loading to the source 0.51 seconds")
+	load("res://tests/crossbow_checks.gd").load_full(game)
 	var arrows_before: int = 0
 	for entity in game.entities.get_children():
 		if entity is Arrow: arrows_before += 1
-	game.survival.fire_crossbow()
+	CrossbowUse.fire(game.player)
 	var arrows_after: int = 0; var recoverable: int = 0
 	for entity in game.entities.get_children():
 		if entity is Arrow:
 			arrows_after += 1
 			if entity.recoverable: recoverable += 1
-	suite.check(arrows_after-arrows_before == 3 and recoverable == 1,"Multishot fires three arrows with only one recoverable copy")
+	suite.check(arrows_after-arrows_before == 3 and recoverable == 3,"Multishot follows the source with three recoverable arrows")
 	for entity in game.entities.get_children():
 		if entity is Arrow: entity.free()
 	var victim: Creature = game.spawn_creature("cow",origin); victim.set_physics_process(false)

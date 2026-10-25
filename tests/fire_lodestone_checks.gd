@@ -39,9 +39,9 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var bound: Dictionary = {}
 	for slot in game.inventory.slots:
 		if slot.id == Nodes.COMPASS and slot.get("data",{}).has("lodestone"): bound = slot
-	suite.check(not bound.is_empty() and bound.data.lodestone.dimension == "nether" and bound.data.lodestone.position == [p.x,p.y,p.z],"bound compass stores its lodestone position and dimension")
+	suite.check(not bound.is_empty() and bound.data.lodestone.dimension == game.dimension and bound.data.lodestone.position == [p.x,p.y,p.z],"bound compass stores its lodestone position and dimension")
 	suite.check(Inventory.clean_slot(bound) == bound and "Lodestone lies" in Lodestones.describe(game,bound),"lodestone compass metadata survives normalization and gives a bearing")
 	game.world.set_node(p,Nodes.AIR)
 	suite.check("lodestone is gone" in Lodestones.describe(game,bound),"destroying a loaded lodestone breaks its compass tracking")
-	var off_dimension: Dictionary = bound.duplicate(true); off_dimension.data.lodestone.dimension = "overworld"
+	var off_dimension: Dictionary = bound.duplicate(true); off_dimension.data.lodestone.dimension = "overworld" if game.dimension == "nether" else "nether"
 	suite.check("spins in this dimension" in Lodestones.describe(game,off_dimension),"lodestone compasses do not point across dimensions")

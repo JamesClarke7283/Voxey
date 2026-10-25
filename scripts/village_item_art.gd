@@ -2,9 +2,14 @@ class_name VillageItemArt
 extends RefCounted
 
 static func draw(img: Image, id: int, base: Color) -> void:
+	if Banners.is_banner(id): Banners.draw(img,id,Banners.color_index(id),[]); return
 	# `mcl_mobitems`' two steering sticks: a rod with their own lure on the end.
 	if PigRiding.is_steering_item(id): PigRiding.draw(img,id,base); return
 	if id == CropFarming.POISONOUS_POTATO: CropFarming.draw(img,id); return
+	if id == CocoaCrops.BEANS: CocoaCrops.draw(img,id); return
+	if id == NetherWartCrops.ITEM: NetherWartCrops.draw(img,id); return
+	if id == SweetBerryCrops.BERRY: SweetBerryCrops.draw(img,id); return
+	if id == LushCaves.GLOW_BERRY: LushCaves.draw(img,id); return
 	if id == Spyglass.ID: Spyglass.draw(img); return
 	if id == Amethyst.SHARD: Amethyst.draw(img,id); return
 	if LargePlants.is_bottom(id): LargePlants.draw(img,id); return

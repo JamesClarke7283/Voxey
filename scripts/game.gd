@@ -45,6 +45,7 @@ var experience: float = 0.0:
 	set(value):
 		if value > experience and is_instance_valid(player) and inventory != null and state in ["playing","trading","workstation","console"]: value = experience+Enchantments.mend(self,value-experience)
 		experience = value
+var enchanting_state: Dictionary = {}
 var dimension: String = "overworld"
 var leads: LeadManager
 var maps: ExplorationMaps
@@ -132,6 +133,8 @@ func _ready() -> void:
 	node_material = ShaderMaterial.new()
 	node_material.shader = preload("res://shaders/terrain.gdshader")
 	node_material.set_shader_parameter("atlas",atlas)
+	var blade_tile: int = Nodes.tile(Stonecutting.BLADE,0)
+	node_material.set_shader_parameter("stonecutter_blade_cell",Vector2(blade_tile%8,blade_tile/8))
 	_setup_environment()
 	world = VoxelWorld.new()
 	world.name = "World"
@@ -286,13 +289,19 @@ func _process(delta: float) -> void:
 	if state != "title" and state != "loading": world.target = player.position
 	_update_torch_lights()
 	if network != null and network.client() and state != "loading":
+		if playing(): survival.update_shield(delta)
 		world.target = player.position
 		_update_day()
 		AntiqueArms.update(self,delta)
 		return
+	if state == "trading": VillagerTrading.update_open(self,delta)
+	# Furnace time follows the game clock while its inventory is open too.
+	if state == "inventory" and hud.station in ["furnace","brewing","steam"]:
+		day_time += delta/1200.0
 	if playing():
 		AntiqueArms.update(self,delta)
 		Dungeons.update(world,delta)
+		Trials.update(world,delta)
 		boats.update(delta)
 		Farming.update_world(self,delta)
 		Golems.update(self,delta)
@@ -457,6 +466,7 @@ func start_new(seed_text: String, display_name: String = "New world", mode: Stri
 	day_time = 0.30
 	experience = 0
 	journal_step = 0
+	enchanting_state.clear()
 	player.health=20; Hunger.reset(player); player.breath=10
 	PotionEffects.clear(player)
 	if player.has_meta("potion_death_done"): player.remove_meta("potion_death_done")
@@ -512,11 +522,27 @@ func _finish_loading() -> void:
 		for entry in pending_save.get("drops",[]):
 			var pos: Array = entry.position
 			var restored_drop := spawn_drop(Vector3(pos[0],pos[1],pos[2]),Nodes.migrate(int(entry.id)),int(entry.count),int(entry.get("wear",0)),Inventory.clean_slot(entry).get("data",{}),float(entry.get("age",0)))
-			if restored_drop != null: restored_drop.pickup_delay = float(entry.get("pickup_delay",0.6))
+			if restored_drop != null: restored_drop.pickup_delay = float(entry.get("pickup_delay",0.6)); restored_drop.insta_collect = bool(entry.get("insta_collect",false))
 		for entry in pending_save.get("arrows",[]):
 			var pos: Array = entry.position
-			var shot := spawn_arrow(Vector3(pos[0],pos[1],pos[2]),Vector3.ZERO)
-			shot.stuck = true; shot.life = float(entry.get("life",0)); shot.item_id = int(entry.get("id",Nodes.ARROW_ITEM)); shot.recoverable = entry.get("recoverable",true)
+			var v: Array = entry.get("velocity",[0,0,0])
+			var shot := spawn_arrow(Vector3(pos[0],pos[1],pos[2]),Vector3(v[0],v[1],v[2]),int(entry.get("id",Nodes.ARROW_ITEM)),false)
+			shot.stuck = bool(entry.get("stuck",true)); shot.life = float(entry.get("life",0))
+			# Old native saves used a ten-minute embedded-arrow timer. Preserve its
+			# elapsed fraction when moving to the source's one-minute lifetime.
+			if int(entry.get("arrow_version",1)) < 2: shot.life /= 10.0
+			shot.recoverable = entry.get("recoverable",true)
+			shot.potion_data = Inventory.clean_slot({"id":shot.item_id,"count":1,"data":entry.get("data",{})}).get("data",{})
+			shot.blocked_by = str(entry.get("blocked_by","")); shot.deflected = bool(entry.get("deflected",false))
+			var start: Array = entry.get("launch_point",[])
+			if start.size() == 3: shot.launch_point = Vector3(start[0],start[1],start[2])
+			shot.damage = float(entry.get("damage",2)); shot.critical = bool(entry.get("critical",false)); shot.flame = bool(entry.get("flame",false))
+			shot.piercing = int(entry.get("piercing",0)); shot.punch = int(entry.get("punch",0)); shot.drag_clock = float(entry.get("drag_clock",0))
+			shot.from_player = bool(entry.get("from_player",false)); shot.hits_player = bool(entry.get("hits_player",false)); shot.shooter_kind = str(entry.get("shooter_kind",""))
+			if shot.from_player: shot.shooter_id = player.get_instance_id()
+			var support: Array = entry.get("support",[])
+			if support.size() == 3: shot.support = Vector3i(support[0],support[1],support[2]); shot.has_support = true
+			shot.recheck_clock = ArrowFlight.RECHECK
 			var rot: Array = entry.get("rotation",[0,0,0])
 			shot.rotation = Vector3(rot[0],rot[1],rot[2])
 		AlchemyWorld.restore(self)
@@ -608,23 +634,33 @@ func resume() -> void:
 	hud.show_game()
 
 func pause() -> void:
+	BowUse.cancel(player); CrossbowUse.cancel(player)
 	state="paused"
 	world.active=false
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
 	hud.show_pause()
 
 func open_inventory(kind: String = "hand", p: Vector3i = Vector3i.ZERO) -> void:
+	BowUse.cancel(player); CrossbowUse.cancel(player)
 	if network != null:
-		network.station_pos = p; network.station_open = kind in ["chest","furnace","brewing","steam"]
+		network.station_pos = p; network.station_open = kind in ["chest","furnace","brewing","steam","stonecutter","grindstone","smithing"]
 	state="inventory"
 	world.active=false
 	# Furnace simulation continues while its screen is open, but the player and mobs pause.
 	if kind in ["furnace","brewing","steam"]: world.active=true
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
 	if is_instance_valid(controls): controls.hide_all()
-	hud.show_inventory(kind,SteamMachines.station(world,p) if kind == "steam" else (world.get_station(p,kind) if kind in ["chest","furnace","brewing"] else {}))
+	if kind == "smithing" and not network.client(): Smithing.refresh(world.get_station(p,kind))
+	if kind == "grindstone": survival.workstation_pos = p
+	if kind == "grindstone" and not network.client(): GrindstoneRepair.refresh(world.get_station(p,kind))
+	if kind == "stonecutter" and not network.client(): Stonecutting.refresh(world.get_station(p,kind))
+	hud.show_inventory(kind,SteamMachines.station(world,p) if kind == "steam" else (world.get_station(p,kind) if kind in ["chest","furnace","brewing","stonecutter","grindstone","smithing"] else {}))
+	if kind == "stonecutter" and network.client(): network.stonecutting_select("",false,true)
+	if kind == "grindstone" and network.client(): network.grindstone_open()
+	if kind == "smithing" and network.client(): network.smithing_open()
 
 func return_to_title() -> void:
+	BowUse.cancel(player); CrossbowUse.cancel(player)
 	hud.return_cursor()
 	save_game()
 	if network != null: network.stop()
@@ -680,7 +716,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index==MOUSE_BUTTON_MIDDLE and gamemode=="creative" and not player.target.is_empty():
 			var picked: int = Nodes.pick_item(player.target.id)
-			inventory.slots[inventory.selected]={"id":picked,"count":Nodes.max_stack(picked),"wear":0}
+			if Banners.is_banner(player.target.id):
+				inventory.slots[inventory.selected] = Banners.stored_item(world,player.target.pos)
+				inventory.slots[inventory.selected].count = Nodes.max_stack(picked)
+			else: inventory.slots[inventory.selected]={"id":picked,"count":Nodes.max_stack(picked),"wear":0}
 			hud.refresh_slots()
 		if event.button_index==MOUSE_BUTTON_WHEEL_UP: inventory.selected=posmod(inventory.selected-1,9); hud.refresh_slots()
 		if event.button_index==MOUSE_BUTTON_WHEEL_DOWN: inventory.selected=posmod(inventory.selected+1,9); hud.refresh_slots()
@@ -695,31 +734,18 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 	if Seagrass.break_node(self,p,id,tool): return
 	if PointedDripstone.break_node(self,p,id,tool): return
 	if DenseMaterials.break_ice(self,p,id,tool): return
+	if SweetBerryCrops.break_node(self,p,id,tool): return
 	if Beehives.break_node(self,p,id,tool): return
 	if Doors.break_node(self,p,id,tool): return
+	if Banners.break_node(self,p,id): return
+	if Bookshelves.break_node(self,p,id,tool): return
 	if Decor.break_node(self,p,id,tool): return
 	if Archaeology.break_node(self,p,id,tool): return
 	# An infested block releases a silverfish unless Silk Touch was used.
 	if MonsterEggs.break_node(self,p,id): return
 	if Sponges.break_node(self,p,id,tool): return
 	if Campfires.break_node(self,p,id,tool): return
-	if id == Bookshelves.ID:
-		# The source's own `after_dig_node` drops the shelf's contents.
-		if not world.set_node(p,Nodes.AIR): return
-		if gamemode != "creative":
-			for entry in Bookshelves.contents(world,p): spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry.id,entry.count,entry.get("wear",0),entry.get("data",{}))
-			spawn_drop(Vector3(p)+Vector3.ONE*0.5,Bookshelves.ID)
-		_break_particles(p,id); sound("break"); progress("gather"); api.emit_node_broken(p,id)
-		return
-	if LargePlants.is_large(id):
-		# A large plant breaks as a whole: removing either half removes the other,
-		# and only the bottom yields the item, which is the source's `after_dig_node`.
-		var other: Vector3i = LargePlants.partner(world,p,id)
-		if other != p: world.set_node(other,Nodes.AIR)
-		if not world.set_node(p,Nodes.AIR): return
-		if gamemode != "creative": spawn_drop(Vector3(p)+Vector3.ONE*0.5,LargePlants.bottom(id),1)
-		_break_particles(p,id); sound("break"); progress("gather"); api.emit_node_broken(p,id)
-		return
+	if LargePlants.break_node(self,p,id,tool): return
 	if Candles.break_node(self,p,id,tool): return
 	if PortableStorage.break_node(self,p,id,tool): return
 	if survival.break_special(p,id,tool): return
@@ -732,7 +758,10 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 		var other: Vector3i = _bed_partner(p,id)
 		if other != p and world.node_at(other) in [Nodes.BED_FOOT,Nodes.BED_HEAD]:
 			world.set_node(other,Nodes.AIR)
+	var source_harvest: Dictionary = Harvesting.harvest(id,inventory.held()) if gamemode != "creative" and not Sculk.is_sculk(id) else {"handled":false}
+	var copper_drop_data: Dictionary = Copper.drop_metadata(world,p)
 	if not world.set_node(p,Nodes.AIR): return
+	if LushCaveExtra.is_dripleaf(id): LushCaveExtra.dug(self,p,id)
 	if id == Nodes.SUGAR_CANE:
 		var above: Vector3i = p+Vector3i.UP
 		while world.node_at(above) == Nodes.SUGAR_CANE:
@@ -745,10 +774,13 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 		# `mobs_mc`'s `register_on_dignode`: breaking a gold-bearing node angers every
 		# piglin within sixteen nodes, with no line-of-sight test.
 		PiglinAnger.on_protected_broken(self,id)
-		var enchanted_drops: Array = Enchantments.harvest(id,inventory.held())
+		var enchanted_drops: Array = [] if source_harvest.handled else Enchantments.harvest(id,inventory.held())
 		# A sculk break is its own contract: nothing by hand, the vein to shears,
 		# sculk and the catalyst to Silk Touch, and stored experience on the break.
-		if Sculk.is_sculk(id):
+		if source_harvest.handled:
+			for entry in source_harvest.drops: spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1],0,copper_drop_data)
+			if source_harvest.xp > 0: XpOrbs.throw_xp(self,Vector3(p)+Vector3.ONE*0.5,source_harvest.xp)
+		elif Sculk.is_sculk(id):
 			for entry in Sculk.harvest(id,inventory.held()): spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
 			XpOrbs.throw_xp(self,Vector3(p)+Vector3.ONE*0.5,Sculk.harvest_xp(world,p,id,inventory.held()))
 		elif CropFarming.is_crop(id) or FruitCrops.harvestable(id) or Amethyst.is_amethyst(id):
@@ -767,7 +799,7 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 			# them, and Silk Touch is what preserves the block itself. So breaking a
 			# huge mushroom yields mushrooms to eat or plant, not building material.
 			var silk: bool = Inventory.enchantment(inventory.held(),"Silk Touch") > 0
-			if silk: spawn_drop(Vector3(p)+Vector3.ONE*0.5,id,1)
+			if silk: spawn_drop(Vector3(p)+Vector3.ONE*0.5,HugeMushrooms.silk_touch_drop(id),1)
 			# Source rarity 9 twice, i.e. one or two mushrooms.
 			else: spawn_drop(Vector3(p)+Vector3.ONE*0.5,HugeMushrooms.species_of(id),1 if randf() < 0.5 else 2)
 		elif FoodFeatures.is_tall_grass(id):
@@ -797,7 +829,7 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 		# `mcl_item_entity`:216-220: a mined node pays its own `group:xp`, which
 		# is the source's per-ore value. Iron, gold and copper ore do not carry
 		# the group, so they pay nothing.
-		if Inventory.enchantment(inventory.held(),"Silk Touch") == 0 and Nodes.ore_xp(id) > 0:
+		if not source_harvest.handled and Inventory.enchantment(inventory.held(),"Silk Touch") == 0 and Nodes.ore_xp(id) > 0:
 			XpOrbs.throw_xp(self,Vector3(p)+Vector3.ONE*0.5,Nodes.ore_xp(id))
 		if WoodTypes.is_log(id): achievements.award("first_log")
 		if id in [Netherite.ANCIENT_DEBRIS]: achievements.award("hidden_in_the_depths")
@@ -810,7 +842,7 @@ func break_node(p: Vector3i, id: int, tool: int) -> void:
 	remove_torch(p)
 	var above: Vector3i=p+Vector3i.UP
 	var upper: int=world.node_at(above)
-	if Nodes.plant(upper) or upper==Nodes.TORCH or upper in Nodes.SMALL_CIRCUITS and upper != Nodes.IRON_DOOR_OPEN: break_node(above,upper,tool)
+	if (Nodes.plant(upper) or upper==Nodes.TORCH or upper in Nodes.SMALL_CIRCUITS and upper != Nodes.IRON_DOOR_OPEN) and not LushCaveExtra.is_dripleaf(upper): break_node(above,upper,tool)
 	settle(above)
 	_break_particles(p,id)
 	sound("break")
@@ -840,11 +872,12 @@ func settle(p: Vector3i) -> void:
 		entities.add_child(falling)
 		p += Vector3i.UP
 
-func spawn_arrow(origin: Vector3, velocity: Vector3) -> Arrow:
+func spawn_arrow(origin: Vector3, velocity: Vector3, item: int = Nodes.ARROW_ITEM, audible: bool = true) -> Arrow:
 	var arrow := Arrow.new()
-	arrow.game = self; arrow.position = origin; arrow.velocity = velocity; arrow.launch_point = origin
+	arrow.game = self; arrow.position = origin; arrow.velocity = velocity; arrow.launch_point = origin; arrow.item_id = item
+	if item == VillageContent.TRIDENT: arrow.damage = 8.0; arrow.player_damage = 8.0
 	entities.add_child(arrow)
-	sound_at("arrow",origin)
+	if audible: sound_at("arrow",origin)
 	return arrow
 
 func ignite_tnt(p: Vector3i, fuse: float = PrimedTnt.FUSE) -> void:
@@ -903,6 +936,14 @@ func explode(center: Vector3, radius: float, source: Node = null, fire: bool = f
 				if Beehives.break_node(self,p,id,0,true): continue
 				if Campfires.break_node(self,p,id,0,true): continue
 				if Doors.break_node(self,p,id,0,true): continue
+				if Bookshelves.break_node(self,p,id,0,true): continue
+				if Banners.is_banner(id):
+					# The destruction callback returns its stored item. A second
+					# generic explosion roll would duplicate it or lose its design.
+					if world.set_node(p,Nodes.AIR):
+						removed.append(p)
+						if fire: ignited.append(p)
+					continue
 				if id == Nodes.TNT: ignite_tnt(p,randf_range(0.3,0.9)); continue
 				if id in [Nodes.BED_FOOT,Nodes.BED_HEAD]:
 					# Remove the whole bed, drop one item, count one node.
@@ -968,7 +1009,10 @@ static func _creature_class(kind: String) -> Creature:
 	if kind in ["piglin","piglin_brute"]: return NetherResident.new()
 	return Creature.new()
 
-func spawn_creature(kind: String, pos: Vector3, farm_key: String = "") -> Creature:
+func spawn_creature(kind: String, pos: Vector3, farm_key: String = "", options: Dictionary = {}) -> Creature:
+	var child: bool = options.get("baby",MobBabies.ALIASES.has(kind))
+	kind = MobBabies.base(kind)
+	if kind == "zombie_villager" and not options.has("baby") and not child: child = MobJockeys.rng_for(world).randi_range(1,100) <= 5
 	if kind == "snow_golem": return Golems.spawn(self,kind,pos)
 	if kind == Bats.KIND:
 		var bat := Bats.Mob.new(); bat.game = self; bat.kind = kind; bat.position = pos; bat.farm_id = farm_key
@@ -993,6 +1037,9 @@ func spawn_creature(kind: String, pos: Vector3, farm_key: String = "") -> Creatu
 	if not Creature.KINDS.has(kind): return null
 	var mob: Creature = ExpeditionCreature.new() if kind in ["ghast","blaze","slime","magma_cube","enderman","end_crystal","ender_dragon","shulker"] else (NetherResident.new() if kind in ["piglin","piglin_brute"] else Creature.new())
 	mob.game=self; mob.position=pos; mob.kind=kind; mob.farm_id=farm_key
+	if kind in MobBabies.KINDS: mob.set_meta("undead_baby",child)
+	mob.set_meta("no_jockey",not options.get("jockey",true))
+	if options.get("owned",false): mob.set_meta("jockey_owned",true)
 	creatures.add_child(mob)
 	return mob
 
@@ -1055,7 +1102,7 @@ func _spawn_creature() -> void:
 	if hostile and dimension == "overworld" and not underground:
 		var deep: Vector3i = UndeadVariants.drowned_cell(world,pos,UndeadVariants.rng_for(world))
 		if deep != Vector3i.MAX and Vector3(deep).distance_to(player.position) >= 10:
-			spawn_creature("drowned",Vector3(deep)+Vector3(0.5,0.05,0.5))
+			spawn_creature(MobBabies.natural("drowned",MobJockeys.rng_for(world).randf()),Vector3(deep)+Vector3(0.5,0.05,0.5))
 			return
 	pos = world.cave_spawn(pos) if underground or dimension == "nether" else _safe_spawn(pos)
 	if is_inf(pos.x): return
@@ -1120,7 +1167,7 @@ func _spawn_creature() -> void:
 	# The husk and the stray are the desert's and the cold's outdoor zombie and
 	# skeleton (`UndeadVariants.biome_variant`).
 	if dimension == "overworld": picked = UndeadVariants.biome_variant(picked,biome,Weather.outdoor(world,Vector3i(pos.floor())),randf())
-	spawn_creature(picked,pos)
+	spawn_creature(MobBabies.roll_kind(picked,MobJockeys.rng_for(world)),pos)
 
 func add_torch(p: Vector3i) -> void:
 	if torch_lights.has(p): return
@@ -1189,6 +1236,7 @@ func sleep_at(p: Vector3i) -> void:
 	save_game()
 
 func die(reason: String = "generic") -> void:
+	BowUse.cancel(player); CrossbowUse.cancel(player)
 	if state == "dead": return
 	# `mcl_sculk` spreads from a catalyst near where the player died, and stores
 	# experience in the new blocks. It is the module's only driver.
@@ -1214,6 +1262,8 @@ func die(reason: String = "generic") -> void:
 	save_game()
 
 func respawn() -> void:
+	for entity in entities.get_children():
+		if entity is Arrow and entity.attached: entity.queue_free()
 	PotionEffects.clear(player)
 	if player.has_meta("potion_death_done"): player.remove_meta("potion_death_done")
 	player.health=20; Hunger.reset(player); player.breath=10; player.velocity=Vector3.ZERO
@@ -1312,7 +1362,7 @@ func save_game(path: String = "", background: bool = false) -> bool:
 		dimensions = dimension_states.duplicate()
 		dimensions[dimension] = snapshot
 	else: dimension_states[dimension] = snapshot
-	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":snapshot.get("edits",[]),"growth":snapshot.growth,"stations":snapshot.stations,"block_states":snapshot.block_states,"adventure":snapshot.adventure,"inventory":inventory.slots.slice(0,Inventory.BASE_SLOTS),"pouches":inventory.pouch_slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"homes":player_homes.duplicate(true),"gamerules":game_rules.duplicate(),"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"nutrition":Hunger.snapshot(player),"ender_storage":ender_storage.duplicate(true),"effects":survival.effect_snapshot(),"armor":player.armor_slots,"offhand":player.offhand_slot,"time":day_time,"experience":experience,"journal":journal_step,"drops":snapshot.drops,"arrows":snapshot.arrows,"leads":snapshot.leads,"animals":snapshot.animals,"dimension":dimension,"dimensions":dimensions,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
+	var data: Dictionary={"version":SAVE_VERSION,"world_id":active_world_id,"name":world_name,"gamemode":gamemode,"seed":world.seed_value,"edits":snapshot.get("edits",[]),"growth":snapshot.growth,"stations":snapshot.stations,"block_states":snapshot.block_states,"adventure":snapshot.adventure,"inventory":inventory.slots.slice(0,Inventory.BASE_SLOTS),"pouches":inventory.pouch_slots,"grid":inventory.grid,"selected":inventory.selected,"cursor":hud.cursor,"position":[player.position.x,player.position.y,player.position.z],"spawn":[spawn_point.x,spawn_point.y,spawn_point.z],"homes":player_homes.duplicate(true),"gamerules":game_rules.duplicate(),"yaw":player.rotation.y,"pitch":player.camera.rotation.x,"health":player.health,"hunger":player.hunger,"nutrition":Hunger.snapshot(player),"ender_storage":ender_storage.duplicate(true),"effects":survival.effect_snapshot(),"armor":player.armor_slots,"offhand":player.offhand_slot,"time":day_time,"experience":experience,"enchanting":enchanting_state.duplicate(true),"journal":journal_step,"drops":snapshot.drops,"arrows":snapshot.arrows,"leads":snapshot.leads,"animals":snapshot.animals,"dimension":dimension,"dimensions":dimensions,"achievements":achievements.to_save(),"settings":{"distance":world.radius,"sensitivity":player.sensitivity,"audio":audio_enabled}}
 	data["difficulty"] = difficulty
 	data["server_settings"] = {"max_players":network.player_limit}
 	data["maps"] = maps.snapshot()
@@ -1440,12 +1490,23 @@ func enter_world(id: String, mode: String = "") -> bool:
 
 func _clean_station_storage() -> void:
 	for station_state in world.stations.values():
-		if station_state.get("kind","") == "shulker":
+		if station_state.get("kind","") == "composter": Composters.restore_state(station_state)
+		if station_state.get("kind","") == "bookshelf":
+			Bookshelves.clean_state(station_state)
+		elif station_state.get("kind","") == "banner":
+			station_state.slots = []
+			if station_state.get("item") is Dictionary: station_state.item = Inventory.clean_slot(station_state.item)
+			if station_state.has("layers"): station_state.layers = Banners.clean_layers(station_state.layers)
+		elif station_state.get("kind","") == "shulker":
 			station_state.slots = PortableStorage.clean_contents(station_state.get("slots",[]))
 		else:
 			for i in station_state.get("slots",[]).size(): station_state.slots[i] = Inventory.clean_slot(station_state.slots[i])
 
 func load_world_data(data: Dictionary) -> void:
+	BowUse.cancel(player); CrossbowUse.cancel(player)
+	# Restoring saved XP is not a new XP award. Suppress Mending while the
+	# inventory and second hand are reconstructed, even when loading from play.
+	state = "loading"
 	identity.migrate_save(data)
 	if int(data.get("version",2)) < 3:
 		Netherite.migrate_wear(data)
@@ -1495,7 +1556,7 @@ func load_world_data(data: Dictionary) -> void:
 	var saved_armor = data.get("armor",[])
 	player.offhand_slot={"id":0,"count":0,"wear":0}
 	var saved_offhand = data.get("offhand",null)
-	if saved_offhand is Dictionary: player.offhand_slot = saved_offhand
+	if saved_offhand is Dictionary: player.offhand_slot = Inventory.clean_slot(saved_offhand)
 	for i in 4: player.armor_slots[i]={"id":0,"count":0,"wear":0}
 	if saved_armor is Array:
 		for i in mini(4,saved_armor.size()):
@@ -1506,6 +1567,7 @@ func load_world_data(data: Dictionary) -> void:
 	achievements.from_save(data.get("achievements",{}))
 	day_time=float(data.get("time",0.3))
 	experience=float(data.get("experience",0))
+	enchanting_state = Enchanting.restore(data.get("enchanting",{}))
 	journal_step=int(data.get("journal",0))
 	var preferences: Dictionary=data.get("settings",{})
 	world.radius=clampi(int(preferences.get("distance",4)),2,6)
@@ -1834,7 +1896,7 @@ func known_biomes() -> Array:
 	var seen: Dictionary = {}
 	for z in range(-128,129,16):
 		for x in range(-128,129,16): seen[world.generator.biome(floori(player.position.x)+x,floori(player.position.z)+z)] = true
-	for name in ["Sunwash desert","Frostpine highlands","Swamp","Willow shores","Oakwood meadow","Warped forest","Soul sand valley","Crimson forest","Basalt deltas","Nether wastes","The End","End highlands"]: seen[name] = true
+	for name in ["WarpedForest","SoulSandValley","CrimsonForest","BasaltDeltas","NetherWastes","TheEnd","EndHighlands"]: seen[name] = true
 	var names: Array = seen.keys(); names.sort(); return names
 
 func find_biome(wanted: String) -> String:
@@ -1897,14 +1959,19 @@ func execute_command(command: String) -> String:
 			if dimension != "overworld": response="Set your spawn in the Overworld."
 			else: spawn_point=player.position; response="Spawn point set."
 		"locate":
-			if parts.size() < 2: response = "Usage: /locate village | stronghold | fortress | bastion | end_city"
+			if parts.size() >= 2 and parts[1] == "desert_well":
+				var found: Vector3i = DesertWells.nearest(TerrainGenerator.new(world.seed_value),player.position)
+				return "Desert well: "+str(found)+" in the Overworld." if found != Vector3i.ZERO else "No desert well found within 2,560 blocks."
+			if parts.size() >= 2 and parts[1] == "trail_ruins": return "Trail ruins: "+str(TrailRuins.nearest(TerrainGenerator.new(world.seed_value),player.position))+" in the Overworld."
+			if parts.size() >= 2 and parts[1] == "trial_chambers": return "Trial chambers: "+str(TrialChambers.nearest(world.generator,player.position))+" in the Overworld."
+			if parts.size() < 2: response = "Usage: /locate village | stronghold | fortress | bastion | end_city | trial_chambers | trail_ruins | desert_well"
 			elif parts[1] == "village": response = "Village: "+str(VillageGenerator.nearest(TerrainGenerator.new(world.seed_value),player.position).center+Vector3i(4,1,4))+" in the Overworld."
 			elif parts[1] == "stronghold": response = "Stronghold: "+str(WorldStructures.nearest_stronghold(world.seed_value,player.position))
 			elif parts[1] == "bastion":
 				var bastion: Dictionary = Bastions.nearest(TerrainGenerator.new(world.seed_value,"nether"),player.position)
 				response = "Nether bastion: "+str(bastion.center) if not bastion.is_empty() else "No bastion found inside the world boundary."
 			elif parts[1] == "fortress": response = "Nether fortress: "+str(Vector3i(roundi((player.position.x-60)/160)*160+60,29,roundi((player.position.z-60)/160)*160+60))
-			elif parts[1] == "end_city": response = "End city: (288, 43, 0) in the End highlands."
+			elif parts[1] == "end_city": response = "End city: (288, 43, 0) in EndHighlands."
 			else: response = "Unknown structure."
 		"findbiome":
 			# `findbiome`'s spiral search: walk outward from the player until a column
@@ -1931,7 +1998,7 @@ func execute_command(command: String) -> String:
 				response="Gave %d × %s." % [amount,Nodes.title(id)]
 		"spawn":
 			var kind: String=parts[1].to_lower() if parts.size()>=2 else ""
-			if not Creature.KINDS.has(kind): response="Usage: /spawn "+" | ".join(Creature.KINDS.keys())
+			if not Creature.KINDS.has(kind) and not MobBabies.ALIASES.has(kind): response="Usage: /spawn "+" | ".join(Creature.KINDS.keys()+MobBabies.ALIASES.keys())
 			else:
 				var ahead: Vector3=player.position-player.camera.global_basis.z*Vector3(1,0,1)*4.0
 				spawn_creature(kind,_safe_spawn(ahead))
@@ -1970,6 +2037,7 @@ func teleport(destination: Vector3) -> void:
 # `deferred` leaves the edit list to the caller as `edit_keys`/`edit_values`;
 # the autosave converts them on its worker instead of the main thread.
 func dimension_snapshot(deferred: bool = false) -> Dictionary:
+	Trials.snapshot(world)
 	boats.snapshot()
 	rails.snapshot()
 	Farming.snapshot(self)
@@ -1986,12 +2054,12 @@ func dimension_snapshot(deferred: bool = false) -> Dictionary:
 	for p in world.growth: growing.append([p.x,p.y,p.z,world.growth[p]])
 	var dropped: Array = []
 	for drop in drops.get_children():
-		if not drop.is_queued_for_deletion(): dropped.append({"position":[drop.position.x,drop.position.y,drop.position.z],"id":drop.item_id,"count":drop.amount,"wear":drop.wear,"data":drop.data.duplicate(true),"age":drop.age,"pickup_delay":drop.pickup_delay})
+		if not drop.is_queued_for_deletion(): dropped.append({"position":[drop.position.x,drop.position.y,drop.position.z],"id":drop.item_id,"count":drop.amount,"wear":drop.wear,"data":drop.data.duplicate(true),"age":drop.age,"pickup_delay":drop.pickup_delay,"insta_collect":drop.insta_collect})
 	var arrows: Array = []
 	for entity in entities.get_children():
 		if entity is TridentProjectile and entity.consumed and not entity.is_queued_for_deletion(): dropped.append({"position":[entity.position.x,entity.position.y,entity.position.z],"id":entity.stack.id,"count":1,"wear":entity.stack.wear,"data":entity.stack.get("data",{}).duplicate(true),"age":0})
-		if entity is Arrow and entity.stuck and not entity.is_queued_for_deletion():
-			arrows.append({"position":[entity.position.x,entity.position.y,entity.position.z],"rotation":[entity.rotation.x,entity.rotation.y,entity.rotation.z],"life":entity.life,"id":entity.item_id,"recoverable":entity.recoverable})
+		if entity is Arrow and not entity.attached and not entity.is_queued_for_deletion() and (entity.stuck or entity.item_id not in [VillageContent.TRIDENT,AntiqueArms.SHOT]):
+			arrows.append({"arrow_version":2,"position":[entity.position.x,entity.position.y,entity.position.z],"rotation":[entity.rotation.x,entity.rotation.y,entity.rotation.z],"velocity":[entity.velocity.x,entity.velocity.y,entity.velocity.z],"stuck":entity.stuck,"life":entity.life,"id":entity.item_id,"recoverable":entity.recoverable,"data":entity.potion_data.duplicate(true),"blocked_by":entity.blocked_by,"deflected":entity.deflected,"damage":entity.damage,"critical":entity.critical,"flame":entity.flame,"piercing":entity.piercing,"punch":entity.punch,"drag_clock":entity.drag_clock,"from_player":entity.from_player,"hits_player":entity.hits_player,"shooter_kind":entity.shooter_kind,"support":[entity.support.x,entity.support.y,entity.support.z] if entity.has_support else [],"launch_point":[entity.launch_point.x,entity.launch_point.y,entity.launch_point.z] if is_finite(entity.launch_point.x) else []})
 	var snapshot: Dictionary = {"animals":survival.animal_snapshot(),"leads":leads.snapshot(),"growth":growing,"stations":world.stations.duplicate(true),"block_states":world.block_states.duplicate(true),"adventure":world.adventure_state.duplicate(true),"drops":dropped,"arrows":arrows,"position":[player.position.x,player.position.y,player.position.z]}
 	if deferred:
 		snapshot["edit_keys"] = world.edits.keys()
@@ -2071,66 +2139,42 @@ func _arrival_portal() -> void:
 	if world.intersects(player.position): player.position = _safe_spawn(player.position)
 
 func xp_level() -> int:
-	var level: int = 0
-	var remaining: float = experience
-	while remaining >= 7+level*2:
-		remaining -= 7+level*2
-		level += 1
-	return level
+	return ExperienceCurve.level(experience)
 
 func xp_progress() -> float:
-	var level: int = xp_level()
-	return (experience-float(level*level+6*level))/(7+2*level)
+	return ExperienceCurve.progress(experience)
 
 func bookshelf_power(p: Vector3i) -> int:
-	var count: int = 0
-	for x in range(-2,3):
-		for z in range(-2,3):
-			if maxi(absi(x),absi(z)) != 2: continue
-			for y in 2:
-				var gap := Vector3i(roundi(x*0.5),y,roundi(z*0.5))
-				if world.node_at(p+Vector3i(x,y,z)) == Nodes.BOOKSHELF and world.node_at(p+gap) == Nodes.AIR: count += 1
-	return mini(15,count)
+	return Enchanting.bookshelf_power(world,p)
 
-func enchant_item(index: int, tier: int, p: Vector3i, selected_enchantment: String = "") -> bool:
+func enchant_item(index: int, tier: int, p: Vector3i, offer_token: String = "") -> bool:
 	if index < 0 or index >= inventory.slots.size() or tier < 1 or tier > 3 or world.node_at(p) != Nodes.ENCHANTING_TABLE: return false
-	var slot: Dictionary = inventory.slots[index]
-	var options: Array = Enchantments.choices(slot.id,true)
-	if options.is_empty(): return false
-	var kind: String = selected_enchantment
-	if kind.is_empty():
-		kind = "Sharpness" if Nodes.tool_kind(slot.id) == 3 else ("Efficiency" if Nodes.is_tool_id(slot.id) else ("Protection" if Nodes.is_armor(slot.id) else ("Power" if slot.id == Nodes.BOW else options[0])))
-	if not options.has(kind): return false
-	if not slot.get("data",{}).get("enchantments",{}).is_empty(): toast("This item is already enchanted."); return false
-	var shelves: int = bookshelf_power(p)
-	var required: int = [1,10,30][tier-1]
-	if shelves < [0,5,15][tier-1]: toast("More bookshelves are needed, with an air gap around the table."); return false
-	if gamemode != "creative":
-		if xp_level() < required or inventory.count_item(Nodes.LAPIS) < tier: toast("You need level %d and %d lapis lazuli." % [required,tier]); return false
-		if slot.id == Nodes.BOOK and slot.count > 1:
-			var trial := Inventory.new(); trial.slots = inventory.slots.duplicate(true)
-			trial.remove_item(Nodes.LAPIS,tier)
-			trial.slots[index].id = VillageContent.ENCHANTED_BOOK; trial.slots[index].count = 1
-			if trial.add_item(Nodes.BOOK,slot.count-1) > 0: toast("Make room for the enchanted book first."); return false
-		var level: int = xp_level()
-		inventory.remove_item(Nodes.LAPIS,tier)
-		experience -= float(level*level+6*level-(level-tier)*(level-tier)-6*(level-tier))
-	var enchantments: Dictionary = {kind:mini(tier,Enchantments.DATA[kind].max)}
-	if Enchantments.accepts(slot.id,"Unbreaking") and kind != "Unbreaking": enchantments["Unbreaking"] = tier
+	var held: Dictionary = inventory.slots[index]
+	if not Enchanting.fresh(held): toast("This item cannot receive a fresh table enchantment."); return false
+	var offers: Array = Enchanting.offers(self,held,bookshelf_power(p))
+	var offer: Dictionary = offers[tier-1]
+	if offer.is_empty(): toast("This offer has no enchantment."); return false
+	if not offer_token.is_empty() and offer.get("token","") != offer_token: toast("The enchanting offer changed."); return false
+	var required: int = int(offer.level_requirement)
+	if inventory.count_item(Nodes.LAPIS) < tier or gamemode != "creative" and xp_level() < required:
+		toast("You need level %d and %d lapis lazuli." % [required,tier]); return false
+	# Validate the complete inventory exchange before spending lapis or levels.
+	var staged := Inventory.new(); staged.slots = inventory.slots.duplicate(true)
+	staged.remove_item(Nodes.LAPIS,tier)
+	var slot: Dictionary = staged.slots[index]
 	if slot.id == Nodes.BOOK:
-		if slot.count > 1:
-			var plain_count: int = slot.count-1
-			slot.id = VillageContent.ENCHANTED_BOOK; slot.count = 1
-			var remaining: int = inventory.add_item(Nodes.BOOK,plain_count)
-			# Split the enchanted book from the plain stack, dropping overflow.
-			if remaining > 0: spawn_drop(player.position+Vector3.UP,Nodes.BOOK,remaining)
+		var remainder: int = slot.count-1
+		var original: Dictionary = slot.get("data",{}).duplicate(true)
 		slot.id = VillageContent.ENCHANTED_BOOK; slot.count = 1
+		if staged.add_item(Nodes.BOOK,remainder,0,original) > 0:
+			toast("Make room for the enchanted book first."); return false
 	if not slot.has("data"): slot.data = {}
-	slot.data.enchantments = enchantments
-	inventory.changed.emit()
-	sound("craft")
-	achievements.award("enchanter")
-	toast("%s %d · Unbreaking %d" % [kind,tier,tier])
+	slot.data.enchantments = offer.enchantments.duplicate(true)
+	inventory.slots = staged.slots; inventory.sync_pouches()
+	if gamemode != "creative": experience = ExperienceCurve.spend(experience,tier)
+	Enchanting.reset(self)
+	inventory.changed.emit(); sound("craft"); achievements.award("enchanter")
+	toast(offer.description)
 	return true
 
 func open_enchanting(p: Vector3i) -> void:
@@ -2149,6 +2193,7 @@ func open_book() -> void:
 # All manual drops use the same metadata-preserving transaction and throw.
 func drop_stack(slot: Dictionary, amount: int = 1) -> bool:
 	if slot.get("id",0) == 0 or amount <= 0: return false
+	if is_same(slot,inventory.held()): BowUse.cancel(player); CrossbowUse.cancel(player)
 	var count: int = mini(amount,int(slot.count))
 	var forward: Vector3 = -player.camera.global_basis.z
 	var origin: Vector3 = player.position+Vector3.UP*1.2

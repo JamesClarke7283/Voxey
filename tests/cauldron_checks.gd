@@ -124,7 +124,7 @@ static func _washing_checks(t: SceneTree) -> void:
 	t.check(result.changed and result.drops.is_empty() and inv.held().id == PortableStorage.SHULKER_PURPLE and inv.held().count == 1 and inv.held().data == metadata and Cauldrons.level(state) == 2,"creative washing transforms the original box in a full inventory without duplication")
 
 static func _rain_checks(t: SceneTree) -> void:
-	t.check(Cauldrons.rainy_biome("Oakwood meadow") and Cauldrons.rainy_biome("Swamp") and not Cauldrons.rainy_biome("Sunwash desert") and not Cauldrons.rainy_biome("Frostpine highlands"),"existing temperate, dry and snowy biomes determine rain eligibility without introducing weather")
+	t.check(Cauldrons.rainy_biome("Plains") and Cauldrons.rainy_biome("SnowyTaiga") and not Cauldrons.rainy_biome("Desert") and Cauldrons.collecting_biome("SnowyTaiga"),"source temperature separates rain, snow collection and arid biomes")
 	var state: Dictionary = {"kind":"cauldron"}
 	t.check(not Cauldrons.rain_step(state,55.9,true) and Cauldrons.level(state) == 0,"rain waits the source's fifty-six-second interval")
 	t.check(Cauldrons.rain_step(state,0.1,true) and Cauldrons.level(state) == 1,"exposed rain adds exactly one water portion at fifty-six seconds")
@@ -212,7 +212,7 @@ static func _live_checks(t: SceneTree, game: Node3D, p: Vector3i) -> void:
 	for x in range(-16,32):
 		for z in range(-16,32):
 			var candidate := Vector3i(x,p.y,z)
-			if game.world.loaded_at(Vector3(candidate)) and game.world.generator.biome(x,z) not in ["Sunwash desert","Frostpine highlands"]: rainy = candidate; break
+			if game.world.loaded_at(Vector3(candidate)) and Cauldrons.rainy_biome(game.world.generator.biome(x,z)): rainy = candidate; break
 	game.world.set_node(rainy,VillageContent.CAULDRON); game.world.set_node(rainy+Vector3i.UP,Nodes.AIR)
 	t.check(game.world.stations.has(VoxelWorld.station_key(rainy)),"newly placed cauldrons register for rainfall before any player interaction")
 	stored = game.world.get_station(rainy,"cauldron"); Cauldrons.set_contents(stored,0)
@@ -230,7 +230,7 @@ static func _live_checks(t: SceneTree, game: Node3D, p: Vector3i) -> void:
 	# where it is raining, on the same interval, so a cold biome needs both the
 	# collection gate and the material choice.
 	t.check(Cauldrons.MATERIALS.has("powder_snow"),"powder snow is a cauldron material")
-	t.check(Cauldrons.collecting_biome("Frostpine highlands") and not Cauldrons.collecting_biome("Sunwash desert"),"a snowy biome collects precipitation while an arid one does not")
+	t.check(Cauldrons.collecting_biome("SnowyTaiga") and not Cauldrons.collecting_biome("DeepDark"),"a snowy biome collects precipitation while an underground one does not")
 	# A powder-snow level round-trips instead of being coerced to water.
 	var snow_station: Dictionary = {"kind":"cauldron"}
 	Cauldrons.set_contents(snow_station,2,"powder_snow")
@@ -244,8 +244,8 @@ static func _live_checks(t: SceneTree, game: Node3D, p: Vector3i) -> void:
 		for z in range(-50,51):
 			if not game.world.loaded_at(Vector3(x,200,z)): continue
 			var top := Vector3i(x,200,z)
-			if cold_column == Vector3i.ZERO and game.world.generator.biome(x,z) == "Frostpine highlands": cold_column = top
-			elif warm_column == Vector3i.ZERO and Cauldrons.collecting_biome(game.world.generator.biome(x,z)) and game.world.generator.biome(x,z) != "Frostpine highlands": warm_column = top
+			if cold_column == Vector3i.ZERO and game.world.generator.biome(x,z) == "SnowyTaiga": cold_column = top
+			elif warm_column == Vector3i.ZERO and game.world.generator.biome(x,z) == "Plains": warm_column = top
 	if cold_column != Vector3i.ZERO:
 		game.world.set_node(cold_column,Nodes.AIR)
 		if Weather.has_snow(game.world,cold_column):

@@ -92,7 +92,7 @@ static func rose_spot(world: VoxelWorld, at: Vector3) -> Vector3i:
 
 # The whole impact, called by the projectile when it strikes something. `victim` may
 # be null for a block hit. Returns whether the strike was lethal to a mob.
-static func impact(game: Node3D, victim: Node3D, at: Vector3, heading: Vector3, difficulty: int) -> bool:
+static func impact(game: Node3D, victim: Node3D, at: Vector3, heading: Vector3, difficulty: int, attacker: Node3D = null) -> bool:
 	# The source's own order inside `hit_mob` is **withering, then the eight, then the
 	# blast**, and it matters: exploding first would kill a weak victim before the
 	# withering could land, so a cow would never catch it at all. A block hit still
@@ -107,7 +107,7 @@ static func impact(game: Node3D, victim: Node3D, at: Vector3, heading: Vector3, 
 	if victim is VoxeyPlayer:
 		# A player takes the eight through `hurt` with the source's own reason, so
 		# armor and the totem still apply the way `mcl_damage`'s flags say they do.
-		(victim as VoxeyPlayer).hurt(SKULL_DAMAGE,false,at,"wither_skull")
+		(victim as VoxeyPlayer).hurt(SKULL_DAMAGE,false,at,"wither_skull",attacker)
 		lethal = (victim as VoxeyPlayer).health <= 0
 	else:
 		mob = victim

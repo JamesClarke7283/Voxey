@@ -3,10 +3,25 @@ extends RefCounted
 
 # Mineclonia mcl_composters/init.lua and the compostability groups of the
 # corresponding foods and plants. Failed rolls still consume the ingredient.
+static var source_chances: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/compost_items.json")).items
+static var item_chances: Dictionary = {}
 static func chance(id: int) -> int:
+	var name: String = ToolCapabilities.node_name(id)
+	if not name.is_empty() and source_chances.has(name): return int(source_chances[name])
+	if item_chances.is_empty():
+		Harvesting.initialize()
+		for item in Harvesting.item_ids:
+			if source_chances.has(item): item_chances[int(Harvesting.item_ids[item])] = int(source_chances[item])
+	if item_chances.has(id): return int(item_chances[id])
+	return fallback_chance(id)
+
+static func fallback_chance(id: int) -> int:
+	var configured: int = int(VillageContent.DATA.get(id,{}).get("compostability",0))
+	if configured > 0: return configured
 	if FruitCrops.is_seed(id): return 30
 	if WoodTypes.is_leaves(id) or WoodTypes.is_sapling(id): return 30
 	if FoodFeatures.flower(id): return 65
+	if SweetBerryCrops.compost_chance(id) > 0: return SweetBerryCrops.compost_chance(id)
 	if id in [Nodes.SEEDS,Nodes.SAPLING,Nodes.LEAVES,VillageContent.BEETROOT_SEEDS,VillageContent.KELP,VillageContent.DRIED_KELP,VillageContent.SWEET_BERRY,VillageContent.NETHER_WART_ITEM,VillageContent.SWAMP_GRASS]: return 30
 	if id in [Nodes.CACTUS,Nodes.VINE,Nodes.SUGAR_CANE,Nodes.MELON_SLICE,VillageContent.DRIED_KELP_BLOCK]: return 50
 	if id in [Nodes.APPLE,Nodes.GRAIN,Nodes.FLOWER,Nodes.PUMPKIN,Nodes.SNOW_GOLEM_SCARECROW,Nodes.MELON,Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM,VillageContent.CARROT,VillageContent.POTATO,VillageContent.BEETROOT,VillageContent.COCOA_BEANS,VillageContent.LILY_PAD]: return 65
@@ -19,14 +34,36 @@ static func chance(id: int) -> int:
 static func level(station: Dictionary) -> int:
 	return clampi(int(station.get("compost",0)),0,8)
 
-static func add(station: Dictionary, id: int, roll: int = -1) -> bool:
+static func apply(station: Dictionary, id: int, roll: int = -1, auto_cycle: bool = false) -> Dictionary:
+	var output: int = 0
+	if level(station) >= 7 and auto_cycle:
+		station.compost = 0; station.erase("maturation"); output = 1
 	var probability: int = chance(id)
-	if level(station) >= 7 or probability == 0: return false
+	if level(station) >= 7 or probability == 0: return {"accepted":false,"bone_meal":output}
 	if roll < 0: roll = randi_range(1,100)
 	if roll <= probability:
 		station.compost = level(station)+1
 		if level(station) == 7: station.maturation = 1.0
-	return true
+	station.compost_version = 2
+	return {"accepted":true,"bone_meal":output}
+
+static func add(station: Dictionary, id: int, roll: int = -1) -> bool:
+	return apply(station,id,roll).accepted
+
+static func restore_state(station: Dictionary) -> void:
+	# Old saves used seven as the immediately ready state, without a timer.
+	if level(station) == 7:
+		if int(station.get("compost_version",0)) < 2 and not station.has("maturation"): station.compost = 8
+		else: station.maturation = 1.0
+	station.compost_version = 2
+
+static func column_loaded(world: VoxelWorld, column: Vector2i) -> void:
+	for entry in world.stations_of("composter"):
+		if Vector2i(entry[1].x >> 4,entry[1].z >> 4) == column: restore_state(entry[2])
+
+static func boxes(station: Dictionary) -> Array:
+	var height: float = (1+mini(7,level(station))*2)/16.0
+	return [AABB(Vector3.ZERO,Vector3(0.125,1,1)),AABB(Vector3(0.875,0,0),Vector3(0.125,1,1)),AABB(Vector3(0.125,0,0.875),Vector3(0.75,1,0.125)),AABB(Vector3(0.125,0,0),Vector3(0.75,1,0.125)),AABB(Vector3.ZERO,Vector3(1,height,1))]
 
 static func step(station: Dictionary, delta: float) -> void:
 	if level(station) != 7: return
@@ -42,6 +79,7 @@ static func harvest(station: Dictionary) -> bool:
 	return true
 
 static func interact(game: Node, p: Vector3i) -> void:
+	if Signs.sneaking(game): return
 	var station: Dictionary = game.world.get_station(p,"composter")
 	var before: int = level(station)
 	if harvest(station):

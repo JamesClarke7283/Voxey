@@ -21,7 +21,7 @@ const MAX_HEIGHT = 4
 const FLOWER_CHANCE_TALL = 0.25
 const FLOWER_CHANCE_SHORT = 0.1
 # Source `grow_cactus` sand group.
-const SOIL = [Nodes.SAND,Archaeology.SUSPICIOUS_SAND]
+const SOIL = [Nodes.SAND,Archaeology.SUSPICIOUS_SAND,ShapeMaterials.RED_SAND]
 
 const DATA = {
 	701:{"name":"Cactus flower","block":true,"shape":"plant","color":"e06aa0","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"source_node":"mcl_core:cactus_flower"},

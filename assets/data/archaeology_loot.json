@@ -1,0 +1,294 @@
+{
+  "license": "GPL-3.0-or-later",
+  "source_hashes": {
+    "mods/ITEMS/mcl_sus_nodes/init.lua": "5b7e07671a284df2f4219811b2adb470b8753825d7695f784ae047763c85aa6d"
+  },
+  "tables": {
+    "trail_ruins_common": [
+      {
+        "item": "mcl_core:emerald",
+        "weight": 2
+      },
+      {
+        "item": "mcl_farming:wheat_item",
+        "weight": 2
+      },
+      {
+        "item": "mcl_farming:hoe_wood",
+        "weight": 2
+      },
+      {
+        "item": "mcl_core:clay_lump",
+        "weight": 2
+      },
+      {
+        "item": "mcl_core:brick",
+        "weight": 2
+      },
+      {
+        "item": "mcl_dyes:yellow",
+        "weight": 2
+      },
+      {
+        "item": "mcl_dyes:blue",
+        "weight": 2
+      },
+      {
+        "item": "mcl_dyes:light_blue",
+        "weight": 2
+      },
+      {
+        "item": "mcl_dyes:white",
+        "weight": 2
+      },
+      {
+        "item": "mcl_dyes:orange",
+        "weight": 2
+      },
+      {
+        "item": "mcl_candles:candle_1",
+        "weight": 2,
+        "candle_colors": [
+          "red",
+          "green",
+          "purple",
+          "brown"
+        ]
+      },
+      {
+        "item": "mcl_panes:pane_magenta_flat",
+        "weight": 1
+      },
+      {
+        "item": "mcl_panes:pane_pink_flat",
+        "weight": 1
+      },
+      {
+        "item": "mcl_panes:pane_blue_flat",
+        "weight": 1
+      },
+      {
+        "item": "mcl_panes:pane_light_blue_flat",
+        "weight": 1
+      },
+      {
+        "item": "mcl_panes:pane_red_flat",
+        "weight": 1
+      },
+      {
+        "item": "mcl_panes:pane_yellow_flat",
+        "weight": 1
+      },
+      {
+        "item": "mcl_signs:hanging_sign_spruce",
+        "weight": 1
+      },
+      {
+        "item": "mcl_signs:hanging_sign_oak",
+        "weight": 1
+      },
+      {
+        "item": "mcl_core:gold_nugget",
+        "weight": 1
+      },
+      {
+        "item": "mcl_core:coal_lump",
+        "weight": 1
+      },
+      {
+        "item": "mcl_farming:wheat_seeds",
+        "weight": 1
+      },
+      {
+        "item": "mcl_farming:beetroot_seeds",
+        "weight": 1
+      },
+      {
+        "item": "mcl_core:deadbush",
+        "weight": 1
+      },
+      {
+        "item": "mcl_flowerpots:flower_pot",
+        "weight": 1
+      },
+      {
+        "item": "mcl_mobitems:string",
+        "weight": 1
+      }
+    ],
+    "trail_ruins_rare": [
+      {
+        "item": "mcl_pottery_sherds:burn",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:danger",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:friend",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:heart",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:heartbreak",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:howl",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:sheaf",
+        "weight": 1
+      },
+      {
+        "item": "mcl_armor:wayfinder",
+        "weight": 1
+      }
+    ],
+    "desert_pyramid_archeology": [
+      {
+        "item": "mcl_pottery_sherds:archer",
+        "weight": 1
+      },
+      {
+        "item": "mcl_core:emerald",
+        "weight": 1
+      },
+      {
+        "item": "mcl_mobitems:gunpowder",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:miner",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:prize",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:skull",
+        "weight": 1
+      },
+      {
+        "item": "mcl_tnt:tnt",
+        "weight": 1
+      },
+      {
+        "item": "mcl_core:diamond",
+        "weight": 1
+      }
+    ],
+    "ocean_ruins_warm": [
+      {
+        "item": "mcl_core:coal_lump",
+        "weight": 2
+      },
+      {
+        "item": "mcl_core:emerald",
+        "weight": 2
+      },
+      {
+        "item": "mcl_farming:wheat_item",
+        "weight": 2
+      },
+      {
+        "item": "mcl_farming:hoe_wood",
+        "weight": 2
+      },
+      {
+        "item": "mcl_core:gold_nugget",
+        "weight": 2
+      },
+      {
+        "item": "mcl_pottery_sherds:angler",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:shelter",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:snort",
+        "weight": 1
+      },
+      {
+        "item": "mcl_tools:axe_iron",
+        "weight": 1
+      }
+    ],
+    "ocean_ruins_cold": [
+      {
+        "item": "mcl_core:coal_lump",
+        "weight": 2
+      },
+      {
+        "item": "mcl_core:emerald",
+        "weight": 2
+      },
+      {
+        "item": "mcl_farming:wheat_item",
+        "weight": 2
+      },
+      {
+        "item": "mcl_farming:hoe_wood",
+        "weight": 2
+      },
+      {
+        "item": "mcl_core:gold_nugget",
+        "weight": 2
+      },
+      {
+        "item": "mcl_pottery_sherds:blade",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:explorer",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:mourner",
+        "weight": 1
+      },
+      {
+        "item": "mcl_pottery_sherds:plenty",
+        "weight": 1
+      },
+      {
+        "item": "mcl_tools:axe_iron",
+        "weight": 1
+      }
+    ],
+    "desert_well": [
+      {
+        "item": "mcl_pottery_sherds:arms_up",
+        "weight": 2
+      },
+      {
+        "item": "mcl_pottery_sherds:brewer",
+        "weight": 2
+      },
+      {
+        "item": "mcl_core:brick",
+        "weight": 1
+      },
+      {
+        "item": "mcl_core:emerald",
+        "weight": 1
+      },
+      {
+        "item": "mcl_core:stick",
+        "weight": 1
+      },
+      {
+        "item": "mcl_sus_stew:stew",
+        "weight": 1
+      }
+    ]
+  }
+}

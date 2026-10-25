@@ -8,11 +8,17 @@ const OAK = 6600
 # The later species each own a 20-id block: four wall facings, then sixteen standing
 # facings. The classic block keeps its own layout so the ids never shift.
 static var BASES = [6600]
+static var SPECIES = {6600:0}
+# The old later-species sign ranges overlapped copper-door states. Only saved
+# sign stations prove that a placed overlapping ID was a sign, not a door.
+const LEGACY_BASES = [9558,9578,9601,9633,9665]
+const REPLACEMENT_BASES = [13332,13352,13372,13540,13560]
 const STANDING = OAK+4
 
-static func register_base(base: int) -> void:
+static func register_base(base: int, species: int = 0) -> void:
 	# Idempotent: a dimension change re-runs `configure`.
 	if not BASES.has(base): BASES.append(base)
+	SPECIES[base] = species
 # Hanging signs. The source registers three placements — a ceiling `hanging_sign`, an
 # `attached` form under a non-full support, and a `wall` form on a side. Each species owns
 # a 20-id block, like the standing signs: sixteen ceiling/attached rotations, then four
@@ -30,13 +36,14 @@ static func hanging_base(id: int) -> int:
 		if id >= b and id < b+20: return b
 	return 0
 static func is_hanging(id: int) -> bool: return hanging_base(id) != 0
+static func is_any(id: int) -> bool: return is_sign(id) or is_hanging(id)
 static func hanging_item(id: int) -> int: return HANGING_ITEMS[maxi(0,HANGING_BASES.find(hanging_base(id)))] if is_hanging(id) else 0
 static func hanging_wall(id: int) -> bool: return is_hanging(id) and id-hanging_base(id) >= 16
 static func hanging_facing(id: int) -> int: return (id-hanging_base(id)-16) if hanging_wall(id) else (id-hanging_base(id))
 static func hanging_kind(id: int) -> int: return maxi(0,HANGING_BASES.find(hanging_base(id))) if is_hanging(id) else -1
 static func hanging_title(id: int) -> String:
 	var kind: int = hanging_kind(id)
-	return "Oak hanging sign" if kind >= 0 else ""
+	return WoodTypes.NAMES[kind]+" hanging sign" if kind >= 0 else ""
 static func hanging_material(id: int) -> int:
 	var kind: int = hanging_kind(id)
 	return Nodes.PLANKS if kind <= 0 else WoodTypes.PLANKS[kind]
@@ -60,19 +67,21 @@ static func is_sign(id: int) -> bool: return base(id) != 0
 static func item(id: int) -> int: return base(id) if is_sign(id) else OAK
 static func wall(id: int) -> bool: return is_sign(id) and id-base(id) < 4
 static func facing(id: int) -> int: return (id-base(id)) if wall(id) else (id-base(id)-4)
-static func yaw(id: int) -> float: return facing(id)*(PI/2.0 if wall(id) else TAU/16.0)
+static func yaw(id: int) -> float:
+	if is_hanging(id): return hanging_facing(id)*(PI/2.0 if hanging_wall(id) else TAU/16.0)
+	return facing(id)*(PI/2.0 if wall(id) else TAU/16.0)
 static func title(id: int) -> String:
-	var kind: int = maxi(0,BASES.find(base(id)))
+	var kind: int = int(SPECIES.get(base(id),0))
 	return "Oak sign" if kind == 0 else WoodTypes.NAMES[kind]+" sign"
 static func material(id: int) -> int:
-	var kind: int = maxi(0,BASES.find(base(id)))
+	var kind: int = int(SPECIES.get(base(id),0))
 	return Nodes.PLANKS if kind == 0 else WoodTypes.PLANKS[kind]
 static func support_offset(id: int) -> Vector3i: return SUPPORT[facing(id)] if wall(id) else Vector3i.DOWN
 
 static func definitions() -> Dictionary:
 	var result: Dictionary = {}
-	for kind in BASES.size():
-		var base_id: int = BASES[kind]
+	for base_id in BASES:
+		var kind: int = int(SPECIES.get(base_id,0))
 		var color: String = "b28c52" if kind == 0 else WoodTypes.WOOD_COLORS[kind]
 		for offset in 20: result[base_id+offset] = {"name":("Oak sign" if kind == 0 else WoodTypes.NAMES[kind]+" sign"),"block":true,"shape":"sign","color":color,"stack":16,"hardness":1.0,"tool":1,"hidden":offset != 0}
 	# A hanging sign carries its own item id; its twenty states are hidden above it.
@@ -84,27 +93,64 @@ static func definitions() -> Dictionary:
 	return result
 
 static func recipes(inv: Inventory) -> void:
-	for kind in BASES.size():
+	for base_id in BASES:
+		var kind: int = int(SPECIES.get(base_id,0))
 		var planks: int = Nodes.PLANKS if kind == 0 else WoodTypes.PLANKS[kind]
-		inv._recipe(("Oak sign" if kind == 0 else WoodTypes.NAMES[kind]+" sign"),BASES[kind],3,[planks,planks,planks,planks,planks,planks,0,Nodes.STICK,0],3,"table")
-	# The source's hanging sign is a stripped log over two chains, six out.
+		inv._recipe(("Oak sign" if kind == 0 else WoodTypes.NAMES[kind]+" sign"),base_id,3,[planks,planks,planks,planks,planks,planks,0,Nodes.STICK,0],3,"table")
+	# mcl_trees/api.lua: two chains above six matching stripped logs, six out.
 	for kind in HANGING_BASES.size():
-		var log: int = WoodTypes.log_id(kind)
+		var log: int = WoodTypes.base(kind)+4
 		var chain: int = CopperDecor.CHAIN
 		inv._recipe(("Oak hanging sign" if kind == 0 else WoodTypes.NAMES[kind]+" hanging sign"),HANGING_ITEMS[kind],6,
-			[log,log,log,0,chain,0,0,chain,0],3,"table")
+			[chain,0,chain,log,log,log,log,log,log],3,"table")
+
+static func migrate_item(id: int) -> int:
+	var index: int = LEGACY_BASES.find(id)
+	return REPLACEMENT_BASES[index] if index >= 0 else id
+
+static func restore_legacy(world: VoxelWorld) -> void:
+	if world.adventure_state.get("sign_ranges",0) >= 1: return
+	for key in world.stations:
+		var entry: Dictionary = world.stations[key]
+		if entry.get("kind","") != "sign": continue
+		var parts: PackedStringArray = str(key).split(",")
+		if parts.size() != 3: continue
+		var p := Vector3i(int(parts[0]),int(parts[1]),int(parts[2]))
+		var id: int = int(world.edits.get(p,0))
+		for i in LEGACY_BASES.size():
+			if id >= LEGACY_BASES[i] and id < LEGACY_BASES[i]+20:
+				world.record_edit(p,REPLACEMENT_BASES[i]+id-LEGACY_BASES[i],id)
+				break
+	world.adventure_state.sign_ranges = 1
 
 static func boxes(id: int) -> Array:
 	if is_hanging(id):
-		var y: float = 5.0/16.0 if hanging_wall(id) else 8.0/16.0
-		return [Barriers.rotate_box(AABB(Vector3(0,y,0.375),Vector3(1,8.0/16,0.25)),posmod(-hanging_facing(id),4))]
+		var result: Array = [rotated_box(AABB(Vector3(0.0625,0,0.4375),Vector3(0.875,0.625,0.125)),yaw(id))]
+		if hanging_wall(id): result.append_array(hanging_collision(id))
+		return result
 	if wall(id): return [Barriers.rotate_box(AABB(Vector3(0,0.25,0),Vector3(1,0.5,5.0/56.0)),posmod(-facing(id),4))]
 	return [AABB(Vector3(0.3,0,0.3),Vector3(0.4,1,0.4))]
 
+static func rotated_box(box: AABB, angle: float) -> AABB:
+	var result := AABB(Vector3(0.5,0,0.5)+(box.position-Vector3(0.5,0,0.5)).rotated(Vector3.UP,angle),Vector3.ZERO)
+	for corner in 8:
+		var p: Vector3 = box.position+Vector3(box.size.x if corner&1 else 0,box.size.y if corner&2 else 0,box.size.z if corner&4 else 0)
+		result = result.expand(Vector3(0.5,0,0.5)+(p-Vector3(0.5,0,0.5)).rotated(Vector3.UP,angle))
+	return result
+
+static func hanging_collision(id: int) -> Array:
+	if not hanging_wall(id): return []
+	return [rotated_box(AABB(Vector3(0,0.875,0.375),Vector3(1,0.125,0.25)),yaw(id))]
+
 static func mesh(out: Array, at: Vector3, id: int) -> void:
 	var parts: Array = BlockMesher._empty()
-	var tile: int = Nodes.tile(material(id),0)
-	if wall(id): BlockMesher._art_box(parts,Vector3(0.5,0.5,1.0/24),Vector3(1,0.5,1.0/12),tile,tile)
+	var tile: int = Nodes.tile(hanging_material(id) if is_hanging(id) else material(id),0)
+	if is_hanging(id):
+		BlockMesher._art_box(parts,Vector3(0.5,0.3125,0.5),Vector3(0.875,0.625,0.125),tile,tile)
+		var chain: int = Nodes.tile(CopperDecor.CHAIN,0)
+		for x in [0.1875,0.8125]: BlockMesher._art_box(parts,Vector3(x,0.8125,0.5),Vector3(0.04,0.375,0.04),chain,chain)
+		if hanging_wall(id): BlockMesher._art_box(parts,Vector3(0.5,0.9375,0.5),Vector3(1,0.125,0.25),tile,tile)
+	elif wall(id): BlockMesher._art_box(parts,Vector3(0.5,0.5,1.0/24),Vector3(1,0.5,1.0/12),tile,tile)
 	else:
 		BlockMesher._art_box(parts,Vector3(0.5,7.0/24,0.5),Vector3(1.0/12,7.0/12,1.0/12),tile,tile)
 		BlockMesher._art_box(parts,Vector3(0.5,5.0/6,0.5),Vector3(1,0.5,1.0/12),tile,tile)
@@ -118,7 +164,7 @@ static func mesh(out: Array, at: Vector3, id: int) -> void:
 static func icon_faces(id: int) -> Array:
 	id = hanging_item(id) if is_hanging(id) else item(id)
 	if not icons.has(id):
-		var source: int = (hanging_base(id)+4) if is_hanging(id) else STANDING
+		var source: int = hanging_base(id) if is_hanging(id) else item(id)+4
 		var out: Array = BlockMesher._empty(); mesh(out,Vector3.ZERO,source)
 		icons[id] = Barriers.project_icon(out)
 	return icons[id]
@@ -269,7 +315,7 @@ static func validate_support(world: VoxelWorld, p: Vector3i) -> void:
 		pending[p] = true; world.set_meta("sign_support_pending",pending); return
 	var id: int = world.node_at(p)
 	if (is_sign(id) or is_hanging(id)) and not supported(world,p,id) and world.set_node(p,Nodes.AIR):
-		world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,hanging_item(id) if is_hanging(id) else OAK,1)
+		world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,hanging_item(id) if is_hanging(id) else item(id),1)
 
 static func finish_piston(world: VoxelWorld) -> void:
 	var pending: Dictionary = world.get_meta("sign_support_pending",{})
@@ -294,7 +340,7 @@ static func changed(world: VoxelWorld, p: Vector3i, old_id: int, new_id: int) ->
 		station(world,p)
 		if world.circuits.moving: validate_support(world,p)
 	if not airlike(new_id): return
-	for offset in [Vector3i.UP,Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
+	for offset in [Vector3i.UP,Vector3i.DOWN,Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
 		var at: Vector3i = p+offset; var id: int = world.node_at(at)
 		if not (is_sign(id) or is_hanging(id)) or at+support_offset_for(id) != p: continue
 		validate_support(world,at)
@@ -327,6 +373,7 @@ static func display_model(game: Node3D, p: Vector3i, state: Dictionary) -> Node3
 	label.modulate = Color(str(state.get("color",DEFAULT_COLOR))); label.shaded = not state.get("glow",false)
 	label.double_sided = false; label.no_depth_test = false
 	var local_position := Vector3(0.5,0.73,1.0/12+0.002) if wall(id) else Vector3(0.5,1.0+1.0/12-0.02,0.5+1.0/24+0.002)
+	if is_hanging(id): local_position = Vector3(0.5,0.52,0.5645)
 	var pivot := Vector3(0.5,0,0.5)
 	label.position = pivot+(local_position-pivot).rotated(Vector3.UP,yaw(id)); label.rotation.y = yaw(id)
 	model.add_child(label); return model

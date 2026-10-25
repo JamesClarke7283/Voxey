@@ -86,6 +86,8 @@ static func hits_node(game: Node3D, at: Vector3, cell: Vector3i) -> void:
 	game.puff(at,Color("dce8ee"),18,2.0)
 	var id: int = game.world.node_at(cell)
 	# `if core.get_item_group(node.name, "bell") >= 1 then mcl_bells.ring_once(pos)`.
+	if Barriers.is_gate(id):
+		Barriers.set_open(game.world,cell,not Barriers.open(id)); return
 	if id == VillageContent.BELL:
 		game.villages.ring_bell(cell); return
 	# `mcl_end:chorus_flower`: a living flower is destroyed, a dead one is replaced by

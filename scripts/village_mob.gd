@@ -5,11 +5,15 @@ var person_key: String = ""
 # Where the killing blow came from, so `die` can tell a zombie's kill from a
 # player's. `can_infect` looks for a zombie standing at this point.
 var death_blow := Vector3.INF
+var damage_source: Node3D
 var profession: String = "unemployed"
 var route: Array = []
 var destination := Vector3.INF
 var path_timer: float = 0.0
 var sleeping: bool = false
+var farmer_work: Dictionary = {}
+var farmer_fields: Dictionary = {}
+var social: Dictionary = {}
 var creator: String = ""
 var revenge_target: Node3D
 var anger_remaining: float = 0.0
@@ -17,6 +21,11 @@ var crack_parts: Array = []
 var environment_clock: float = 0.0
 
 func bind(person: Dictionary) -> void:
+	farmer_work = {}; farmer_fields = {}; social = {}
+	if kind == "villager":
+		VillagerFood.clean(person); VillagerGossip.initialize(person)
+		VillagerTrading.initialize(person,(str(game.world.generator.world_seed)+str(person.key)).hash())
+	if kind == "villager": person.inventory = VillagerInventory.clean(person.get("inventory",[]))
 	person_key = person.key; profession = person.profession; health = person.health
 	custom_name = NameTags.bounded(str(person.get("custom_name","")),30)
 	creator = str(person.get("creator",""))
@@ -87,18 +96,21 @@ func _build_model() -> void:
 		if not r.is_empty():
 			_box(Vector3(0.13,0.82,-0.23),Vector3(0.09,0.09,0.025),[Color("b78a5b"),Color("a2a5a5"),Color("dfbb53"),Color("40bd89"),Color("72d5d0")][int(r.level)-1],"")
 			var young: bool = r.get("age",0.0) > 0
-			model.scale = Vector3.ONE*(0.55 if young else 1.0)
-			height = 1.1 if young else 1.95; width = 0.16 if young else 0.28
+			model.scale = Vector3.ONE*(0.5 if young else 1.0)
+			height = 0.95 if young else 1.9; width = 0.125 if young else 0.25
 
 func store_record() -> void:
 	var r: Dictionary = game.villages.record(person_key)
 	if r.is_empty(): return
 	r.position = [position.x,position.y,position.z]; r.health = health
 	r.custom_name = custom_name
+	var vehicle: Creature = MobJockeys.vehicle(self)
+	if vehicle != null: r.jockey_vehicle = vehicle.farm_id
+	elif not get_meta("jockey_owned",false): r.erase("jockey_vehicle")
 	if kind == "iron_golem":
 		r.creator = creator; r.anger_remaining = anger_remaining
 		r.angry_player = is_instance_valid(revenge_target) and revenge_target == game.player
-		r.effects = PotionEffects.snapshot(self)
+	r.effects = PotionEffects.snapshot(self)
 
 func _physics_process(delta: float) -> void:
 	if not game.playing(): return
@@ -107,6 +119,8 @@ func _physics_process(delta: float) -> void:
 	if game.leads.sleep_if_unloaded(self) or not game.world.loaded_at(position): return
 	var r: Dictionary = game.villages.record(person_key)
 	if r.is_empty(): return
+	if kind == "villager": VillagerTrading.tick(self,delta)
+	VillagerInventory.pickup(self)
 	life += delta; attack_cooldown -= delta; path_timer -= delta
 	anger_remaining = maxf(0,anger_remaining-delta); hurt_flash = maxf(0,hurt_flash-delta)
 	if anger_remaining <= 0 or not is_instance_valid(revenge_target) or revenge_target.is_queued_for_deletion(): revenge_target = null
@@ -116,8 +130,6 @@ func _physics_process(delta: float) -> void:
 		if mob == self or not mob.hostile or mob.is_queued_for_deletion() or kind == "iron_golem" and mob.kind == "creeper": continue
 		var d: float = position.distance_to(mob.position)
 		if d < distance: threat = mob; distance = d
-	if profession == "farmer" and int(life)%24 > 8 and fposmod(game.day_time,1.0) > 0.25 and fposmod(game.day_time,1.0) < 0.55:
-		goal = VillageLife.vec(r.center)+Vector3(-14,1,-5)
 	var night: bool = fposmod(game.day_time,1.0) > 0.72 or fposmod(game.day_time,1.0) < 0.2
 	if kind == "iron_golem":
 		iron_environment(delta)
@@ -136,6 +148,13 @@ func _physics_process(delta: float) -> void:
 			attack_cooldown = 1; super.hit(3,threat.position); store_record()
 			if health <= 0: return
 		if r.get("age",0.0) > 0: goal = VillageLife.vec(r.center)+Vector3(sin(life*0.3)*5,1,cos(life*0.3)*5)
+	var social_goal: Vector3 = Vector3.INF
+	if kind == "villager": social_goal = VillagerSocial.step(self,delta,not night and threat == null and game.villages.alarm <= 0 and not game.leads.attached(self))
+	if profession == "farmer" and social_goal == Vector3.INF:
+		var daytime: float = fposmod(game.day_time,1.0)
+		var activity_goal: Vector3 = FarmerFields.step(self,delta,r.get("age",0.0) <= 0 and daytime >= 0.23 and daytime <= 0.65 and threat == null and game.villages.alarm <= 0 and not game.leads.attached(self) and game.world.node_at(Vector3i(VillageLife.vec(r.job))) == VillageContent.COMPOSTER)
+		if activity_goal != Vector3.INF: goal = activity_goal
+	if social_goal != Vector3.INF: goal = social_goal
 	if game.leads.player_attached(self): goal = game.player.position
 	sleeping = not game.leads.attached(self) and kind == "villager" and night and position.distance_to(goal) < 1.0 and VillageContent.is_bed(game.world.node_at(Vector3i(VillageLife.vec(r.bed))))
 	model.rotation.x = PI*0.5 if sleeping else 0.0
@@ -147,27 +166,29 @@ func _physics_process(delta: float) -> void:
 	if toward.length() < 0.3 and not route.is_empty(): route.pop_front()
 	var moving: bool = toward.length() > 0.3
 	var speed: float = (2.2 if threat != null else 1.15) if kind == "villager" else (2.5 if threat != null or is_instance_valid(revenge_target) else 1.5)
-	velocity.x = toward.normalized().x*speed if moving else 0.0; velocity.z = toward.normalized().z*speed if moving else 0.0
-	velocity.y = maxf(-20,velocity.y-20*delta)
-	for axis in [0,2,1]:
-		var next: Vector3 = position; next[axis] += velocity[axis]*delta
-		var door: Vector3i = Vector3i((next+toward.normalized()*0.4).floor())
-		if kind == "villager" and (game.world.node_at(door) == VillageContent.WOODEN_DOOR or Doors.wooden(game.world.node_at(door)) and not Doors.opened(game.world.node_at(door))): game.survival.toggle_door(door)
-		if not game.world.intersects(next,width,height): position = next
-		elif axis == 1: velocity.y = 0
-		elif not game.world.intersects(position+Vector3.UP*1.05,width,height): velocity.y = 6.0
+	if not MobJockeys.move(self,delta,toward.normalized() if moving else Vector3.ZERO):
+		velocity.x = toward.normalized().x*speed if moving else 0.0; velocity.z = toward.normalized().z*speed if moving else 0.0
+		velocity.y = maxf(-20,velocity.y-20*delta)
+		for axis in [0,2,1]:
+			var next: Vector3 = position; next[axis] += velocity[axis]*delta
+			var door: Vector3i = Vector3i((next+toward.normalized()*0.4).floor())
+			if kind == "villager" and (game.world.node_at(door) == VillageContent.WOODEN_DOOR or Doors.wooden(game.world.node_at(door)) and not Doors.opened(game.world.node_at(door))): game.survival.toggle_door(door)
+			if not game.world.intersects(next,width,height): position = next
+			elif axis == 1: velocity.y = 0
+			elif not game.world.intersects(position+Vector3.UP*1.05,width,height): velocity.y = 6.0
 	if moving: model.rotation.y = lerp_angle(model.rotation.y,atan2(-toward.x,-toward.z),delta*5)
 	else:
-		var look: Vector3 = game.player.position-position
+		var look: Vector3 = (VillageLife.vec(r.job)+Vector3(0.5,0,0.5) if profession == "farmer" and farmer_fields.get("mode","") == "work" else (social.partner.position if is_instance_valid(social.get("partner")) else game.player.position))-position
 		if look.length() < 5: model.rotation.y = lerp_angle(model.rotation.y,atan2(-look.x,-look.z),delta*3)
 	for i in legs.size(): legs[i].rotation.x = sin(life*7+i*PI)*0.38 if moving else 0.0
 	for arm in arms: arm.rotation.x = -1.0 if attack_cooldown > 0.65 else 0.0
+	if MobJockeys.vehicle(self) != null: MobJockeys.sync(self)
 
 const PATH_SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]
 
 func path_to(goal: Vector3) -> Array:
 	var world: VoxelWorld = game.world
-	var start := Vector3i(position.floor()); var end := Vector3i(goal.floor())
+	var start := Vector3i((position+Vector3.UP*0.07).floor()); var end := Vector3i(goal.floor())
 	var queue: Array = [start]; var parents: Dictionary = {start:start}; var best: Vector3i = start
 	var best_distance: float = 0.0 if start == end else Vector3(start-end).length_squared()
 	var cursor: int = 0
@@ -222,11 +243,11 @@ func strike(enemy: Node3D) -> void:
 	if not is_instance_valid(enemy) or enemy.is_queued_for_deletion() or enemy.health <= 0: return
 	var before: float = enemy.health
 	var damage: float = 7.5+randi_range(0,14)
-	if enemy == game.player: game.player.hurt(damage,false,position)
+	if enemy == game.player: game.player.hurt(damage,false,position,"mob",self)
 	else: Golems.attacked(enemy,self); enemy.hit(damage,position)
 	if enemy.health < before and not (enemy is VillageMob and enemy.kind == "iron_golem"): enemy.velocity.y += 16.0
 
-func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> void:
+func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "", armor_breach: int = 0, attacker: Node3D = null) -> void:
 	if is_queued_for_deletion() or health <= 0: return
 	if kind == "iron_golem":
 		if from != Vector3.INF:
@@ -234,25 +255,24 @@ func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> voi
 			else:
 				for mob in game.creatures.get_children():
 					if mob != self and not mob.is_queued_for_deletion() and from.distance_to(mob.position) < 0.15: retaliate(mob); break
-		PotionEffects.damaged(self); health -= damage*PotionEffects.resistance(self); hurt_flash = 0.2
+		PotionEffects.damaged(self); health -= damage*PotionEffects.resistance(self)*(1+0.15*armor_breach); hurt_flash = 0.2
 		game.sound_at("mob_hurt",position,0.7); cracks()
 		if health <= 0: die()
 	else:
-		var r: Dictionary = game.villages.record(person_key)
-		if not r.is_empty():
-			if not r.has("reputations"): r.reputations = {}
-			r.reputations[game.player_id] = maxi(-200,game.villages.reputation(r)-25)
-		# The killing blow's origin decides whether this death infects, and by the
-		# time `die` runs the attacker may have moved, so the position is kept.
-		if health-damage*PotionEffects.resistance(self) <= 0: death_blow = from
-		super.hit(damage,from,reason)
+		var before: float = health
+		if attacker == null and from != Vector3.INF and reason not in ["arrow","trident"]: attacker = GuardianAuras.attacker_at(game,from,self)
+		damage_source = attacker; death_blow = from
+		super.hit(damage,from,reason,armor_breach,attacker)
+		if health > 0 and health < before and attacker == game.player: VillagerGossip.record(game.villages.record(person_key),game.player_id,"minor_negative",25)
 	store_record()
 
 func die() -> void:
 	if is_queued_for_deletion(): return
+	MobJockeys.died(self)
 	PotionEffects.died(self)
 	var r: Dictionary = game.villages.record(person_key)
 	if not r.is_empty(): r.dead = true; r.health = 0.0
+	if kind == "villager" and damage_source == game.player: VillagerGossip.murder(game,self,game.player_id)
 	if kind == "iron_golem":
 		game.spawn_drop(position+Vector3.UP,Nodes.IRON,randi_range(3,5))
 		var flowers: int = randi_range(0,2)

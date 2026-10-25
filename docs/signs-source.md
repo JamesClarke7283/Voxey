@@ -1,4 +1,4 @@
-# Oak signs
+# Signs
 
 Voxey now has a complete oak sign acquisition and writing loop: six oak planks and one stick make three signs at a crafting table; signs stack to sixteen, place on floors or walls, open a native text editor, accept all sixteen existing dyes, retain their writing through a save/restart, and drop an unwritten canonical sign when broken or detached.
 
@@ -51,3 +51,30 @@ There is **no obtainable glow ink sac or glow squid yet**. The saved metadata, r
 - GameRules persists rewriting; the game menu preserves drafts on resize and discards them on Escape.
 
 Run `godot --headless --path <minimal-project> --script res://tests/lifecycle_runner.gd -- sign`. The checks cover source text edge cases, every wall/standing state, the recipe and item registry, native editor/resize/Escape, keyboard dispatch and touch sneak, all sixteen dyes and creative consumption, support changes, precise raycasts, stale editor prevention, a real game save/reload that recreates visible text, and piston push/pull/detachment. Final focused result: **106 passed, 0 failed**, including the startup check, with no script errors.
+
+## All material variants and hanging signs (2026-10-24)
+
+All twelve source materials now have ordinary and hanging signs. Five classic
+non-oak signs were missing; the later-species ordinary signs also had incorrect
+species indexing. Sign material is now explicit. Every ordinary icon uses its
+own wood texture, and unsupported signs drop their own canonical item.
+
+The old cherry/mangrove/pale-oak/crimson/warped sign ranges overlapped copper door
+states. Their new canonical IDs are 13332, 13352, 13372, 13540 and 13560. Inventory
+items migrate directly; placed blocks migrate only when a saved sign station
+identifies them. This preserves text and facing without reinterpreting untagged
+copper doors. The five new classic sign ranges begin at 13232 in steps of 20;
+bamboo uses 13460. Hanging-sign ranges are unchanged, with bamboo appended at 13480.
+
+The source hanging-sign recipe is two chains above six matching stripped logs or
+bamboo blocks, yielding six signs. Hanging signs now render a suspended board and
+chains, with a top bracket on wall forms. Text rotates with the board and supports
+dye and glow ink. Ray targeting uses the board/bracket bounds; only the wall
+bracket blocks movement. Ceiling support removal drops the correct item, including
+when the supporting node is edited through the normal world path. Streaming and
+piston hooks recognize both sign types.
+
+The native encoding still combines the source's four-direction ceiling and
+sixteen-direction attached forms into one sixteen-direction ceiling family.
+It retains separate four-direction wall forms. Distinguishing attachment shapes
+and reproducing the source bitmap font remain presentation adaptations.

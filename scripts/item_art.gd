@@ -10,7 +10,9 @@ static var materials: Dictionary = {}
 static var dial_frames: Dictionary = {}
 static var dial_game: Node3D = null
 
-static func texture(id: int) -> Texture2D:
+static func texture(id: int, bow_stage: int = -1) -> Texture2D:
+	if id == Nodes.BOW and bow_stage >= 0: return bow_texture(bow_stage)
+	if id == VillageContent.CROSSBOW and bow_stage >= 0: return crossbow_texture(bow_stage)
 	# A clock or compass re-renders whenever its dial frame changes.
 	if id in [Nodes.CLOCK,Nodes.COMPASS,RecoveryCompass.ID]:
 		var frame: int = (RecoveryCompass.frame(dial_game) if id == RecoveryCompass.ID else Dials.frame(dial_game,id)) if dial_game != null else 0
@@ -207,18 +209,20 @@ static func _line(img: Image, a: Vector2, b: Vector2, color: Color, width: int =
 		var p := Vector2i(a.lerp(b,float(i)/steps))
 		img.fill_rect(Rect2i(p,Vector2i(width,width)).intersection(Rect2i(0,0,16,16)),color)
 
-static func material(id: int) -> StandardMaterial3D:
-	if materials.has(id): return materials[id]
+static func material(id: int, bow_stage: int = -1) -> StandardMaterial3D:
+	var key = ("bow:" if id == Nodes.BOW else "crossbow:")+str(bow_stage) if id in [Nodes.BOW,VillageContent.CROSSBOW] and bow_stage >= 0 else id
+	if materials.has(key): return materials[key]
 	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = texture(id)
+	mat.albedo_texture = texture(id,bow_stage)
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	mat.roughness = 1.0
-	materials[id] = mat
+	materials[key] = mat
 	return mat
 
-static func mesh(id: int) -> ArrayMesh:
-	if meshes.has(id): return meshes[id]
-	var img: Image = texture(id).get_image()
+static func mesh(id: int, bow_stage: int = -1) -> ArrayMesh:
+	var key = ("bow:" if id == Nodes.BOW else "crossbow:")+str(bow_stage) if id in [Nodes.BOW,VillageContent.CROSSBOW] and bow_stage >= 0 else id
+	if meshes.has(key): return meshes[key]
+	var img: Image = texture(id,bow_stage).get_image()
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var uvs := PackedVector2Array()
@@ -245,5 +249,38 @@ static func mesh(id: int) -> ArrayMesh:
 	arrays[Mesh.ARRAY_TEX_UV] = uvs; arrays[Mesh.ARRAY_INDEX] = indices
 	var result := ArrayMesh.new()
 	result.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
-	meshes[id] = result
+	meshes[key] = result
 	return result
+
+# Original sprites for the source's three drawn states, with a progressively
+# pulled string and a nocked arrow. They share the ordinary item's extrusion.
+static func bow_texture(stage: int) -> Texture2D:
+	var key: String = "bow:"+str(clampi(stage,0,2))
+	if textures.has(key): return textures[key]
+	var img := Image.create(16,16,false,Image.FORMAT_RGBA8)
+	var pull: int = 4-stage*2
+	for pair in [[6,1,11,4],[11,4,13,8],[13,8,11,12],[11,12,6,15]]:
+		_line(img,Vector2(pair[0],pair[1]),Vector2(pair[2],pair[3]),Color("a87b48"),2)
+	_line(img,Vector2(6,1),Vector2(pull,8),Color("ded7bb"))
+	_line(img,Vector2(pull,8),Vector2(6,15),Color("ded7bb"))
+	_line(img,Vector2(pull,8),Vector2(14,8),Color("c5ab70"))
+	_polygon(img,[[13,6],[15,8],[13,10]],Color("e2e5db"))
+	textures[key] = ImageTexture.create_from_image(img)
+	return textures[key]
+
+static func crossbow_texture(stage: int) -> Texture2D:
+	var key: String = "crossbow:"+str(clampi(stage,0,3))
+	if textures.has(key): return textures[key]
+	var img := Image.create(16,16,false,Image.FORMAT_RGBA8)
+	_line(img,Vector2(7,15),Vector2(7,2),Color("795635"),3)
+	_line(img,Vector2(8,14),Vector2(8,3),Color("b49160"))
+	for pair in [[0,3,3,5],[3,5,7,6],[7,6,11,5],[11,5,14,3]]:
+		_line(img,Vector2(pair[0],pair[1]),Vector2(pair[2],pair[3]),Color("b49160"),2)
+	var pull: int = 7+mini(stage,2)*2
+	_line(img,Vector2(0,3),Vector2(7,pull),Color("dedaca"))
+	_line(img,Vector2(7,pull),Vector2(14,3),Color("dedaca"))
+	if stage == 3:
+		_line(img,Vector2(7,11),Vector2(7,1),Color("d4c79f"))
+		_polygon(img,[[5,2],[7,0],[9,2]],Color("e2e5db"))
+	textures[key] = ImageTexture.create_from_image(img)
+	return textures[key]

@@ -16,13 +16,11 @@ extends RefCounted
 #     regeneration at 4. Power 4 also allows a second effect, which the source
 #     fixes to regeneration.
 #   * **Range.** `(power_level + 1) * 10` blocks, and the effect is granted at
-#     level 16 which decays normally.
+#     renewed for 16 seconds and then decays normally.
 #   * **Beam.** A vertical beam rises from the beacon through transparent blocks
 #     and takes the colour of the stained glass directly above it.
 #
-# Beacons need a nether star, which the Wither drops. Voxey has no Wither, so the
-# recipe is registered from the source's own shape and the acquisition gap is
-# recorded rather than papered over.
+# The Wither's nether star provides the survival acquisition route.
 
 const ID = VillageContent.BEACON
 const BEAM = VillageContent.BEACON_BEAM
@@ -108,13 +106,15 @@ static func update(world: VoxelWorld, delta: float) -> void:
 		var primary: String = str(state.get("effect",""))
 		if primary.is_empty(): primary = "swiftness"
 		# A completed pyramid gains the source's second effect automatically.
-		if power_level >= POWER_MAX and str(state.get("secondary","")).is_empty():
+		var effect_level: int = clampi(int(state.get("effect_level",1)),1,2)
+		if effect_level == 2 and power_level < POWER_MAX: continue
+		if power_level >= POWER_MAX and effect_level == 1 and str(state.get("secondary","")).is_empty():
 			state["secondary"] = SECONDARY
 		var reach: float = effect_range(power_level)
 		if game.player.position.distance_to(Vector3(p)+Vector3.ONE*0.5) <= reach:
-			PotionEffects.apply(game.player,primary,DURATION,1)
+			PotionEffects.apply(game.player,primary,DURATION,effect_level)
 			# A power-four beacon grants its chosen second effect as well.
-			if power_level >= POWER_MAX and str(state.get("secondary","")) == SECONDARY:
+			if power_level >= POWER_MAX and effect_level == 1 and str(state.get("secondary","")) == SECONDARY:
 				PotionEffects.apply(game.player,SECONDARY,DURATION,1)
 	world.set_meta("beacons",tracked)
 
@@ -150,10 +150,19 @@ static func use(game: Node3D, target: Dictionary) -> bool:
 		return true
 	var choices: Array = available(power_level)
 	var state: Dictionary = station(world,target.pos)
+	if game.player.crouching:
+		if power_level < POWER_MAX or str(state.get("effect","")).is_empty():
+			game.toast("Choose a beacon effect and complete four pyramid layers to amplify it.")
+			return true
+		state["effect_level"] = 1 if int(state.get("effect_level",1)) == 2 else 2
+		state["secondary"] = SECONDARY if state.effect_level == 1 else ""
+		game.toast("Beacon: %s %s."%[str(state.effect).capitalize(),"II" if state.effect_level == 2 else "I + Regeneration"])
+		return true
 	var index: int = choices.find(str(state.get("effect","")))
 	state["effect"] = str(choices[(index+1)%choices.size()])
+	state["effect_level"] = 1
 	if power_level >= POWER_MAX: state["secondary"] = SECONDARY
-	game.toast("Beacon: %s at range %d." % [str(state.effect).capitalize(),int(effect_range(power_level))])
+	game.toast("Beacon: %s at range %d.%s" % [str(state.effect).capitalize(),int(effect_range(power_level))," Sneak-use for level II." if power_level == POWER_MAX else ""])
 	# `bring_home_the_beacon` on activation, and `beaconator` once a maximum-power
 	# pyramid has granted the second effect.
 	game.achievements.award("bring_home_the_beacon")

@@ -1,0 +1,1066 @@
+{
+  "license": "GPL-3.0-or-later",
+  "source_hashes": {
+    "mods/ITEMS/mcl_vaults/init.lua": "ee87954dc6f5085c0e5e2668c2551841496b348a99c471907e15f946dfdb4e0f",
+    "mods/ITEMS/mcl_trial_spawners/init.lua": "a86ea5d2bb27e28f5b7e078b2b79a8a2f2330fc2414f42705e79fc9040689f5d",
+    "mods/MAPGEN/mcl_levelgen/trial_chambers.lua": "3e56d3acc8836ec6a6001e1e3c015796449071c75fba9d63d295b02bc383011b"
+  },
+  "tables": {
+    "vault": [
+      {
+        "min": 1,
+        "max": 1,
+        "items": [
+          {
+            "item": "mcl_core:emerald",
+            "weight": 392,
+            "amount_min": 2,
+            "amount_max": 4
+          },
+          {
+            "item": "mcl_bows:arrow",
+            "weight": 92,
+            "amount_min": 2,
+            "amount_max": 8
+          },
+          {
+            "item": "mcl_potions:poison_arrow",
+            "weight": 92,
+            "amount_min": 2,
+            "amount_max": 8,
+            "potency": 0
+          },
+          {
+            "item": "mcl_core:iron_ingot",
+            "weight": 69,
+            "amount_min": 1,
+            "amount_max": 4
+          },
+          {
+            "item": "mcl_charges:wind_charge",
+            "weight": 69,
+            "amount_min": 1,
+            "amount_max": 3
+          },
+          {
+            "item": "mcl_honey:honey_bottle",
+            "weight": 69,
+            "amount_min": 1,
+            "amount_max": 2
+          },
+          {
+            "item": "mcl_potions:ominous",
+            "weight": 48,
+            "amount_min": 1,
+            "amount_max": 1,
+            "omen": [
+              1,
+              2
+            ]
+          },
+          {
+            "item": "mcl_shields:shield",
+            "weight": 300,
+            "amount_min": 1,
+            "amount_max": 1,
+            "wear": [
+              5000,
+              60000
+            ]
+          },
+          {
+            "item": "mcl_bows:bow",
+            "weight": 300,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchant_power": [
+              5,
+              15
+            ]
+          },
+          {
+            "item": "mcl_charges:wind_charge",
+            "weight": 23,
+            "amount_min": 4,
+            "amount_max": 12
+          },
+          {
+            "item": "mcl_mobitems:breeze_rod",
+            "weight": 23,
+            "amount_min": 1,
+            "amount_max": 3
+          },
+          {
+            "item": "mcl_core:diamond",
+            "weight": 23,
+            "amount_min": 1,
+            "amount_max": 2
+          },
+          {
+            "item": "mcl_farming:carrot_item_gold",
+            "weight": 200,
+            "amount_min": 1,
+            "amount_max": 2
+          },
+          {
+            "item": "mcl_books:book",
+            "weight": 200,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchantments": [
+              "mending",
+              "riptide",
+              "loyalty",
+              "channeling",
+              "impaling"
+            ]
+          },
+          {
+            "item": "mcl_books:book",
+            "weight": 200,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchantments": [
+              "sharpness",
+              "bane_of_arthropods",
+              "efficiency",
+              "fortune",
+              "silk_touch",
+              "feather_falling"
+            ]
+          },
+          {
+            "item": "mcl_bows:crossbow",
+            "weight": 200,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchant_power": [
+              5,
+              20
+            ]
+          },
+          {
+            "item": "mcl_tools:axe_iron",
+            "weight": 200,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchant_power": [
+              5,
+              15
+            ]
+          },
+          {
+            "item": "mcl_armor:chestplate_iron",
+            "weight": 200,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchant_power": [
+              0,
+              10
+            ]
+          },
+          {
+            "item": "mcl_tools:axe_diamond",
+            "weight": 100,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchant_power": [
+              5,
+              15
+            ]
+          },
+          {
+            "item": "mcl_armor:chestplate_diamond",
+            "weight": 100,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchant_power": [
+              5,
+              15
+            ]
+          }
+        ]
+      },
+      {
+        "min": 1,
+        "max": 3,
+        "items": [
+          {
+            "item": "mcl_core:emerald",
+            "weight": 4,
+            "amount_min": 2,
+            "amount_max": 4
+          },
+          {
+            "item": "mcl_bows:arrow",
+            "weight": 4,
+            "amount_min": 2,
+            "amount_max": 8
+          },
+          {
+            "item": "mcl_potions:poison_arrow",
+            "weight": 4,
+            "amount_min": 2,
+            "amount_max": 8,
+            "potency": 0
+          },
+          {
+            "item": "mcl_core:iron_ingot",
+            "weight": 3,
+            "amount_min": 1,
+            "amount_max": 4
+          },
+          {
+            "item": "mcl_charges:wind_charge",
+            "weight": 3,
+            "amount_min": 1,
+            "amount_max": 3
+          },
+          {
+            "item": "mcl_honey:honey_bottle",
+            "weight": 3,
+            "amount_min": 1,
+            "amount_max": 2
+          },
+          {
+            "item": "mcl_potions:ominous",
+            "weight": 2,
+            "amount_min": 1,
+            "amount_max": 1,
+            "omen": [
+              1,
+              2
+            ]
+          },
+          {
+            "item": "mcl_charges:wind_charge",
+            "weight": 1,
+            "amount_min": 4,
+            "amount_max": 12
+          },
+          {
+            "item": "mcl_mobitems:breeze_rod",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 3
+          },
+          {
+            "item": "mcl_core:diamond",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 2
+          }
+        ]
+      },
+      {
+        "min": 1,
+        "max": 1,
+        "items": [
+          {
+            "item": "",
+            "weight": 36,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_core:apple_gold",
+            "weight": 4,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_armor:bolt",
+            "weight": 3,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_jukebox:record_mall",
+            "weight": 2,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_banners:pattern_guster",
+            "weight": 2,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_tridents:trident",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1
+          }
+        ]
+      }
+    ],
+    "ominous_vault": [
+      {
+        "min": 1,
+        "max": 1,
+        "items": [
+          {
+            "item": "mcl_core:emerald",
+            "weight": 145,
+            "amount_min": 4,
+            "amount_max": 10
+          },
+          {
+            "item": "mcl_charges:wind_charge",
+            "weight": 116,
+            "amount_min": 8,
+            "amount_max": 12
+          },
+          {
+            "item": "mcl_mobitems:breeze_rod",
+            "weight": 116,
+            "amount_min": 2,
+            "amount_max": 3
+          },
+          {
+            "item": "mcl_potions:slowness_arrow",
+            "weight": 87,
+            "amount_min": 4,
+            "amount_max": 12,
+            "potency": 3
+          },
+          {
+            "item": "mcl_core:diamond",
+            "weight": 58,
+            "amount_min": 2,
+            "amount_max": 3
+          },
+          {
+            "item": "mcl_potions:ominous",
+            "weight": 29,
+            "amount_min": 1,
+            "amount_max": 1,
+            "omen": [
+              3,
+              5
+            ]
+          },
+          {
+            "item": "mcl_core:emeraldblock",
+            "weight": 300,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_bows:crossbow",
+            "weight": 240,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchant_power": [
+              10,
+              20
+            ]
+          },
+          {
+            "item": "mcl_core:ironblock",
+            "weight": 240,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_core:apple_gold",
+            "weight": 180,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_tools:axe_diamond",
+            "weight": 180,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchant_power": [
+              10,
+              20
+            ]
+          },
+          {
+            "item": "mcl_armor:chestplate_diamond",
+            "weight": 180,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchant_power": [
+              10,
+              20
+            ]
+          },
+          {
+            "item": "mcl_books:book",
+            "weight": 120,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchantments": [
+              "breach",
+              "density"
+            ]
+          },
+          {
+            "item": "mcl_books:book",
+            "weight": 120,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchantments": [
+              "knockback",
+              "punch",
+              "smite",
+              "looting",
+              "multishot"
+            ]
+          },
+          {
+            "item": "mcl_books:book",
+            "weight": 120,
+            "amount_min": 1,
+            "amount_max": 1,
+            "enchantments": [
+              "wind_burst"
+            ],
+            "enchantment_level": 1
+          },
+          {
+            "item": "mcl_core:diamondblock",
+            "weight": 60,
+            "amount_min": 1,
+            "amount_max": 1
+          }
+        ]
+      },
+      {
+        "min": 1,
+        "max": 3,
+        "items": [
+          {
+            "item": "mcl_core:emerald",
+            "weight": 5,
+            "amount_min": 4,
+            "amount_max": 10
+          },
+          {
+            "item": "mcl_charges:wind_charge",
+            "weight": 4,
+            "amount_min": 8,
+            "amount_max": 12
+          },
+          {
+            "item": "mcl_mobitems:breeze_rod",
+            "weight": 4,
+            "amount_min": 2,
+            "amount_max": 3
+          },
+          {
+            "item": "mcl_potions:slowness_arrow",
+            "weight": 3,
+            "amount_min": 4,
+            "amount_max": 12,
+            "potency": 3
+          },
+          {
+            "item": "mcl_core:diamond",
+            "weight": 2,
+            "amount_min": 2,
+            "amount_max": 3
+          },
+          {
+            "item": "mcl_potions:ominous",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1,
+            "omen": [
+              3,
+              5
+            ]
+          }
+        ]
+      },
+      {
+        "min": 1,
+        "max": 1,
+        "items": [
+          {
+            "item": "",
+            "weight": 10,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_armor:flow",
+            "weight": 9,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_core:apple_gold_enchanted",
+            "weight": 9,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_banners:pattern_flow",
+            "weight": 6,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_jukebox:record_mellohi",
+            "weight": 3,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_tools:heavy_core",
+            "weight": 3,
+            "amount_min": 1,
+            "amount_max": 1
+          }
+        ]
+      }
+    ],
+    "standard_spawner": [
+      {
+        "min": 1,
+        "max": 1,
+        "items": [
+          {
+            "item": "mcl_farming:bread",
+            "weight": 3,
+            "amount_min": 1,
+            "amount_max": 3
+          },
+          {
+            "item": "mcl_mobitems:cooked_chicken",
+            "weight": 3,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_farming:potato_item_baked",
+            "weight": 2,
+            "amount_min": 1,
+            "amount_max": 3
+          },
+          {
+            "item": "mcl_potions:regeneration",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_potions:swiftness",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1
+          }
+        ]
+      }
+    ],
+    "ominous_spawner": [
+      {
+        "min": 1,
+        "max": 1,
+        "items": [
+          {
+            "item": "mcl_farming:potato_item_baked",
+            "weight": 3,
+            "amount_min": 2,
+            "amount_max": 4
+          },
+          {
+            "item": "mcl_mobitems:cooked_beef",
+            "weight": 3,
+            "amount_min": 1,
+            "amount_max": 2
+          },
+          {
+            "item": "mcl_farming:carrot_item_gold",
+            "weight": 2,
+            "amount_min": 1,
+            "amount_max": 2
+          },
+          {
+            "item": "mcl_potions:regeneration",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_potions:strength",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1
+          }
+        ]
+      }
+    ],
+    "trial_chambers_chest_entrance_loot": [
+      {
+        "min": 2,
+        "max": 3,
+        "items": [
+          {
+            "item": "mcl_bows:arrow",
+            "weight": 10,
+            "amount_min": 5,
+            "amount_max": 10
+          },
+          {
+            "item": "mcl_honey:honeycomb",
+            "weight": 10,
+            "amount_min": 2,
+            "amount_max": 8
+          },
+          {
+            "item": "mcl_tools:axe_wood",
+            "weight": 10,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_core:stick",
+            "weight": 5,
+            "amount_min": 2,
+            "amount_max": 5
+          },
+          {
+            "item": "mcl_vaults:trial_key",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1
+          }
+        ]
+      }
+    ],
+    "trial_chambers_chest_intersection_loot": [
+      {
+        "min": 1,
+        "max": 3,
+        "items": [
+          {
+            "item": "mcl_amethyst:amethyst_shard",
+            "weight": 20,
+            "amount_min": 8,
+            "amount_max": 20
+          },
+          {
+            "item": "mcl_cake:cake",
+            "weight": 20,
+            "amount_min": 1,
+            "amount_max": 4
+          },
+          {
+            "item": "mcl_core:ironblock",
+            "weight": 20,
+            "amount_min": 1,
+            "amount_max": 2
+          },
+          {
+            "item": "mcl_core:diamond",
+            "weight": 10,
+            "amount_min": 1,
+            "amount_max": 2
+          },
+          {
+            "item": "mcl_core:emeraldblock",
+            "weight": 5,
+            "amount_min": 1,
+            "amount_max": 3
+          },
+          {
+            "item": "mcl_tools:axe_diamond",
+            "weight": 5,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_tools:pick_diamond",
+            "weight": 5,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_core:diamondblock",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1
+          }
+        ]
+      }
+    ],
+    "trial_chambers_chest_supply_loot": [
+      {
+        "min": 3,
+        "max": 5,
+        "items": [
+          {
+            "item": "mcl_bows:arrow",
+            "weight": 2,
+            "amount_min": 4,
+            "amount_max": 14
+          },
+          {
+            "item": "mcl_lush_caves:glow_berry",
+            "weight": 2,
+            "amount_min": 2,
+            "amount_max": 10
+          },
+          {
+            "item": "mcl_farming:potato_item_baked",
+            "weight": 2,
+            "amount_min": 2,
+            "amount_max": 4
+          },
+          {
+            "item": "mcl_tools:pick_stone",
+            "weight": 2,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_deepslate:tuff",
+            "weight": 1,
+            "amount_min": 5,
+            "amount_max": 10
+          },
+          {
+            "item": "mcl_potions:poison_arrow",
+            "weight": 1,
+            "amount_min": 4,
+            "amount_max": 8
+          },
+          {
+            "item": "mcl_potions:slowness_arrow",
+            "weight": 1,
+            "amount_min": 4,
+            "amount_max": 8
+          },
+          {
+            "item": "mcl_trees:wood_acacia",
+            "weight": 1,
+            "amount_min": 3,
+            "amount_max": 6
+          },
+          {
+            "item": "mcl_torches:torch",
+            "weight": 1,
+            "amount_min": 3,
+            "amount_max": 6
+          },
+          {
+            "item": "mcl_bone_meal:bone_meal",
+            "weight": 1,
+            "amount_min": 2,
+            "amount_max": 5
+          },
+          {
+            "item": "mcl_lush_caves:moss",
+            "weight": 1,
+            "amount_min": 2,
+            "amount_max": 5
+          },
+          {
+            "item": "mcl_potions:regeneration",
+            "weight": 1,
+            "amount_min": 2,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_potions:strength",
+            "weight": 1,
+            "amount_min": 2,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_mobitems:milk_bucket",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1
+          }
+        ]
+      }
+    ],
+    "trial_chambers_barrel_intersection_loot": [
+      {
+        "min": 1,
+        "max": 3,
+        "items": [
+          {
+            "item": "mcl_trees:wood_bamboo",
+            "weight": 10,
+            "amount_min": 5,
+            "amount_max": 15
+          },
+          {
+            "item": "mcl_farming:potato_item_baked",
+            "weight": 10,
+            "amount_min": 6,
+            "amount_max": 10
+          },
+          {
+            "item": "mcl_tools:axe_gold",
+            "weight": 4,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_tools:pick_gold",
+            "weight": 4,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_core:diamond",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 3
+          },
+          {
+            "item": "mcl_buckets:bucket_empty",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 2
+          },
+          {
+            "item": "mcl_compass:compass",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_tools:pick_diamond",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_tools:axe_diamond",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1
+          }
+        ]
+      }
+    ],
+    "trial_chambers_barrel_corridor_loot": [
+      {
+        "min": 1,
+        "max": 3,
+        "items": [
+          {
+            "item": "mcl_deepslate:tuff",
+            "weight": 3,
+            "amount_min": 8,
+            "amount_max": 20
+          },
+          {
+            "item": "mcl_bamboo:scaffolding",
+            "weight": 2,
+            "amount_min": 2,
+            "amount_max": 10
+          },
+          {
+            "item": "mcl_trees:wood_bamboo",
+            "weight": 2,
+            "amount_min": 3,
+            "amount_max": 6
+          },
+          {
+            "item": "mcl_torches:torch",
+            "weight": 2,
+            "amount_min": 3,
+            "amount_max": 6
+          },
+          {
+            "item": "mcl_signs:hanging_sign_bamboo",
+            "weight": 2,
+            "amount_min": 1,
+            "amount_max": 4
+          },
+          {
+            "item": "mcl_throwing:ender_pearl",
+            "weight": 2,
+            "amount_min": 1,
+            "amount_max": 2
+          },
+          {
+            "item": "mcl_tools:axe_stone",
+            "weight": 2,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_tools:pick_stone",
+            "weight": 2,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_honey:honeycomb",
+            "weight": 1,
+            "amount_min": 2,
+            "amount_max": 8
+          },
+          {
+            "item": "mcl_tools:axe_iron",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1
+          }
+        ]
+      }
+    ],
+    "trial_chambers_dispenser_chamber_loot": [
+      {
+        "min": 1,
+        "max": 1,
+        "items": [
+          {
+            "item": "mcl_fire:fire_charge",
+            "weight": 6,
+            "amount_min": 4,
+            "amount_max": 8
+          },
+          {
+            "item": "mcl_throwing:snowball",
+            "weight": 6,
+            "amount_min": 4,
+            "amount_max": 8
+          },
+          {
+            "item": "mcl_bows:arrow",
+            "weight": 4,
+            "amount_min": 4,
+            "amount_max": 8
+          },
+          {
+            "item": "mcl_buckets:bucket_water",
+            "weight": 4,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_throwing:egg",
+            "weight": 2,
+            "amount_min": 4,
+            "amount_max": 8
+          },
+          {
+            "item": "mcl_potions:healing_lingering",
+            "weight": 1,
+            "amount_min": 2,
+            "amount_max": 5
+          },
+          {
+            "item": "mcl_potions:poison_lingering",
+            "weight": 1,
+            "amount_min": 2,
+            "amount_max": 5
+          },
+          {
+            "item": "mcl_potions:slowness_lingering",
+            "weight": 1,
+            "amount_min": 2,
+            "amount_max": 5
+          },
+          {
+            "item": "mcl_potions:weakness_lingering",
+            "weight": 1,
+            "amount_min": 2,
+            "amount_max": 5
+          },
+          {
+            "item": "mcl_potions:poison_splash",
+            "weight": 1,
+            "amount_min": 2,
+            "amount_max": 5
+          },
+          {
+            "item": "mcl_potions:slowness_splash",
+            "weight": 1,
+            "amount_min": 2,
+            "amount_max": 5
+          },
+          {
+            "item": "mcl_potions:weakness_splash",
+            "weight": 1,
+            "amount_min": 2,
+            "amount_max": 5
+          }
+        ]
+      }
+    ],
+    "trial_chambers_dispenser_corridor_loot": [
+      {
+        "min": 1,
+        "max": 1,
+        "items": [
+          {
+            "item": "mcl_bows:arrow",
+            "weight": 1,
+            "amount_min": 4,
+            "amount_max": 8
+          }
+        ]
+      }
+    ],
+    "trial_chambers_pot": [
+      {
+        "min": 1,
+        "max": 1,
+        "items": [
+          {
+            "item": "mcl_core:emerald",
+            "weight": 125,
+            "amount_min": 1,
+            "amount_max": 3
+          },
+          {
+            "item": "mcl_bows:arrow",
+            "weight": 100,
+            "amount_min": 2,
+            "amount_max": 8
+          },
+          {
+            "item": "mcl_core:iron_ingot",
+            "weight": 100,
+            "amount_min": 1,
+            "amount_max": 2
+          },
+          {
+            "item": "mcl_vaults:trial_key",
+            "weight": 10,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_core:diamond",
+            "weight": 5,
+            "amount_min": 1,
+            "amount_max": 2
+          },
+          {
+            "item": "mcl_core:emeraldblock",
+            "weight": 5,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_jukebox:record_mellohi",
+            "weight": 5,
+            "amount_min": 1,
+            "amount_max": 1
+          },
+          {
+            "item": "mcl_core:diamondblock",
+            "weight": 1,
+            "amount_min": 1,
+            "amount_max": 1
+          }
+        ]
+      }
+    ]
+  }
+}

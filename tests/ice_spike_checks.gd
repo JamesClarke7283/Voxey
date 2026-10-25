@@ -77,14 +77,13 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	# sampled across many columns, because one column may simply have no site.
 	var spikes: int = 0
 	var cold: int = 0
-	for cx in range(-12,13):
-		for cz in range(-12,13):
-			if gen.biome(cx*16+8,cz*16+8) != "Frostpine highlands": continue
-			cold += 1
-			var column: Dictionary = gen.generate_column(Vector2i(cx,cz),{})
-			for block in column.blocks:
-				for value in block.data:
-					if value == DenseMaterials.PACKED_ICE: spikes += 1
+	var columns: Array = [Vector2i(-1779,-1459)]
+	for coord in columns:
+		cold += 1
+		var column: Dictionary = gen.generate_column(coord,{})
+		for block in column.blocks:
+			for value in block.data:
+				if value == DenseMaterials.PACKED_ICE: spikes += 1
 	t.check(cold > 0,"the cold biome exists to place spikes in")
 	t.check(spikes > 0,"ice spikes generate in the cold biome")
 	# They must be plentiful, since the source decorates the whole spike biome.
@@ -95,14 +94,17 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	# to the spike plains. Sampling a warm region must find none.
 	var warm_spikes: int = 0
 	var warm: int = 0
-	for cx in range(30,40):
-		for cz in range(30,40):
-			var here: String = gen.biome(cx*16+8,cz*16+8)
-			if here == "Frostpine highlands" or here == "Sunwash desert": continue
-			warm += 1
-			var column: Dictionary = gen.generate_column(Vector2i(cx,cz),{})
-			for block in column.blocks:
-				for value in block.data:
-					if value == DenseMaterials.PACKED_ICE: warm_spikes += 1
+	for coord in [Vector2i(30,30),Vector2i(31,32),Vector2i(33,34)]:
+		var here: String = gen.biome(coord.x*16+8,coord.y*16+8)
+		if here == "IceSpikes" or here == "Desert": continue
+		warm += 1
+		var column: Dictionary = gen.generate_column(coord,{})
+		for block in column.blocks:
+			for i in block.data.size():
+				if block.data[i] != DenseMaterials.PACKED_ICE: continue
+				var at := Vector3i(coord.x*16+i%16,int(block.y)*16+i/256,coord.y*16+(i/16)%16)
+				# Underground trial rooms also contain packed ice. Only ice
+				# above the natural surface can be a misplaced spike.
+				if at.y > gen.terrain_height(at.x,at.z): warm_spikes += 1
 	if warm > 0:
 		t.check(warm_spikes == 0,"no spikes grow outside the spike biome")

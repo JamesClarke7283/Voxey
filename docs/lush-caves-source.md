@@ -1,58 +1,57 @@
 # Lush caves
 
-Voxey follows the supplied Mineclonia `mods/ITEMS/mcl_lush_caves/{nodes,crafting}.lua`. The implementation is original GDScript using the source as a behaviour reference; art is original procedural code.
+Voxey follows the supplied Mineclonia `mods/ITEMS/mcl_lush_caves/{init,nodes,crafting}.lua` and the `mcl_crimson.grow_vines` helper it calls. The implementation is original GDScript; the art is original procedural code. Numeric ids remain unchanged.
 
-## Why it mattered
+## Cave-vine survival loop
 
-Lush caves are the source's **lit** cave biome, and the light comes from one block: **cave vines carrying glow berries**. An unlit vine is just foliage; its lit form emits light 14, which is what makes a lush cave visible without a torch.
+The source stores age in `param2`. Voxey has no per-node param2 table, so `LushCaves` stores `cave_vine_age` in `VoxelWorld.block_states` under `VoxelWorld.station_key(p)`. Age zero is the default and is omitted. Changing a cell to a non-vine removes only this age key, preserving unrelated saved state.
 
-So this is not decoration — it is the biome's light source, and it is also the only natural source of the glow berry.
-
-| Rule | Source |
+| Rule | Executable source behavior |
 |---|---|
-| Lit vine light | **14** |
-| Bone meal | ripens the vine's **tip**, not the whole vine |
-| Right-click | picks a berry and reverts the vine to unlit |
-| Glow berry | **food**, 2 points, compostability 50 |
-| Moss | makes mossy cobblestone and mossy stone bricks |
+| Light | Only `cave_vines_lit` emits, at light **14**. |
+| Bone meal | `nodes.lua:180-184` converts the **clicked unlit node**, preserving age. It does not find or ripen the tip. |
+| Harvest | Lit `on_rightclick` (`230-234`) creates **one glow-berry item entity**, then makes that same node unlit without changing age. |
+| Shears | Only the unlit form has `_on_shears_place` (`186-198`). The clicked node must already be the lowest tip; age becomes **25**. Off-tip use performs no work and does not wear the tool. |
+| Passive growth | The ABM (`init.lua:162-180`) has interval **180 seconds**, chance denominator **5**, and acts only on the lowest tip below age 25. |
+| New tip | `mcl_crimson.grow_vines` grows one cell downward into literal air, with old age + 1. The old tip is unchanged. The new cell has an **11%** chance to be lit. A blocked cell changes nothing. |
+| Support | `vinelike_node=2` accepts the same vine group or a solid node directly above. `mcl_attached` also deliberately does **not** detach when the node above is non-solid but non-airlike; literal air detaches. Unlit drops nothing and lit drops one glow berry. |
 
-Ripening the **tip** matters: berries grow at the end of the vine, where a player can reach them. Ripening the whole tower would put them against the ceiling.
+Both internal vine forms have `not_in_creative_inventory=1`, `drop=""` for unlit and `drop="glow_berry"` for lit. Neither is a directly placeable item. A player obtains and plants the glow-berry craftitem instead.
 
-Harvesting **reverts** the vine rather than removing it, so a vine survives picking and can fruit again — which is why a lit vine is worth finding rather than consuming.
+## Glow-berry placement is deliberately unusual
 
-## Moss closed two recipe gaps
+The berry is food with **2 hunger points**, **1.2 saturation**, and compostability **50**. Its `on_place` (`nodes.lua:281-334`) takes precedence over eating for a node-targeted click:
 
-The source turns cobblestone and stone bricks into their **mossy** forms using moss. Voxey had both mossy blocks craftable from a **vine** instead, which is not the source's recipe — and could not offer the real one because moss did not exist.
+1. The clicked face must be an underside (`direction(under, above).y == -1`). Other faces do not plant or begin eating.
+2. Lit cave vines and other `vinelike_node=2` forms cannot be extended. The destination below must be `buildable_to`; Voxey uses its shared air/snow/plant/liquid/fire replacement vocabulary, excluding non-buildable vine nodes.
+3. Extending an unlit cave vine gives the new cell `old_age + 1`. Any other underside gives age zero. Manual placement does not clamp that value to 25; 25 is the passive-growth cutoff.
+4. **Line 320 calls `core.place_node(pointed_thing.under, {name=vine}, placer)`, not `above`.** This is intentional source behavior to preserve, not a typo to “fix.” Luanti placement honors `buildable_to`: on ordinary stone this call is a no-op and the stone support remains; on a buildable clicked node it places an unlit vine. The subsequent `swap_node` creates the new cell below regardless.
+5. The new cell has the same independent 11% lit roll. Survival consumes one berry, creative does not, and `mcl_hunger.prevent_eating` suppresses the food action. Voxey's `LushCaves.use` returns handled before `Hunger.can_eat`, providing the same suppression without a second inventory transaction.
 
-Adding moss let the real recipe stand, and the vine substitutes were **removed** rather than left alongside it, so there is one recipe per block. The test asserts the recipe takes moss and cobblestone, and that mossy stone bricks take moss.
+## Moss and recipes
 
-## Bugs this batch caught
+`nodes.lua:78-88` registers moss with hardness **0.1**, `hoey=2`, and compostability **65**. The content entry therefore uses Voxey hoe tool kind 4, not the old 0.5 hardness and shovel kind. Moss still makes mossy cobblestone and mossy stone bricks; two moss make three moss carpet.
 
-1. **A duplicate id in the content table.** The moss block reused id 1180, which the ender chest already had. A repeated key in a GDScript dictionary literal is a **parse error for the whole file** — so `VillageContent` failed to load and took every consumer down with it, including `game.gd`. The block simply would not start. The test now asserts the content table has no duplicate ids and that every id this batch added is present.
+## Loaded-column runtime and persistence
 
-2. **`supported` looked the wrong way.** A vine hangs *below* its ceiling, but `Vector3i.UP` is positive Y, so support is `p + UP` and not `p - UP` — the check was testing the cell *below*, so no vine could ever be supported.
+`LushCaves.runtime` contains only transient indexes, a seeded RNG, and a bounded job cursor. `registered` tracks only loaded vine cells, `changed` refreshes registration and vertical support, `column_loaded` revalidates a column, and `unload` drops only that column's transient registrations. No growth reads or writes an unloaded destination.
 
-3. **Two missing consumers**, the recurring class: the lit vine was not in the light emitter, so a placed lit vine would have emitted nothing, and the moss recipes were not registered at all.
+The fractional ABM clock lives in saved `world.adventure_state["lush_cave_vine_elapsed"]`. Each 180-second cycle snapshots current cells. Sixteen jobs at most are processed per update; unfinished jobs remain queued and cannot be replaced by a later snapshot. `reset` removes only transient runtime state. Saved node ids, age state, and elapsed time survive save/load.
 
-## A vine had no mesh
+## Integrated parent wiring
 
-Cave vines rendered as **nothing**, and would have been solid if they had rendered.
-Three separate shape lists each omitted `"vine"`, with a different symptom in each:
+These are the module's live integration contracts:
 
-* `Nodes.plant` — the plant mesher never picked it up, so it built no geometry;
-* `VillageContent.special` — it was classified as an unmeshed special shape;
-* `Nodes.solid` — it was reported as solid, so a hanging strand would have blocked movement.
+- `scripts/player.gd`: in `use()`, call `if LushCaves.use(game, target): return` **before** `Hunger.can_eat` and before generic placement. This one entry handles bone meal, lit harvest, shears, and berry planting.
+- `scripts/dispensers.gd`: in the bone-meal branch, add a cave-vine case calling `LushCaves.ripen(world, target)` and use its boolean for `applied`/`consume`.
+- `scripts/voxel_world.gd`: call `LushCaves.reset(self)` from `configure`; `LushCaves.update(self, delta)` in the active non-replica update; `LushCaves.changed(self, p, old_id, id)` from `set_node`; `LushCaves.unload(self, c)` from `_unload`; and `LushCaves.column_loaded(self, c)` after column reconciliation. In both generated-special and edited-cell load loops, call `LushCaves.registered(self, p, id)` when `LushCaves.is_vine(id)`.
+- `scripts/hunger.gd`: in `food_saturation(id)`, return `LushCaves.BERRY_SATURATION` for `LushCaves.GLOW_BERRY` before the ordinary fixed table (the table otherwise defaults this VillageContent item to zero).
+- `scripts/village_content.gd`: mirror `LushCaves.BLOCK_DATA` for ids **1177, 1178, 1179, and 1204** (including drops, hidden internal vine forms, berry saturation/compost, and moss hardness/hoe/compost). Keep the existing carpet/root entries and ids.
+- `scripts/nodes.gd`: before the generic `VillageContent.DATA` placeability fallback, return `false` when `LushCaves.is_vine(id)`. `Nodes.drop` already honors each entry's explicit `drop`.
+- `scripts/village_item_art.gd`: delegate `LushCaves.GLOW_BERRY` to `LushCaves.draw(img, id)` before the generic item fallback.
 
-The source is explicit for this block: `walkable = false`, `climbable = true`. Both now
-hold, including the climb — the player's ladder test had no branch for a vine, so
-`climbable` was a declared field nothing read.
+`tests/lush_cave_checks.gd` exercises real player clicks, a dispenser bone-meal action, world support changes, loaded-column unload/reload, and actual save/load. It no longer asserts the incorrect tip-ripening rule.
 
-See [the atlas and the fallback tile](texture-atlas.md) for the wider class.
+## Boundary
 
-## Recorded source gaps
-
-- **No moss carpet or hanging roots behaviour.** Both blocks are registered and drawn, but the source grows moss across stone and hangs roots from ceilings; neither generates or spreads.
-- **No drip leaves.** The source ships a full drip leaf with four states and a tilt/spring mechanic that drops an entity standing on it. That is a separate and substantial piece.
-- **No natural generation.** The whole lush cave biome — moss floors, hanging roots, cave vines and drip leaves — is generated by the source. Voxey's blocks are placed, not generated.
-- **No cave vine growth.** The source's vines grow downward over time; Voxey's hang where placed.
-- **No glow berry planting.** The source lets a berry be planted onto a vine's underside, which is how a vine is started; Voxey's vines are placed directly.
+Natural lush-cave biome dispatch and full source biome generation remain separate from this survival lifecycle. Azalea/rooted-dirt behavior remains owned by `LushCaveExtra` and `AzaleaTrees`.

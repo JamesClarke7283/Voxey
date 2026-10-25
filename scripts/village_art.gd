@@ -2,6 +2,8 @@ class_name VillageArt
 extends RefCounted
 
 static func pixel(id: int, x: int, y: int, noise: Color) -> Color:
+	if DryTerrain.DATA.has(id): return DryTerrain.pixel(id,x,y,noise)
+	if id == BambooWood.MOSAIC: return BambooWood.pixel(id,x,y,noise)
 	if id in SteamMachines.BLOCKS: return SteamMachines.pixel(id,x,y,noise)
 	if Beacons.is_beacon(id) or Beacons.is_beam(id): return Beacons.pixel(id,x,y,noise)
 	if Seagrass.is_seagrass(id): return Seagrass.pixel(id,x,y,noise)
@@ -20,6 +22,9 @@ static func pixel(id: int, x: int, y: int, noise: Color) -> Color:
 	if Amethyst.is_amethyst(id): return Amethyst.pixel(id,x,y,noise)
 	if Farmland.is_soil(id): return Farmland.pixel(id,x,y,noise)
 	if CropFarming.is_crop(id): return CropFarming.pixel(id,x,y,noise)
+	if CocoaCrops.is_cocoa(id): return CocoaCrops.pixel(id,x,y,noise)
+	if NetherWartCrops.is_wart(id): return NetherWartCrops.pixel(id,x,y,noise)
+	if SweetBerryCrops.is_bush(id): return SweetBerryCrops.pixel(id,x,y,noise)
 	if FruitCrops.DATA.has(id): return FruitCrops.pixel(id,x,y,noise)
 	if id in DenseMaterials.BLOCKS: return DenseMaterials.pixel(id,x,y,noise)
 	if Concrete.is_concrete_family(id): return Concrete.pixel(id,x,y,noise)
@@ -44,15 +49,20 @@ static func pixel(id: int, x: int, y: int, noise: Color) -> Color:
 	if id >= PaleOak.RESIN_BLOCK and id <= PaleOak.EYEBLOSSOM_OPEN: return PaleOak.pixel(id,x,y,noise)
 	if id >= CopperDecor.LANTERN_FLOOR and id <= CopperDecor.BARS+CopperDecor.STAGES-1: return CopperDecor.pixel(id,x,y,noise)
 	if id == Bookshelves.ID: return Bookshelves.pixel(id,x,y,noise)
+	if Trials.is_block(id): return Trials.pixel(id,x,y,noise)
 	if id == Dungeons.SPAWNER: return Dungeons.pixel(id,x,y,noise)
 	if id == Jukeboxes.ID: return Jukeboxes.pixel(id,x,y,noise)
 	if id == NoteBlocks.ID: return NoteBlocks.pixel(id,x,y,noise)
 	if RespawnAnchors.is_anchor(id): return RespawnAnchors.pixel(id,x,y)
 	if HugeMushrooms.is_huge(id): return HugeMushrooms.pixel(id,x,y)
+	if FlowersExtra.is_flower(id) or FlowersExtra.is_plant(id): return FlowersExtra.pixel(id,x,y,noise)
 	if FoodFeatures.flower(id): return FoodFeatures.flower_pixel(id,x,y)
 	if FoodFeatures.is_tall_grass(id): return FoodFeatures.tall_grass_pixel(x,y)
 	if RedstoneSensors.is_device(id): return RedstoneSensors.pixel(id,x,y,noise)
 	if PortableStorage.is_storage(id): return PortableStorage.pixel(id,x,y,noise)
+	if id == VillageContent.GRINDSTONE: return GrindstoneRepair.pixel(x,y,noise)
+	if id == Stonecutting.BLADE: return Stonecutting.blade_pixel(x,y)
+	if ShapeMaterials.DATA.has(id): return ShapeMaterials.pixel(id,x,y,noise)
 	if id in Masonry.BLOCKS: return Masonry.pixel(id,x,y,noise)
 	if Magma.is_magma(id): return Magma.pixel(id,x,y,noise)
 	if TrappedChests.is_trapped(id): return TrappedChests.pixel(id,x,y,noise)
@@ -140,6 +150,7 @@ static func mesh(out: Array, p: Vector3, id: int) -> void:
 	# A candle stack renders one column per candle, so the count is visible.
 	if id in Candles.BLOCKS: _candles(out,p,id); return
 	if FruitCrops.is_stem(id) or FruitCrops.is_pumpkin_head(id): FruitCrops.mesh(out,p,id); return
+	if Trials.is_block(id): Trials.mesh(out,p,id); return
 	if id == Dungeons.SPAWNER: Dungeons.mesh(out,p); return
 	var tile: int = Nodes.tile(id,0)
 	var shape: String = VillageContent.shape(id)
@@ -147,8 +158,7 @@ static func mesh(out: Array, p: Vector3, id: int) -> void:
 		"bed","bed_head": _box(out,p,Vector3(0.5,0.27,0.5),Vector3(1,0.54,1),tile)
 		"carpet": _box(out,p,Vector3(0.5,0.03,0.5),Vector3(1,0.06,1),tile)
 		"banner":
-			_box(out,p,Vector3(0.5,0.55,0.5),Vector3(0.06,1.1,0.06),Nodes.tile(Nodes.LOG,0))
-			_box(out,p,Vector3(0.5,0.72,0.47),Vector3(0.72,0.75,0.04),tile)
+			pass # Per-item patterns and orientation are rendered by Banners.display_model.
 		"bell":
 			_box(out,p,Vector3(0.5,0.85,0.5),Vector3(0.95,0.12,0.15),Nodes.tile(Nodes.LOG,0))
 			_box(out,p,Vector3(0.5,0.47,0.5),Vector3(0.5,0.6,0.5),tile)
@@ -179,7 +189,9 @@ static func mesh(out: Array, p: Vector3, id: int) -> void:
 			_box(out,p,Vector3(0.5,0.08,0.5),Vector3(0.8,0.16,0.8),Nodes.tile(Nodes.COBBLE,0))
 			_box(out,p,Vector3(0.5,0.5,0.5),Vector3(0.15,0.8,0.15),tile)
 			for x in [0.2,0.8]: _box(out,p,Vector3(x,0.3,0.5),Vector3(0.17,0.3,0.17),Nodes.tile(Nodes.GLASS,0))
-		"grindstone","stonecutter","anvil":
+		"stonecutter": Stonecutting.mesh(out,p,id)
+		"grindstone": GrindstoneRepair.mesh(out,p,id)
+		"anvil":
 			_box(out,p,Vector3(0.5,0.17,0.5),Vector3(0.8,0.34,0.65),tile)
 			_box(out,p,Vector3(0.5,0.55,0.5),Vector3(0.4,0.45,0.4),tile)
 			_box(out,p,Vector3(0.5,0.8,0.5),Vector3(0.9,0.25,0.7),tile)

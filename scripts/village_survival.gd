@@ -27,13 +27,14 @@ func reset() -> void:
 	displays.clear()
 	bobber = null; mount = null; fishing = 0; effects.clear(); shield_raised = false; shield_disabled = 0.0
 
-func update(delta: float) -> void:
+func update_shield(delta: float) -> void:
 	shield_disabled = maxf(0,shield_disabled-delta)
 	# A shield is raised while the player holds it with sneak, which is the
 	# source's own held state.
-	shield_raised = game.inventory.held().id == VillageContent.SHIELD and (Input.is_physical_key_pressed(KEY_CTRL) or (game.touch and is_instance_valid(game.controls) and game.controls.sneak_held))
-	var held_slot: Dictionary = game.inventory.held()
-	if held_slot.get("data",{}).has("charge"): held_slot.data.charge = maxf(0,float(held_slot.data.charge)-delta)
+	shield_raised = (Shields.is_shield(int(game.inventory.held().id)) or Shields.is_shield(game.player.offhand_id())) and (Input.is_physical_key_pressed(KEY_CTRL) or (game.touch and is_instance_valid(game.controls) and game.controls.sneak_held))
+
+func update(delta: float) -> void:
+	update_shield(delta)
 	Enchantments.frost_step(game,delta)
 	AlchemyWorld.update(game,delta)
 	Fishing.update(self,delta)
@@ -63,6 +64,7 @@ func use() -> bool:
 	if mob != null and Cats.is_cat(mob.kind) and Cats.use(game,mob): return true
 	if mob != null and Parrots.is_parrot(mob.kind) and Parrots.use(game,mob): return true
 	if Farming.use(game,mob): return true
+	if MooshroomStew.use(game,mob): return true
 	if held == Nodes.COMPASS and not target.is_empty() and target.id == Bastions.LODESTONE: return Lodestones.bind(game,target.pos)
 	if mob is NetherResident and held == Nodes.GOLD:
 		if not mob.barter(): game.toast("This piglin will not barter right now.")
@@ -131,18 +133,12 @@ func use() -> bool:
 			game.toast("Washed clean.")
 			return true
 		return Cauldrons.use(game,target.pos)
-	# `mcl_core.bottle_dirt`: pouring a **water bottle** on dirt turns it to mud and
-	# returns the empty bottle. This must run before the generic potion branch, or a
-	# water bottle is drunk instead of poured. The source resolves both the `under`
-	# and `above` cells of its pointed thing, so either is accepted.
-	if held == VillageContent.WATER_BOTTLE and not target.is_empty():
-		var pour: Vector3i = target.pos+target.normal if target.normal != Vector3i.ZERO else target.pos
-		for cell in [target.pos,pour]:
-			if game.world.node_at(cell) == Nodes.DIRT and game.world.set_node(cell,VillageContent.MUD):
-				_consume(); give(VillageContent.GLASS_BOTTLE,1); game.sound("place"); return true
+	# `mcl_core.bottle_dirt`: only the pointed host converts. Direct creative use
+	# preserves the water bottle and creates no empty glass bottle.
+	if held == VillageContent.WATER_BOTTLE and not target.is_empty() and MudBottles.convert(game,target.pos): return true
 	if PotionCatalog.is_bottle(held):
 		if PotionCatalog.ITEMS[held].form == "drink":
-			PotionEffects.apply_item(game.player,held); _consume()
+			PotionEffects.apply_item(game.player,held,1.0,game.inventory.held().get("data",{})); _consume()
 			if PotionCatalog.ITEMS[held].potion != "ominous": give(VillageContent.GLASS_BOTTLE,1)
 			game.toast(PotionCatalog.description(held))
 		else:
@@ -159,7 +155,6 @@ func use() -> bool:
 		for entity in game.entities.get_children():
 			if entity is MagicProjectile and entity.kind == "breath" and entity.position.distance_to(game.player.position) < 6:
 				_consume(); give(VillageContent.DRAGON_BREATH,1); entity.queue_free(); game.toast("Collected dragon breath."); return true
-	if held == VillageContent.CROSSBOW: fire_crossbow(); return true
 	if target.is_empty(): return false
 	var p: Vector3i = target.pos; var id: int = target.id
 	if held == VillageContent.GLASS_BOTTLE and Fluids.water(id):
@@ -168,35 +163,14 @@ func use() -> bool:
 	# **live** fish it carries and returns an empty bucket. The old path placed water
 	# and dropped a raw cod item, so a bucketed fish could never be released alive.
 	if FishBuckets.is_fish_bucket(held) and FishBuckets.place(game,target): return true
-	if held == VillageContent.COCOA_BEANS and WoodTypes.canonical(id) == WoodTypes.log_id(3) and target.normal.y == 0 and game.world.node_at(p+target.normal) == Nodes.AIR:
-		game.world.set_node(p+target.normal,VillageContent.COCOA_POD); _consume(); return true
+	if CocoaCrops.use(game,target): return true
 	if held == VillageContent.KELP and id == Nodes.WATER and game.world.node_at(p+Vector3i.DOWN) != Nodes.AIR:
 		game.world.set_node(p,VillageContent.KELP_PLANT); _consume(); return true
 	if held == VillageContent.LILY_PAD and id == Nodes.WATER and game.world.node_at(p+Vector3i.UP) == Nodes.AIR:
 		game.world.set_node(p+Vector3i.UP,held); _consume(); return true
+	if SweetBerryCrops.use(game,target): return true
 	if CropFarming.use(game,target): return true
-	if VillageContent.CROPS.has(held) and not CropFarming.is_crop(VillageContent.CROPS[held]):
-		var soil: int = Nodes.SOUL_SAND if held == VillageContent.NETHER_WART_ITEM else (Nodes.GRASS if held == VillageContent.SWEET_BERRY else Nodes.FARMLAND)
-		var placement: Dictionary = SnowCover.placement(game.world,target)
-		if target.normal == Vector3i.UP and (placement.support_id == soil or held == VillageContent.SWEET_BERRY and placement.support_id == Nodes.DIRT) and SnowCover.replaceable(game.world.node_at(placement.pos)):
-			if game.world.set_node(placement.pos,VillageContent.CROPS[held]): _consume(); game.sound("place")
-		elif Nodes.food(held) > 0 and game.player.hunger < 20: return false
-		else: game.toast("Plant this on "+Nodes.title(soil).to_lower()+".")
-		return true
-	# Bone meal advances a crop-like node one stage. The arithmetic is by *id*, so
-	# the node's own stage layout decides the result, and a node whose ids are not
-	# laid out as three consecutive stages must not be advanced this way.
-	#
-	# Cocoa is exactly that case: its pod ids jump to a cobweb, so the old
-	# `id+3-stage` turned a pod into a cobweb. Cocoa has its own ripening path
-	# (the `RIPE_COCOA_POD` id) and is excluded here.
-	if held == Nodes.BONE_MEAL and not CropFarming.is_crop(id) and not VillageContent.is_cocoa(id) and VillageContent.shape(id) == "crop" and VillageContent.DATA[id].stage < 3:
-		var advanced: int = id+3-int(VillageContent.DATA[id].stage)
-		# Only advance when the destination is really a later stage of the same
-		# crop, so a table that is not three-wide cannot silently produce anything.
-		if VillageContent.DATA.get(advanced,{}).get("crop","") == VillageContent.DATA[id].get("crop","") and VillageContent.crop_seed(id) != VillageContent.NETHER_WART_ITEM:
-			game.world.set_node(p,advanced); _consume()
-		return true
+	if NetherWartCrops.use(game,target): return true
 	# `mcl_itemframes`: a glow ink sac clicked onto a frame changes its form rather
 	# than being placed, so this test precedes the take path. `GlowInk.apply` refuses
 	# anything that is not a frame or a sign, and a sign never reaches here because
@@ -204,27 +178,6 @@ func use() -> bool:
 	if GlowInk.is_glow_ink(held) and GlowInk.apply(game,{"id":id,"pos":p,"distance":0.0}): return true
 	if id == VillageContent.ITEM_FRAME:
 		frame_item(p); return true
-	# Emblazoning a banner with a dye appends a layer, and a banner used on an
-	# emblazoned banner combines their layers, as the source's rules say.
-	if VillageContent.DATA.get(id,{}).get("family","") == "banner":
-		if Banners.is_banner(held):
-			var other: Dictionary = {"id":held,"count":1,"wear":int(game.inventory.held().get("wear",0)),"data":game.inventory.held().get("data",{}).duplicate(true)}
-			var station: Dictionary = game.world.get_station(p,"banner")
-			var current: Dictionary = {"id":id,"count":1,"data":station.get("layers",[])}
-			if Banners.combine(current,other):
-				station["layers"] = Banners.layers(current)
-				refresh_displays(); if game.gamemode != "creative": _consume()
-				game.toast("Banners combined."); return true
-			game.toast("That banner is already emblazoned the same way."); return true
-		var as_dye: int = Banners.dye_color(held)
-		if as_dye >= 0:
-			var station2: Dictionary = game.world.get_station(p,"banner")
-			var banner_slot: Dictionary = {"id":id,"count":1,"data":station2.get("layers",[])}
-			if Banners.emblazon(banner_slot,Banners.pending_pattern(held),as_dye):
-				station2["layers"] = Banners.layers(banner_slot)
-				refresh_displays(); if game.gamemode != "creative": _consume()
-				game.toast("Pattern applied."); return true
-			game.toast("That banner already carries its maximum of patterns."); return true
 	if not Input.is_physical_key_pressed(KEY_CTRL):
 		if PortableStorage.interact(game,p): return true
 		if id == VillageContent.BELL: game.villages.ring_bell(p); return true
@@ -243,20 +196,10 @@ func use() -> bool:
 			var station: Dictionary = game.world.get_station(p,"furnace"); station.device = id
 			game.open_inventory("furnace",p); return true
 		if id == VillageContent.COMPOSTER: Composters.interact(game,p); return true
-		if id == Bookshelves.ID:
-			# The source's right-click puts a book into, or takes one out of, the slot
-			# under the pointer, chosen from where on the face the click landed.
-			var hit: Vector3 = target.get("point",Vector3(p)+Vector3.ONE*0.5)-Vector3(p)
-			var index: int = Bookshelves.slot_at(hit,game.world.circuits.facing(p)) if game.world.circuits.has_method("facing") else Bookshelves.slot_at(hit,0)
-			var offered: Dictionary = game.inventory.held()
-			if offered.id != 0 and Bookshelves.is_book(offered.id):
-				if Bookshelves.insert(game.world,p,index,offered): _consume()
-			else:
-				var taken: Dictionary = Bookshelves.take(game.world,p,index)
-				if not taken.is_empty():
-					var rest: int = game.inventory.add_item(taken.id,1,taken.get("wear",0),taken.get("data",{}))
-					if rest > 0: game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,taken.id,rest,taken.get("wear",0),taken.get("data",{}))
-			game.sound("place"); return true
+		if id == VillageContent.SMITHING_TABLE: game.open_inventory("smithing",p); return true
+		if GrindstoneRepair.is_grindstone(id): game.open_inventory("grindstone",p); return true
+		if Stonecutting.is_cutter(id): game.open_inventory("stonecutter",p); return true
+		if Bookshelves.use(game,target): return true
 		if id in [VillageContent.ANVIL,VillageContent.GRINDSTONE,VillageContent.SMITHING_TABLE,VillageContent.BREWING_STAND,VillageContent.LOOM,VillageContent.STONECUTTER,VillageContent.CARTOGRAPHY_TABLE,VillageContent.FLETCHING_TABLE,VillageContent.LECTERN]:
 			show_station(p,id); return true
 	# A glowstone block charges a respawn anchor; using a charged one sets the spawn in
@@ -322,31 +265,12 @@ func fish(target: Dictionary) -> void:
 	Fishing.use(self,target)
 
 func fire_crossbow() -> void:
-	var held: Dictionary = game.inventory.held()
-	var loaded: int = int(held.get("data",{}).get("loaded_arrow",0))
-	if loaded == 0:
-		for slot in game.inventory.slots:
-			if slot.id == Nodes.ARROW_ITEM or VillageContent.DATA.get(slot.id,{}).get("family","") == "arrow": loaded = slot.id; break
-		if loaded == 0 and game.gamemode == "creative": loaded = Nodes.ARROW_ITEM
-		if loaded == 0: game.toast("You need an arrow to load the crossbow."); return
-		if game.gamemode != "creative": game.inventory.remove_item(loaded,1)
-		if not held.has("data"): held.data = {}
-		held.data.loaded_arrow = loaded; held.data.charge = maxf(0.1,1.25-0.25*Inventory.enchantment(held,"Quick Charge")); game.inventory.changed.emit(); game.toast("Crossbow loaded. Use again to fire."); return
-	if float(held.data.get("charge",0)) > 0: game.toast("Crossbow charging…"); return
-	var multishot: bool = Inventory.enchantment(held,"Multishot") > 0
-	for i in (3 if multishot else 1):
-		var direction: Vector3 = (-game.player.camera.global_basis.z).rotated(Vector3.UP,deg_to_rad([0,-10,10][i]))
-		var shot: Arrow = game.spawn_arrow(game.player.camera.global_position+direction*0.5,direction*35+Vector3.UP)
-		shot.from_player = true; shot.damage = 9; shot.item_id = loaded; shot.piercing = Inventory.enchantment(held,"Piercing"); shot.recoverable = i == 0 and game.gamemode != "creative"
-	held.data.erase("charge")
-	held.data.erase("loaded_arrow")
-	if held.data.is_empty(): held.erase("data")
-	if game.gamemode != "creative": game.inventory.damage_tool()
-	game.sound("arrow")
+	# Kept for callers that request use; loaded crossbows fire through Attack.
+	CrossbowUse.begin(game.player)
 
-func blocks_damage(source: Vector3, kind: String = "generic") -> bool:
+func blocks_damage(source: Vector3, kind: String = "generic", damage: float = 3.0) -> bool:
 	if not Shields.can_block(game.player,source,kind): return false
-	Shields.add_wear(game.player,3.0)
+	Shields.add_wear(game.player,damage)
 	game.sound("thud"); return true
 
 func apply_effect(target: Node3D, effect: String, duration: float = 15.0) -> void:
@@ -373,6 +297,11 @@ static func _lectern_page(station: Dictionary) -> String:
 	return body.substr((page-1)*per,per)
 
 func show_station(p: Vector3i, id: int) -> void:
+	if id == VillageContent.SMITHING_TABLE: game.open_inventory("smithing",p); return
+	if GrindstoneRepair.is_grindstone(id): game.open_inventory("grindstone",p); return
+	if Stonecutting.is_cutter(id): game.open_inventory("stonecutter",p); return
+	if id == VillageContent.LOOM: Banners.show_loom(game,p); return
+	if id in [VillageContent.ANVIL,11446,11447]: AnvilWorkbench.show(game,p); return
 	workstation_pos = p; workstation_id = id
 	game.state = "workstation"; game.world.active = false; Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	game.hud._clear(); game.hud.screen = "workstation"; game.hud._dim()
@@ -381,88 +310,7 @@ func show_station(p: Vector3i, id: int) -> void:
 	var scroll := ScrollContainer.new(); scroll.position = Vector2(24,67); scroll.size = Vector2(704,404); panel.add_child(scroll)
 	var list := VBoxContainer.new(); list.size_flags_horizontal = Control.SIZE_EXPAND_FILL; list.add_theme_constant_override("separation",7); scroll.add_child(list)
 	var actions: Array = []
-	if id == VillageContent.ANVIL: NameTags.editor(game,list)
-	if id in [VillageContent.ANVIL,VillageContent.GRINDSTONE,VillageContent.SMITHING_TABLE]:
-		for i in game.inventory.slots.size():
-			var slot: Dictionary = game.inventory.slots[i]
-			if Nodes.durability(slot.id) <= 0 and slot.id != VillageContent.ENCHANTED_BOOK: continue
-			var index: int = i
-			if id == VillageContent.SMITHING_TABLE and Netherite.upgrade_id(slot.id) != 0:
-				actions.append([Nodes.title(slot.id)+" → Netherite · 1 ingot + 1 template",func():
-					if not Netherite.upgrade(game.inventory,index): game.toast("Bring one netherite ingot and one upgrade template.")
-					else: game.achievements.award("serious_dedication"); game.sound("equip")
-					show_station(p,id)])
-			var description: String = "Remove enchantments, recover XP" if id == VillageContent.GRINDSTONE else ("Apply first compatible enchanted book · 1 XP level" if id == VillageContent.ANVIL else "Repair 25% · 1 matching material")
-			actions.append([Nodes.title(slot.id)+" — "+description,func(): equipment_work(index,id); show_station(p,id)])
-	elif id == VillageContent.STONECUTTER:
-		for pair in [[Nodes.STONE,Nodes.BRICKS],[Nodes.BRICKS,VillageContent.CHISELED_BRICKS],[VillageContent.GRANITE,VillageContent.POLISHED_GRANITE],[VillageContent.DIORITE,VillageContent.POLISHED_DIORITE],[VillageContent.ANDESITE,VillageContent.POLISHED_ANDESITE],[VillageContent.QUARTZ_BLOCK,VillageContent.QUARTZ_PILLAR],[Nodes.DEEPSLATE,Nodes.POLISHED_DEEPSLATE]]:
-			var input: int = pair[0]; var output: int = pair[1]
-			actions.append(["1 "+Nodes.title(input)+" → 1 "+Nodes.title(output),func(): exchange([[input,1]],output)])
-		# The source's own chiseled forms that are not stairs or slabs.
-		for pair in [[PaleOak.RESIN_BRICK_BLOCK,PaleOak.CHISELED_RESIN_BRICK]]:
-			var cin: int = pair[0]; var cout: int = pair[1]
-			actions.append(["1 "+Nodes.title(cin)+" → 1 "+Nodes.title(cout),func(): exchange([[cin,1]],cout)])
-		for base in BuildingShapes.MATERIALS+BuildingShapes.EXTRA_MATERIALS:
-			for source in BuildingShapes.stonecutter_inputs(base):
-				var input: int = source
-				var slab: int = BuildingShapes.slab_for(base); var stair: int = BuildingShapes.stair_for(base)
-				actions.append([BuildingShapes.title(slab)+" × 2 · 1 "+Nodes.title(input),func(): exchange([[input,1]],slab,2)])
-				actions.append([BuildingShapes.title(stair)+" · 1 "+Nodes.title(input),func(): exchange([[input,1]],stair)])
-		for i in Barriers.WALL_MATERIALS.size():
-			for source in Barriers.stonecutter_inputs(Barriers.WALL_MATERIALS[i]):
-				var input: int = source; var output: int = Barriers.WALL_FIRST+i
-				actions.append([Nodes.title(output)+" · 1 "+Nodes.title(input),func(): exchange([[input,1]],output)])
-		var masonry: Dictionary = Masonry.cuts()
-		for magma_id in Magma.BLOCKS: masonry[magma_id] = true
-		for output_id in masonry:
-			for source_id in masonry[output_id]:
-				var input: int = source_id; var output: int = output_id
-				actions.append(["1 "+Nodes.title(input)+" → 1 "+Nodes.title(output),func(): exchange([[input,1]],output)])
-
-	elif id == VillageContent.LOOM:
-		# `mcl_loom`: the loom's real purpose is to apply a **pattern item + dye** to a
-		# banner the player carries, previewing the result. Voxey already lets a dye be
-		# used on a placed banner (`banners.gd`); this adds the loom's own carried-banner
-		# route, which is the source's UI.
-		for i in game.inventory.slots.size():
-			var slot: Dictionary = game.inventory.slots[i]
-			if not Banners.is_banner(slot.id): continue
-			var banner_index: int = i
-			var layers: Array = Banners.layers(slot)
-			for pattern_index in VillageContent.PATTERN_KEYS.size():
-				var pattern_id: int = VillageContent.PATTERN_FIRST+pattern_index
-				var key: String = VillageContent.PATTERN_KEYS[pattern_index]
-				if Banners.pattern(key).is_empty(): continue
-				var label: String = "Apply "+key.replace("_"," ")+" · pattern + dye + banner"
-				actions.append([label,func():
-					# Find a pattern item and a dye in the inventory, then emblazon.
-					var pattern_slot: int = -1; var dye_slot: int = -1
-					for j in game.inventory.slots.size():
-						var s: Dictionary = game.inventory.slots[j]
-						if s.id == pattern_id and pattern_slot < 0: pattern_slot = j
-						elif Banners.dye_color(s.id) >= 0 and dye_slot < 0: dye_slot = j
-					if pattern_slot < 0 or dye_slot < 0:
-						game.toast("The loom needs a pattern item and a dye.")
-						return
-					var banner: Dictionary = game.inventory.slots[banner_index]
-					if not Banners.emblazon(banner,Banners.pending_pattern(game.inventory.slots[pattern_slot].id),Banners.dye_color(game.inventory.slots[dye_slot].id)):
-						game.toast("That banner already carries its maximum of patterns.")
-						return
-					game.inventory.remove_item(pattern_id,1)
-					game.inventory.remove_item(game.inventory.slots[dye_slot].id,1)
-					game.inventory.changed.emit(); game.sound("place")
-					game.toast("Pattern applied at the loom.")
-					show_station(p,id)])
-		# The source's loom also crafts a plain banner from wool and a dye.
-		for dye in VillageContent.DATA:
-			if VillageContent.DATA[dye].get("family","") != "dye": continue
-			var dye_id: int = dye; var color_name: String = VillageContent.DATA[dye].dye
-			var banner_id: int = 0
-			for node in VillageContent.BLOCKS:
-				if VillageContent.DATA[node].get("family","") == "banner" and VillageContent.DATA[node].dye == color_name: banner_id = node
-			var output: int = banner_id
-			actions.append([color_name.replace("_"," ").capitalize()+" banner · 6 wool + stick + dye",func(): exchange([[Nodes.WOOL,6],[Nodes.STICK,1],[dye_id,1]],output)])
-	elif id == VillageContent.CARTOGRAPHY_TABLE:
+	if id == VillageContent.CARTOGRAPHY_TABLE:
 		actions.append(["Create map · 8 paper + compass",func(): exchange([[Nodes.PAPER,8],[Nodes.COMPASS,1]],VillageContent.EMPTY_MAP)])
 		for i in game.inventory.slots.size():
 			var slot: Dictionary = game.inventory.slots[i]
@@ -518,9 +366,7 @@ func show_station(p: Vector3i, id: int) -> void:
 # `mcl_anvils.damage_anvil_by_using`: the anvil is damaged by **taking the result**,
 # not by opening the menu, so the roll runs only after a successful operation.
 func equipment_work(index: int, device: int) -> bool:
-	var worked: bool = _equipment_work(index,device)
-	if worked and device == VillageContent.ANVIL: _damage_anvil()
-	return worked
+	return _equipment_work(index,device)
 
 func _damage_anvil() -> void:
 	damage_anvil(workstation_pos)
@@ -536,7 +382,6 @@ func damage_anvil(p: Vector3i) -> bool:
 	if next >= Anvils.MAX_DAMAGE:
 		if game.world.set_node(p,Nodes.AIR):
 			game.sound("break"); game.toast("The anvil breaks apart.")
-			if game.gamemode != "creative": game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,VillageContent.ANVIL,1)
 		if game.state == "workstation": game.resume()
 		return true
 	game.world.set_node(p,[VillageContent.ANVIL,11446,11447][next])
@@ -544,91 +389,18 @@ func damage_anvil(p: Vector3i) -> bool:
 	return false
 
 func _equipment_work(index: int, device: int) -> bool:
+	if index < 0 or index >= game.inventory.slots.size(): return false
 	var slot: Dictionary = game.inventory.slots[index]
 	if slot.id == 0: return false
-	if device == VillageContent.GRINDSTONE:
-		# `mcl_grindstone/init.lua`:127-151: two damaged pieces of the same item
-		# combine with a 5 percent durability bonus and transfer any curse, so the
-		# repair half runs **before** the enchantment test — a pair with no
-		# enchantments must still repair. The screen shows one item at a time, so the
-		# partner is whatever else is carried.
-		for partner_index in game.inventory.slots.size():
-			if partner_index == index: continue
-			if GrindstoneRepair.use(game,slot,game.inventory.slots[partner_index]): return true
-		# `calculate_xp` (`:66-77`) pays `random(7,13) * level` per non-curse
-		# enchantment, read before the enchantments are erased.
-		var xp: int = GrindstoneRepair.xp_for(slot)
-		if slot.get("data",{}).get("enchantments",{}).is_empty(): game.toast("This item has no enchantments."); return false
-		var kept: Dictionary = {}
-		for enchant in slot.data.enchantments:
-			if Enchantments.DATA.get(enchant,{}).get("curse",false): kept[enchant] = slot.data.enchantments[enchant]
-		if kept == slot.data.enchantments: game.toast("Curses cannot be removed by a grindstone."); return false
-		if kept.is_empty(): slot.data.erase("enchantments")
-		else: slot.data.enchantments = kept
-		if slot.id == VillageContent.ENCHANTED_BOOK and kept.is_empty(): slot.id = Nodes.BOOK
-		if slot.data.is_empty(): slot.erase("data")
-		# `mcl_grindstone/init.lua`:282-283 throws the disenchantment's experience at
-		# the grindstone, so a remote grindstone still pays the player who used it.
-		if xp > 0: XpOrbs.throw_xp(game,Vector3(workstation_pos)+Vector3.ONE*0.5,xp)
-		game.inventory.changed.emit(); return true
-	if device == VillageContent.SMITHING_TABLE:
-		# `mcl_smithing_table`: a template plus a trim material trims a piece of
-		# armor, and re-applying the same overlay and material is refused.
-		if ArmorTrims.trimmable(slot.id):
-			for template_index in game.inventory.slots.size():
-				var template: Dictionary = game.inventory.slots[template_index]
-				if template_index == index or not ArmorTrims.is_template(template.id): continue
-				for material_index in game.inventory.slots.size():
-					var material: Dictionary = game.inventory.slots[material_index]
-					if material_index in [index,template_index] or not ArmorTrims.is_material(material.id): continue
-					if not ArmorTrims.apply(slot,template.id,material.id):
-						game.toast("That armor already carries this trim."); return false
-					# The source consumes all three inputs (`take_item` on the item,
-					# the mineral and the template), so one template trims once.
-					material.count -= 1
-					if material.count <= 0: material.clear(); material.merge({"id":0,"count":0,"wear":0})
-					template.count -= 1
-					if template.count <= 0: template.clear(); template.merge({"id":0,"count":0,"wear":0})
-					game.inventory.changed.emit()
-					game.toast("Trim applied: "+ArmorTrims.title(template.id).replace(" armor trim template","")+".")
-					game.achievements.award("crafting_a_new_look")
-					# `smithing_with_style` counts **distinct** trims, so the overlay key
-					# is what advances the counter rather than the application count.
-					game.achievements.track_distinct("smithing_with_style",ArmorTrims.key(template.id))
-					return true
-		if slot.wear <= 0: game.toast("This item needs no repair."); return false
-		var material: int = Anvils.repair_material(slot.id)
-		material = VillageContent.DATA.get(slot.id,{}).get("repair_material",material)
-		if material == 0 or game.inventory.count_item(material) <= 0:
-			game.toast("Repair needs "+Nodes.title(material)+"."); return false
-		# `mcl_anvils`: up to four materials are consumed for 25/50/75/100%, and
-		# each repair adds one to the prior-work penalty.
-		var plan: Dictionary = Anvils.material_repair(slot,game.inventory.count_item(material),material)
-		if plan.is_empty(): game.toast("That material does not repair this item."); return false
-		game.inventory.remove_item(material,int(plan.materials))
-		slot.wear = int(plan.wear)
-		Anvils.add_pwp(slot)
-		game.inventory.changed.emit(); return true
-	for book_index in game.inventory.slots.size():
-		if book_index == index: continue
-		var book: Dictionary = game.inventory.slots[book_index]
-		if book.id != VillageContent.ENCHANTED_BOOK: continue
-		var enchants: Dictionary = book.get("data",{}).get("enchantments",{})
-		var current: Dictionary = slot.get("data",{}).get("enchantments",{})
-		var combined: Dictionary = Enchantments.combine(slot.id,current,enchants)
-		if combined == current: continue
-		if game.xp_level() < 1 and game.gamemode != "creative": game.toast("Applying a book costs one XP level."); return false
-		if not slot.has("data"): slot.data = {}
-		slot.data.enchantments = combined
-		# `mcl_anvils`: the cost is the enchanting level requirement plus the
-		# prior-work penalty on *both* inputs, and the result takes max(p1,p2)+1.
-		var cost: int = 2+Anvils.pwp_cost(slot)+Anvils.pwp_cost(book)
-		if game.experience < cost and game.gamemode != "creative":
-			game.toast("This needs %d experience points." % cost); return false
-		Anvils.combine_pwp(slot,book)
-		book.clear(); book.merge({"id":0,"count":0,"wear":0})
-		game.experience = maxf(0,game.experience-cost); game.inventory.changed.emit(); return true
-	game.toast("Bring a compatible enchanted book."); return false
+	if device != VillageContent.ANVIL: return false
+	# Legacy scripted callers may still request an automatic book operation. The
+	# actual workstation uses explicit inputs and the same pure source plan.
+	for other in game.inventory.slots.size():
+		if other == index: continue
+		var preview: Dictionary = Anvils.plan(slot,game.inventory.slots[other])
+		if preview.is_empty(): continue
+		return AnvilWorkbench.use(game,workstation_pos,index,other)
+	game.toast("Choose compatible inputs at the anvil."); return false
 
 func ammunition() -> int:
 	for slot in game.inventory.slots:
@@ -706,18 +478,26 @@ func refresh_displays() -> void:
 		game.entities.add_child(model); displays["paint:"+key] = model
 	for key in game.world.stations:
 		var station: Dictionary = game.world.stations[key]
-		if station.get("kind","") not in ["frame","banner","composter","cauldron","campfire","sign"]: continue
+		if station.get("kind","") not in ["frame","banner","bookshelf","composter","cauldron","campfire","sign"]: continue
 		var xyz: PackedStringArray = key.split(",")
 		if xyz.size() != 3: continue
 		var p := Vector3i(int(xyz[0]),int(xyz[1]),int(xyz[2]))
 		if not game.world.loaded_at(Vector3(p)) or Vector3(p).distance_to(game.player.position) > 70: continue
-		if station.kind == "sign" and Signs.is_sign(game.world.node_at(p)):
+		if station.kind == "sign" and Signs.is_any(game.world.node_at(p)):
 			var sign_model: Node3D = Signs.display_model(game,p,Signs.station(game.world,p))
 			game.entities.add_child(sign_model); displays[key] = sign_model
 			continue
 		if station.kind == "campfire" and Campfires.is_campfire(game.world.node_at(p)):
 			var campfire: Node3D = Campfires.display_model(game,p,station)
 			game.entities.add_child(campfire); displays[key] = campfire
+			continue
+		if station.kind == "bookshelf" and game.world.node_at(p) == Bookshelves.ID:
+			var shelf: Node3D = Bookshelves.display_model(game.world,p)
+			game.entities.add_child(shelf); displays[key] = shelf
+			continue
+		if station.kind == "banner" and Banners.is_banner(game.world.node_at(p)):
+			var banner_model: Node3D = Banners.display_model(game.world,p)
+			game.entities.add_child(banner_model); displays[key] = banner_model
 			continue
 		var mesh := MeshInstance3D.new()
 		if station.kind == "composter" and game.world.node_at(p) == VillageContent.COMPOSTER:
@@ -731,15 +511,19 @@ func refresh_displays() -> void:
 			var id: int = station.slots[0].id
 			if id == VillageContent.FILLED_MAP:
 				mesh.free(); mesh = game.maps.frame_model(station.slots[0]); mesh.position = Vector3(p)+Vector3(0.5,0.5,-0.025)
+			elif Shields.is_shield(id):
+				mesh.free(); mesh = Shields.model(station.slots[0]); mesh.scale = Vector3.ONE*0.7; mesh.position = Vector3(p)+Vector3(0.5,0.5,-0.02)
+			elif Banners.is_banner(id):
+				var cloth := QuadMesh.new(); cloth.size = Vector2(0.65,0.65); mesh.mesh = cloth
+				var material := StandardMaterial3D.new(); material.albedo_texture = Banners.texture(station.slots[0])
+				material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR; material.cull_mode = BaseMaterial3D.CULL_DISABLED; material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+				mesh.material_override = material; mesh.position = Vector3(p)+Vector3(0.5,0.5,-0.02)
 			else:
-				mesh.mesh = game.node_mesh(id) if Nodes.placeable(id) else ItemArt.mesh(id)
-				mesh.material_override = game.node_material if Nodes.placeable(id) else ItemArt.material(id)
+				mesh.mesh = game.node_mesh(id) if Nodes.placeable(id) else ItemArt.mesh(id,3 if CrossbowUse.loaded_form(station.slots[0]) else -1)
+				mesh.material_override = game.node_material if Nodes.placeable(id) else ItemArt.material(id,3 if CrossbowUse.loaded_form(station.slots[0]) else -1)
 				mesh.scale = Vector3.ONE*0.4; mesh.position = Vector3(p)+Vector3(0.5,0.5,-0.02)
 				if Nodes.placeable(id): mesh.position -= Vector3.ONE*0.2
 			Frames.apply_display(mesh,id,frame_state)
-		elif station.kind == "banner" and station.get("globe",false) and VillageContent.DATA.get(game.world.node_at(p),{}).get("family","") == "banner":
-			var sphere := SphereMesh.new(); sphere.radius = 0.16; sphere.height = 0.32; mesh.mesh = sphere
-			var mat := StandardMaterial3D.new(); mat.albedo_color = Color("d7cf82"); mesh.material_override = mat; mesh.position = Vector3(p)+Vector3(0.5,0.72,0.43)
 		else: mesh.free(); continue
 		game.entities.add_child(mesh); displays[key] = mesh
 

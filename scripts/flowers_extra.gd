@@ -6,12 +6,12 @@ extends RefCounted
 # all art is original procedural code.
 #
 # The source registers thirteen **simple flowers** through
-# `mcl_flowers.register_simple_flower` (init.lua:110) and two more families
-# through `register_ground_flower` (init.lua:160) and the plant nodes in
+# `mcl_flowers.register_simple_flower` (init.lua:110), three ground families
+# through `register_ground_flower` (init.lua:160), and the plant nodes in
 # register.lua:302-512. Voxey already has poppy, dandelion, oxeye daisy and tall
 # grass (5610-5613, declared in `food_features.gd`); this module closes the ten
-# remaining simple flowers plus the small plants the source hangs off the same
-# file. `waterlily` is deliberately absent: Voxey has a lily pad already (684).
+# remaining simple flowers plus the small plants and all four ground stages.
+# `waterlily` is deliberately absent: Voxey has a lily pad already (684).
 #
 # Source rules reproduced here:
 #   * A simple flower is `drawtype = "plantlike"`, `walkable = false`,
@@ -31,20 +31,17 @@ extends RefCounted
 #     puts `_mcl_cooking_output` on the shared leaves template), and it burns for
 #     5 seconds like the two dry grasses (register.lua:163, 454, 492).
 #
-# Integration (the parent owns every shared file; this module owns only its own
-# `DATA`, `BLOCKS` and predicates):
-#   * `village_content.gd`: merge `DATA` as `NetherBlocks.DATA` already is, and
-#     append `BLOCKS` to `VillageContent.BLOCKS`.
+# Integration (the parent owns every shared file; this module owns its data and
+# executable callbacks):
+#   * `village_content.gd`: merge `DATA` and append `BLOCKS`.
 #   * `village_art.gd`/`village_item_art.gd`: dispatch to `pixel`/`draw`.
-#   * `FoodFeatures.FLOWERS`: ten more ids give stew, flower pots, the placement
-#     gate and the support/`changed` rule; guard its dye line against double
-#     registration (this module registers the dye recipes).
+#   * `FoodFeatures`: source-flower and stew registries are intentionally
+#     separate; its support and bone-meal functions dispatch into this module.
 #   * `Pasture.emission`: `light_level` (the firefly bush).
-#   * `Nodes.drop`: `drop` (the tallgrass family drops nothing, the fern a seed).
+#   * `Nodes.drop`: `drop` and `drop_count` (ground stage count matters).
 #   * `Nodes.smelt_result`: `smelt_output` (leaves to leaf litter).
 #   * `Nodes.fuel_time`: `fuel_time` (leaf litter and both dry grasses burn 5s).
-#   * Contact damage for the wither rose: `contact` (spec), wired at the source's
-#     `_on_object_in` point.
+#   * Player/mob containment: `apply_contact`, wired at `_on_object_in`.
 
 const TULIP_ORANGE = 11400
 const TULIP_PINK = 11401
@@ -64,10 +61,27 @@ const TALL_DRY_GRASS = 11414
 const WILDFLOWERS = 11415
 const LEAF_LITTER = 11416
 const PINK_PETALS = 11417
+# The base ids above are the source's `_1` nodes. LargePlants owns 11418-11429,
+# so the remaining three states of each ground family use this free id run.
+const WILDFLOWERS_2 = 11430
+const WILDFLOWERS_3 = 11431
+const WILDFLOWERS_4 = 11432
+const LEAF_LITTER_2 = 11433
+const LEAF_LITTER_3 = 11434
+const LEAF_LITTER_4 = 11435
+const PINK_PETALS_2 = 11436
+const PINK_PETALS_3 = 11437
+const PINK_PETALS_4 = 11438
 
 const FLOWERS = [TULIP_ORANGE,TULIP_PINK,TULIP_RED,TULIP_WHITE,ALLIUM,AZURE_BLUET,BLUE_ORCHID,WITHER_ROSE,LILY_OF_THE_VALLEY,CORNFLOWER]
 const PLANTS = [FERN,BUSH,FIREFLY_BUSH,SHORT_DRY_GRASS,TALL_DRY_GRASS,WILDFLOWERS,LEAF_LITTER,PINK_PETALS]
-const BLOCKS = FLOWERS+PLANTS
+const GROUND = {
+	WILDFLOWERS:[WILDFLOWERS,WILDFLOWERS_2,WILDFLOWERS_3,WILDFLOWERS_4],
+	LEAF_LITTER:[LEAF_LITTER,LEAF_LITTER_2,LEAF_LITTER_3,LEAF_LITTER_4],
+	PINK_PETALS:[PINK_PETALS,PINK_PETALS_2,PINK_PETALS_3,PINK_PETALS_4],
+}
+const GROUND_EXTRA = [WILDFLOWERS_2,WILDFLOWERS_3,WILDFLOWERS_4,LEAF_LITTER_2,LEAF_LITTER_3,LEAF_LITTER_4,PINK_PETALS_2,PINK_PETALS_3,PINK_PETALS_4]
+const BLOCKS = FLOWERS+PLANTS+GROUND_EXTRA
 
 # Source `light_source = 2` (register.lua:419).
 const FIREFLY_LIGHT = 2
@@ -75,10 +89,10 @@ const FIREFLY_LIGHT = 2
 const DRY_FUEL = 5
 # Source register.lua:121-123:
 #   `_on_object_in = function(_, _, obj) mcl_potions.give_effect("withering", obj, 1, 2) end`
-# The source calls this once per globalstep for whatever stands in the node, with
-# factor 1 (its level-1 rate of -1 HP per second) for two seconds. This module does
-# not apply damage; `contact` is the whole spec the parent needs to wire it.
-const CONTACT = {WITHER_ROSE:{"effect":"withering","factor":1,"duration":2.0}}
+# The source calls this once per globalstep for whatever stands in the node.
+# Withering uses `uses_factor`: raw factor 1 is effect level 2, with a one-second
+# damage timer (mcl_potions/functions.lua:927-946), and lasts two seconds.
+const CONTACT = {WITHER_ROSE:{"effect":"withering","factor":1,"potency":2,"duration":2.0}}
 # The tallgrass family: `_mcl_shears_drop = true` and `_mcl_silk_touch_drop = true`.
 const SHEARED = [FERN,BUSH,FIREFLY_BUSH,SHORT_DRY_GRASS,TALL_DRY_GRASS]
 # The plants whose drop is empty in the source (`drop = ""`): breaking one yields
@@ -93,17 +107,16 @@ const SEED_DROPS = [FERN]
 # mcl_lush_caves/nodes.lua:83,241; mcl_mangrove/init.lua:373;
 # mcl_pale_oak/plants.lua:216). `soil_flower` is that same list **plus** clay
 # (mcl_core/nodes_base.lua:649) and both farmland forms (mcl_farming/soil.lua:22,
-# 45) — farmland is deliberately *not* in the generic set. Voxey has no mycelium,
-# podzol, coarse dirt, rooted dirt, mangrove mud roots or pale moss, so those six
-# have no analogue here.
-const SOIL_GENERIC = [Nodes.GRASS,Nodes.DIRT,VillageContent.SWAMP_GRASS,VillageContent.MUD,LushCaves.MOSS]
+# 45) — farmland is deliberately *not* in the generic set.
+const SOIL_GENERIC = [DryTerrain.COARSE_DIRT,Nodes.GRASS,Nodes.SNOW,Nodes.DIRT,VillageContent.SWAMP_GRASS,VillageContent.MUD,LushCaves.MOSS,LushCaveExtra.ROOTED_DIRT,PaleOak.PALE_MOSS,SoilVariants.PODZOL,SoilVariants.SNOWY_PODZOL,SoilVariants.MYCELIUM,SoilVariants.SNOWY_MYCELIUM]
 const SOIL_FLOWER = SOIL_GENERIC+[Nodes.CLAY,Farmland.DRY,Farmland.WET]
-# The two dry grasses also accept hardened clay and the sands (register.lua:460-467,
-# 495-502). Voxey has no red sand; the source's `mcl_sus_nodes:sand` is Voxey's
-# suspicious sand.
-const SOIL_DRY_EXTRA = [Nodes.TERRACOTTA,Nodes.SAND,Archaeology.SUSPICIOUS_SAND]
-# The wither rose short-circuits the soil rule entirely: `soil_generic_plant`,
-# netherrack or a soul block (init.lua:98-104).
+# Firefly bush and dry grass use explicit lists rather than the generic group;
+# those lists include both farmland forms (register.lua:427-440,458-472,496-510).
+const SOIL_SPECIAL = SOIL_GENERIC+[Farmland.DRY,Farmland.WET]
+# The two dry grasses also accept hardened clay and all registered sands.
+const SOIL_DRY_EXTRA = [Nodes.TERRACOTTA,Nodes.SAND,ShapeMaterials.RED_SAND,Archaeology.SUSPICIOUS_SAND]
+# The wither rose short-circuits both the ordinary soil rule and the light rule:
+# `soil_generic_plant`, netherrack or a soul block (init.lua:92-106).
 const SOIL_WITHER = [Nodes.NETHERRACK,Nodes.SOUL_SAND,Campfires.SOUL_SOIL]
 
 # Source `sus_stew = {effect = <e>, duration = <d>}` per flower (register.lua:36-146).
@@ -154,18 +167,38 @@ const DATA = {
 	# Ground flowers. `wildflowers` and `pink_petals` are the source's `wildflower`
 	# group, which places against `soil_generic_plant` and needs no light at all
 	# (init.lua:196-204); leaf litter is `placeable_on_anything` (register.lua:161).
-	WILDFLOWERS:{"name":"Wildflowers","block":true,"shape":"plant","color":"d9c34a","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"source_node":"mcl_flowers:wildflowers"},
-	LEAF_LITTER:{"name":"Leaf litter","block":true,"shape":"plant","color":"a37546","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"place_anywhere":true,"fuel":DRY_FUEL,"source_node":"mcl_flowers:leaf_litter"},
-	PINK_PETALS:{"name":"Pink petals","block":true,"shape":"plant","color":"dd8eac","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"source_node":"mcl_flowers:pink_petals"},
+	WILDFLOWERS:{"name":"Wildflowers","block":true,"shape":"plant","color":"d9c34a","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"source_node":"mcl_flowers:wildflowers_1"},
+	LEAF_LITTER:{"name":"Leaf litter","block":true,"shape":"plant","color":"a37546","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"place_anywhere":true,"fuel":DRY_FUEL,"source_node":"mcl_flowers:leaf_litter_1"},
+	PINK_PETALS:{"name":"Pink petals","block":true,"shape":"plant","color":"dd8eac","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"source_node":"mcl_flowers:pink_petals_1"},
+	WILDFLOWERS_2:{"name":"Wildflowers","block":true,"shape":"plant","color":"d9c34a","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"hidden":true,"source_node":"mcl_flowers:wildflowers_2"},
+	WILDFLOWERS_3:{"name":"Wildflowers","block":true,"shape":"plant","color":"d9c34a","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"hidden":true,"source_node":"mcl_flowers:wildflowers_3"},
+	WILDFLOWERS_4:{"name":"Wildflowers","block":true,"shape":"plant","color":"d9c34a","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"hidden":true,"source_node":"mcl_flowers:wildflowers_4"},
+	LEAF_LITTER_2:{"name":"Leaf litter","block":true,"shape":"plant","color":"a37546","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"hidden":true,"place_anywhere":true,"fuel":DRY_FUEL,"source_node":"mcl_flowers:leaf_litter_2"},
+	LEAF_LITTER_3:{"name":"Leaf litter","block":true,"shape":"plant","color":"a37546","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"hidden":true,"place_anywhere":true,"fuel":DRY_FUEL,"source_node":"mcl_flowers:leaf_litter_3"},
+	LEAF_LITTER_4:{"name":"Leaf litter","block":true,"shape":"plant","color":"a37546","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"hidden":true,"place_anywhere":true,"fuel":DRY_FUEL,"source_node":"mcl_flowers:leaf_litter_4"},
+	PINK_PETALS_2:{"name":"Pink petals","block":true,"shape":"plant","color":"dd8eac","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"hidden":true,"source_node":"mcl_flowers:pink_petals_2"},
+	PINK_PETALS_3:{"name":"Pink petals","block":true,"shape":"plant","color":"dd8eac","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"hidden":true,"source_node":"mcl_flowers:pink_petals_3"},
+	PINK_PETALS_4:{"name":"Pink petals","block":true,"shape":"plant","color":"dd8eac","hardness":0.0,"tool":-1,"transparent":true,"flammable":true,"compostability":30,"hidden":true,"source_node":"mcl_flowers:pink_petals_4"},
 }
 
 # --- predicates --------------------------------------------------------------
 
-# The two id runs are contiguous, so the predicates are range tests rather than
-# list scans; `FLOWERS` and `PLANTS` must stay in the same order.
 static func is_flower(id: int) -> bool: return id >= TULIP_ORANGE and id <= CORNFLOWER
-static func is_plant(id: int) -> bool: return id >= FERN and id <= PINK_PETALS
+static func is_plant(id: int) -> bool: return id >= FERN and id <= PINK_PETALS or id in GROUND_EXTRA
 static func is_sheared(id: int) -> bool: return id in SHEARED
+static func ground_base(id: int) -> int:
+	for base in GROUND:
+		if id in GROUND[base]: return int(base)
+	return 0
+static func is_ground(id: int) -> bool: return ground_base(id) != 0
+static func ground_stage(id: int) -> int:
+	var base: int = ground_base(id)
+	return GROUND[base].find(id)+1 if base != 0 else 0
+static func ground_id(base: int, stage: int) -> int:
+	return int(GROUND[base][stage-1]) if GROUND.has(base) and stage >= 1 and stage <= 4 else 0
+static func next_ground(id: int) -> int:
+	var stage: int = ground_stage(id)
+	return ground_id(ground_base(id),stage+1) if stage >= 1 and stage < 4 else 0
 
 # Source `_mcl_crafting_output = {single = {output = "mcl_dyes:<c>"}}`: one flower
 # to one dye, in the source's own colour per flower. The three the source calls
@@ -187,48 +220,129 @@ static func dye_of(id: int) -> int:
 static func stew_effect(id: int) -> String: return str(STEW.get(id,{}).get("effect",""))
 static func stew_duration(id: int) -> float: return float(STEW.get(id,{}).get("duration",0.0))
 
-# The effect spec a contact-damage hook applies to whatever stands in this node, or
-# an empty dictionary when the plant is harmless. The parent wires this to the
-# source's `_on_object_in` point (its `mcl_walkover` globalstep, which tests the
-# feet and head cells): `PotionEffects.apply(target, spec.effect, spec.duration)`.
+# The source's `_on_object_in` gives factor-one withering for two seconds. The
+# walkover hook calls this for both feet and head cells on every globalstep, so
+# remaining contact refreshes the real effect rather than applying direct damage.
 static func contact(id: int) -> Dictionary: return CONTACT.get(id,{})
 static func contact_effect(id: int) -> String: return str(contact(id).get("effect",""))
+static func apply_contact(target: Node3D, id: int) -> bool:
+	var spec: Dictionary = contact(id)
+	if spec.is_empty(): return false
+	PotionEffects.apply(target,str(spec.effect),float(spec.duration),int(spec.get("potency",spec.factor)))
+	return true
 static func light_level(id: int) -> int: return FIREFLY_LIGHT if id == FIREFLY_BUSH else 0
 
-# Source `_mcl_burntime = 5`. `Nodes.fuel_time` resolves fuel with hardcoded
-# branches rather than reading a `fuel` key, so this is the accessor the parent
-# adds one branch for; the DATA entries also carry the value for the record.
-static func fuel_time(id: int) -> float: return float(DRY_FUEL) if id in [LEAF_LITTER,SHORT_DRY_GRASS,TALL_DRY_GRASS] else 0.0
+# Source `_mcl_burntime = 5`. The ground-flower `add_def` puts it on every leaf
+# litter stage, not only the craftitem/base node.
+static func fuel_time(id: int) -> float:
+	return float(DRY_FUEL) if ground_base(id) == LEAF_LITTER or id in [SHORT_DRY_GRASS,TALL_DRY_GRASS] else 0.0
 
-# Source `drop = ""` for the bush and both dry grasses; the fern keeps the
-# tallgrass template's wheat-seed drop instead (rarity 8, rolled by the parent),
-# and the two ground flowers drop themselves.
-static func drop(id: int) -> int: return 0 if id in NO_DROP or id in SEED_DROPS else id
+# Ground nodes use `drop = nodename .. " " .. i`: stage four drops four base
+# craftitems. Other plant drops retain the tallgrass rules.
+static func drop(id: int) -> int:
+	if is_ground(id): return ground_base(id)
+	return 0 if id in NO_DROP or id in SEED_DROPS else id
+static func drop_count(id: int) -> int: return ground_stage(id) if is_ground(id) else (0 if drop(id) == 0 else 1)
 static func seeds(id: int) -> bool: return id in SEED_DROPS
 
 # --- placement rules ---------------------------------------------------------
 
-# Whether the source accepts `below` as this plant's soil. Simple flowers and the
-# tallgrass family need `group:soil_flower`; the ground flowers, the firefly bush
-# and the dry grasses need `group:soil_generic_plant` (the dry grasses also accept
-# hardened clay and sand), and leaf litter accepts anything.
+# Exact placement hosts from each executable callback. In particular, clay and
+# farmland belong to soil_flower but not soil_generic_plant; firefly bush and dry
+# grass explicitly add farmland, and only the wither rose adds nether/soul hosts.
 static func soil_ok(id: int, below: int) -> bool:
-	if id == LEAF_LITTER: return true
-	if id == WITHER_ROSE: return below in SOIL_GENERIC or below in SOIL_WITHER
-	# Simple flowers, and the fern and bush through the tallgrass template, all go
-	# through `mcl_flowers.on_place_flower` and its `soil_flower` test.
+	if ground_base(id) == LEAF_LITTER: return true
+	if id == WITHER_ROSE: return below in SOIL_FLOWER or below in SOIL_WITHER
 	if is_flower(id) or id in [FERN,BUSH]: return below in SOIL_FLOWER
-	# The rest replace `on_place` with their own allowed list: `soil_generic_plant`,
-	# which the two dry grasses extend with hardened clay and the sands.
-	if id in [SHORT_DRY_GRASS,TALL_DRY_GRASS]: return below in SOIL_GENERIC or below in SOIL_DRY_EXTRA
-	return below in SOIL_GENERIC
+	if id == FIREFLY_BUSH: return below in SOIL_SPECIAL
+	if id in [SHORT_DRY_GRASS,TALL_DRY_GRASS]: return below in SOIL_SPECIAL or below in SOIL_DRY_EXTRA
+	if is_ground(id): return below in SOIL_GENERIC
+	return false
 
-# Only the simple flowers and the tallgrass template test light at all; the
-# ground flowers, the firefly bush and the dry grasses do not, and the wither rose
-# returns before the test (init.lua:71-108, 196-204, 402-512).
+# Only simple flowers and the tallgrass template test light. Ground flowers,
+# firefly bush and dry grasses do not. Wither rose skips light only on its early
+# generic/netherrack/soul branch; on clay or farmland it falls through to the
+# ordinary soil_flower + light check.
 static func needs_light(id: int) -> bool:
 	if id == WITHER_ROSE: return false
 	return is_flower(id) or id in [FERN,BUSH]
+static func needs_light_on(id: int, below: int) -> bool:
+	if id == WITHER_ROSE: return below not in SOIL_GENERIC and below not in SOIL_WITHER
+	return needs_light(id)
+
+# --- bone meal ---------------------------------------------------------------
+
+static func has_bone_meal(id: int) -> bool:
+	return (is_flower(id) and id != WITHER_ROSE) or is_ground(id) or id in [BUSH,FIREFLY_BUSH,SHORT_DRY_GRASS,TALL_DRY_GRASS]
+
+# `bone_meal_simple_flower`: scan grass under air in +/-3 XZ and +/-2 Y, with an
+# independent 20% roll for every position. Ground flowers spread their exact
+# current `_1`..`_4` node, not their base item or first stage.
+static func spread_flower(world: VoxelWorld, p: Vector3i, id: int, rng: RandomNumberGenerator = null) -> bool:
+	var placed: bool = false
+	for x in range(p.x-3,p.x+4):
+		for z in range(p.z-3,p.z+4):
+			for y in range(p.y-2,p.y+3):
+				var soil := Vector3i(x,y,z)
+				if not world.loaded_at(Vector3(soil)) or world.node_at(soil) not in [Nodes.GRASS,Nodes.SNOW,VillageContent.MUD] or world.node_at(soil+Vector3i.UP) != Nodes.AIR: continue
+				var roll: int = rng.randi_range(1,100) if rng != null else randi_range(1,100)
+				if roll <= 20: placed = world.set_node(soil+Vector3i.UP,id) or placed
+	return placed
+
+static func _neighbors(rng: RandomNumberGenerator) -> Array:
+	var result: Array = [Vector3i.LEFT+Vector3i.DOWN,Vector3i.RIGHT+Vector3i.DOWN,Vector3i.FORWARD+Vector3i.DOWN,Vector3i.BACK+Vector3i.DOWN]
+	# table.shuffle: every valid neighbor is tried, in one random permutation.
+	for i in range(result.size()-1,0,-1):
+		var j: int = rng.randi_range(0,i)
+		var swap: Vector3i = result[i]; result[i] = result[j]; result[j] = swap
+	return result
+
+# `mcl_flowers.on_bone_meal` for bush/firefly/tall dry grass, plus the two
+# special short-dry-grass and ground-flower callbacks. Fern belongs to
+# LargePlants and wither rose deliberately has no callback at all.
+static func bone_meal(world: VoxelWorld, p: Vector3i, rng: RandomNumberGenerator = null) -> bool:
+	var id: int = world.node_at(p)
+	if is_ground(id): return spread_flower(world,p,id,rng)
+	if id == SHORT_DRY_GRASS: return world.set_node(p,TALL_DRY_GRASS)
+	if id not in [BUSH,FIREFLY_BUSH,TALL_DRY_GRASS]: return false
+	var offsets: Array = _neighbors(rng if rng != null else _random())
+	for offset in offsets:
+		var soil: Vector3i = p+offset
+		var at: Vector3i = soil+Vector3i.UP
+		if world.node_at(at) != Nodes.AIR: continue
+		var growth: int = SHORT_DRY_GRASS if id == TALL_DRY_GRASS else id
+		var host: int = world.node_at(soil)
+		# This callback uses generic soil, not each node's broader placement list.
+		var allowed: bool = host in SOIL_GENERIC or (id == TALL_DRY_GRASS and host in SOIL_DRY_EXTRA)
+		if allowed and world.set_node(at,growth): return true
+	return false
+
+static var _fallback_rng := RandomNumberGenerator.new()
+static func _random() -> RandomNumberGenerator:
+	_fallback_rng.randomize()
+	return _fallback_rng
+
+# `register_ground_flower.on_place`: clicking this family's _1.._3 increments in
+# place. Any other ground node suppresses new placement; otherwise _1 goes in the
+# air directly above the clicked node on generic soil (or anything for litter).
+# Returns false only when the held item is not a ground-flower craftitem.
+static func try_place_ground(game: Node3D, target: Dictionary) -> bool:
+	var held: Dictionary = game.inventory.held()
+	var base: int = ground_base(int(held.get("id",0)))
+	if base == 0 or int(held.get("count",0)) <= 0: return false
+	if target.is_empty(): return true
+	var under: Vector3i = target.get("pos",Vector3i.ZERO)
+	var clicked: int = game.world.node_at(under)
+	var next: int = next_ground(clicked) if ground_base(clicked) == base else 0
+	var at: Vector3i = under if next != 0 else under+Vector3i.UP
+	if next == 0:
+		if is_ground(clicked) or game.world.node_at(at) != Nodes.AIR or not soil_ok(base,clicked): return true
+	if not game.world.loaded_at(Vector3(at)): return true
+	var placed: int = next if next != 0 else base
+	if game.world.set_node(at,placed):
+		if game.gamemode != "creative": game.inventory.consume_selected()
+		game.sound("place"); game.player.swing = 1; game.api.emit_node_placed(at,placed)
+	return true
 
 # Shears or Silk Touch recover the tallgrass family itself, and an ordinary break
 # yields nothing (or the fern's seed, which the parent rolls).
@@ -353,6 +467,7 @@ static func lily_pixel(x: int, y: int) -> Color:
 	return Color.TRANSPARENT
 
 static func plant_pixel(id: int, x: int, y: int, noise: Color) -> Color:
+	if is_ground(id): id = ground_base(id)
 	var base: Color = Color(DATA[id].color)
 	if id == FERN: return frond_pixel(x,y,base)
 	if id in [BUSH,FIREFLY_BUSH]: return bush_pixel(id,x,y,noise,base)

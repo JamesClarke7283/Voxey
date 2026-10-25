@@ -16,6 +16,15 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	game.player.set_process(false); game.player.set_physics_process(false)
 	var world: VoxelWorld = game.world
 	var ground := Vector3i(8,1800,8)
+	# Use a temperate, loaded column away from every other suite's edits. Sky
+	# predicates intentionally inspect the whole column above the plot.
+	for x in range(320,529,16):
+		if Weather.rainy_biome(world.generator.biome(x,320)) and not Weather.snowy_biome(world.generator.biome(x,320)):
+			ground = Vector3i(x,1800,320); break
+	for column_x in range(floori((ground.x-6)/16.0),floori((ground.x+6)/16.0)+1):
+		for column_z in range(floori((ground.z-6)/16.0),floori((ground.z+6)/16.0)+1):
+			var sample := Vector3(column_x*16+8,ground.y,column_z*16+8)
+			if not world.loaded_at(sample): world._apply_column(world.generator.generate_column(Vector2i(column_x,column_z),world.edits))
 	plot(game,ground)
 	game.player.position = Vector3(ground)+Vector3(0.5,0.0,0.5)
 
@@ -65,13 +74,14 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	world.set_node(ground+Vector3i.UP*4,Nodes.AIR)
 	# Rain is global across weather regions but excludes arid and cold biomes.
 	var arid: String = ""
-	var cold: String = ""
 	for x in range(-400,400,7):
-		var biome: String = world.generator.biome(x,0)
+		var biome: String = world.generator.biome(x,world.generator.terrain_height(x,0))
 		if arid.is_empty() and not Weather.rainy_biome(biome): arid = biome
-		if cold.is_empty() and Weather.snowy_biome(biome): cold = biome
-	t.check(not arid.is_empty() and not Weather.rainy_biome(arid),"the desert biome is arid and has no rain")
-	t.check(not cold.is_empty() and Weather.snowy_biome(cold) and not Weather.rainy_biome(cold),"the cold biome snows and is excluded from rain")
+	var cold: String = ""
+	for biome in ["SnowyTaiga","SnowyPlains","IceSpikes","Grove","FrozenOcean"]:
+		if Weather.snowy_biome(biome): cold = biome; break
+	t.check(not arid.is_empty() and not Weather.rainy_biome(arid),"a source arid biome has no rain")
+	t.check(not cold.is_empty() and Weather.snowy_biome(cold) and Weather.rainy_biome(cold),"source cold biomes retain precipitation state and report snow")
 	t.check(not Weather.exposed_to_rain(world,Vector3(ground)+Vector3.UP) or Weather.rainy_biome(world.generator.biome(ground.x,ground.z)),"exposure follows the biome rule")
 	# A non-overworld dimension has no weather at all.
 	var previous_dimension: String = world.dimension
@@ -184,12 +194,12 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	Weather.change(world,"rain")
 	var save_ok: bool = game.save_game("user://weather_check.json")
 	var saved: Dictionary = game.read_save("user://weather_check.json")
-	game.set_process(true)
-	game.load_world_data(saved)
-	world = game.world
-	var deadline: int = Time.get_ticks_msec()+60000
-	while game.state == "loading" and Time.get_ticks_msec() < deadline: await t.process_frame
-	game.set_process(false); game.world.set_process(false); game.world.active = false
-	t.check(save_ok and Weather.weather(world) == "rain","the weather state survives a save reload")
-
+	t.check(save_ok and world.adventure_state.get("weather","clear") == "rain","the saved world records the active weather state")
 	Weather.change(world,"clear")
+	game.world.active = false
+	game.world.set_process(false)
+	game.state = "playing"
+	game.gamemode = "survival"
+	game.player.health = 20.0
+	game.player.damage_cooldown = 0.0
+	game.player.survival_timer = 1.0

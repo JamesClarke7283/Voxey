@@ -34,6 +34,11 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	lst.page = 2
 	t.check(game.world.circuits.container_signal(lec) == 5,"with the source's scaling in between")
 	t.check(VillageSurvival._lectern_page({"book":{"text":"abcdef"},"pages":3,"page":2}) == "cd","the lectern slices the page from the book body")
+	var reader: Vector3i = lec+Vector3i.RIGHT
+	game.world.set_node(reader,Nodes.COMPARATOR); game.world.circuits.configure(reader,Vector3i.RIGHT)
+	game.world.circuits.step(0.1)
+	t.check(game.world.circuits.state(reader).out == 5,"a live comparator reads the lectern's selected page")
+	game.world.set_node(reader,Nodes.AIR)
 
 	game._clear_entities(); await t.process_frame
 	game.state = "playing"; game.gamemode = "survival"; game.world.active = false
@@ -168,9 +173,9 @@ static func review_checks(t: SceneTree, game: Node3D, p: Vector3i) -> void:
 	for drop in game.drops.get_children():
 		if not drop.is_queued_for_deletion() and drop.item_id == Nodes.WRITTEN_BOOK and drop.data == book: exact_book = true
 	t.check(drops(game,Nodes.WRITTEN_BOOK) == before+1 and exact_book,"breaking the moved lectern returns its original authored book metadata")
-	clear(game); base(game,p); world.set_node(p+d,VillageContent.BANNER_WHITE)
-	world.get_station(p+d,"banner").globe = true
-	t.check(not circuit.piston(p,true) and world.node_at(p+d) == VillageContent.BANNER_WHITE and world.get_station(p+d,"banner").globe,"source immovable banner blocks the piston and retains its saved pattern")
+	clear(game); base(game,p); world.set_node(p+d+Vector3i.DOWN,Nodes.STONE); world.set_node(p+d,VillageContent.BANNER_WHITE)
+	Banners.station(world,p+d).item["data"] = {"layers":[{"pattern":"globe","color":4}]}
+	t.check(not circuit.piston(p,true) and world.node_at(p+d) == VillageContent.BANNER_WHITE and Banners.layers(Banners.stored_item(world,p+d)) == [{"pattern":"globe","color":4}],"source immovable banner blocks the piston and retains its saved pattern")
 	clear(game); base(game,p); world.set_node(p+d,VillageContent.ITEM_FRAME)
 	var map_item: Dictionary = game.maps.create(Vector3(p)); map_item.data.custom_name = "Piston chart"
 	world.get_station(p+d,"frame").slots[0] = map_item.duplicate(true)

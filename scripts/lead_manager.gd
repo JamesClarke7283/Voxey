@@ -26,7 +26,7 @@ func _rope() -> Node3D:
 
 func attach(mob: Creature, consume: bool = true) -> bool:
 	if mob == null or mob.kind == "end_crystal" or attached(mob): return false
-	if Boats.is_passenger(mob): game.toast("Release the creature from its boat before attaching a lead."); return false
+	if Boats.is_passenger(mob) or MobJockeys.vehicle(mob) != null: game.toast("Release the creature from its boat before attaching a lead."); return false
 	if consume and game.gamemode != "creative" and not game.inventory.remove_item(VillageContent.LEAD,1): return false
 	leads.append({"mob":mob,"rope":_rope()})
 	game.toast("Lead attached. Walk to pull; use an empty hand or lead on this creature to release.")
@@ -85,6 +85,7 @@ func sleep_if_unloaded(mob: Creature) -> bool:
 	if not anchored(mob) or mob.is_queued_for_deletion() or mob.health <= 0: return false
 	if game.world.loaded_at(mob.position) and mob.position.distance_to(game.player.position) <= 90: return false
 	hibernate(mob)
+	MobJockeys.remove_pair(mob)
 	mob.queue_free()
 	return true
 
@@ -141,6 +142,12 @@ func record(link: Dictionary) -> Dictionary:
 	if mob is NetherResident: mob.ensure_record(); mob.store_record()
 	var saved: Dictionary = {"kind":mob.kind,"farm_id":mob.farm_id,"custom_name":mob.custom_name,"position":[mob.position.x,mob.position.y,mob.position.z],"health":mob.health,"effects":PotionEffects.snapshot(mob),"slime_size":mob.slime_size if mob is ExpeditionCreature and mob.kind == "slime" else 0,"wool_timer":mob.wool_timer,"raid":mob.get_meta("raid",false),"person":mob.person_key if mob is VillageMob else "","sheared":mob.sheared,"sheep_color":mob.sheep_color,"grazing":mob.grazing,"graze_consumed":mob.graze_consumed,"trust":mob.trust if mob is RuralAnimal else 0,"saddled":mob.saddled if mob is RuralAnimal else false,"horse_armor":mob.horse_armor if mob is RuralAnimal else false,"equine":Equines.snapshot(mob) if mob is RuralAnimal and Equines.is_equine(mob.kind) else {}}
 	if mob is SnowGolem: mob.store_record(); saved["golem"] = mob.golem_key
+	saved.zombie_traits = ZombieTraits.snapshot(mob)
+	saved.baby = MobBabies.baby(mob); saved.chicken_jockey = mob.get_meta("chicken_jockey",false)
+	saved.jockey = {} if mob.get_meta("jockey_trial_owner",false) else MobJockeys.snapshot(mob)
+	if MobArmor.handles(mob.kind): saved["mob_armor"] = MobArmor.snapshot(mob)
+	if MobBows.handles(mob.kind): saved["bow"] = MobBows.snapshot(mob)
+	if MobWeapons.handles(mob.kind): saved["weapon_state"] = MobWeapons.snapshot(mob)
 	if mob is NetherResident: saved["resident"] = mob.resident_key
 	if mob is ExpeditionCreature: saved["crystal_key"] = mob.crystal_key
 	if link.has("anchor"): saved["anchor"] = link.anchor.duplicate()
@@ -172,8 +179,14 @@ func _restore_mob(entry: Dictionary) -> Creature:
 		if mob == null: return null
 	else:
 		mob = Farming.resolve(game,str(entry.get("farm_id","")))
-		if mob == null: mob = game.spawn_creature(entry.kind,VillageLife.vec(entry.position))
+		if mob == null: mob = game.spawn_creature(entry.kind,VillageLife.vec(entry.position),"",{"baby":bool(entry.get("baby",false)),"jockey":false})
 	if mob == null: return null
+	MobBabies.restore(mob,entry)
+	ZombieTraits.restore(mob,entry.get("zombie_traits",{}))
+	if mob.kind == "chicken": MobJockeys.restore(mob,entry)
+	if MobArmor.handles(mob.kind) and entry.has("mob_armor"): MobArmor.restore(mob,entry.mob_armor)
+	if MobBows.handles(mob.kind) and entry.has("bow"): MobBows.restore(mob,entry.bow)
+	if MobWeapons.handles(mob.kind) and entry.has("weapon_state"): MobWeapons.restore(mob,entry.weapon_state)
 	if mob is ExpeditionCreature:
 		mob.crystal_key = str(entry.get("crystal_key",mob.crystal_key))
 		if mob.kind == "slime": mob.set_slime_size(int(entry.get("slime_size",2)))

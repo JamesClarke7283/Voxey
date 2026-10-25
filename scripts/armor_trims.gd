@@ -8,13 +8,13 @@ extends RefCounted
 # `mcl_armor.trim` writes two metadata keys onto the armor stack:
 # `mcl_armor:trim_overlay` and `mcl_armor:trim_material`. The observable rules:
 #
-# - There are 17 templates. Three (`raiser`, `shaper`, `host`) are commented out
-#   in the checkout, so they are not registered either here.
-# - Each template is duplicated at a smithing table: the template, a **dupe item**
+# - The checkout registers 15 templates. Voxey also preserves its Host and
+#   Raiser additions; the source comments those two and Shaper out.
+# - Each template is duplicated at a crafting table: the template, a **dupe item**
 #   named per overlay, and seven diamonds, in the source's own cross pattern.
 # - A template is applied at a smithing table with a **trim-material** item, which
 #   is any item carrying the source's `_mcl_armor_trim_color`: diamond, iron, gold,
-#   emerald, lapis, copper, amethyst, netherite scrap/ingot, redstone wire and the
+#   emerald, lapis, copper, amethyst, quartz and netherite ingot, redstone wire and the
 #   pale-oak resin brick. The material's colour is what the trim is drawn in.
 # - Applying the *same* overlay and material again is refused, which the source's
 #   `is_trimmed` guard does.
@@ -26,8 +26,7 @@ extends RefCounted
 
 const FIRST = 11490
 const COUNT = 17
-# Source order, with `raiser`/`shaper`/`host` omitted because the checkout comments
-# them out. `readable_name` is the display name the source uses.
+# Source templates first, followed by the two retained native additions.
 const NAMES = ["Sentry","Dune","Coast","Wild","Tide","Ward","Vex","Rib","Snout","Eye","Spire","Silence","Wayfinder","Bolt","Flow","Host","Raiser"]
 const KEYS = ["sentry","dune","coast","wild","tide","ward","vex","rib","snout","eye","spire","silence","wayfinder","bolt","flow","host","raiser"]
 # The source's `dupe_item` per overlay, as a Voxey id.
@@ -47,7 +46,7 @@ const MATERIAL_COLORS = {
 	Nodes.LAPIS:"1c306b",
 	Nodes.COPPER:"c36447",
 	Amethyst.SHARD:"8246a5",
-	Netherite.SCRAP:"c9bcb9",
+	Nodes.QUARTZ:"c9bcb9",
 	Netherite.INGOT:"302a26",
 	Nodes.REDSTONE_WIRE:"e80202",
 	# `mcl_pale_oak:resin_brick`'s own `_mcl_armor_trim_color`.
@@ -71,6 +70,8 @@ static func dupe_item(id: int) -> int:
 # `is_smithing_mineral` in the source is that check.
 static func is_material(id: int) -> bool: return MATERIAL_COLORS.has(id)
 static func material_color(id: int) -> Color:
+	# Keep the appearance of legacy scrap trims while refusing new applications.
+	if id == Netherite.SCRAP: return Color("c9bcb9")
 	return Color(MATERIAL_COLORS[id]) if MATERIAL_COLORS.has(id) else Color.WHITE
 
 # `mcl_armor.blacklisted`: the elytra cannot be trimmed.
@@ -137,3 +138,30 @@ static func pixel(id: int, x: int, y: int, noise: Color) -> Color:
 		5:
 			if y in [4,11] and x in range(4,12): return accent
 	return noise.lerp(Color("b9b2a4"),0.7)
+
+# Original inventory artwork. Keep trim colors independent from leather dye.
+static var textures: Dictionary = {}
+static func texture(slot: Dictionary) -> Texture2D:
+	var trim: Dictionary = trim_of(slot)
+	var key: String = str(slot.id)+":"+str(trim)+":"+str(slot.get("data",{}).get("color",-1))
+	if textures.has(key): return textures[key]
+	if textures.size() > 256: textures.clear()
+	var base: Image = ItemArt.texture(int(slot.id)).get_image()
+	var img: Image = base.duplicate()
+	var color: Color = overlay_color(slot)
+	var variant: int = maxi(0,KEYS.find(str(trim.get("overlay",""))))
+	var dye: Color = CauldronWash.color_of(slot) if CauldronWash.is_leather_armor(int(slot.id)) and CauldronWash.has_tint(slot) else Color.WHITE
+	for y in img.get_height():
+		for x in img.get_width():
+			var pixel: Color = base.get_pixel(x,y)
+			if pixel.a < 0.5: continue
+			img.set_pixel(x,y,pixel*dye)
+			var edge: bool = false
+			for d in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+				var at: Vector2i = Vector2i(x,y)+d
+				if at.x < 0 or at.y < 0 or at.x >= base.get_width() or at.y >= base.get_height() or base.get_pixel(at.x,at.y).a < 0.5: edge = true
+			var motif: bool = (x+y*(1+variant%3)+variant)%(4+variant%4) == 0
+			if edge and (x+y+variant)%3 != 0 or motif and y > 4:
+				img.set_pixel(x,y,color.lightened(0.18) if (x+y)%2 == 0 else color)
+	textures[key] = ImageTexture.create_from_image(img)
+	return textures[key]

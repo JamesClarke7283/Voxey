@@ -28,23 +28,23 @@ static func xp_from_break(suite: Object, game: Node3D, id: int) -> int:
 
 static func run(suite: Object, game: Node3D) -> void:
 	# --- the biome gate -------------------------------------------------------
-	# `TerrainGenerator.biome` classifies the surface and can only ever return these
-	# strings, so any other name in a rule's filter is unreachable.
-	var outcomes: Array = ["Sunwash desert","Frostpine highlands","Swamp","Willow shores","Oakwood meadow"]
+	# `TerrainGenerator.biome` now delegates to the source biome LUT, so the
+	# source's own badlands and hill families are directly reachable.
 	var generator := TerrainGenerator.new(8675309)
 	var seen: Dictionary = {}
 	for x in range(-600,600,37):
 		for z in range(-600,600,37): seen[generator.biome(x,z)] = true
-	suite.check(seen.keys().all(func(name): return name in outcomes),"the generator only ever reports the five known surface biomes")
-	suite.check(MinecloniaOres.biome_matches("Oakwood meadow",[]) and MinecloniaOres.biome_matches("Sunwash desert",["Sunwash desert"]),"an empty filter accepts everything and an exact name matches")
-	suite.check(MinecloniaOres.biome_matches("Frostpine highlands",["ExtremeHills","ExtremeHills_ocean"]) and not MinecloniaOres.biome_matches("Swamp",["ExtremeHills"]),"the source's mountain family maps onto the one mountain biome Voxey has")
-	suite.check(not MinecloniaOres.biome_matches("Sunwash desert",["Mesa","Mesa_ocean"]) and not MinecloniaOres.biome_matches("Oakwood meadow",["DripstoneCave","DripstoneCave_deep_underground"]),"the badlands and cave-biome families name biomes this generator cannot produce, so their rules never place")
-	# The gap is named rather than hidden: ten rules sit behind those two families.
+	suite.check(seen.size() >= 12 and seen.keys().all(func(name): return BiomeMap.is_canonical(name)),"the generator reports canonical source biome identities")
+	suite.check(MinecloniaOres.biome_matches("Oakwood meadow",[]) and MinecloniaOres.biome_matches("Desert",["Desert"]),"an empty filter accepts everything and a canonical name matches")
+	suite.check(MinecloniaOres.biome_matches("WindsweptHills",["ExtremeHills","ExtremeHills_ocean"]) and not MinecloniaOres.biome_matches("Forest",["ExtremeHills"]),"the source's mountain family resolves through canonical biome groups")
+	suite.check(MinecloniaOres.biome_matches("Mesa",["Mesa","Mesa_ocean"]) and not MinecloniaOres.biome_matches("Forest",["Mesa","Mesa_ocean"]),"badlands gold rules now match source Mesa identities")
+	suite.check(not MinecloniaOres.biome_matches("Forest",["DripstoneCave","DripstoneCave_deep_underground"]),"cave-biome families remain unavailable because Voxey caves have no biome identity")
+	# The gap is named rather than hidden: nine rules sit behind the cave family.
 	var unreachable: Array = MinecloniaOres.unrepresentable()
 	var kinds: Dictionary = {}
 	for rule in unreachable: kinds[rule.id] = int(kinds.get(rule.id,0))+1
-	suite.check(unreachable.size() == 10,"exactly ten source rules are gated on a biome this generator cannot produce")
-	suite.check(int(kinds.get(Nodes.GOLD_ORE,0)) == 1 and int(kinds.get(Nodes.COPPER_ORE,0)) == 7 and int(kinds.get(Nodes.DEEP_COPPER_ORE,0)) == 2,"the unreachable rules are the badlands gold band and the nine cave-biome copper bands")
+	suite.check(unreachable.size() == 9,"exactly nine source rules are gated on a cave biome this generator cannot produce")
+	suite.check(int(kinds.get(Nodes.COPPER_ORE,0)) == 7 and int(kinds.get(Nodes.DEEP_COPPER_ORE,0)) == 2,"the unreachable rules are the nine cave-biome copper bands")
 	suite.check(MinecloniaOres.unrepresentable().all(func(rule): return rule.id in [Nodes.GOLD_ORE,Nodes.COPPER_ORE,Nodes.DEEP_COPPER_ORE]),"no other ore family is affected, so each of them still has a reachable route")
 
 	# --- the height ceiling ---------------------------------------------------

@@ -4,7 +4,7 @@ The potion recipes, colors, effect durations, level limits and enchantment compa
 
 The source has 26 potion definitions plus water. Voxey registers their supported drink, splash, lingering and arrow forms, including normal, extended and strong variants. Brewing uses the source’s ten-second batches and twenty-batch blaze powder fuel. Turtle-shell brewing and survival acquisition of special potions are Voxey additions. No source texture, sound, model or schematic was imported.
 
-There are 39 active enchantment definitions in the reference. Voxey also implements Aqua Affinity and Sweeping Edge, which appear as disabled definitions in that checkout, for 41 total. Compatibility, maximum levels, treasure flags and curses come from the source. The table’s explicit enchantment selection and the simplified anvil costs are Voxey interfaces and rules, not a reproduction of Mineclonia’s random enchanting UI.
+There are 39 active enchantment definitions in the reference. Voxey also implements Aqua Affinity and Sweeping Edge, which appear as disabled definitions in that checkout, for 41 total. Compatibility, maximum levels, treasure flags and curses come from the source. The table now uses the 39 active source definitions and the source random-selection loop, with cached offers and source level costs; see [enchanting source notes](enchanting-source.md). The two disabled definitions remain readable on existing items. The inventory picker and hint presentation are native UI adaptations. Anvil combination costs, repairs, names and input consumption now follow the [source anvil rules](anvil-source.md), using native inventory selectors.
 
 Source SHA-256 values:
 

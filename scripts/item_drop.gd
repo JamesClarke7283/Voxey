@@ -8,6 +8,7 @@ var wear: int = 0
 var data: Dictionary = {}
 var age: float = 0.0
 var pickup_delay: float = 0.0
+var insta_collect: bool = false
 var velocity := Vector3.ZERO
 var mesh_instance: MeshInstance3D
 # As with mobs, bunched engine ticks after a slow frame merge into one step per
@@ -17,16 +18,23 @@ var step_delta: float = 0.0
 
 func _ready() -> void:
 	velocity = Vector3(randf_range(-1.2,1.2),2.8,randf_range(-1.2,1.2))
-	mesh_instance = MeshInstance3D.new()
-	if Nodes.placeable(item_id):
+	mesh_instance = Shields.model({"id":item_id,"data":data}) if Shields.is_shield(item_id) else MeshInstance3D.new()
+	if Shields.is_shield(item_id):
+		mesh_instance.scale = Vector3.ONE*0.45
+	elif Banners.is_banner(item_id):
+		var mesh := QuadMesh.new(); mesh.size = Vector2(0.35,0.45); mesh_instance.mesh = mesh
+		var material := StandardMaterial3D.new(); material.albedo_texture = Banners.texture({"id":item_id,"data":data})
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR; material.cull_mode = BaseMaterial3D.CULL_DISABLED; material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		mesh_instance.material_override = material
+	elif Nodes.placeable(item_id):
 		# Dropped nodes are miniature copies of the real node, atlas textures included.
 		mesh_instance.mesh = game.node_mesh(item_id)
 		mesh_instance.material_override = game.world.water_material if item_id in [Amethyst.TINTED_GLASS,Beehives.HONEY_BLOCK] else game.node_material
 		mesh_instance.scale = Vector3.ONE*0.25
 		mesh_instance.position = Vector3(-0.125,0,-0.125)
 	else:
-		mesh_instance.mesh = ItemArt.mesh(item_id)
-		mesh_instance.material_override = ItemArt.material(item_id)
+		mesh_instance.mesh = ItemArt.mesh(item_id,3 if CrossbowUse.loaded_form({"id":item_id,"data":data}) else -1)
+		mesh_instance.material_override = ItemArt.material(item_id,3 if CrossbowUse.loaded_form({"id":item_id,"data":data}) else -1)
 		mesh_instance.scale = Vector3.ONE*0.36
 	add_child(mesh_instance)
 
@@ -49,7 +57,7 @@ func _physics_process(delta: float) -> void:
 	if ItemPhysics.step(self,delta): return
 	rotation.y += delta
 	mesh_instance.position.y = sin(age*3)*0.04
-	if game.network.active() and not game.network.client() and age > 0.6 and pickup_delay <= 0:
+	if game.network.active() and not game.network.client() and (insta_collect or age > 0.6) and pickup_delay <= 0:
 		if game.network.collect_drop(self,delta): return
 	var destination: Vector3 = game.player.position+Vector3.UP*0.8
 	var distance: float = position.distance_to(destination)
@@ -57,7 +65,7 @@ func _physics_process(delta: float) -> void:
 	# offhand first, so a full backpack must not block a pickup that the offhand
 	# can take — which is `core.item_pickup`'s whole point.
 	var room: int = game.inventory.capacity(item_id,wear,data)+ItemPhysics.offhand_room(game,self)
-	if not game.network.active() and age > 0.6 and pickup_delay <= 0 and distance < 2.4 and room >= amount:
+	if not game.network.active() and (insta_collect or age > 0.6) and pickup_delay <= 0 and distance < 2.4 and room >= amount:
 		position = position.move_toward(destination,delta*8)
 		if distance < 0.65:
 			# Source `core.item_pickup`: the **offhand** is filled first, and only

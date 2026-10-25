@@ -1,5 +1,8 @@
 # Husks, drowned and strays
 
+[Skeleton and stray bow combat](mob-bows-source.md) now has a separate real-engine
+comparison, including equipped bows, conversion persistence and slowness shots.
+
 The zombie and the skeleton each have biome and conversion variants in
 `ENTITIES/mobs_mc/`. Voxey had neither the variants nor the conversions, and it
 rolled a thinner drop table for both base mobs than the source does.
@@ -36,8 +39,9 @@ difficulty that the husk's bite reads lives in
 - **Drowned.** The zombie's swimming form. It holds its depth in water rather
   than bobbing up, and it rises and sinks toward its target. It still burns in
   daylight once it surfaces; the source keeps that deliberately, as its comment
-  at `drowned.lua`:144-147 records. By day it only targets a player who is in
-  water. When it first appears, one in ten is armed, and ten in sixteen of those
+  at `drowned.lua`:144-147 records. By day it only targets unmounted living
+  creatures or players in water; [shared target rules](zombie-targets-source.md)
+  cover retaliation, ally alerts and NPC-directed tridents. When it first appears, one in ten is armed, and ten in sixteen of those
   carry a trident, the rest a fishing rod. Separately, three in a hundred hold a
   nautilus shell. A trident makes it a ranged attacker. It throws a trident every
   2 seconds inside 10 nodes, at 50 nodes/s, for 8 damage, with `14 − 4 × difficulty`
@@ -111,8 +115,8 @@ Old saves default to zero, which is the source's reading of an unvisited chunk.
 
 ## Recorded deviations
 
-- The source's 5% **baby** zombie, husk and drowned are not spawned, because
-  Voxey has no baby hostile body yet.
+- The source's baby zombie, husk and drowned variants and chicken jockeys are
+  now covered by the later [baby-undead batch](baby-undead-source.md).
 - Spawning is a substitution within Voxey's existing hostile pool, not the
   source's weighted spawner list:
   - In the desert, an outdoor zombie becomes a husk with probability

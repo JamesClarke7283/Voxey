@@ -75,7 +75,7 @@ func _physics_process(delta: float) -> void:
 					impact(position); return
 		elif position.distance_to(game.player.position+Vector3.UP*0.9) < 0.7:
 			if kind == "shulker": game.player.levitation = 8
-			game.player.hurt(6 if kind == "ghast" else 4,false,position-velocity,"fire" if kind in ["blaze","ghast"] else "projectile")
+			game.player.hurt(6 if kind == "ghast" else 4,false,position-velocity,"fireball" if kind in ["blaze","ghast"] else "projectile",source if is_instance_valid(source) and source is Node3D else null)
 			if kind == "blaze": ignite(game.player)
 			impact(position); return
 	if fmod(life,0.12) < delta: game.puff(position,Color("aa72d2") if kind in ["breath","pearl"] else Color("f6aa42"),1,0.3)
@@ -101,7 +101,7 @@ func impact(at: Vector3) -> void:
 			game.teleport(destination)
 			# One pearl in ten leaves an endermite where the thrower stood.
 			Endermites.after_pearl(game,origin,RandomNumberGenerator.new())
-			game.player.hurt(5,true)
+			game.player.hurt(5,true,Vector3.INF,"magic")
 			game.puff(destination+Vector3.UP,Color("a875d8"),16)
 		else: game.toast("The pearl found no safe landing space.")
 	elif kind == "ghast": game.explode(at,1.8,source if is_instance_valid(source) else null)

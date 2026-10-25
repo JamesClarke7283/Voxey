@@ -161,13 +161,14 @@ static func visible(game: Node3D, from: Vector3, to: Vector3) -> bool:
 	return hit.is_empty() or float(hit.distance) >= direction.length()-0.2
 
 static func hot(game: Node3D, p: Vector3) -> bool:
-	# Voxey's reduced biome map has one hot Overworld biome. Source temperature
-	# values are 2.0 for desert and Nether, <=1.0 for represented temperate biomes.
-	return game.dimension == "nether" or game.world.generator.biome(floori(p.x),floori(p.z)) == "Sunwash desert"
+	# Source temperature values are 2.0 for the Nether and the badlands family.
+	if game.dimension == "nether": return true
+	var climate: Dictionary = game.world.generator.biome_climate(floori(p.x),floori(p.y),floori(p.z))
+	return float(climate.temperature) >= 1.5
 
 static func wet(game: Node3D, p: Vector3) -> bool:
 	if Fluids.water(game.world.node_at(Vector3i(p.floor()))): return true
 	if game.dimension != "overworld" or game.survival.weather() == "clear": return false
-	var biome: String = game.world.generator.biome(floori(p.x),floori(p.z))
-	if biome in ["Sunwash desert","Frostpine highlands"]: return false
+	var climate: Dictionary = game.world.generator.biome_climate(floori(p.x),floori(p.y),floori(p.z))
+	if float(climate.temperature) > 1.0: return false
 	return game.world.open_sky(Vector3i((p+Vector3.UP*1.7).floor()))

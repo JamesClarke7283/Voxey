@@ -1,7 +1,7 @@
 class_name LushCaveExtra
 extends RefCounted
 
-# Mineclonia ITEMS/mcl_lush_caves/{nodes,dripleaf,crafting}.lua, GPL-3.0-or-later.
+# Mineclonia ITEMS/mcl_lush_caves/{nodes,dripleaf,crafting,init,lg_register}.lua,
 # Original GDScript using the source as a behaviour reference; all art is original
 # procedural code.
 #
@@ -16,28 +16,23 @@ extends RefCounted
 #     accepts only an opaque block, an upright stair or a bottom slab above it. The
 #     checkout gives it **no `light_source`** (nodes.lua:211 is the lit cave vine,
 #     which `LushCaves` owns), so it emits nothing and `light_level` is zero.
-#   * **Azalea / flowering azalea** (nodes.lua:405-485): bushes that need
+#   * **Azalea / flowering azalea** (nodes.lua:405-484): bushes that need
 #     `group:soil_flower` below, carry `compostability` 65 and 85, are the source's
-#     own flower-pot entries (init.lua:203-214) and grow into an azalea tree under
-#     bone meal (nodes.lua:455-468, a structure this checkout has no loader for).
+#     own flower-pot entries (init.lua:221-231) and grow into the shipped
+#     azalea1.mts under bone meal (nodes.lua:439-451). `AzaleaTrees` owns that
+#     decoded structure, its levelgen entry point and moss vegetation.
 #   * **Azalea leaves** (nodes.lua:344-366): `mcl_trees.register_leaves` called with
 #     *both* azalea forms as their "sapling" entries and no apples, so an ordinary
 #     break rolls the shared stick/sapling table (mcl_trees/api.lua:296-330) and
 #     shears or Silk Touch recover the leaf.
 #   * **Dripleaf** (dripleaf.lua): a two-cell small plant that bone meal grows into
-#     a stem column, and a big leaf that is walkable and tips under a standing
-#     player in the source's own three stages and timings.
+#     a stem column, and a big leaf with per-player tipping holds, independent
+#     half/full node timers and the source's adjacent digging cascade.
 #
-# Two source details Voxey's shape vocabulary cannot express, reported rather than
-# approximated silently. The azalea's `collision_box` is a 0.75-high box
-# ({-0.5,0.25,-0.5,0.5,0.75,0.5}) plus a trunk ({-0.125,0,-0.125,0.125,0.25,0.125})
-# and the big dripleaf's is a 1/16 plate at the top of its cell
-# ({-0.5,0.45,-0.5,0.5,0.5,0.5}). `Nodes.solid` and `VoxelWorld.collision_boxes` are
-# shared files this module does not touch, so the azalea is a `plant` (bush
-# silhouette, walk-through) and the big leaf is a `cube` (a walkable platform). The
-# big leaf is exact where it matters: a cube puts the player's feet one cell above
-# the leaf, and the source's globalstep inspects the cell under the feet, so
-# `standing_cell` names the same node either way and the tipping rule is unchanged.
+# Shaped collision is exposed through `collision_boxes`; the shared world dispatcher
+# delegates big-leaf cells here. Upright and half-tipped leaves have a thin top
+# plate, while the source's `walkable = false` full-tipped form has no collision.
+# Azalea's compound bush silhouette remains outside Voxey's single-box vocabulary.
 
 const ROOTED_DIRT = 11470
 const SPORE_BLOSSOM = 11471
@@ -51,7 +46,10 @@ const DRIPLEAF_BIG_STEM = 11478
 const DRIPLEAF_BIG = 11479
 const DRIPLEAF_BIG_TIPPED_HALF = 11480
 const DRIPLEAF_BIG_TIPPED_FULL = 11481
-
+# Numeric aliases avoid introducing content-registry cycles for nodes owned by
+# other modules. Both are real members of the source's current soil lists.
+const COARSE_DIRT = 13600
+const PALE_MOSS = 11526
 const BLOCKS = [ROOTED_DIRT,SPORE_BLOSSOM,AZALEA,AZALEA_FLOWERING,AZALEA_LEAVES,AZALEA_LEAVES_FLOWERING,
 	DRIPLEAF_SMALL_STEM,DRIPLEAF_SMALL,DRIPLEAF_BIG_STEM,DRIPLEAF_BIG,DRIPLEAF_BIG_TIPPED_HALF,DRIPLEAF_BIG_TIPPED_FULL]
 
@@ -102,10 +100,16 @@ const DATA = {
 static func is_extra(id: int) -> bool: return id >= ROOTED_DIRT and id <= DRIPLEAF_BIG_TIPPED_FULL
 static func is_azalea(id: int) -> bool: return id == AZALEA or id == AZALEA_FLOWERING
 static func is_azalea_leaves(id: int) -> bool: return id == AZALEA_LEAVES or id == AZALEA_LEAVES_FLOWERING
-static func is_ceiling_plant(id: int) -> bool: return id == SPORE_BLOSSOM
+static func is_ceiling_plant(id: int) -> bool: return id == SPORE_BLOSSOM or id == LushCaves.HANGING_ROOTS
 static func is_dripleaf(id: int) -> bool: return is_dripleaf_leaf(id) or is_dripleaf_stem(id)
 static func is_dripleaf_leaf(id: int) -> bool: return id in [DRIPLEAF_SMALL,DRIPLEAF_BIG,DRIPLEAF_BIG_TIPPED_HALF,DRIPLEAF_BIG_TIPPED_FULL]
 static func is_dripleaf_stem(id: int) -> bool: return id == DRIPLEAF_SMALL_STEM or id == DRIPLEAF_BIG_STEM
+static func is_big_leaf(id: int) -> bool: return id == DRIPLEAF_BIG or is_dripleaf_tipped(id)
+# `group:dripleaf=1` is present on the small plant, both stems and upright big
+# leaf. The tipped table.merge replaces that group table, so tipped forms are not
+# traversed by the source's adjacent digging callback.
+static func is_dripleaf_group(id: int) -> bool: return id in [DRIPLEAF_SMALL_STEM,DRIPLEAF_SMALL,DRIPLEAF_BIG_STEM,DRIPLEAF_BIG]
+static func needs_placement_rule(id: int) -> bool: return is_extra(id) or id == LushCaves.HANGING_ROOTS
 static func is_dripleaf_tipped(id: int) -> bool: return id == DRIPLEAF_BIG_TIPPED_HALF or id == DRIPLEAF_BIG_TIPPED_FULL
 
 # Source `light_source`: the checkout sets one only on the lit cave vine
@@ -168,23 +172,22 @@ static func leaf_drops(id: int, slot: Dictionary, rng: RandomNumberGenerator = n
 # --- soil and placement rules ------------------------------------------------
 
 # Source `group:soil_flower` members that exist in Voxey: grass block and dirt
-# (mcl_core/nodes_base.lua:341,473), clay (:649), both farmland forms
-# (mcl_farming/soil.lua:22,45), moss (mcl_lush_caves/nodes.lua:83), rooted dirt
-# (:241), mud (mcl_mud/init.lua:13) and the generic dirt set the other plants and
-# the composters already use. Voxey has no coarse dirt, podzol, mycelium, mangrove
-# roots or pale moss, which are the source members without an analogue here.
+# (mcl_core/nodes_base.lua:341,473), coarse dirt (:483), clay (:649), both
+# farmland forms (mcl_farming/soil.lua:22,45), moss and rooted dirt
+# (mcl_lush_caves/nodes.lua:83,241), mud (mcl_mud/init.lua:13) and pale moss.
+# Mangrove mud roots are the remaining source-only soil variant.
 static func azalea_soil(id: int) -> bool:
-	return id in [Nodes.GRASS,Nodes.DIRT,VillageContent.SWAMP_GRASS,VillageContent.MUD,LushCaves.MOSS,
-		Nodes.CLAY,Farmland.DRY,Farmland.WET,ROOTED_DIRT]
+	return id in [Nodes.GRASS,Nodes.DIRT,COARSE_DIRT,VillageContent.SWAMP_GRASS,VillageContent.MUD,LushCaves.MOSS,
+		Nodes.CLAY,Farmland.DRY,Farmland.WET,ROOTED_DIRT,PALE_MOSS,13602,13604]
 
 # The source's `dripleaf_allowed` list (dripleaf.lua:3-15) mapped onto Voxey: dirt,
-# dirt with grass, rooted dirt, moss, both farmland forms, clay and mud. Coarse
-# dirt, podzol and mycelium have no Voxey equivalent.
+# coarse dirt, dirt with grass, rooted dirt, moss, both farmland forms, clay, mud,
+# podzol and mycelium. Mangrove roots remain a separate source-only variant.
 static func dripleaf_soil(id: int) -> bool:
-	return id in [Nodes.DIRT,Nodes.GRASS,VillageContent.SWAMP_GRASS,ROOTED_DIRT,LushCaves.MOSS,
-		Farmland.DRY,Farmland.WET,Nodes.CLAY,VillageContent.MUD]
+	return id in [Nodes.DIRT,COARSE_DIRT,Nodes.GRASS,VillageContent.SWAMP_GRASS,ROOTED_DIRT,LushCaves.MOSS,
+		Farmland.DRY,Farmland.WET,Nodes.CLAY,VillageContent.MUD,13602,13604]
 
-# A **big** leaf may also stand on another big leaf (dripleaf.lua:240-243), which is
+# A big leaf may also stand on another big leaf (dripleaf.lua:240-243), which is
 # how the source stacks a column; a small dripleaf may not.
 static func big_dripleaf_soil(id: int) -> bool:
 	return id == DRIPLEAF_BIG or dripleaf_soil(id)
@@ -197,6 +200,24 @@ static func soil_ok(id: int, below: int) -> bool:
 	if id == DRIPLEAF_BIG: return big_dripleaf_soil(below)
 	if is_azalea(id): return azalea_soil(below)
 	return true
+
+# Both source azaleas are explicit mcl_flowerpots registrations, not merely
+# plants admitted by a broad group. Decor stores the returned id as pot_plant.
+static func pottable(id: int) -> bool: return is_azalea(id)
+
+# World-space placement hook. `normal` is the clicked face pointing into the new
+# cell. Hanging roots' own on_place accepts only an underside click; the shared
+# attached_node=4 check additionally requires a walkable support above. A spore
+# blossom can be clicked from any face but applies its stricter support predicate.
+static func can_place(world: VoxelWorld, p: Vector3i, id: int, normal: Vector3i = Vector3i.UP) -> bool:
+	if id == LushCaves.HANGING_ROOTS: return normal == Vector3i.DOWN and attached_supported(world,p)
+	if id == SPORE_BLOSSOM: return ceiling_supported(world,p)
+	if is_azalea(id) or is_dripleaf(id): return soil_ok(id,world.node_at(p+Vector3i.DOWN))
+	return true
+
+static func attached_supported(world: VoxelWorld, p: Vector3i) -> bool:
+	var above: Vector3i = p+Vector3i.UP
+	return world.loaded_at(Vector3(above)) and Nodes.solid(world.node_at(above))
 
 # Source `on_place` for the spore blossom (nodes.lua:387-400): the cell above must be
 # opaque, an upright stair or a bottom slab. `Nodes.transparent` is Voxey's opacity
@@ -221,7 +242,7 @@ static func placed(world: VoxelWorld, p: Vector3i, id: int) -> void:
 	elif id == DRIPLEAF_BIG and world.node_at(p+Vector3i.DOWN) == DRIPLEAF_BIG:
 		world.set_node(p+Vector3i.DOWN,DRIPLEAF_BIG_STEM)
 
-# --- rooted dirt -------------------------------------------------------------
+# --- rooted dirt and interaction --------------------------------------------
 
 # Source `_on_bone_meal` (nodes.lua:246-253): the air *below* rooted dirt becomes
 # hanging roots, and nothing happens if that cell is occupied.
@@ -229,6 +250,60 @@ static func bone_meal_rooted_dirt(world: VoxelWorld, p: Vector3i) -> bool:
 	var below: Vector3i = p+Vector3i.DOWN
 	if world.node_at(below) != Nodes.AIR: return false
 	return world.set_node(below,LushCaves.HANGING_ROOTS)
+
+static func _bone_meal_feedback(game: Node3D, p: Vector3i) -> void:
+	if game.gamemode != "creative": game.inventory.consume_selected()
+	game.puff(Vector3(p)+Vector3.ONE*0.5,Color("b8e07a"),8)
+	game.puff(Vector3(p+Vector3i.UP)+Vector3.ONE*0.5,Color("b8e07a"),8)
+	game.sound("place"); game.player.swing = 1
+
+# One dispatcher entry covers rooted dirt, moss, azaleas and the already-owned
+# dripleaf bone-meal path. `rng` is optional and exists for deterministic world
+# generation checks; ordinary player calls use a randomized generator.
+static func use(game: Node3D, target: Dictionary, rng: RandomNumberGenerator = null) -> bool:
+	if target.is_empty(): return false
+	var p: Vector3i = target.pos
+	var id: int = int(target.id)
+	var held: int = int(game.inventory.held().id)
+	if held == Nodes.BONE_MEAL:
+		var grown: bool = false
+		if id == ROOTED_DIRT: grown = bone_meal_rooted_dirt(game.world,p)
+		elif is_azalea(id):
+			grown = AzaleaTrees.grow(game.world,p,rng)
+			# The source callback returns nil on a failed roll or clearance check;
+			# nil still consumes bone meal and emits both dispatcher effects.
+			_bone_meal_feedback(game,p)
+			return true
+		elif id == LushCaves.MOSS: grown = AzaleaTrees.bone_meal_moss(game.world,p,rng)
+		elif bone_meal_target(id) != 0: grown = bone_meal(game.world,p,rng)
+		else: return false
+		if grown: _bone_meal_feedback(game,p)
+		return true
+	if id != ROOTED_DIRT: return false
+	# mcl_core.bottle_dirt is registered on rooted dirt too.
+	if held == VillageContent.WATER_BOTTLE: return MudBottles.convert(game,p)
+	var kind: int = Nodes.tool_kind(held)
+	if kind not in [2,4]: return false
+	var above: Vector3i = p+Vector3i.UP
+	if not game.world.loaded_at(Vector3(above)) or game.world.node_at(above) != Nodes.AIR: return true
+	# Shovel paths reject only the clicked underside; the hoe accepts every face.
+	if kind == 2 and target.get("normal",Vector3i.UP).y < 0: return true
+	var converted: bool = false
+	if kind == 4:
+		# Source quirk: cultivate_dirt, not cultivate_soil. Rooted dirt becomes
+		# ordinary dirt, then a hanging root below is removed and dropped.
+		converted = game.world.set_node(p,Nodes.DIRT)
+		if converted:
+			var below: Vector3i = p+Vector3i.DOWN
+			if game.world.node_at(below) == LushCaves.HANGING_ROOTS:
+				game.world.set_node(below,Nodes.AIR)
+				if game.gamemode != "creative": game.spawn_drop(Vector3(below)+Vector3.ONE*0.5,LushCaves.HANGING_ROOTS)
+	else:
+		converted = game.world.set_node(p,VillageContent.PATH)
+	if converted:
+		if game.gamemode != "creative": ToolCapabilities.action_wear(game.inventory)
+		game.sound("dig"); game.player.swing = 1
+	return true
 
 # --- dripleaf ----------------------------------------------------------------
 
@@ -285,17 +360,20 @@ static func tip(id: int, step: int = 1) -> int:
 	var index: int = order.find(id)
 	return order[posmod(index+step,order.size())] if index >= 0 else id
 
-# The globalstep's own condition (dripleaf.lua:294-296): an upright big leaf that
-# carries no redstone power. A powered leaf never tips, and the source does not
-# reset a partial hold when power arrives, so the parent should simply skip the
-# accumulation while this is false.
+# The globalstep's own condition (dripleaf.lua:294-321): an upright big leaf that
+# carries no redstone power. Powered leaves are absent from `current`, so arrival
+# of power also discards an unfinished hold on the next globalstep.
 static func tips(world: VoxelWorld, p: Vector3i) -> bool:
 	return world.node_at(p) == DRIPLEAF_BIG and world.circuits.input_power(p) == 0
 
-# The cell the globalstep inspects: `vector.offset(p:get_pos(),0,-1,0)`
-# (dripleaf.lua:295) is the cell *under* the feet, not the cell the feet are in.
+# The cell under one player's feet. Mineclonia nodes are centre-addressed while
+# Voxey cells are minimum-corner addressed, hence the -0.5 coordinate conversion
+# before applying dripleaf.lua:302's collisionbox-bottom + 0.45 sample.
 static func standing_cell(position: Vector3) -> Vector3i:
-	return Vector3i(floori(position.x),floori(position.y-1.0),floori(position.z))
+	return Vector3i(floori(position.x),floori(position.y-0.05),floori(position.z))
+
+# Only the upright big leaf tips; the tipped forms are already down.
+static func tips_leaf(id: int) -> bool: return id == DRIPLEAF_BIG
 
 # --- recipes -----------------------------------------------------------------
 
@@ -305,9 +383,9 @@ static func standing_cell(position: Vector3) -> Vector3i:
 # include), and `dripleaf.lua` registers no craft at all; neither do the other mods
 # that mention these names (the hoe and water-bottle placement tables in
 # mcl_farming/hoes.lua:51 and mcl_potions/init.lua:189, and the wandering trader's
-# `rooted_dirt 2`/`dripleaf_small 2` offers at
-# mobs_mc/wandering_trader.lua:120,124). Acquisition is generation, trade and bone
-# meal, so nothing is invented here.
+# `dripleaf_small 2`/`rooted_dirt 2` offers at
+# mobs_mc/wandering_trader.lua:119,123). Acquisition is generation, trade and bone
+# meal (including moss vegetation), so nothing is invented here.
 static func recipes(_inv: Inventory) -> void:
 	pass
 
@@ -396,72 +474,191 @@ static func big_leaf_pixel(id: int, x: int, y: int, noise: Color) -> Color:
 
 # --- simulation --------------------------------------------------------------
 
-# The clock for both halves of the source's behaviour, keyed by the leaf's cell
-# with the time elapsed in the leaf's *current* stage:
-#
-#   * `dripleaf.lua`'s `player_dripleaf` globalstep: a player standing on an
-#     upright, unpowered big leaf tips it once the hold passes 0.5 s.
-#   * `tipped_half`'s own 0.5 s node timer moves it to `tipped_full`, and
-#     `tipped_full`'s 3 s timer returns it to upright (dripleaf.lua:267-287).
-#
-# The two timers run whether or not anyone is standing on the leaf — the source
-# runs them as node timers, which is why a leaf under a standing player still rolls
-# through its three stages and lifts them again. Voxey has no per-node timer slot,
-# so the elapsed time lives per world; a hold that is abandoned is **not** reset,
-# which is the source's own behaviour for its per-player accumulator.
-static func update(world: VoxelWorld, delta: float) -> void:
-	var state: Dictionary = _runtime(world)
-	var standing: Vector3i = Vector3i.ZERO
-	var occupied: bool = false
-	var player: Node3D = _player(world)
-	if player != null:
-		standing = standing_cell(player.position)
-		occupied = world.loaded_at(Vector3(standing)) and is_dripleaf_leaf(world.node_at(standing))
-	var finished: Array = []
-	for key in state.keys():
-		if not key is Vector3i: continue
+const DIG_CASCADE_DELAY = 0.05
+const PLAYER_HALF_WIDTH = 0.29
+const PLAYER_COLLISION_BOTTOM = 0.0
+
+# Upright and half-tipped leaves retain the big definition's top collision plate:
+# source local Y 0.45..0.5 becomes Voxey cell Y 0.95..1.0 (a literal 0.05 height).
+# Full-tipped merges `walkable = false`; despite inheriting the collision_box
+# field, Luanti does not make it walkable, so its live collision set is empty.
+static func collision_boxes(id: int) -> Array:
+	if id == DRIPLEAF_BIG or id == DRIPLEAF_BIG_TIPPED_HALF:
+		return [AABB(Vector3(0,0.95,0),Vector3(1,0.05,1))]
+	return []
+
+static func walkable(id: int) -> bool:
+	return id == DRIPLEAF_BIG or id == DRIPLEAF_BIG_TIPPED_HALF
+
+# Source get_player_dripleaves scans the whole X/Z footprint, not merely the cell
+# containing the player's origin. Its small 0.501/0.499 epsilons are retained;
+# positions are converted from Voxey's minimum-corner cells to source-centred
+# cells before applying them. Only upright, unpowered leaves enter a hold.
+static func player_dripleaves(world: VoxelWorld, position: Vector3, half_width: float = PLAYER_HALF_WIDTH, collision_bottom: float = PLAYER_COLLISION_BOTTOM) -> Dictionary:
+	var found: Dictionary = {}
+	var min_x: int = floori(position.x-0.5-half_width+0.501)
+	var max_x: int = floori(position.x-0.5+half_width+0.499)
+	var min_z: int = floori(position.z-0.5-half_width+0.501)
+	var max_z: int = floori(position.z-0.5+half_width+0.499)
+	var y: int = floori(position.y-0.5+collision_bottom+0.45)
+	for x in range(min_x,max_x+1):
+		for z in range(min_z,max_z+1):
+			var p := Vector3i(x,y,z)
+			if world.loaded_at(Vector3(p)) and tips(world,p): found[p] = true
+	return found
+
+# Per-player holds exactly follow player_dripleaf in the source: a hold belongs to
+# one player and one leaf, and only currently occupied cells survive into the next
+# globalstep. Consequently stepping off, losing power and disconnecting all reset
+# an unfinished hold. Half/full timers are independent of every player.
+static func update(world: VoxelWorld, delta: float, players: Variant = null) -> void:
+	if world.network_replica or not is_finite(delta) or delta < 0: return
+	var state: Dictionary = runtime(world)
+	_advance_timers(world,state,delta)
+	var samples: Array = connected_players(world) if players == null else players
+	var active: Dictionary = {}
+	for sample in samples:
+		var normalized: Dictionary = _player_sample(sample)
+		if normalized.is_empty(): continue
+		var key: Variant = normalized.key
+		active[key] = true
+		var previous: Dictionary = state.holds.get(key,{}).duplicate()
+		var current: Dictionary = player_dripleaves(world,normalized.position,normalized.width,normalized.bottom)
+		var next: Dictionary = {}
+		for p in current:
+			var elapsed: float = float(previous.get(p,0.0))+delta
+			if elapsed > TIP_STAND_TIME:
+				# Another player may have tipped this leaf earlier in the same step.
+				if tips(world,p):
+					if world.set_node(p,DRIPLEAF_BIG_TIPPED_HALF): state.timers[p] = 0.0
+			else: next[p] = elapsed
+		if next.is_empty(): state.holds.erase(key)
+		else: state.holds[key] = next
+	for key in state.holds.keys():
+		if not active.has(key): state.holds.erase(key)
+
+static func _advance_timers(world: VoxelWorld, state: Dictionary, delta: float) -> void:
+	for key in state.timers.keys():
+		if not key is Vector3i: state.timers.erase(key); continue
 		var p: Vector3i = key
-		if not world.loaded_at(Vector3(p)): finished.append(p); continue
+		if not world.loaded_at(Vector3(p)): state.timers.erase(p); continue
 		var id: int = world.node_at(p)
-		if id == DRIPLEAF_BIG:
-			# Only a standing player advances an upright leaf, and a powered leaf is
-			# never tipped, exactly as the source's globalstep checks.
-			if p != standing or not tips(world,p): continue
-		elif not is_dripleaf_tipped(id):
-			finished.append(p); continue
-		var elapsed: float = float(state.get(p,0.0))+delta
-		var limit: float = TIP_STAND_TIME if id == DRIPLEAF_BIG else (TIP_HALF_TIME if id == DRIPLEAF_BIG_TIPPED_HALF else TIP_FULL_TIME)
+		if not is_dripleaf_tipped(id): state.timers.erase(p); continue
+		var elapsed: float = float(state.timers[p])+delta
+		var limit: float = TIP_HALF_TIME if id == DRIPLEAF_BIG_TIPPED_HALF else TIP_FULL_TIME
 		if elapsed < limit:
-			state[p] = elapsed
+			state.timers[p] = elapsed
 			continue
 		var next: int = tip(id,1)
-		if not world.set_node(p,next): finished.append(p); continue
-		if next == DRIPLEAF_BIG: finished.append(p)
-		else: state[p] = 0.0
-	for p in finished: state.erase(p)
-	# A leaf under the player's feet joins the clock: an upright one starts its
-	# hold, and one already tipped finishes the cycle it was in.
-	if occupied and not state.has(standing): state[standing] = 0.0
-	world.set_meta("dripleaf",state)
+		if not world.set_node(p,next): state.timers.erase(p)
+		elif next == DRIPLEAF_BIG: state.timers.erase(p)
+		else: state.timers[p] = 0.0
 
-# Only the upright big leaf tips; the tipped forms are already down.
-static func tips_leaf(id: int) -> bool: return id == DRIPLEAF_BIG
+# Records contain key, position and optional width/bottom. The optional argument
+# is a deterministic/test adapter and a seam for alternative player providers.
+static func _player_sample(sample: Variant) -> Dictionary:
+	if sample is Node3D:
+		if not is_instance_valid(sample): return {}
+		return {"key":sample.get_instance_id(),"position":sample.position,"width":PLAYER_HALF_WIDTH,"bottom":PLAYER_COLLISION_BOTTOM}
+	if not sample is Dictionary or not sample.get("position",null) is Vector3: return {}
+	return {"key":sample.get("key",sample.get("id",0)),"position":sample.position,
+		"width":float(sample.get("width",PLAYER_HALF_WIDTH)),"bottom":float(sample.get("bottom",PLAYER_COLLISION_BOTTOM))}
 
-static func _runtime(world: VoxelWorld) -> Dictionary:
-	if not world.has_meta("dripleaf"): world.set_meta("dripleaf",{})
+# Authority-side local player plus every network roster member. Roster positions
+# are used directly, so a valid but not-yet-created avatar cannot omit a player.
+static func connected_players(world: VoxelWorld) -> Array:
+	var result: Array = []
+	var game: Node = world.get_parent()
+	if game == null: return result
+	var local_key: Variant = 0
+	var network: Node = game.get("network")
+	if network != null and network.active() and not network.client(): local_key = network.multiplayer.get_unique_id()
+	if is_instance_valid(game.player): result.append({"key":local_key,"position":game.player.position})
+	if network != null and network.active() and not network.client():
+		for key in network.players:
+			if key == local_key: continue
+			var record: Dictionary = network.players[key]
+			if record.get("position",null) is Vector3: result.append({"key":key,"position":record.position})
+	return result
+
+static func player_left(world: VoxelWorld, key: Variant) -> void:
+	runtime(world).holds.erase(key)
+
+static func runtime(world: VoxelWorld) -> Dictionary:
+	if not world.has_meta("dripleaf"): world.set_meta("dripleaf",{"holds":{},"timers":{}})
 	return world.get_meta("dripleaf")
 
-static func _player(world: VoxelWorld) -> Node3D:
-	var game: Node = world.get_parent()
-	if game == null or not ("player" in game): return null
-	var p: Node3D = game.player
-	return p if is_instance_valid(p) else null
+static func _erase_cell_holds(state: Dictionary, p: Vector3i) -> void:
+	for key in state.holds.keys():
+		state.holds[key].erase(p)
+		if state.holds[key].is_empty(): state.holds.erase(key)
+
+static func changed(world: VoxelWorld, p: Vector3i, old_id: int, id: int) -> void:
+	if world.network_replica: return
+	var state: Dictionary = runtime(world)
+	if old_id != id:
+		state.timers.erase(p)
+		_erase_cell_holds(state,p)
+	registered(world,p,id)
+	validate_support(world,p)
+	validate_support(world,p+Vector3i.DOWN)
+
+static func registered(world: VoxelWorld, p: Vector3i, id: int) -> void:
+	if not world.loaded_at(Vector3(p)): return
+	var state: Dictionary = runtime(world)
+	if is_dripleaf_tipped(id) and not state.timers.has(p): state.timers[p] = 0.0
+	if is_ceiling_plant(id): validate_support(world,p)
+
+# attached_node=4 placement uses the stricter on_place predicates above, while
+# subsequent support checks only require the support to remain walkable. Thus a
+# spore blossom placed under stone survives replacement by non-opaque glass.
+static func validate_support(world: VoxelWorld, p: Vector3i) -> void:
+	var id: int = world.node_at(p)
+	if not is_ceiling_plant(id) or not world.loaded_at(Vector3(p+Vector3i.UP)) or attached_supported(world,p): return
+	if not world.set_node(p,Nodes.AIR): return
+	# Hanging roots have source drop="" and attached loss supplies no shears.
+	if id == SPORE_BLOSSOM:
+		var game: Node = world.get_parent()
+		if game != null and game.has_method("spawn_drop"): game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,id)
+
+# Source after_dig_node schedules both vertical neighbours after 0.05 s. Recursive
+# core.dig_node calls continue the cascade, but only through group:dripleaf nodes.
+static func dug(game: Node3D, p: Vector3i, old_id: int) -> void:
+	if not is_dripleaf(old_id) or game.network != null and game.network.client(): return
+	_delayed_dig(game,p)
+
+static func _delayed_dig(game: Node3D, p: Vector3i) -> void:
+	await game.get_tree().create_timer(DIG_CASCADE_DELAY).timeout
+	if not is_instance_valid(game) or not is_instance_valid(game.world): return
+	_dig_adjacent(game,p+Vector3i.UP)
+	_dig_adjacent(game,p+Vector3i.DOWN)
+
+static func _dig_adjacent(game: Node3D, p: Vector3i) -> void:
+	var world: VoxelWorld = game.world
+	if not world.loaded_at(Vector3(p)): return
+	var id: int = world.node_at(p)
+	if not is_dripleaf_group(id) or not world.set_node(p,Nodes.AIR): return
+	game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.drop(id))
+	dug(game,p,id)
+
+static func column_loaded(world: VoxelWorld, column: Vector2i) -> void:
+	if world.network_replica: return
+	for p in world.column_edits(column):
+		if world.loaded_at(Vector3(p)): registered(world,p,world.node_at(p))
+	# A ceiling plant may live immediately below the newly arrived column.
+	for p in world.edits_near(column):
+		validate_support(world,p)
+		validate_support(world,p+Vector3i.DOWN)
 
 static func unload(world: VoxelWorld, column: Vector2i) -> void:
-	var state: Dictionary = _runtime(world)
-	for p in state.keys():
-		if p is Vector3i and Vector2i(floori(p.x/16.0),floori(p.z/16.0)) == column: state.erase(p)
-	world.set_meta("dripleaf",state)
+	if not world.has_meta("dripleaf"): return
+	var state: Dictionary = runtime(world)
+	for p in state.timers.keys():
+		if p is Vector3i and Vector2i(floori(p.x/16.0),floori(p.z/16.0)) == column: state.timers.erase(p)
+	for key in state.holds.keys():
+		for p in state.holds[key].keys():
+			if Vector2i(floori(p.x/16.0),floori(p.z/16.0)) == column: state.holds[key].erase(p)
+		if state.holds[key].is_empty(): state.holds.erase(key)
 
 static func reset(world: VoxelWorld) -> void:
-	if world.has_meta("dripleaf"): world.set_meta("dripleaf",{})
+	world.set_meta("dripleaf",{"holds":{},"timers":{}})

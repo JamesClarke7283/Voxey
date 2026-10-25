@@ -26,6 +26,10 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	game.gamemode = "survival"
 	var world: VoxelWorld = game.world
 	var ground := Vector3i(8,1800,8)
+	for column_x in range(floori((ground.x-6)/16.0),floori((ground.x+6)/16.0)+1):
+		for column_z in range(floori((ground.z-6)/16.0),floori((ground.z+6)/16.0)+1):
+			var sample := Vector3(column_x*16+8,ground.y,column_z*16+8)
+			if not world.loaded_at(sample): world._apply_column(world.generator.generate_column(Vector2i(column_x,column_z),world.edits))
 	plot(game,ground)
 	game.player.position = Vector3(ground)+Vector3(0.5,0.0,0.5)
 
@@ -121,8 +125,8 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	furnace.slots[2] = {"id":0,"count":0,"wear":0}
 	furnace.burn = 100.0
 	furnace.progress = 0.0
-	# Source cooks a sponge over eight progress ticks at the ordinary furnace rate.
-	for i in 8: world._simulate()
+	# Registered source recipes take ten seconds at the ordinary furnace rate.
+	for i in 10: world._simulate()
 	t.check(furnace.slots[2].id == Sponges.SPONGE and furnace.slots[2].count == 1,"the furnace dries a wet sponge into a plain sponge")
 	t.check(furnace.slots[1].id == Nodes.WATER_BUCKET and furnace.slots[1].count == 1,"the empty fuel-slot bucket receives the sponge's water")
 	t.check(furnace.slots[0].id == 0,"the input slot is emptied")
@@ -132,7 +136,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	furnace.slots[2] = {"id":0,"count":0,"wear":0}
 	furnace.burn = 100.0
 	furnace.progress = 0.0
-	for i in 8: world._simulate()
+	for i in 10: world._simulate()
 	t.check(furnace.slots[1].id == Nodes.COAL,"a fuel slot holding something else is not replaced")
 
 	# --- persistence --------------------------------------------------------

@@ -260,7 +260,11 @@ static func clear(game: Node3D) -> void:
 static func award(game: Node3D, amount: int) -> void:
 	if amount <= 0 or game == null or not is_instance_valid(game): return
 	var before: int = game.xp_level()
-	game.experience += float(amount)
+	# Inventory awards (for example taking furnace output) also run Mending.
+	# The property setter handles active-play awards, but intentionally skips
+	# inventory state so loading/previewing a stored XP value cannot repair items.
+	var credited: float = Enchantments.mend(game,amount) if game.state == "inventory" else float(amount)
+	game.experience += credited
 	game.sound(LEVEL_SOUND if game.xp_level() != before else PICKUP_SOUND)
 
 # --- simulation -------------------------------------------------------------
@@ -279,9 +283,10 @@ class Orb extends Node3D:
 	var velocity := Vector3.ZERO
 	var acceleration := Vector3.ZERO
 	var age: float = 0.0
-	# The source's `collected`/`collector` pair, collapsed: this is a
-	# single-player game, so the only possible collector is the player.
+	# The source's collected/collector pair. In hosted games the server keeps
+	# a peer identity and grants the pickup to that living player.
 	var collected: bool = false
+	var collector_id: int = 1
 	# `orb.lua:168-171`: the entity starts physical and moving.
 	var physical_state: bool = true
 	var moving_state: bool = true
@@ -330,28 +335,42 @@ class Orb extends Node3D:
 
 	func step(delta: float) -> void:
 		var world: VoxelWorld = game.world
+		var network: Node = game.get("network")
+		var hosted: bool = network != null and network.active()
+		if hosted and network.client(): return
 		var player: Node3D = game.player
 		var alive: bool = is_instance_valid(player) and player.health > 0
+		var player_position: Vector3 = player.position if is_instance_valid(player) else Vector3.ZERO
+		var player_velocity: Vector3 = player.velocity if is_instance_valid(player) else Vector3.ZERO
+		if hosted:
+			if not collected:
+				collector_id = network.xp_collector(position)
+				collected = collector_id != 0
+			var record: Dictionary = network.xp_player(collector_id)
+			alive = not record.is_empty() and float(record.get("health",0)) > 0
+			player_position = record.get("position",Vector3.ZERO)
+			player_velocity = record.get("velocity",Vector3.ZERO)
 		# `mcl_item_entity/init.lua:66-86`: an uncollected orb inside the magnet
 		# radius of the player's collect point is claimed.
-		if not collected and alive and position.distance_to(player.position+Vector3.UP*XpOrbs.COLLECT_HEIGHT) < XpOrbs.MAGNET_RANGE:
+		if not collected and alive and position.distance_to(player_position+Vector3.UP*XpOrbs.COLLECT_HEIGHT) < XpOrbs.MAGNET_RANGE:
 			collected = true
 		if collected:
 			# `orb.lua:40-79`. The range test uses the collector's feet, while the
 			# pull target is 0.8 above them, exactly as the source has it.
-			if alive and position.distance_to(player.position) < XpOrbs.MAGNET_RANGE:
+			if alive and position.distance_to(player_position) < XpOrbs.MAGNET_RANGE:
 				acceleration = Vector3.ZERO
 				disable_physics()
 				# `orb.lua:62-64`: the source reads its own velocity *after*
 				# `disable_physics`, so the first magnetised frame starts at rest.
-				var target: Vector3 = player.position+Vector3.UP*XpOrbs.COLLECT_HEIGHT
+				var target: Vector3 = player_position+Vector3.UP*XpOrbs.COLLECT_HEIGHT
 				var distance: float = position.distance_to(target)
 				var direction: Vector3 = (target-position).normalized()
 				if distance > XpOrbs.PULL_RANGE:
 					var goal: Vector3 = direction*(XpOrbs.PULL_SPEED-distance)
-					velocity += (goal-velocity)+player.velocity
+					velocity += (goal-velocity)+player_velocity
 				elif distance < XpOrbs.COLLECT_RANGE:
-					XpOrbs.award(game,xp)
+					if hosted: network.award_xp(collector_id,xp)
+					else: XpOrbs.award(game,xp)
 					queue_free()
 					return
 				# Between the two, the source changes nothing and lets the orb's

@@ -302,7 +302,7 @@ static func update(world: VoxelWorld, delta: float) -> void:
 		job.cursor += 1; budget -= 1
 		var p: Vector3i = job.pos+Vector3i(index%9-4,(index/9)%3,index/27-4)
 		if allowed(world,p,job.mob,rng):
-			game.spawn_creature(job.mob,Vector3(p)+Vector3(0.5,0.01,0.5)); job.spawned += 1
+			game.spawn_creature(MobBabies.roll_kind(job.mob,rng),Vector3(p)+Vector3(0.5,0.01,0.5)); job.spawned += 1
 		if job.spawned >= 4 or job.cursor >= 243: state.pending.erase(job.pos); state.jobs.pop_front()
 
 static func pixel(_id: int, x: int, y: int, noise: Color) -> Color:

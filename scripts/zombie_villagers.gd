@@ -47,9 +47,9 @@ static func begin(game: Node3D, mob: Creature, rng: RandomNumberGenerator) -> bo
 	if bool(mob.get_meta("curing",false)): return false
 	PotionEffects.clear_one(mob,"weakness")
 	PotionEffects.clear_one(mob,"strength")
-	# Source grants strength at a level scaled by difficulty; the base level is used,
-	# which is what the source gives on its easiest setting.
-	PotionEffects.apply(mob,"strength",INF,1)
+	# Source difficulty is one-based; Easy grants no Strength, Normal I, Hard II.
+	var strength: int = RegionalDifficulty.source_level(game.difficulty)-1
+	if strength > 0: PotionEffects.apply(mob,"strength",INF,strength)
 	mob.set_meta("curing",true)
 	mob.set_meta("cure_timer",rng.randf_range(CURE_MIN,CURE_MAX))
 	mob.set_meta("curer",game.player_id)
@@ -61,7 +61,11 @@ static func begin(game: Node3D, mob: Creature, rng: RandomNumberGenerator) -> bo
 # The source's `zombie_types`, which is the set of killers that can infect a
 # villager. A zombie villager can itself infect a villager, which is why it is in
 # the list.
-const INFECTING_KINDS = ["zombie","zombie_villager","husk"]
+const INFECTING_KINDS = ["zombie","zombie_villager","husk","drowned"]
+
+static func infection_allowed(difficulty: int, coin: int) -> bool:
+	var source_level: int = RegionalDifficulty.source_level(difficulty)
+	return source_level >= 2 and (source_level > 2 or coin == 1)
 
 # Whether a death at `from` should infect rather than bury a villager. The source
 # gates this on difficulty and, below the hardest setting, a coin flip:
@@ -72,11 +76,10 @@ const INFECTING_KINDS = ["zombie","zombie_villager","husk"]
 # standing there. A non-zombie killer, or a player kill, never infects.
 static func can_infect(game: Node3D, from: Vector3) -> bool:
 	if is_inf(from.x): return false
-	if game.difficulty < 2: return false
-	if game.difficulty <= 2 and randi_range(1,2) != 1: return false
+	if game.difficulty < 1: return false
 	for mob in game.creatures.get_children():
 		if mob is Creature and not mob.is_queued_for_deletion() and mob.kind in INFECTING_KINDS and mob.position.distance_to(from) < 1.5:
-			return true
+			return infection_allowed(game.difficulty,randi_range(1,2))
 	return false
 
 # Mark a freshly infected zombie villager as carrying `record`, the villager it
@@ -84,7 +87,11 @@ static func can_infect(game: Node3D, from: Vector3) -> bool:
 # cure, so the villager that comes back is the *same* one - same profession, same
 # trades, same home - rather than a stranger with the same name.
 static func infect(game: Node3D, mob: Creature, record: Dictionary) -> void:
-	mob.set_meta("incarnation",record.duplicate(true))
+	var incarnation: Dictionary = record.duplicate(true)
+	incarnation.erase("food_level"); incarnation.erase("food"); incarnation.erase("breed_time")
+	incarnation.erase("inventory") # The source export_villager_data omits its private inventory.
+	incarnation.levelup_in = 0.0; incarnation.erase("effects")
+	mob.set_meta("incarnation",incarnation)
 	mob.set_meta("persistent",true)
 	game.puff(mob.center(),Color("6f8f6a"),16)
 
@@ -102,9 +109,13 @@ static func update(game: Node3D, mob: Creature, delta: float) -> void:
 	mob.position.x += shake
 	if remaining > 0.0: return
 	# The cure completes: a villager takes the zombie's place.
+	var chicken: Creature = MobJockeys.vehicle(mob)
+	if chicken != null: MobJockeys.detach(mob)
 	var at: Vector3 = mob.position
 	var curer: String = String(mob.get_meta("curer",""))
 	var incarnation: Dictionary = mob.get_meta("incarnation",{})
+	MobArmor.die(mob,2.0)
+	if mob.held_weapon_probability >= 2.0: MobWeapons.drop(mob,2.0)
 	Farming.forget(mob)
 	mob.queue_free()
 	var villager: Creature = game.spawn_creature("villager",at)
@@ -125,8 +136,13 @@ static func update(game: Node3D, mob: Creature, delta: float) -> void:
 		people[original_key] = incarnation
 		restored.person_key = original_key
 		restored.bind(incarnation)
+	if villager != null and chicken != null: MobJockeys.attach(villager,chicken)
 	if villager != null and not curer.is_empty():
 		# The source records a major and a minor positive gossip, which is what
 		# makes a cured villager trade cheaply for the player who cured it.
 		villager.set_meta("gossip_"+curer,{"major":MAJOR_GOSSIP,"minor":MINOR_GOSSIP})
+		if villager is VillageMob:
+			var person: Dictionary = game.villages.record(villager.person_key)
+			VillagerGossip.record(person,curer,"major_positive",MAJOR_GOSSIP)
+			VillagerGossip.record(person,curer,"minor_positive",MINOR_GOSSIP)
 		game.achievements.award("zombie_doctor")

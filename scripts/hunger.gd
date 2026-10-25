@@ -68,15 +68,16 @@ static func move(player: VoxeyPlayer, displacement: Vector3, sprinting: bool, sw
 static func can_eat(player: VoxeyPlayer, id: int) -> bool:
 	if FoodFeatures.is_cake(id): return false
 	if Nodes.food(id) <= 0: return false
-	return player.hunger < 20 or player.game.gamemode == "creative" or id in [Nodes.GOLDEN_APPLE,Nodes.CHORUS_FRUIT,VillageContent.SUSPICIOUS_STEW,Beehives.BOTTLE] or bool(Nodes.custom_items.get(id,{}).get("can_eat_when_full",false))
+	return player.hunger < 20 or player.game.gamemode == "creative" or id in [Trials.ENCHANTED_APPLE,Nodes.GOLDEN_APPLE,Nodes.CHORUS_FRUIT,VillageContent.SUSPICIOUS_STEW,Beehives.BOTTLE] or bool(Nodes.custom_items.get(id,{}).get("can_eat_when_full",false))
 
 static func food_saturation(id: int) -> float:
+	if id == LushCaves.GLOW_BERRY: return LushCaves.BERRY_SATURATION
 	if id in [Beehives.BOTTLE,CropFarming.POISONOUS_POTATO]: return 1.2
 	if Nodes.custom_items.has(id): return _number(Nodes.custom_items[id].get("saturation"),0.0,20.0)
 	return {
 		Nodes.APPLE:2.4,Nodes.RAW_MEAT:1.8,Nodes.COOKED_MEAT:12.8,Nodes.BREAD:6.0,
 		Nodes.ROTTEN_FLESH:0.8,Nodes.PUMPKIN_PIE:4.8,Nodes.MELON_SLICE:1.2,
-		Nodes.GOLDEN_APPLE:9.6,Nodes.MUSHROOM_STEW:7.2,Nodes.CHORUS_FRUIT:2.4,
+		Trials.ENCHANTED_APPLE:9.6,Nodes.GOLDEN_APPLE:9.6,Nodes.MUSHROOM_STEW:7.2,Nodes.CHORUS_FRUIT:2.4,
 		VillageContent.CARROT:3.6,VillageContent.POTATO:0.6,VillageContent.BAKED_POTATO:6.0,
 		VillageContent.BEETROOT:1.2,VillageContent.SWEET_BERRY:0.4,VillageContent.GOLDEN_CARROT:14.4,
 		VillageContent.COOKIE:0.4,VillageContent.SUSPICIOUS_STEW:7.2,VillageContent.BEETROOT_SOUP:7.2,

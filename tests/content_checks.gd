@@ -77,7 +77,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	for pair in [[Nodes.LOG,Nodes.CHARCOAL],[Nodes.CLAY,Nodes.TERRACOTTA],[Nodes.CLAY_BALL,Nodes.BRICK_ITEM]]:
 		furnace.slots = [{"id":pair[0],"count":1,"wear":0},{"id":Nodes.CHARCOAL,"count":1,"wear":0},{"id":0,"count":0,"wear":0}]
 		furnace.burn = 0; furnace.progress = 0
-		for i in 8: game.world._simulate()
+		for i in 10: game.world._simulate()
 		suite.check(furnace.slots[2].id == pair[1] and furnace.slots[2].count == 1,"charcoal fuel smelts "+Nodes.title(pair[1]))
 	# Eating soup returns the container and preserves item ids above 255 in saves.
 	var old_slots: Array = game.inventory.slots.duplicate(true)
@@ -136,7 +136,9 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var egg_found: bool = false
 	for drop in game.drops.get_children():
 		if drop.item_id == Nodes.EGG: egg_found = true
-	suite.check(egg_found and chicken.egg_timer >= 90,"chickens lay collectible eggs and reset their timer")
+	suite.check(egg_found and chicken.egg_timer == -1,"chickens lay collectible eggs and mark the timer for reinitialization")
+	game.resume(); chicken._physics_process(0.02); game.pause()
+	suite.check(chicken.egg_timer >= 299 and chicken.egg_timer <= 600,"the following adult chicken step starts the source five-to-ten-minute timer")
 	chicken.free()
 
 # A bed in the Nether or the End explodes, which is the source's own rule and the

@@ -14,9 +14,8 @@ extends RefCounted
 # - Not in a mushroom biome. Voxey has no mushroom biome, so that guard has no
 #   analogue and is recorded rather than invented.
 # - `mcl_villages.get_poi_heat(nodepos) >= 5`, tested both at the player and **again
-#   32 blocks away** along a random bearing. Voxey has no POI-heat score; the honest
-#   analogue is a real village whose residents exist, so `village_heat` counts the
-#   living records near a point instead.
+#   32 blocks away** along a random bearing. VillagePois derives the source heat
+#   from claimed beds, workplaces and bells in 16-block sections.
 #
 # `spawn_zombies` then makes 20 outer attempts, each with 10 inner attempts, at
 # offsets up to 8 blocks, and takes the first spot that is still near the village
@@ -52,21 +51,9 @@ static func night_of(day: int, daylight: float) -> int:
 	# A night belongs to the day that started it; the small hours are its tail.
 	return day if daylight > 0.5 else day-1
 
-# The source's `get_poi_heat` analogue: how many living village residents are within
-# a radius of `near`. Voxey's villagers are records in `VillageLife`, so counting
-# them is the honest equivalent of the source's POI score.
-static func village_heat(game: Node3D, near: Vector3, radius: float = 24.0) -> int:
-	var life = game.villages
-	if life == null: return 0
-	var state: Dictionary = life.state()
-	var people: Dictionary = state.get("people",{})
-	var heat: int = 0
-	for key in people:
-		var person: Dictionary = people[key]
-		if bool(person.get("dead",false)): continue
-		var at: Vector3 = life.vec(person.get("position",[0,0,0]))
-		if at.distance_to(near) <= radius: heat += 1
-	return heat
+# Shared POI heat, including the source's six-level section propagation.
+static func village_heat(game: Node3D, near: Vector3) -> int:
+	return VillagePois.heat(game,Vector3i(near.floor()))
 
 # The source's surface search: `mobs_mc.find_surface_position`. Voxey's equivalent is
 # its own safe-spawn search, which also refuses a spot inside terrain.

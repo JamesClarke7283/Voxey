@@ -1,0 +1,888 @@
+{
+  "license": "GPL-3.0-or-later",
+  "source": "/home/impulse/.minetest/games/mineclonia",
+  "bindings": {
+    "13": {
+      "node": "mcl_core:dirt_with_grass_snow",
+      "name": "Snowy grass"
+    },
+    "37": {
+      "node": "mcl_copper:block",
+      "name": "Copper node"
+    },
+    "41": {
+      "node": "mcl_core:vine",
+      "name": "Vines"
+    },
+    "45": {
+      "node": "mcl_farming:pumpkin_face",
+      "name": "Carved pumpkin"
+    },
+    "46": {
+      "node": "mcl_farming:pumpkin",
+      "name": "Pumpkin"
+    },
+    "47": {
+      "node": "mcl_farming:melon",
+      "name": "Melon"
+    },
+    "52": {
+      "node": "mcl_core:brick_block",
+      "name": "Red bricks"
+    },
+    "53": {
+      "node": "mcl_farming:hay_block",
+      "name": "Hay bale"
+    },
+    "54": {
+      "node": "mcl_beds:bed_red_bottom",
+      "name": "Bed (foot)"
+    },
+    "55": {
+      "node": "mcl_beds:bed_red_top",
+      "name": "Bed (head)"
+    },
+    "56": {
+      "node": "mcl_core:reeds",
+      "name": "Sugar cane"
+    },
+    "58": {
+      "node": "mcl_mushrooms:mushroom_brown",
+      "name": "Brown mushroom"
+    },
+    "60": {
+      "node": "mcl_core:stonebrickmossy",
+      "name": "Mossy stone bricks"
+    },
+    "61": {
+      "node": "mcl_core:coalblock",
+      "name": "Block of coal"
+    },
+    "62": {
+      "node": "mcl_colorblocks:hardened_clay",
+      "name": "Terracotta"
+    },
+    "75": {
+      "node": "mcl_wool:white",
+      "name": "White wool"
+    },
+    "180": {
+      "node": "mcl_core:lava_source"
+    },
+    "183": {
+      "node": "mcl_blackstone:basalt",
+      "name": "Basalt"
+    },
+    "186": {
+      "node": "mcl_crimson:crimson_nylium",
+      "name": "Crimson nylium"
+    },
+    "187": {
+      "node": "mcl_crimson:warped_nylium",
+      "name": "Warped nylium"
+    },
+    "188": {
+      "node": "mcl_portals:portal"
+    },
+    "191": {
+      "node": "mcl_trees:tree_crimson",
+      "name": "Crimson stem"
+    },
+    "192": {
+      "node": "mcl_trees:tree_warped",
+      "name": "Warped stem"
+    },
+    "193": {
+      "node": "mcl_crimson:shroomlight",
+      "name": "Shroomlight"
+    },
+    "195": {
+      "node": "mcl_deepslate:deepslate_cobbled",
+      "name": "Cobbled deepslate"
+    },
+    "196": {
+      "node": "mcl_deepslate:deepslate_polished",
+      "name": "Polished deepslate"
+    },
+    "197": {
+      "node": "mcl_deepslate:deepslate_bricks",
+      "name": "Deepslate bricks"
+    },
+    "198": {
+      "node": "mcl_deepslate:deepslate_with_diamond",
+      "name": "Deepslate diamond ore"
+    },
+    "199": {
+      "node": "mcl_deepslate:deepslate_with_iron",
+      "name": "Deepslate iron ore"
+    },
+    "206": {
+      "node": "mcl_deepslate:deepslate_with_gold",
+      "name": "Deepslate gold ore"
+    },
+    "207": {
+      "node": "mcl_deepslate:deepslate_with_lapis",
+      "name": "Deepslate lapis ore"
+    },
+    "208": {
+      "node": "mcl_deepslate:deepslate_with_coal",
+      "name": "Deepslate coal ore"
+    },
+    "209": {
+      "node": "mcl_deepslate:deepslate_with_copper",
+      "name": "Deepslate copper ore"
+    },
+    "210": {
+      "node": "mcl_core:stone_with_redstone",
+      "name": "Redstone ore"
+    },
+    "211": {
+      "node": "mcl_deepslate:deepslate_with_redstone",
+      "name": "Deepslate redstone ore"
+    },
+    "212": {
+      "node": "mcl_redstone:redstone",
+      "name": "Redstone dust"
+    },
+    "213": {
+      "node": "mcl_redstone_torch:redstone_torch_on",
+      "name": "Redstone torch"
+    },
+    "214": {
+      "node": "mesecons_walllever:wall_lever_off",
+      "name": "Lever"
+    },
+    "215": {
+      "node": "mcl_buttons:button_stone_off",
+      "name": "Stone button"
+    },
+    "216": {
+      "node": "mcl_pressureplates:pressure_plate_stone_off",
+      "name": "Stone pressure plate"
+    },
+    "217": {
+      "node": "mcl_repeaters:repeater_off_1",
+      "name": "Redstone repeater"
+    },
+    "218": {
+      "node": "mcl_comparators:comparator_off_comp",
+      "name": "Redstone comparator"
+    },
+    "219": {
+      "node": "mcl_pistons:piston_off",
+      "name": "Piston"
+    },
+    "220": {
+      "node": "mcl_pistons:piston_sticky_off",
+      "name": "Sticky piston"
+    },
+    "221": {
+      "node": "mcl_pistons:piston_pusher"
+    },
+    "222": {
+      "node": "mcl_redstone_lamp:lamp_off",
+      "name": "Redstone lamp"
+    },
+    "223": {
+      "node": "mcl_redstone_torch:redstoneblock",
+      "name": "Block of redstone"
+    },
+    "224": {
+      "node": "mcl_observers:observer_off",
+      "name": "Observer"
+    },
+    "226": {
+      "node": "mcl_dispensers:dropper",
+      "name": "Dropper"
+    },
+    "227": {
+      "node": "mcl_hoppers:hopper",
+      "name": "Hopper"
+    },
+    "228": {
+      "node": "mcl_doors:iron_door",
+      "name": "Iron door"
+    },
+    "229": {
+      "node": "mcl_doors:iron_door_b_2"
+    },
+    "232": {
+      "node": "mcl_portals:end_portal_frame",
+      "name": "End portal frame"
+    },
+    "233": {
+      "node": "mcl_portals:end_portal_frame_eye"
+    },
+    "234": {
+      "node": "mcl_portals:portal_end"
+    },
+    "235": {
+      "node": "mcl_panes:bar_flat",
+      "name": "Iron bars"
+    },
+    "237": {
+      "node": "mcl_end:chorus_plant",
+      "name": "Chorus plant"
+    },
+    "238": {
+      "node": "mcl_end:end_rod",
+      "name": "End rod"
+    },
+    "239": {
+      "node": "mcl_end:dragon_egg",
+      "name": "Dragon egg"
+    },
+    "240": {
+      "node": "mcl_mobspawners:spawner"
+    },
+    "241": {
+      "node": "mcl_blackstone:soul_torch",
+      "name": "Soul torch"
+    },
+    "242": {
+      "node": "mcl_portals:portal_gateway"
+    },
+    "512": {
+      "node": "mcl_core:stone_with_emerald",
+      "name": "Emerald ore"
+    },
+    "513": {
+      "node": "mcl_deepslate:deepslate_with_emerald",
+      "name": "Deepslate emerald ore"
+    },
+    "514": {
+      "node": "mcl_core:emeraldblock",
+      "name": "Block of emerald"
+    },
+    "515": {
+      "node": "mcl_blast_furnace:blast_furnace",
+      "name": "Blast furnace"
+    },
+    "516": {
+      "node": "mcl_smoker:smoker",
+      "name": "Smoker"
+    },
+    "517": {
+      "node": "mcl_cartography_table:cartography_table",
+      "name": "Cartography table"
+    },
+    "518": {
+      "node": "mcl_brewing:stand_000",
+      "name": "Brewing stand"
+    },
+    "519": {
+      "node": "mcl_composters:composter",
+      "name": "Composter"
+    },
+    "521": {
+      "node": "mcl_fletching_table:fletching_table",
+      "name": "Fletching table"
+    },
+    "522": {
+      "node": "mcl_cauldrons:cauldron",
+      "name": "Cauldron"
+    },
+    "523": {
+      "node": "mcl_lectern:lectern",
+      "name": "Lectern"
+    },
+    "524": {
+      "node": "mcl_stonecutter:stonecutter",
+      "name": "Stonecutter"
+    },
+    "525": {
+      "node": "mcl_loom:loom",
+      "name": "Loom"
+    },
+    "526": {
+      "node": "mcl_smithing_table:table",
+      "name": "Smithing table"
+    },
+    "527": {
+      "node": "mcl_grindstone:grindstone",
+      "name": "Grindstone"
+    },
+    "528": {
+      "node": "mcl_bells:bell",
+      "name": "Bell"
+    },
+    "529": {
+      "node": "mcl_core:grass_path",
+      "name": "Dirt path"
+    },
+    "530": {
+      "node": "mcl_lanterns:lantern_floor",
+      "name": "Lantern"
+    },
+    "531": {
+      "node": "mcl_campfires:campfire",
+      "name": "Campfire"
+    },
+    "532": {
+      "node": "mcl_anvils:anvil",
+      "name": "Anvil"
+    },
+    "533": {
+      "node": "mcl_core:granite",
+      "name": "Granite"
+    },
+    "534": {
+      "node": "mcl_core:diorite",
+      "name": "Diorite"
+    },
+    "535": {
+      "node": "mcl_core:andesite",
+      "name": "Andesite"
+    },
+    "536": {
+      "node": "mcl_core:granite_smooth",
+      "name": "Polished granite"
+    },
+    "537": {
+      "node": "mcl_core:diorite_smooth",
+      "name": "Polished diorite"
+    },
+    "538": {
+      "node": "mcl_core:andesite_smooth",
+      "name": "Polished andesite"
+    },
+    "539": {
+      "node": "mcl_core:stonebrickcarved",
+      "name": "Chiseled stone bricks"
+    },
+    "541": {
+      "node": "mcl_nether:quartz_block",
+      "name": "Quartz block"
+    },
+    "542": {
+      "node": "mcl_nether:quartz_pillar",
+      "name": "Quartz pillar"
+    },
+    "543": {
+      "node": "mcl_panes:pane_natural_flat",
+      "name": "Glass pane"
+    },
+    "544": {
+      "node": "mcl_ocean:dried_kelp_block",
+      "name": "Dried kelp block"
+    },
+    "545": {
+      "node": "mcl_itemframes:frame",
+      "name": "Item frame"
+    },
+    "547": {
+      "node": "mcl_candles:candle_1",
+      "name": "Red candle"
+    },
+    "548": {
+      "node": "mcl_candles:candle_1",
+      "name": "Yellow candle"
+    },
+    "683": {
+      "node": "mcl_mud:mud",
+      "name": "Mud"
+    },
+    "684": {
+      "node": "mcl_flowers:waterlily",
+      "name": "Lily pad"
+    },
+    "689": {
+      "node": "mcl_core:slimeblock",
+      "name": "Slime block"
+    },
+    "691": {
+      "node": "mcl_core:frosted_ice_0",
+      "name": "Frosted ice"
+    },
+    "693": {
+      "node": "mcl_nether:ancient_debris",
+      "name": "Ancient debris"
+    },
+    "694": {
+      "node": "mcl_nether:netheriteblock",
+      "name": "Block of netherite"
+    },
+    "695": {
+      "node": "mcl_blackstone:nether_gold",
+      "name": "Nether gold ore"
+    },
+    "697": {
+      "node": "mcl_blackstone:blackstone",
+      "name": "Blackstone"
+    },
+    "779": {
+      "node": "mcl_cake:cake",
+      "name": "Cake"
+    },
+    "1100": {
+      "node": "mcl_blackstone:blackstone_polished",
+      "name": "Polished blackstone"
+    },
+    "1101": {
+      "node": "mcl_blackstone:blackstone_brick_polished",
+      "name": "Polished blackstone bricks"
+    },
+    "1102": {
+      "node": "mcl_blackstone:blackstone_chiseled_polished",
+      "name": "Chiseled polished blackstone"
+    },
+    "1103": {
+      "node": "mcl_blackstone:blackstone_gilded",
+      "name": "Gilded blackstone"
+    },
+    "1104": {
+      "node": "mcl_core:crying_obsidian",
+      "name": "Crying obsidian"
+    },
+    "1105": {
+      "node": "mcl_compass:lodestone",
+      "name": "Lodestone"
+    },
+    "1117": {
+      "node": "mcl_fire:fire",
+      "name": "Fire"
+    },
+    "1118": {
+      "node": "mcl_fire:eternal_fire",
+      "name": "Eternal fire"
+    },
+    "1150": {
+      "node": "mcl_deepslate:deepslate_tiles",
+      "name": "Deepslate tiles"
+    },
+    "1151": {
+      "node": "mcl_deepslate:deepslate_bricks_cracked",
+      "name": "Cracked deepslate bricks"
+    },
+    "1152": {
+      "node": "mcl_deepslate:deepslate_tiles_cracked",
+      "name": "Cracked deepslate tiles"
+    },
+    "1153": {
+      "node": "mcl_deepslate:deepslate_chiseled",
+      "name": "Chiseled deepslate"
+    },
+    "1159": {
+      "node": "mcl_core:stonebrickcarved",
+      "name": "Chiseled stone bricks"
+    },
+    "1160": {
+      "node": "mcl_core:stonebrickcracked",
+      "name": "Cracked stone bricks"
+    },
+    "1161": {
+      "node": "mcl_core:stonebrickmossy",
+      "name": "Mossy stone bricks"
+    },
+    "1162": {
+      "node": "mcl_monster_eggs:monster_egg_stone",
+      "name": "Infested stone"
+    },
+    "1163": {
+      "node": "mcl_monster_eggs:monster_egg_cobble",
+      "name": "Infested cobblestone"
+    },
+    "1164": {
+      "node": "mcl_monster_eggs:monster_egg_stonebrick",
+      "name": "Infested stone bricks"
+    },
+    "1165": {
+      "node": "mcl_monster_eggs:monster_egg_stonebrickcracked",
+      "name": "Infested cracked stone bricks"
+    },
+    "1166": {
+      "node": "mcl_monster_eggs:monster_egg_stonebrickmossy",
+      "name": "Infested mossy stone bricks"
+    },
+    "1167": {
+      "node": "mcl_monster_eggs:monster_egg_stonebrickcarved",
+      "name": "Infested chiseled stone bricks"
+    },
+    "1168": {
+      "node": "mcl_lanterns:soul_lantern_floor",
+      "name": "Soul lantern"
+    },
+    "1169": {
+      "node": "mcl_lanterns:chain",
+      "name": "Chain"
+    },
+    "1170": {
+      "node": "mcl_bamboo:bamboo_shoot",
+      "name": "Bamboo shoot"
+    },
+    "1171": {
+      "node": "mcl_bamboo:bamboo_big",
+      "name": "Bamboo"
+    },
+    "1175": {
+      "node": "mcl_powder_snow:powder_snow",
+      "name": "Powder snow"
+    },
+    "1177": {
+      "node": "mcl_lush_caves:cave_vines",
+      "name": "Cave vines"
+    },
+    "1178": {
+      "node": "mcl_lush_caves:cave_vines_lit",
+      "name": "Lit cave vines"
+    },
+    "1180": {
+      "node": "mcl_chests:ender_chest_small",
+      "name": "Ender chest"
+    },
+    "1205": {
+      "node": "mcl_lush_caves:moss_carpet",
+      "name": "Moss carpet"
+    },
+    "1206": {
+      "node": "mcl_lush_caves:hanging_roots",
+      "name": "Hanging roots"
+    },
+    "1207": {
+      "node": "mcl_mushrooms:brown_mushroom_block_stem",
+      "name": "Brown mushroom stem"
+    },
+    "1208": {
+      "node": "mcl_mushrooms:red_mushroom_block_stem",
+      "name": "Red mushroom stem"
+    },
+    "1209": {
+      "node": "mcl_mushrooms:brown_mushroom_block_cap_111111",
+      "name": "Brown mushroom block"
+    },
+    "1210": {
+      "node": "mcl_mushrooms:red_mushroom_block_cap_111111",
+      "name": "Red mushroom block"
+    },
+    "1211": {
+      "node": "mcl_mushrooms:brown_mushroom_block_cap_000000",
+      "name": "Brown mushroom block pores"
+    },
+    "1212": {
+      "node": "mcl_mushrooms:red_mushroom_block_cap_000000",
+      "name": "Red mushroom block pores"
+    },
+    "1213": {
+      "node": "mcl_beds:respawn_anchor",
+      "name": "Respawn anchor"
+    },
+    "1221": {
+      "node": "mcl_campfires:soul_campfire",
+      "name": "Soul campfire"
+    },
+    "1223": {
+      "node": "mcl_blackstone:soul_soil",
+      "name": "Soul soil"
+    },
+    "1240": {
+      "node": "mcl_daylight_detector:daylight_detector",
+      "name": "Daylight detector"
+    },
+    "1241": {
+      "node": "mcl_daylight_detector:daylight_detector_inverted"
+    },
+    "1242": {
+      "node": "mcl_target:target_off",
+      "name": "Target"
+    },
+    "1243": {
+      "node": "mcl_target:target_on"
+    },
+    "1247": {
+      "node": "mcl_chests:trapped_chest_small",
+      "name": "Trapped chest"
+    },
+    "1274": {
+      "node": "mcl_dripstone:dripstone_bottom_tip",
+      "name": "Pointed dripstone"
+    },
+    "1297": {
+      "node": "mcl_copper:copper_torch",
+      "name": "Copper torch"
+    },
+    "1300": {
+      "node": "mcl_bamboo:scaffolding",
+      "name": "Scaffolding"
+    },
+    "1311": {
+      "node": "mcl_conduits:conduit",
+      "name": "Conduit"
+    },
+    "1312": {
+      "node": "mcl_ocean:prismarine",
+      "name": "Prismarine"
+    },
+    "1313": {
+      "node": "mcl_ocean:prismarine_brick",
+      "name": "Prismarine bricks"
+    },
+    "1314": {
+      "node": "mcl_ocean:prismarine_dark",
+      "name": "Dark prismarine"
+    },
+    "1315": {
+      "node": "mcl_ocean:sea_lantern",
+      "name": "Sea lantern"
+    },
+    "1330": {
+      "node": "mcl_ocean:tube_coral_block",
+      "name": "Tube Coral Block"
+    },
+    "1332": {
+      "node": "mcl_ocean:tube_coral",
+      "name": "Tube Coral"
+    },
+    "1334": {
+      "node": "mcl_ocean:tube_coral_fan",
+      "name": "Tube Coral Fan"
+    },
+    "1336": {
+      "node": "mcl_ocean:brain_coral_block",
+      "name": "Brain Coral Block"
+    },
+    "1338": {
+      "node": "mcl_ocean:brain_coral",
+      "name": "Brain Coral"
+    },
+    "1340": {
+      "node": "mcl_ocean:brain_coral_fan",
+      "name": "Brain Coral Fan"
+    },
+    "1342": {
+      "node": "mcl_ocean:bubble_coral_block",
+      "name": "Bubble Coral Block"
+    },
+    "1344": {
+      "node": "mcl_ocean:bubble_coral",
+      "name": "Bubble Coral"
+    },
+    "1346": {
+      "node": "mcl_ocean:bubble_coral_fan",
+      "name": "Bubble Coral Fan"
+    },
+    "1348": {
+      "node": "mcl_ocean:fire_coral_block",
+      "name": "Fire Coral Block"
+    },
+    "1350": {
+      "node": "mcl_ocean:fire_coral",
+      "name": "Fire Coral"
+    },
+    "1352": {
+      "node": "mcl_ocean:fire_coral_fan",
+      "name": "Fire Coral Fan"
+    },
+    "1354": {
+      "node": "mcl_ocean:horn_coral_block",
+      "name": "Horn Coral Block"
+    },
+    "1356": {
+      "node": "mcl_ocean:horn_coral",
+      "name": "Horn Coral"
+    },
+    "1358": {
+      "node": "mcl_ocean:horn_coral_fan",
+      "name": "Horn Coral Fan"
+    },
+    "1360": {
+      "node": "mcl_ocean:sea_pickle_1_dead_brain_coral_block",
+      "name": "Sea pickle"
+    },
+    "1361": {
+      "node": "mcl_ocean:sea_pickle_1_dead_brain_coral_block",
+      "name": "Sea pickle"
+    },
+    "1362": {
+      "node": "mcl_ocean:sea_pickle_1_dead_brain_coral_block",
+      "name": "Sea pickle"
+    },
+    "1363": {
+      "node": "mcl_ocean:sea_pickle_1_dead_brain_coral_block",
+      "name": "Sea pickle"
+    },
+    "1390": {
+      "node": "mcl_beacons:beacon",
+      "name": "Beacon"
+    },
+    "5610": {
+      "node": "mcl_flowers:poppy",
+      "name": "Poppy"
+    },
+    "5611": {
+      "node": "mcl_flowers:dandelion",
+      "name": "Dandelion"
+    },
+    "5612": {
+      "node": "mcl_flowers:oxeye_daisy",
+      "name": "Oxeye daisy"
+    },
+    "5613": {
+      "node": "mcl_flowers:tallgrass",
+      "name": "Tall grass"
+    },
+    "6700": {
+      "node": "mcl_noteblock:noteblock",
+      "name": "Note block"
+    },
+    "6800": {
+      "node": "mcl_jukebox:jukebox",
+      "name": "Jukebox"
+    },
+    "7560": {
+      "node": "mcl_farming:pumpkin_face_light",
+      "name": "Jack o'lantern"
+    },
+    "7700": {
+      "node": "mcl_amethyst:amethyst_block",
+      "name": "Block of amethyst"
+    },
+    "7701": {
+      "node": "mcl_amethyst:budding_amethyst_block",
+      "name": "Budding amethyst"
+    },
+    "7702": {
+      "node": "mcl_amethyst:calcite",
+      "name": "Calcite"
+    },
+    "7703": {
+      "node": "mcl_blackstone:basalt_smooth",
+      "name": "Smooth basalt"
+    },
+    "7704": {
+      "node": "mcl_amethyst:tinted_glass",
+      "name": "Tinted glass"
+    },
+    "9400": {
+      "node": "mcl_sponges:sponge",
+      "name": "Sponge"
+    },
+    "9401": {
+      "node": "mcl_sponges:sponge_wet",
+      "name": "Waterlogged sponge"
+    },
+    "9402": {
+      "node": "mcl_sponges:sponge_wet_river_water",
+      "name": "mcl_sponges:sponge_wet_river_water"
+    },
+    "9901": {
+      "node": "mcl_sus_nodes:sand",
+      "name": "Suspicious sand"
+    },
+    "9902": {
+      "node": "mcl_sus_nodes:gravel",
+      "name": "Suspicious gravel"
+    },
+    "10801": {
+      "node": "mcl_armor_stand:armor_stand",
+      "name": "Armor stand"
+    },
+    "11280": {
+      "node": "mcl_candles:candle_cake"
+    },
+    "11281": {
+      "node": "mcl_candles:candle_cake_lit"
+    },
+    "11415": {
+      "node": "mcl_flowers:wildflowers_1",
+      "name": "Wildflowers"
+    },
+    "11416": {
+      "node": "mcl_flowers:leaf_litter_1",
+      "name": "Leaf litter"
+    },
+    "11417": {
+      "node": "mcl_flowers:pink_petals_1",
+      "name": "Pink petals"
+    },
+    "11446": {
+      "node": "mcl_anvils:anvil_damage_1"
+    },
+    "11447": {
+      "node": "mcl_anvils:anvil_damage_2"
+    },
+    "11511": {
+      "node": "mcl_crimson:crimson_fungus",
+      "name": "Crimson fungus"
+    },
+    "11512": {
+      "node": "mcl_crimson:warped_fungus",
+      "name": "Warped fungus"
+    },
+    "11513": {
+      "node": "mcl_crimson:crimson_roots",
+      "name": "Crimson roots"
+    },
+    "11514": {
+      "node": "mcl_crimson:warped_roots",
+      "name": "Warped roots"
+    },
+    "11515": {
+      "node": "mcl_crimson:nether_sprouts",
+      "name": "Nether sprouts"
+    },
+    "11516": {
+      "node": "mcl_crimson:twisting_vines",
+      "name": "Twisting vines"
+    },
+    "11517": {
+      "node": "mcl_crimson:weeping_vines",
+      "name": "Weeping vines"
+    },
+    "11518": {
+      "node": "mcl_crimson:warped_wart_block",
+      "name": "Warped wart block"
+    },
+    "11521": {
+      "node": "mcl_pale_oak:block_of_resin",
+      "name": "Block of resin"
+    },
+    "11522": {
+      "node": "mcl_pale_oak:resin_brick_block",
+      "name": "Resin bricks"
+    },
+    "11523": {
+      "node": "mcl_pale_oak:chiseled_resin_brick",
+      "name": "Chiseled resin brick"
+    },
+    "11524": {
+      "node": "mcl_pale_oak:hanging_moss",
+      "name": "Pale hanging moss"
+    },
+    "11525": {
+      "node": "mcl_pale_oak:hanging_moss_tip",
+      "name": "mcl_pale_oak:hanging_moss_tip"
+    },
+    "11526": {
+      "node": "mcl_pale_oak:pale_moss",
+      "name": "Pale moss block"
+    },
+    "11527": {
+      "node": "mcl_pale_oak:pale_moss_carpet",
+      "name": "Pale moss carpet"
+    },
+    "11528": {
+      "node": "mcl_flowers:eyeblossom",
+      "name": "Closed eyeblossom"
+    },
+    "11529": {
+      "node": "mcl_flowers:eyeblossom_open",
+      "name": "mcl_flowers:eyeblossom_open"
+    },
+    "11546": {
+      "node": "mcl_books:chiseled_bookshelf",
+      "name": "Chiseled bookshelf"
+    },
+    "13521": {
+      "node": "mcl_bamboo:bamboo_mosaic",
+      "name": "Bamboo mosaic"
+    },
+    "13600": {
+      "node": "mcl_core:coarse_dirt",
+      "name": "Coarse dirt"
+    },
+    "13601": {
+      "node": "mcl_core:deadbush",
+      "name": "Dead bush"
+    }
+  }
+}

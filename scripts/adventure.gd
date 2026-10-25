@@ -57,7 +57,7 @@ func update(delta: float) -> void:
 		cloud.life -= delta
 		if cloud.life <= 0 or cloud.dimension != game.dimension:
 			breath_clouds.erase(cloud); continue
-		if game.player.position.distance_to(cloud.position) < 3: game.player.hurt(3,true)
+		if game.player.position.distance_to(cloud.position) < 3: game.player.hurt(3,true,Vector3.INF,"dragon_breath")
 		if fmod(cloud.life,0.2) < delta: game.puff(cloud.position,Color("c575da"),4,1.8)
 	if clock >= 0.5:
 		clock = 0
@@ -236,7 +236,7 @@ func enter_gateway() -> void:
 	var outer: bool = Vector2(game.player.position.x,game.player.position.z).length() < 160
 	game.portal_cooldown = 5
 	game.teleport(Vector3(280.5,43.01,1.5) if outer else Vector3(50.5,45.01,5.5))
-	game.toast("The End highlands await." if outer else "Returned to the central island.")
+	game.toast("EndHighlands await." if outer else "Returned to the central island.")
 
 func _gateway_block(p: Vector3i, id: int) -> void:
 	if game.world.loaded_at(Vector3(p)):

@@ -93,6 +93,7 @@ func run() -> void:
 	check(game.player.health >= outside_health and game.player.void_clock == 0.0,"leaving the void stops the damage and clears its timer")
 	game.player.health = 20.0
 
+	await load("res://tests/weather_checks.gd").run(self,game)
 	load("res://tests/fluid_checks.gd").run(self,game)
 	print("ENVIRONMENT TESTS: %d passed, %d failed"%[passed,failed])
 	game.queue_free()

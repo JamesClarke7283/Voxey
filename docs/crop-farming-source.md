@@ -8,8 +8,9 @@ This implementation follows the supplied Mineclonia source under
 uses the discrete uniform distribution in Mineclonia's item-drop handler.
 
 `CropFarming` owns the four crop lifecycles. `Farmland` supplies dry/wet
-soil states; the existing nether-wart and sweet-berry implementations are
-separate and retain their earlier behavior.
+soil states. The separate [cocoa](cocoa-source.md),
+[nether wart](nether-wart-source.md) and [sweet berry](sweet-berries-source.md)
+systems now have their own source-backed lifecycles.
 
 ## Saved IDs and growth
 
@@ -39,7 +40,7 @@ plus a rolling historical light average for unloaded catch-up. The first
 successful fresh attempt advances two stages because the source adds
 `ceil(0.1)` to the requested one stage. Time uses Voxey's existing
 20-minute day clock. Successful node replacement resets that stage's
-growth history, as source `set_node` does.
+growth history, as source `set_node` does, including a successful same-stage placement after a clock change. Time equality is exact; a nearby timestamp is not promoted to a whole elapsed interval. Negative elapsed time retains the source’s stage arithmetic and out-of-range mature-stage fallback.
 
 Block-state metadata stores `last_time`, `light_count` and `light_total`.
 Column load queues one catch-up attempt; unloading removes active jobs and
@@ -87,8 +88,8 @@ Existing village plots, wheat-seed acquisition, animal foods and dungeon
 beetroot-seed loot remain usable. Source food recipes include bread,
 golden carrots, baked potatoes, beetroot-to-red-dye and the shaped beetroot
 soup recipe: two full rows of beetroot above a centered bowl. Eating soup
-returns one bowl. Crop farming does not replace the separate cocoa or
-other plant systems.
+returns one bowl. The separate specialized-crop systems cover cocoa, nether
+wart and sweet berries.
 
 Poisonous potato ID 8070 is obtainable through the actual potato harvest.
 It stacks to 64, restores two hunger points and 1.2 saturation, and has an
@@ -109,9 +110,9 @@ Voxey uses its shared voxel light approximation, with maximum skylight 14,
 while preserving the source crop threshold 10. Simulation is limited to
 loaded columns and catch-up is applied on load; it does not run arbitrary
 unloaded-world ticks. Original voxel geometry replaces Mineclonia's plant
-textures. Nether wart, sweet berries and cocoa retain their earlier
-simplified systems and are not claimed as part of this parity batch.
+textures. The specialized crop notes record their own remaining engine and
+presentation boundaries.
 
-Focused isolated checks: **162 passed, 0 failed**, with no script errors (`/tmp/voxey-crop-final.log`).
+The 2026-10-25 reference fixture runs the actual growth callback for 27,648 combinations of crop stage, elapsed time, stored light history, present light, dry-soil rolls and light bypass. The combined source suite passes 65,972 assertions, including the soil callbacks. Live tests cover near-equal future timestamps, same-stage metadata clearing and clock rewind in addition to the original gameplay cases.
 
 The rendered `tests/farm_golem_tour.gd` also verifies crop stages, wet/dry furrows and lowered soil, both construction patterns, constructed/sheared golem models and farming inventory icons. Images are written to `/tmp/voxey-farm-golem-shots/` using isolated temporary saves.

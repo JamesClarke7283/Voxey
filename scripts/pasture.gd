@@ -6,7 +6,7 @@ const SPREAD_INTERVAL = 30.0
 const SPREAD_CHANCE = 20
 const DECAY_INTERVAL = 8.0
 const DECAY_CHANCE = 50
-const TRACKED = {Nodes.GRASS:true,Nodes.DIRT:true,VillageContent.SWAMP_GRASS:true,Nodes.TORCH:true,1119:true,1120:true,1121:true,1122:true,Nodes.GLOWSTONE:true,Nodes.SHROOMLIGHT:true,VillageContent.LANTERN:true,Nodes.END_ROD:true,Nodes.SOUL_TORCH:true,Nodes.REDSTONE_LAMP:true,Nodes.REDSTONE_TORCH:true,Nodes.LAVA:true,Fire.FLAME:true,Fire.ETERNAL:true,Campfires.LIT:true,Campfires.UNLIT:true,Campfires.SOUL_LIT:true,Campfires.SOUL_UNLIT:true,Bastions.CRYING_OBSIDIAN:true,Nodes.NETHER_PORTAL:true,Nodes.END_PORTAL:true,Nodes.FURNACE:true,VillageContent.SMOKER:true,VillageContent.BLAST_FURNACE:true,VillageContent.CAULDRON:true,9540:true,9541:true,9542:true,9543:true,9544:true,9545:true,9546:true,9547:true,9554:true,9555:true,9556:true,9557:true}
+const TRACKED = {Nodes.GRASS:true,Nodes.DIRT:true,VillageContent.SWAMP_GRASS:true,SoilVariants.MYCELIUM:true,Nodes.TORCH:true,1119:true,1120:true,1121:true,1122:true,Nodes.GLOWSTONE:true,Nodes.SHROOMLIGHT:true,VillageContent.LANTERN:true,Nodes.END_ROD:true,Nodes.SOUL_TORCH:true,Nodes.REDSTONE_LAMP:true,Nodes.REDSTONE_TORCH:true,Nodes.LAVA:true,Fire.FLAME:true,Fire.ETERNAL:true,Campfires.LIT:true,Campfires.UNLIT:true,Campfires.SOUL_LIT:true,Campfires.SOUL_UNLIT:true,Bastions.CRYING_OBSIDIAN:true,Nodes.NETHER_PORTAL:true,Nodes.END_PORTAL:true,Nodes.FURNACE:true,VillageContent.SMOKER:true,VillageContent.BLAST_FURNACE:true,VillageContent.CAULDRON:true,9540:true,9541:true,9542:true,9543:true,9544:true,9545:true,9546:true,9547:true,9554:true,9555:true,9556:true,9557:true}
 const STATEFUL_LIGHTS = [Nodes.REDSTONE_LAMP,Nodes.REDSTONE_TORCH,Nodes.FURNACE,VillageContent.SMOKER,VillageContent.BLAST_FURNACE,VillageContent.CAULDRON,9544,9545,9546,9547,9554,9555,9556,9557]
 const SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.UP,Vector3i.DOWN,Vector3i.FORWARD,Vector3i.BACK]
 
@@ -40,7 +40,7 @@ static func emission(world: VoxelWorld, p: Vector3i) -> int:
 	if id == Nodes.REDSTONE_LAMP: return 14 if world.circuits.state(p).get("powered",false) else 0
 	if id == Nodes.REDSTONE_TORCH: return int(world.circuits.state(p).get("out",0))/2
 	if id in [Nodes.FURNACE,VillageContent.SMOKER,VillageContent.BLAST_FURNACE]:
-		return 13 if float(world.stations.get(world.station_key(p),{}).get("burn",0.0)) > 0 else 0
+		return 13 if FurnaceRules.burning(world.stations.get(world.station_key(p),{})) else 0
 	return 14 if Cauldrons.liquid(world.stations.get(world.station_key(p),{})) == "lava" else 0
 
 static func id_emission(id: int) -> int:
@@ -52,6 +52,7 @@ static func id_emission(id: int) -> int:
 	return level
 
 static func _id_emission(id: int) -> int:
+	if Trials.is_spawner(id): return 4 if id == Trials.SPAWNER else 8
 	if FruitCrops.lit(id): return 14
 	if Amethyst.is_crystal(id): return Amethyst.light_level(id)
 	if Copper.is_bulb(id): return Copper.light_level(id)
@@ -91,7 +92,7 @@ static func track(world: VoxelWorld, p: Vector3i) -> void:
 	if not world.columns.has(Vector2i(p.x >> 4,p.z >> 4)):
 		remove_cell(data,p); remove_light(data,p); return
 	var id: int = world.node_at(p)
-	if id == Nodes.GRASS or id == VillageContent.SWAMP_GRASS or id == Nodes.DIRT and not covered(world,p): add_cell(data,p)
+	if is_grass(id) or SoilVariants.spreading(id) or id == Nodes.DIRT and not covered(world,p): add_cell(data,p)
 	elif data.cells.has(p): remove_cell(data,p)
 	# Retain switchable nodes while off/empty; sample their live metadata.
 	if id in STATEFUL_LIGHTS or emission(world,p) > 0:
@@ -154,7 +155,7 @@ static func column_loaded(world: VoxelWorld, column: Vector2i, candidates: Dicti
 		if block.x != column.x or block.z != column.y: continue
 		var id: int = int(candidates[p])
 		if world.edits.has(p) or world.edits.has(p+Vector3i.UP): track(world,p); continue
-		if is_grass(id) or id == Nodes.DIRT: add_cell(data,p)
+		if is_grass(id) or SoilVariants.spreading(id) or id == Nodes.DIRT: add_cell(data,p)
 		elif id not in [Campfires.UNLIT,Campfires.SOUL_UNLIT]: add_light(data,p)
 
 # The worker's pre-split membership for a freshly generated column, merged
@@ -245,6 +246,7 @@ static func sources(world: VoxelWorld, p: Vector3i) -> Array:
 			for x in range(-1,2):
 				var q: Vector3i = p+Vector3i(x,y,z)
 				if world.loaded_at(Vector3(q)) and is_grass(world.node_at(q)): found.append(q)
+	found.append_array(SoilVariants.mycelium_sources(world,p))
 	return found
 
 static func spread(world: VoxelWorld, p: Vector3i) -> bool:
@@ -253,11 +255,13 @@ static func spread(world: VoxelWorld, p: Vector3i) -> bool:
 	if nearby.is_empty() or light(world,p+Vector3i.UP,4) < 4: return false
 	var rng: RandomNumberGenerator = state(world).rng
 	var source: Vector3i = nearby[rng.randi_range(0,nearby.size()-1)]
+	if SoilVariants.is_mycelium(world.node_at(source)): return SoilVariants.spread_from(world,p,source)
 	if light(world,source+Vector3i.UP,9) < 9: return false
 	var grass: int = VillageContent.SWAMP_GRASS if "swamp" in world.generator.biome(p.x,p.z) else Nodes.GRASS
 	return world.set_node(p,grass)
 
 static func decay(world: VoxelWorld, p: Vector3i) -> bool:
+	if SoilVariants.is_mycelium(world.node_at(p)): return SoilVariants.decay(world,p)
 	if not world.loaded_at(Vector3(p)) or not is_grass(world.node_at(p)) or not covered(world,p): return false
 	return world.set_node(p,Nodes.DIRT)
 
@@ -290,7 +294,7 @@ static func update(world: VoxelWorld, delta: float) -> void:
 			if not columns.has(Vector2i(p.x >> 4,p.z >> 4)): continue
 			var id: int = world.node_at(p)
 			if spreading_scan and id == Nodes.DIRT and rng.randi_range(1,SPREAD_CHANCE) == 1: data.jobs.append({"p":p,"spread":true})
-			elif decaying_scan and (id == Nodes.GRASS or id == VillageContent.SWAMP_GRASS) and NodeInfo.of(world.node_at(p+Vector3i.UP)) & NodeInfo.COVER != 0 and rng.randi_range(1,DECAY_CHANCE) == 1: data.jobs.append({"p":p,"spread":false})
+			elif decaying_scan and ((is_grass(id) and covered(world,p)) or (SoilVariants.spreading(id) and SoilVariants.covered(world,p))) and rng.randi_range(1,DECAY_CHANCE) == 1: data.jobs.append({"p":p,"spread":false})
 			if cursor & 15 == 0 and Time.get_ticks_usec()-started >= 1500: break
 		budget -= cursor-int(scan.cursor); scan.cursor = cursor
 		if Time.get_ticks_usec()-started >= 1500: break

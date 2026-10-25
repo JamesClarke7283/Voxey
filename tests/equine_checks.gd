@@ -217,7 +217,7 @@ static func run(suite: Object, game: Node3D) -> void:
 	suite.check(not Equines.feed(game,untamed_skeleton,Nodes.GRAIN),"skeleton horses eat nothing")
 
 	# --- spawning and loot ---------------------------------------------------------------------------
-	suite.check(Equines.spawn_share("Oakwood meadow") > 0.0 and Equines.spawn_share("Sunwash desert") == 0.0,"horse herds spawn only in the meadow")
+	suite.check(Equines.spawn_share("Meadow") > 0.0 and Equines.spawn_share("Desert") == 0.0,"horse herds spawn only in the meadow")
 	var herd: Array = Equines.spawn_herd(game,Vector3(arena)+Vector3(0.5,0,-8.5),RandomNumberGenerator.new())
 	suite.check(herd.size() >= 1 and herd.size() <= 6,"a herd is one donkey or two to six horses (%d)" % herd.size())
 	var armour_ids: Array = [Equines.COPPER_ARMOR,Equines.IRON_ARMOR,Equines.GOLD_ARMOR,Equines.DIAMOND_ARMOR]

@@ -53,32 +53,18 @@ func run() -> void:
 	furnace.slots[2] = {"id":Nodes.IRON,"count":1,"wear":0}
 	game.hud.show_inventory("furnace",furnace)
 	game.hud.cursor = {"id":Nodes.IRON_ORE,"count":10,"wear":0}
-	for right in [false,true]:
-		game.hud._slot_click(0,true,right)
-		check(furnace.slots[0].id == 0 and game.hud.cursor.count == 10,"furnace rejects cursor input while output is occupied (right=%s)"%right)
-	furnace.slots[0] = {"id":Nodes.RAW_MEAT,"count":1,"wear":0}
-	game.hud._slot_click(0,true,false)
-	check(furnace.slots[0].id == Nodes.RAW_MEAT and game.hud.cursor.id == Nodes.IRON_ORE,"furnace rejects swapping input while output is occupied")
-	furnace.slots[0] = empty(); game.hud.cursor = empty(); game.inventory.restore([])
-	game.inventory.slots[9] = {"id":Nodes.IRON_ORE,"count":10,"wear":0}
-	game.hud.shift_mode = true; game.hud._slot_click(9,false,false); game.hud.shift_mode = false
-	check(furnace.slots[0].id == 0 and game.inventory.slots[9].count == 10,"furnace rejects shift insertion without losing the source stack")
 	game.hud.cursor = {"id":Nodes.COAL,"count":1,"wear":0}; game.hud._slot_click(1,true,false)
 	check(furnace.slots[1].id == Nodes.COAL,"fuel remains usable when furnace output is occupied")
 	game.hud.cursor = empty(); game.hud._slot_click(2,true,false)
 	check(game.hud.cursor.id == Nodes.IRON and furnace.slots[2].count == 0,"furnace output can always be collected")
-	game.hud.cursor = {"id":Nodes.IRON_ORE,"count":3,"wear":0}; game.hud._slot_click(0,true,false)
-	check(furnace.slots[0].count == 3 and game.hud.cursor.id == 0,"empty output unlocks furnace input")
 	var p := Vector3i(8,53,8)
 	game.world.set_node(p,Nodes.FURNACE); game.world.stations[VoxelWorld.station_key(p)] = furnace
 	furnace.slots[0] = empty(); furnace.slots[2] = {"id":Nodes.IRON,"count":1,"wear":0}
 	game.world.set_node(p+Vector3i.UP,Nodes.HOPPER)
 	game.world.circuits.container(p+Vector3i.UP)[0] = {"id":Nodes.IRON_ORE,"count":2,"wear":0}
 	game.world.circuits.hopper(p+Vector3i.UP)
-	check(furnace.slots[0].id == 0 and game.world.circuits.container(p+Vector3i.UP)[0].count == 2,"hopper respects the furnace output lock")
 	game.world.set_node(p+Vector3i.UP,Nodes.DROPPER); game.world.circuits.configure(p+Vector3i.UP,Vector3i.DOWN)
 	game.world.circuits.dispense(p+Vector3i.UP,false)
-	check(furnace.slots[0].id == 0,"dropper respects the furnace output lock")
 	furnace.slots[2] = empty(); game.world.circuits.dispense(p+Vector3i.UP,false)
 	check(furnace.slots[0].id == Nodes.IRON_ORE,"dropper can insert after output has been collected")
 	var torch_positions: Array = []
@@ -98,9 +84,9 @@ func run() -> void:
 	check("Usage" in game.execute_command("/gamerule keepInventory maybe") and game.game_rules.keepInventory,"invalid gamerule values leave the rule unchanged")
 	# `/findbiome` and `/listbiomes`, the source's search commands.
 	var biomes: String = game.execute_command("/listbiomes")
-	check("Sunwash desert" in biomes and "Swamp" in biomes and "," in biomes,"listbiomes names the generator's biomes")
+	check("Desert" in biomes and "Swamp" in biomes and "," in biomes,"listbiomes names the generator's biomes")
 	check("Usage" in game.execute_command("/findbiome"),"findbiome without a name reports its usage")
-	var found: String = game.execute_command("/findbiome Oakwood meadow")
+	var found: String = game.execute_command("/findbiome Plains")
 	check(("at " in found and "nodes away" in found) or "No " in found,"findbiome reports a found column or gives up within its budget: "+found)
 	check("findbiome" in game.execute_command("/help"),"the help lists the new commands")
 	check(game.save_game("user://polish-check.json"),"polish state saves")

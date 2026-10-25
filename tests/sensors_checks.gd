@@ -32,6 +32,11 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	game.touch = true; game.controls.sneak_held = false
 	game.state = "playing"; game.gamemode = "survival"; game.daylight = 1.0
 	game.player.position = Vector3(2,476,2)
+	# Earlier lifecycle fixtures build at several higher altitudes. Their saved
+	# roofs must not shadow this test's explicitly open sky.
+	for at in world.edits.keys():
+		if at.y >= 474 and at.x >= 1 and at.x < 15 and at.z >= 1 and at.z < 15 and world.node_at(at) != Nodes.AIR:
+			world.set_node(at,Nodes.AIR)
 	for x in range(1,15):
 		for z in range(1,15):
 			for y in range(467,474): world.set_node(Vector3i(x,y,z),Nodes.AIR)
@@ -115,7 +120,9 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	arrow.queue_free(); world.set_node(target,RedstoneSensors.TARGET)
 	var trident := TridentProjectile.new(); trident.game = game; trident.consumed = false
 	trident.stack = {"id":VillageContent.TRIDENT,"count":1,"wear":0,"data":{"enchantments":{"Loyalty":1}}}
-	trident.position = Vector3(target)+Vector3(-1,0.8,0.5); trident.velocity = Vector3(30,0.6,0)
+	# Cancel the source's 24 m/s² trident gravity for this 0.05-second step,
+	# keeping this a precision-score check at an unchanged impact height.
+	trident.position = Vector3(target)+Vector3(-1,0.8,0.5); trident.velocity = Vector3(30,1.2,0)
 	game.entities.add_child(trident); trident.set_physics_process(false); trident._physics_process(0.05)
 	t.check(trident.returning and world.node_at(target) == RedstoneSensors.TARGET_ON and circuit.state(target).out == 8,"a real trident hit keeps precision scoring and its normal Loyalty return behavior")
 	trident.queue_free(); world.set_node(target,RedstoneSensors.TARGET)

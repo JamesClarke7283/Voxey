@@ -1,0 +1,1121 @@
+{
+  "profiles": {
+    "80": {
+      "armor": false,
+      "elytra": false,
+      "id": 80,
+      "name": "mcl_tools:pick_wood",
+      "points": 0,
+      "span": 60,
+      "toughness": 0,
+      "uses": [
+        60,
+        120,
+        180,
+        240
+      ]
+    },
+    "81": {
+      "armor": false,
+      "elytra": false,
+      "id": 81,
+      "name": "mcl_tools:axe_wood",
+      "points": 0,
+      "span": 60,
+      "toughness": 0,
+      "uses": [
+        60,
+        120,
+        180,
+        240
+      ]
+    },
+    "82": {
+      "armor": false,
+      "elytra": false,
+      "id": 82,
+      "name": "mcl_tools:shovel_wood",
+      "points": 0,
+      "span": 60,
+      "toughness": 0,
+      "uses": [
+        60,
+        120,
+        180,
+        240
+      ]
+    },
+    "83": {
+      "armor": false,
+      "elytra": false,
+      "id": 83,
+      "name": "mcl_tools:sword_wood",
+      "points": 0,
+      "span": 60,
+      "toughness": 0,
+      "uses": [
+        30,
+        60,
+        90,
+        120
+      ]
+    },
+    "84": {
+      "armor": false,
+      "elytra": false,
+      "id": 84,
+      "name": "mcl_farming:hoe_wood",
+      "points": 0,
+      "span": 60,
+      "toughness": 0,
+      "uses": [
+        60,
+        120,
+        180,
+        240
+      ]
+    },
+    "85": {
+      "armor": false,
+      "elytra": false,
+      "id": 85,
+      "name": "mcl_tools:pick_stone",
+      "points": 0,
+      "span": 132,
+      "toughness": 0,
+      "uses": [
+        132,
+        264,
+        396,
+        528
+      ]
+    },
+    "86": {
+      "armor": false,
+      "elytra": false,
+      "id": 86,
+      "name": "mcl_tools:axe_stone",
+      "points": 0,
+      "span": 132,
+      "toughness": 0,
+      "uses": [
+        132,
+        264,
+        396,
+        528
+      ]
+    },
+    "87": {
+      "armor": false,
+      "elytra": false,
+      "id": 87,
+      "name": "mcl_tools:shovel_stone",
+      "points": 0,
+      "span": 132,
+      "toughness": 0,
+      "uses": [
+        132,
+        264,
+        396,
+        528
+      ]
+    },
+    "88": {
+      "armor": false,
+      "elytra": false,
+      "id": 88,
+      "name": "mcl_tools:sword_stone",
+      "points": 0,
+      "span": 132,
+      "toughness": 0,
+      "uses": [
+        66,
+        132,
+        198,
+        264
+      ]
+    },
+    "89": {
+      "armor": false,
+      "elytra": false,
+      "id": 89,
+      "name": "mcl_farming:hoe_stone",
+      "points": 0,
+      "span": 132,
+      "toughness": 0,
+      "uses": [
+        132,
+        264,
+        396,
+        528
+      ]
+    },
+    "90": {
+      "armor": false,
+      "elytra": false,
+      "id": 90,
+      "name": "mcl_tools:pick_iron",
+      "points": 0,
+      "span": 251,
+      "toughness": 0,
+      "uses": [
+        251,
+        502,
+        753,
+        1004
+      ]
+    },
+    "91": {
+      "armor": false,
+      "elytra": false,
+      "id": 91,
+      "name": "mcl_tools:axe_iron",
+      "points": 0,
+      "span": 251,
+      "toughness": 0,
+      "uses": [
+        251,
+        502,
+        753,
+        1004
+      ]
+    },
+    "92": {
+      "armor": false,
+      "elytra": false,
+      "id": 92,
+      "name": "mcl_tools:shovel_iron",
+      "points": 0,
+      "span": 251,
+      "toughness": 0,
+      "uses": [
+        251,
+        502,
+        753,
+        1004
+      ]
+    },
+    "93": {
+      "armor": false,
+      "elytra": false,
+      "id": 93,
+      "name": "mcl_tools:sword_iron",
+      "points": 0,
+      "span": 251,
+      "toughness": 0,
+      "uses": [
+        125,
+        251,
+        376,
+        502
+      ]
+    },
+    "94": {
+      "armor": false,
+      "elytra": false,
+      "id": 94,
+      "name": "mcl_farming:hoe_iron",
+      "points": 0,
+      "span": 251,
+      "toughness": 0,
+      "uses": [
+        251,
+        502,
+        753,
+        1004
+      ]
+    },
+    "95": {
+      "armor": false,
+      "elytra": false,
+      "id": 95,
+      "name": "mcl_tools:pick_diamond",
+      "points": 0,
+      "span": 1562,
+      "toughness": 0,
+      "uses": [
+        1562,
+        3124,
+        4686,
+        6248
+      ]
+    },
+    "96": {
+      "armor": false,
+      "elytra": false,
+      "id": 96,
+      "name": "mcl_tools:axe_diamond",
+      "points": 0,
+      "span": 1562,
+      "toughness": 0,
+      "uses": [
+        1562,
+        3124,
+        4686,
+        6248
+      ]
+    },
+    "97": {
+      "armor": false,
+      "elytra": false,
+      "id": 97,
+      "name": "mcl_tools:shovel_diamond",
+      "points": 0,
+      "span": 1562,
+      "toughness": 0,
+      "uses": [
+        1562,
+        3124,
+        4686,
+        6248
+      ]
+    },
+    "98": {
+      "armor": false,
+      "elytra": false,
+      "id": 98,
+      "name": "mcl_tools:sword_diamond",
+      "points": 0,
+      "span": 1562,
+      "toughness": 0,
+      "uses": [
+        781,
+        1562,
+        2343,
+        3124
+      ]
+    },
+    "99": {
+      "armor": false,
+      "elytra": false,
+      "id": 99,
+      "name": "mcl_farming:hoe_diamond",
+      "points": 0,
+      "span": 1562,
+      "toughness": 0,
+      "uses": [
+        1562,
+        3124,
+        4686,
+        6248
+      ]
+    },
+    "1090": {
+      "armor": false,
+      "elytra": false,
+      "id": 1090,
+      "name": "mcl_tools:pick_netherite",
+      "points": 0,
+      "span": 2031,
+      "toughness": 0,
+      "uses": [
+        2031,
+        4062,
+        6093,
+        8124
+      ]
+    },
+    "1091": {
+      "armor": false,
+      "elytra": false,
+      "id": 1091,
+      "name": "mcl_tools:axe_netherite",
+      "points": 0,
+      "span": 2031,
+      "toughness": 0,
+      "uses": [
+        2031,
+        4062,
+        6093,
+        8124
+      ]
+    },
+    "1092": {
+      "armor": false,
+      "elytra": false,
+      "id": 1092,
+      "name": "mcl_tools:shovel_netherite",
+      "points": 0,
+      "span": 2031,
+      "toughness": 0,
+      "uses": [
+        2031,
+        4062,
+        6093,
+        8124
+      ]
+    },
+    "1093": {
+      "armor": false,
+      "elytra": false,
+      "id": 1093,
+      "name": "mcl_tools:sword_netherite",
+      "points": 0,
+      "span": 2031,
+      "toughness": 0,
+      "uses": [
+        1015,
+        2031,
+        3046,
+        4062
+      ]
+    },
+    "1094": {
+      "armor": false,
+      "elytra": false,
+      "id": 1094,
+      "name": "mcl_farming:hoe_netherite",
+      "points": 0,
+      "span": 2031,
+      "toughness": 0,
+      "uses": [
+        2031,
+        4062,
+        6093,
+        8124
+      ]
+    },
+    "1110": {
+      "armor": false,
+      "elytra": false,
+      "id": 1110,
+      "name": "mcl_tools:pick_gold",
+      "points": 0,
+      "span": 33,
+      "toughness": 0,
+      "uses": [
+        33,
+        66,
+        99,
+        132
+      ]
+    },
+    "1111": {
+      "armor": false,
+      "elytra": false,
+      "id": 1111,
+      "name": "mcl_tools:axe_gold",
+      "points": 0,
+      "span": 33,
+      "toughness": 0,
+      "uses": [
+        33,
+        66,
+        99,
+        132
+      ]
+    },
+    "1112": {
+      "armor": false,
+      "elytra": false,
+      "id": 1112,
+      "name": "mcl_tools:shovel_gold",
+      "points": 0,
+      "span": 33,
+      "toughness": 0,
+      "uses": [
+        33,
+        66,
+        99,
+        132
+      ]
+    },
+    "1113": {
+      "armor": false,
+      "elytra": false,
+      "id": 1113,
+      "name": "mcl_tools:sword_gold",
+      "points": 0,
+      "span": 33,
+      "toughness": 0,
+      "uses": [
+        16,
+        33,
+        49,
+        66
+      ]
+    },
+    "1114": {
+      "armor": false,
+      "elytra": false,
+      "id": 1114,
+      "name": "mcl_farming:hoe_gold",
+      "points": 0,
+      "span": 33,
+      "toughness": 0,
+      "uses": [
+        33,
+        66,
+        99,
+        132
+      ]
+    },
+    "11592": {
+      "armor": false,
+      "elytra": false,
+      "id": 11592,
+      "name": "mcl_tools:pick_copper",
+      "points": 0,
+      "span": 191,
+      "toughness": 0,
+      "uses": [
+        191,
+        382,
+        573,
+        764
+      ]
+    },
+    "11593": {
+      "armor": false,
+      "elytra": false,
+      "id": 11593,
+      "name": "mcl_tools:axe_copper",
+      "points": 0,
+      "span": 191,
+      "toughness": 0,
+      "uses": [
+        191,
+        382,
+        573,
+        764
+      ]
+    },
+    "11594": {
+      "armor": false,
+      "elytra": false,
+      "id": 11594,
+      "name": "mcl_tools:shovel_copper",
+      "points": 0,
+      "span": 191,
+      "toughness": 0,
+      "uses": [
+        191,
+        382,
+        573,
+        764
+      ]
+    },
+    "11595": {
+      "armor": false,
+      "elytra": false,
+      "id": 11595,
+      "name": "mcl_tools:sword_copper",
+      "points": 0,
+      "span": 191,
+      "toughness": 0,
+      "uses": [
+        95,
+        191,
+        286,
+        382
+      ]
+    },
+    "11596": {
+      "armor": false,
+      "elytra": false,
+      "id": 11596,
+      "name": "mcl_farming:hoe_copper",
+      "points": 0,
+      "span": 191,
+      "toughness": 0,
+      "uses": [
+        191,
+        382,
+        573,
+        764
+      ]
+    },
+    "100": {
+      "armor": true,
+      "elytra": false,
+      "id": 100,
+      "name": "mcl_armor:helmet_leather",
+      "points": 1,
+      "span": 55,
+      "toughness": 0,
+      "uses": [
+        55,
+        68.75,
+        75,
+        78.57142857142857
+      ]
+    },
+    "101": {
+      "armor": true,
+      "elytra": false,
+      "id": 101,
+      "name": "mcl_armor:chestplate_leather",
+      "points": 3,
+      "span": 81,
+      "toughness": 0,
+      "uses": [
+        81,
+        101.25,
+        110.45454545454547,
+        115.71428571428572
+      ]
+    },
+    "102": {
+      "armor": true,
+      "elytra": false,
+      "id": 102,
+      "name": "mcl_armor:leggings_leather",
+      "points": 2,
+      "span": 76,
+      "toughness": 0,
+      "uses": [
+        76,
+        95,
+        103.63636363636364,
+        108.57142857142858
+      ]
+    },
+    "103": {
+      "armor": true,
+      "elytra": false,
+      "id": 103,
+      "name": "mcl_armor:boots_leather",
+      "points": 1,
+      "span": 66,
+      "toughness": 0,
+      "uses": [
+        66,
+        82.5,
+        90,
+        94.28571428571429
+      ]
+    },
+    "104": {
+      "armor": true,
+      "elytra": false,
+      "id": 104,
+      "name": "mcl_armor:helmet_iron",
+      "points": 2,
+      "span": 165,
+      "toughness": 0,
+      "uses": [
+        165,
+        206.25,
+        225.00000000000003,
+        235.71428571428572
+      ]
+    },
+    "105": {
+      "armor": true,
+      "elytra": false,
+      "id": 105,
+      "name": "mcl_armor:chestplate_iron",
+      "points": 6,
+      "span": 241,
+      "toughness": 0,
+      "uses": [
+        241,
+        301.25,
+        328.6363636363637,
+        344.28571428571433
+      ]
+    },
+    "106": {
+      "armor": true,
+      "elytra": false,
+      "id": 106,
+      "name": "mcl_armor:leggings_iron",
+      "points": 5,
+      "span": 226,
+      "toughness": 0,
+      "uses": [
+        226,
+        282.5,
+        308.1818181818182,
+        322.8571428571429
+      ]
+    },
+    "107": {
+      "armor": true,
+      "elytra": false,
+      "id": 107,
+      "name": "mcl_armor:boots_iron",
+      "points": 2,
+      "span": 196,
+      "toughness": 0,
+      "uses": [
+        196,
+        245,
+        267.2727272727273,
+        280
+      ]
+    },
+    "108": {
+      "armor": true,
+      "elytra": false,
+      "id": 108,
+      "name": "mcl_armor:helmet_gold",
+      "points": 2,
+      "span": 77,
+      "toughness": 0,
+      "uses": [
+        77,
+        96.25,
+        105.00000000000001,
+        110
+      ]
+    },
+    "109": {
+      "armor": true,
+      "elytra": false,
+      "id": 109,
+      "name": "mcl_armor:chestplate_gold",
+      "points": 5,
+      "span": 113,
+      "toughness": 0,
+      "uses": [
+        113,
+        141.25,
+        154.0909090909091,
+        161.42857142857144
+      ]
+    },
+    "110": {
+      "armor": true,
+      "elytra": false,
+      "id": 110,
+      "name": "mcl_armor:leggings_gold",
+      "points": 3,
+      "span": 106,
+      "toughness": 0,
+      "uses": [
+        106,
+        132.5,
+        144.54545454545456,
+        151.42857142857144
+      ]
+    },
+    "111": {
+      "armor": true,
+      "elytra": false,
+      "id": 111,
+      "name": "mcl_armor:boots_gold",
+      "points": 1,
+      "span": 92,
+      "toughness": 0,
+      "uses": [
+        92,
+        115,
+        125.45454545454547,
+        131.42857142857144
+      ]
+    },
+    "112": {
+      "armor": true,
+      "elytra": false,
+      "id": 112,
+      "name": "mcl_armor:helmet_diamond",
+      "points": 3,
+      "span": 363,
+      "toughness": 2,
+      "uses": [
+        363,
+        453.75,
+        495.00000000000006,
+        518.5714285714286
+      ]
+    },
+    "113": {
+      "armor": true,
+      "elytra": false,
+      "id": 113,
+      "name": "mcl_armor:chestplate_diamond",
+      "points": 8,
+      "span": 529,
+      "toughness": 2,
+      "uses": [
+        529,
+        661.25,
+        721.3636363636364,
+        755.7142857142858
+      ]
+    },
+    "114": {
+      "armor": true,
+      "elytra": false,
+      "id": 114,
+      "name": "mcl_armor:leggings_diamond",
+      "points": 6,
+      "span": 496,
+      "toughness": 2,
+      "uses": [
+        496,
+        620,
+        676.3636363636364,
+        708.5714285714287
+      ]
+    },
+    "115": {
+      "armor": true,
+      "elytra": false,
+      "id": 115,
+      "name": "mcl_armor:boots_diamond",
+      "points": 3,
+      "span": 430,
+      "toughness": 2,
+      "uses": [
+        430,
+        537.5,
+        586.3636363636364,
+        614.2857142857143
+      ]
+    },
+    "1095": {
+      "armor": true,
+      "elytra": false,
+      "id": 1095,
+      "name": "mcl_armor:helmet_netherite",
+      "points": 3,
+      "span": 381,
+      "toughness": 3,
+      "uses": [
+        381,
+        476.25,
+        519.5454545454546,
+        544.2857142857143
+      ]
+    },
+    "1096": {
+      "armor": true,
+      "elytra": false,
+      "id": 1096,
+      "name": "mcl_armor:chestplate_netherite",
+      "points": 8,
+      "span": 556,
+      "toughness": 3,
+      "uses": [
+        556,
+        695,
+        758.1818181818182,
+        794.2857142857143
+      ]
+    },
+    "1097": {
+      "armor": true,
+      "elytra": false,
+      "id": 1097,
+      "name": "mcl_armor:leggings_netherite",
+      "points": 6,
+      "span": 521,
+      "toughness": 3,
+      "uses": [
+        521,
+        651.25,
+        710.4545454545455,
+        744.2857142857143
+      ]
+    },
+    "1098": {
+      "armor": true,
+      "elytra": false,
+      "id": 1098,
+      "name": "mcl_armor:boots_netherite",
+      "points": 3,
+      "span": 451,
+      "toughness": 3,
+      "uses": [
+        451,
+        563.75,
+        615,
+        644.2857142857143
+      ]
+    },
+    "817": {
+      "armor": true,
+      "elytra": false,
+      "id": 817,
+      "name": "mcl_armor:helmet_chain",
+      "points": 2,
+      "span": 165,
+      "toughness": 0,
+      "uses": [
+        165,
+        206.25,
+        225.00000000000003,
+        235.71428571428572
+      ]
+    },
+    "818": {
+      "armor": true,
+      "elytra": false,
+      "id": 818,
+      "name": "mcl_armor:chestplate_chain",
+      "points": 5,
+      "span": 241,
+      "toughness": 0,
+      "uses": [
+        241,
+        301.25,
+        328.6363636363637,
+        344.28571428571433
+      ]
+    },
+    "819": {
+      "armor": true,
+      "elytra": false,
+      "id": 819,
+      "name": "mcl_armor:leggings_chain",
+      "points": 4,
+      "span": 226,
+      "toughness": 0,
+      "uses": [
+        226,
+        282.5,
+        308.1818181818182,
+        322.8571428571429
+      ]
+    },
+    "820": {
+      "armor": true,
+      "elytra": false,
+      "id": 820,
+      "name": "mcl_armor:boots_chain",
+      "points": 1,
+      "span": 196,
+      "toughness": 0,
+      "uses": [
+        196,
+        245,
+        267.2727272727273,
+        280
+      ]
+    },
+    "277": {
+      "armor": true,
+      "elytra": true,
+      "id": 277,
+      "name": "mcl_armor:elytra",
+      "points": 0,
+      "span": 433,
+      "toughness": 0,
+      "uses": [
+        432,
+        864,
+        1296,
+        1728
+      ]
+    },
+    "134": {
+      "armor": false,
+      "elytra": false,
+      "id": 134,
+      "name": "mcl_bows:bow",
+      "points": 0,
+      "span": 385,
+      "toughness": 0,
+      "uses": [
+        385,
+        770,
+        1155,
+        1540
+      ]
+    },
+    "789": {
+      "armor": false,
+      "elytra": false,
+      "id": 789,
+      "name": "mcl_fishing:fishing_rod",
+      "points": 0,
+      "span": 65,
+      "toughness": 0,
+      "uses": [
+        65,
+        130,
+        195,
+        260
+      ]
+    },
+    "790": {
+      "armor": false,
+      "elytra": false,
+      "id": 790,
+      "name": "mcl_bows:crossbow",
+      "points": 0,
+      "span": 465,
+      "toughness": 0,
+      "uses": [
+        326,
+        652,
+        978,
+        1304
+      ]
+    },
+    "123": {
+      "armor": false,
+      "elytra": false,
+      "id": 123,
+      "name": "mcl_tools:shears",
+      "points": 0,
+      "span": 239,
+      "toughness": 0,
+      "uses": [
+        238,
+        476,
+        714,
+        952
+      ]
+    },
+    "813": {
+      "armor": false,
+      "elytra": false,
+      "id": 813,
+      "name": "mcl_shields:shield",
+      "points": 0,
+      "span": 337,
+      "toughness": 0,
+      "uses": [
+        336,
+        672,
+        1008,
+        1344
+      ]
+    },
+    "947": {
+      "armor": false,
+      "elytra": false,
+      "id": 947,
+      "name": "mcl_tools:mace",
+      "points": 0,
+      "span": 500,
+      "toughness": 0,
+      "uses": [
+        50,
+        100,
+        150,
+        200
+      ]
+    },
+    "138": {
+      "armor": false,
+      "elytra": false,
+      "id": 138,
+      "name": "mcl_fire:flint_and_steel",
+      "points": 0,
+      "span": 65,
+      "toughness": 0,
+      "uses": [
+        65,
+        130,
+        195,
+        260
+      ]
+    },
+    "11580": {
+      "armor": false,
+      "elytra": false,
+      "id": 11580,
+      "name": "mcl_mobitems:carrot_on_a_stick",
+      "points": 0,
+      "span": 26,
+      "toughness": 0,
+      "uses": [
+        26,
+        52,
+        78,
+        104
+      ]
+    },
+    "11581": {
+      "armor": false,
+      "elytra": false,
+      "id": 11581,
+      "name": "mcl_mobitems:warped_fungus_on_a_stick",
+      "points": 0,
+      "span": 26,
+      "toughness": 0,
+      "uses": [
+        100,
+        200,
+        300,
+        400
+      ]
+    },
+    "279": {
+      "armor": false,
+      "elytra": false,
+      "id": 279,
+      "name": "screwdriver:screwdriver",
+      "points": 0,
+      "span": 200,
+      "toughness": 0,
+      "uses": [
+        200,
+        400,
+        600,
+        800
+      ]
+    },
+    "11568": {
+      "armor": true,
+      "elytra": false,
+      "id": 11568,
+      "name": "mcl_armor:helmet_copper",
+      "points": 2,
+      "span": 121,
+      "toughness": 0,
+      "uses": [
+        121,
+        151.25,
+        165,
+        172.85714285714286
+      ]
+    },
+    "11569": {
+      "armor": true,
+      "elytra": false,
+      "id": 11569,
+      "name": "mcl_armor:chestplate_copper",
+      "points": 4,
+      "span": 177,
+      "toughness": 0,
+      "uses": [
+        177,
+        221.25,
+        241.36363636363637,
+        252.85714285714286
+      ]
+    },
+    "11570": {
+      "armor": true,
+      "elytra": false,
+      "id": 11570,
+      "name": "mcl_armor:leggings_copper",
+      "points": 3,
+      "span": 166,
+      "toughness": 0,
+      "uses": [
+        166,
+        207.5,
+        226.36363636363637,
+        237.14285714285717
+      ]
+    },
+    "11571": {
+      "armor": true,
+      "elytra": false,
+      "id": 11571,
+      "name": "mcl_armor:boots_copper",
+      "points": 1,
+      "span": 144,
+      "toughness": 0,
+      "uses": [
+        144,
+        180,
+        196.36363636363637,
+        205.71428571428572
+      ]
+    }
+  },
+  "license": "GPL-3.0-or-later",
+  "source_hashes": {
+    "mods/ITEMS/mcl_enchanting/enchantments.lua": "ff7e36d44e8a407c1f1f17f1ff2964c9d249394392cd8e993c6d9072aae02507",
+    "mods/ITEMS/mcl_armor/damage.lua": "b2e25ff671252fe6202da5409edc44a03985f2333950d3c2420c3f6ae4839c16",
+    "mods/CORE/mcl_util/item.lua": "6d039662cb339cc7e20946479b679c1e827e1293689c943e511151ac64982e93",
+    "mods/ITEMS/mcl_enchanting/groupcaps.lua": "afb6f5de4042a222ae26d86b3cc65f30e04cdfa445e4ca0caae084b4cfc700f5"
+  }
+}

@@ -25,6 +25,9 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	game.gamemode = "survival"
 	var world: VoxelWorld = game.world
 	var player: VoxeyPlayer = game.player
+	var saved_armor: Array = player.armor_slots.duplicate(true)
+	# Any leather piece prevents freezing; preceding armor checks may leave one.
+	for i in player.armor_slots.size(): player.armor_slots[i] = {"id":0,"count":0,"wear":0}
 
 	# --- the block and the bucket exist -------------------------------------
 	t.check(VillageContent.DATA.has(PowderSnow.ID),"the powder snow block is registered")
@@ -163,3 +166,4 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	game.inventory.slots[game.inventory.selected] = {"id":PowderSnow.BUCKET,"count":1,"wear":0}
 	t.check(PowderSnow.pour(game,pour_at),"a bucket pours powder snow back")
 	t.check(world.node_at(pour_at) == PowderSnow.ID,"the poured block is placed")
+	player.armor_slots = saved_armor

@@ -159,44 +159,11 @@ static func run(suite: Object, game: Node3D) -> void:
 	state.people.clear()
 	var timed: Array = []
 	for i in 6: timed.append(villager(game,"village/"+str(i),Vector3(base)+Vector3(0.5+i,1.0,0.5),clock))
-	for i in 4: suite.check(not VillageGolems.step(game,timed[0],false,1.0),"the request waits out the source's five-second interval")
-	suite.check(VillageGolems.step(game,timed[0],false,1.0) and golems(game) == 1,"and fires once the interval has elapsed")
+	suite.check(not VillageGolems.step(game,timed[0],false,100.0) and golems(game) == 0,"calm villagers wait for a social conversation instead of using the panic timer")
+	for i in 4: suite.check(not VillageGolems.step(game,timed[0],true,1.0),"the request waits out the source's five-second interval")
+	suite.check(VillageGolems.step(game,timed[0],true,1.0) and golems(game) == 1,"and fires once the interval has elapsed")
 
-	# --- gossip --------------------------------------------------------------
-	# `villager.lua`:2565-2573 — a trade makes the villager share what it knows with
-	# the villagers around it, and fires the ordinary golem request at the same
-	# moment. `copy_gossips` shrinks the value by `transfer_decay` as the story
-	# travels, and the receiver keeps whichever value is stronger.
-	clear_village(game)
-	pad(game,base)
-	state.people.clear()
-	game.player_id = "player"
-	var speaker: Dictionary = game.villages.make_record("village/0","farmer",Vector3(base)+Vector3(0.5,1.0,0.5),base,base,base)
-	speaker["reputations"] = {"player":25}
-	state.people["village/0"] = speaker
-	var near: Dictionary = game.villages.make_record("village/1","farmer",Vector3(base)+Vector3(3.5,1.0,0.5),base,base,base)
-	state.people["village/1"] = near
-	# A villager far outside the ten-block sweep hears nothing.
-	var far: Dictionary = game.villages.make_record("village/2","farmer",Vector3(base)+Vector3(40.5,1.0,0.5),base,base,base)
-	state.people["village/2"] = far
-	VillageGolems.gossip(game,speaker,Vector3(base)+Vector3(1.0,1.0,0.5))
-	suite.check(int(near.get("reputations",{}).get("player",0)) == 5,"a listener ten blocks away hears the story shrunk by the source's transfer decay of 20")
-	suite.check(int(far.get("reputations",{}).get("player",0)) == 0,"and a villager outside the sweep hears nothing")
-	# The receiver keeps whichever is stronger, so good news cannot overwrite a worse
-	# opinion, and a hearsay value never crosses from dislike to like.
-	near["reputations"] = {"player":-30}
-	VillageGolems.gossip(game,speaker,Vector3(base)+Vector3(1.0,1.0,0.5))
-	# A positive story raises the villager's *positive* bucket, which the source sums
-	# against the negative one — so the net improves by the decayed value while the
-	# grudge itself remains.
-	suite.check(int(near["reputations"]["player"]) == -25,"a positive story improves a hostile villager's standing by the decayed value without cancelling the grudge")
-	var angry: Dictionary = game.villages.make_record("village/3","farmer",Vector3(base)+Vector3(4.5,1.0,0.5),base,base,base)
-	angry["reputations"] = {"player":-25}
-	state.people["village/3"] = angry
-	near["reputations"] = {"player":0}
-	VillageGolems.gossip(game,angry,Vector3(base)+Vector3(1.0,1.0,0.5))
-	suite.check(int(near["reputations"]["player"]) == -5,"bad news travels the same way, decayed by the same amount")
-	suite.check(int(near["reputations"]["player"]) < 0,"and hearsay never flips the sign of the player's standing")
+	# Typed gossip transfer is exercised by villager_gossip_checks.
 
 	# --- the sleep stamp ------------------------------------------------------
 	# Passing a night stamps every resident, which is what unblocks the request.

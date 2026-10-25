@@ -90,6 +90,12 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	t.check(CropFarming.grow(world,p) and CropFarming.stage(world.node_at(p)) == 3 and not CropFarming.metadata(world,p).has("last_time"),"fresh hydrated growth advances1+ceil(.1) stages and source set_node resets stage metadata")
 	fresh(world,p,Nodes.WHEAT); CropFarming.metadata(world,p).last_time = CropFarming.now(world)-1500
 	t.check(CropFarming.grow(world,p) and CropFarming.stage(world.node_at(p)) == 5,"saved elapsed time advances1+ceil(1500/500) wheat stages")
+	fresh(world,p,Nodes.WHEAT); CropFarming.metadata(world,p).last_time = CropFarming.now(world)+0.001
+	t.check(CropFarming.grow(world,p) and CropFarming.stage(world.node_at(p)) == 2,"a near-equal future timestamp uses the source's exact comparison rather than adding a whole interval")
+	fresh(world,p,CropFarming.STAGES[0][2]); CropFarming.metadata(world,p).last_time = CropFarming.now(world)+500
+	t.check(CropFarming.grow(world,p) and CropFarming.stage(world.node_at(p)) == 3 and CropFarming.metadata(world,p).is_empty(),"same-stage source growth clears old history as a fresh node placement")
+	fresh(world,p,Nodes.WHEAT); CropFarming.metadata(world,p).last_time = CropFarming.now(world)+1500
+	t.check(CropFarming.grow(world,p) and CropFarming.mature(world.node_at(p)),"a rewound clock retains the source's out-of-range mature-stage fallback")
 	roof(world,true); world.set_node(p+Vector3i.RIGHT*5,Nodes.GLOWSTONE); fresh(world,p,Nodes.WHEAT)
 	t.check(Pasture.light(world,p,14) == 9 and not CropFarming.grow(world,p),"natural crop growth rejects source light9")
 	world.set_node(p+Vector3i.RIGHT*5,Nodes.AIR); world.set_node(p+Vector3i.RIGHT*4,Nodes.GLOWSTONE); fresh(world,p,Nodes.WHEAT)

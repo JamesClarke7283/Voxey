@@ -109,7 +109,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	# A suspicious node's loot table yields when brushed, so the ruin's material
 	# is actually recoverable.
 	var rng := RandomNumberGenerator.new(); rng.seed = 99
-	var rolled: Array = Archaeology.loot(suspicious_id,rng)
+	var rolled: Array = Archaeology.loot(suspicious_id,rng,"ocean_ruins_warm" if found.warm else "ocean_ruins_cold")
 	t.check(rolled.size() > 0,"a suspicious node's table yields loot when brushed")
 	# A nether column never receives a ruin.
 	var before: PackedInt32Array = data.duplicate()

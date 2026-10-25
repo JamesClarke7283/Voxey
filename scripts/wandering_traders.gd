@@ -123,9 +123,9 @@ const PURCHASING := [
 	{"tier":1,"cost":[[Nodes.HAY_BALE,1,1]],"give":[EMERALD,1,1],"stock":1,"xp":0,"multiplier":0.0},
 ]
 
-# `trades_special_table` (93-102). Seven of the source's eight rows: `podzol` has
-# no Voxey item and is left out.
+# `trades_special_table` (93-102): all eight source rows.
 const SPECIAL := [
+	SoilVariants.PODZOL_OFFER,
 	{"tier":1,"cost":[[EMERALD,1,1]],"give":[DenseMaterials.PACKED_ICE,1,1],"stock":6,"xp":0,"multiplier":0.0},
 	{"tier":1,"cost":[[EMERALD,6,6]],"give":[DenseMaterials.BLUE_ICE,1,1],"stock":6,"xp":0,"multiplier":0.0},
 	{"tier":1,"cost":[[EMERALD,1,1]],"give":[Nodes.GUNPOWDER,4,4],"stock":2,"xp":0,"multiplier":0.0},
@@ -138,8 +138,8 @@ const SPECIAL := [
 	{"tier":1,"cost":[[EMERALD,6,20]],"give":[Nodes.TOOLS+10,1,1],"stock":12,"xp":1,"multiplier":0.0,"enchanted":true},
 ]
 
-# `trades_ordinary_table` (104-139). Thirty-two of the source's thirty-four rows:
-# `redsand` and `hanging_moss` have no Voxey item and are left out.
+# `trades_ordinary_table` (104-139). Thirty-three of the source's thirty-four rows:
+# `hanging_moss` has no Voxey item and is left out.
 const ORDINARY := [
 	{"tier":1,"cost":[[EMERALD,1,1]],"give":[FlowersExtra.FERN,1,1],"stock":12,"xp":0,"multiplier":0.0},
 	{"tier":1,"cost":[[EMERALD,1,1]],"give":[Nodes.SUGAR_CANE,1,1],"stock":8,"xp":0,"multiplier":0.0},
@@ -153,6 +153,7 @@ const ORDINARY := [
 	{"tier":1,"cost":[[EMERALD,1,1]],"give":[Nodes.VINE,3,3],"stock":4,"xp":0,"multiplier":0.0},
 	{"tier":1,"cost":[[EMERALD,1,1]],"give":[VillageContent.LILY_PAD,3,3],"stock":2,"xp":0,"multiplier":0.0},
 	{"tier":1,"cost":[[EMERALD,1,1]],"give":[Nodes.SAND,3,3],"stock":8,"xp":0,"multiplier":0.0},
+	{"tier":1,"cost":[[EMERALD,1,1]],"give":[ShapeMaterials.RED_SAND,3,3],"stock":6,"xp":0,"multiplier":0.0},
 	{"tier":1,"cost":[[EMERALD,1,1]],"give":[LushCaveExtra.DRIPLEAF_SMALL,2,2],"stock":5,"xp":0,"multiplier":0.0},
 	{"tier":1,"cost":[[EMERALD,1,1]],"give":[Nodes.BROWN_MUSHROOM,3,3],"stock":4,"xp":0,"multiplier":0.0},
 	{"tier":1,"cost":[[EMERALD,1,1]],"give":[Nodes.RED_MUSHROOM,3,3],"stock":4,"xp":0,"multiplier":0.0},
@@ -305,6 +306,7 @@ static func offer(template: Dictionary, rng: RandomNumberGenerator) -> Dictionar
 	entry["cost"] = costs
 	entry["give"] = [give_id(entry,rng),rng.randi_range(int(entry.give[1]),int(entry.give[2]))]
 	entry["uses"] = 0
+	entry["reward_xp"] = false
 	entry["demand"] = 0
 	entry["data"] = {}
 	if entry.get("enchanted",false):

@@ -46,7 +46,7 @@ const DATA = {
 	WARPED_WART_BLOCK:{"name":"Warped wart block","block":true,"shape":"cube","color":"1f6f66","hardness":1.0,"tool":4,"family":"nether_plant","compostability":85},
 }
 
-# The source's `soil_fungus` group: a fungus only survives on its own nylium.
+# Source placement uses the complete `soil_fungus` group, not only nylium.
 static func soil(id: int) -> String:
 	return str(DATA.get(id,{}).get("soil",""))
 
@@ -61,12 +61,14 @@ static func is_plant(id: int) -> bool:
 
 static func light_level(id: int) -> int: return int(DATA.get(id,{}).get("light",0))
 
-# `on_place`: a fungus is refused on the wrong soil, which the source's
-# `place_fungus` enforces.
+# `place_fungus`: any registered `soil_fungus` host accepts either species.
 static func placement_ok(world: VoxelWorld, at: Vector3i, id: int) -> bool:
 	if not is_fungus(id): return true
-	var below: int = world.node_at(at+Vector3i.DOWN)
-	return below == (Nodes.CRIMSON_NYLIUM if soil(id) == "crimson" else Nodes.WARPED_NYLIUM)
+	return FarmingRules.group(world.node_at(at+Vector3i.DOWN),"soil_fungus") > 0
+
+# Huge fungus bone meal has the source's separate matching-nylium requirement.
+static func huge_soil_ok(world: VoxelWorld, at: Vector3i, id: int) -> bool:
+	return world.node_at(at+Vector3i.DOWN) == (Nodes.CRIMSON_NYLIUM if soil(id) == "crimson" else Nodes.WARPED_NYLIUM)
 
 # `grow_vines`: one to three blocks downward, each step in the empty cell below the
 # last, from the source's `math.random(1, 3)`.
@@ -93,7 +95,7 @@ static func grow(world: VoxelWorld, from: Vector3i, id: int, rng: RandomNumberGe
 # generator rather than loaded from a schematic, because Voxey has no `.mts` reader.
 static func bone_meal_fungus(world: VoxelWorld, at: Vector3i, rng: RandomNumberGenerator = null) -> bool:
 	var id: int = world.node_at(at)
-	if not is_fungus(id) or not placement_ok(world,at,id) or at.y <= world.generator.min_y(): return false
+	if not is_fungus(id) or not huge_soil_ok(world,at,id) or at.y <= world.generator.min_y(): return false
 	var roll: int = rng.randi_range(1,100) if rng != null else randi_range(1,100)
 	if roll > 40: return false
 	return grow_huge(world,at,id,rng)

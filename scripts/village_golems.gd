@@ -4,7 +4,7 @@ extends RefCounted
 # Mineclonia `ENTITIES/mobs_mc/villager.lua`: `summon_golem` (:3431-3458),
 # `maybe_summon_golem` (:3463-3484), `desires_golem`/`slept_recently_enough_for_golem`
 # (:3423-3429) and the two call sites — the panic branch (:3490) and the ordinary
-# one (:5901). GPL-3.0-or-later. Original GDScript using the source as a
+# conversation (:2574). GPL-3.0-or-later. Original GDScript using the source as a
 # behaviour reference.
 #
 # A village in the reference **grows its own defender**. The rule is:
@@ -12,7 +12,7 @@ extends RefCounted
 #   * A villager wants a golem only if it has **slept within the last 1200 game
 #     seconds** and has **not seen a golem within the last 30**.
 #   * A **panicking** villager (one whose village is under attack) asks every five
-#     seconds and needs **three** other villagers nearby who also want one; an
+#     seconds and needs **three** villagers nearby including itself; an
 #     ordinary villager needs **five**.
 #   * The summon searches an 17×11×17 box around the villager for a solid or water
 #     cell with a solid block beneath and **twelve** air cells above it (the golem's
@@ -21,8 +21,8 @@ extends RefCounted
 #   * Every villager who wanted one records the time, which is what the 30-second
 #     "seen a golem lately" test then reads.
 #
-# Voxey already gives each village one golem at generation, but has neither the
-# summon nor the sleep record. The sleep half is derived from the day cycle: a
+# Voxey gives each village one golem at generation. The sleep record is derived
+# from the day cycle: a
 # villager has slept when the village has been through a night since the record was
 # written, which is `day_number()`'s own bookkeeping.
 
@@ -108,10 +108,10 @@ static func find_spot(world: VoxelWorld, near: Vector3) -> Vector3:
 	if Fluids.water(world.node_at(chosen)): spot.y -= 1.0
 	return spot
 
-# The per-villager clock the panic and ordinary branches run on. Returns whether a
-# golem was summoned, so the caller can report it.
+# The five-second clock belongs to the panic path. Calm requests are made
+# by VillagerGossip.converse when a social conversation actually takes place.
 static func step(game: Node3D, mob: Creature, panicking: bool, delta: float) -> bool:
-	if not mob is VillageMob: return false
+	if not panicking or not mob is VillageMob: return false
 	var record: Dictionary = game.villages.record(mob.person_key)
 	if record.is_empty(): return false
 	var timer: float = float(record.get("golem_timer",0.0))+delta
@@ -129,57 +129,6 @@ static func hostile_near(game: Node3D, at: Vector3, radius: float = 12.0) -> boo
 		if mob.is_queued_for_deletion() or mob.health <= 0 or not mob.hostile: continue
 		if mob.position.distance_to(at) <= radius: return true
 	return false
-
-# `villager.lua`:2565-2573: the gossip a trade triggers, and the **ordinary** golem
-# request that fires at the same moment. The source copies the speaker's reputations
-# to every villager within ten blocks — which is what makes curing one villager raise
-# the whole village's opinion of the player — and then asks for a golem with the
-# calm threshold of five.
-#
-# Voxey already keeps reputations per villager keyed by player, so the copy is the
-# same operation. Returns whether a golem was summoned.
-static func gossip(game: Node3D, speaker: Dictionary, near: Vector3) -> bool:
-	var village_key: String = str(speaker.get("key",""))
-	var gossip: Dictionary = speaker.get("reputations",{}).duplicate(true)
-	for person in game.villages.state().people.values():
-		if person == speaker or not person is Dictionary or person.get("dead",false): continue
-		var position: Array = person.get("position",[])
-		if position.size() != 3: continue
-		var at := Vector3(float(position[0]),float(position[1]),float(position[2]))
-		if at.distance_to(near) > GOSSIP_RADIUS: continue
-		var other: Dictionary = person.get("reputations",{})
-		for player in gossip:
-			var heard: int = int(gossip[player])
-			# `copy_gossips` does `self_gossip[type] = min(max(value - transfer_decay,
-			# self_value), max_value)` — a per-type **magnitude** that only ever grows
-			# to the value being repeated. `evaluate_player_reputation` then sums
-			# `gossip * rep_multiplier` across types, so a villager's standing is
-			# positives minus negatives and hearing good news *does* raise a hostile
-			# villager — it simply does not cancel the grudge.
-			#
-			# Voxey keeps one signed net rather than the source's typed buckets, so the
-			# buckets are reconstructed minimally: what is not positive is negative.
-			# That reproduces the source's arithmetic exactly for the two types this
-			# model covers (`trading` and `minor_negative`), which is what the checks
-			# pin.
-			var decayed: int = signi(heard)*maxi(absi(heard)-GOSSIP_TRANSFER_DECAY,0)
-			var existing: int = int(other.get(player,0))
-			var positive: int = maxi(existing,0)
-			var negative: int = maxi(-existing,0)
-			other[player] = maxi(positive,decayed)-negative if decayed >= 0 else positive-maxi(negative,-decayed)
-		person["reputations"] = other
-	# The ordinary branch's own request, on the same five-second timer.
-	if not village_key.is_empty():
-		for mob in game.creatures.get_children():
-			if mob is VillageMob and not mob.is_queued_for_deletion() and not mob.hostile and mob.person_key == speaker.get("key",""):
-				return step(game,mob,false,SUMMON_INTERVAL)
-	return false
-
-# `sense_villagers_requesting_golem`'s ten-block sweep, used for the gossip radius too.
-const GOSSIP_RADIUS = 10.0
-# `gossip_types`' `transfer_decay` for the two types Voxey's model covers: `trading`
-# and `minor_negative` both decay by 20 as the story travels.
-const GOSSIP_TRANSFER_DECAY = 20
 
 # `_last_slept_gmt`: stamp every village resident when the village passes a night.
 # `VillageLife.update` calls this once per new day, which is the same information the

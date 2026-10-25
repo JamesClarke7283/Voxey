@@ -38,24 +38,11 @@ extends RefCounted
 #    assist cache, so `message` takes no assist argument and the assist texts are
 #    transcribed but unreachable here.
 #
-# Flag table: `mcl_damage.types` declares eleven flag names; six describe how a hit
-# is mitigated, and those are what `flags` reports. The other five — is_magic,
-# is_lightning, bypasses_guardian, bypasses_invulnerability, scales,
-# always_affects_dragons — are kept in DECLARED, where they are visible, but Voxey
-# has no counterpart to compare them against.
+# The public audit projects six mitigation flags. ArmorEffects also reads the
+# complete DECLARED table, including bypasses_invulnerability.
 #
-# Voxey findings (`audit`): Voxey does not carry flags through its damage pipeline.
-# `hurt(amount,bypass_armor,source,cause)` decides mitigation per call, and
-# `bypass_armor` skips `Totems.intercept` outright (player.gd:952), so **every**
-# armor-bypassing cause also bypasses a totem, while the source sets
-# `bypasses_totem` for `out_of_world` alone. That is the systematic difference; the
-# per-cause table is IMPLEMENTED below. The causes that already agree are void,
-# sweet_berry, explosion, mob, projectile, anvil and falling_node. `magic` is
-# armor-reduced in Voxey but bypasses armor in the source, `hot_floor` and
-# `generic` disagree on armor, and `fire` has no source entry at all: Voxey merges
-# the source's in_fire, on_fire, lava and hot_floor into one cause, and the sites
-# that pass it are split on armor (false at magic_projectile.gd:78, true
-# everywhere else), so the audit reports it as unknown rather than guessing.
+# The active player damage pipeline now reads this source flag table through
+# ArmorEffects.flags. The audit below compares that live adapter with the table.
 
 # `@1` in every source line is the victim's object name. Voxey is single-player
 # and has no name field, so this stands in.
@@ -188,7 +175,7 @@ const VOXEY_CAUSES = [
 	"in_wall",       # hazards.gd:59
 	"freeze",        # player.gd:175
 	"hot_floor",     # magma.gd:56
-	"fire",          # player.gd:278 (lava), player.gd:282 (burning), campfires.gd:234, potion_effects.gd:95, magic_projectile.gd:78
+	"fire",          # Legacy alias; active fire sites use distinct source reasons.
 	"sweet_berry",   # sweet_berry_thorns.gd:102
 	"explosion",     # game.gd:796
 	"thorns",        # guardian_auras.gd:82
@@ -197,48 +184,12 @@ const VOXEY_CAUSES = [
 	"projectile",    # arrow.gd:102, magic_projectile.gd:78
 	"anvil",         # falling_damage.gd:64
 	"falling_node",  # falling_damage.gd:64
-	"generic",       # the default at player.gd:946, also passed explicitly by potion_effects.gd:95
+	"generic",       # the default for unclassified damage
+	"drown", "lava", "in_fire", "on_fire", "wither", "dragon_breath", "spit", "wither_skull", "trident",
 ]
 
-# What Voxey actually does for each cause the audit can resolve, as the six flags.
-# Derived from the call sites above, not declared anywhere in Voxey:
-#
-#  * `bypasses_armor` is the call's own `bypass_armor` argument.
-#  * `bypasses_totem` is true whenever that argument is true, because
-#    `Totems.intercept` is only consulted under `if not bypass_armor`
-#    (player.gd:952); `Totems.bypasses` adds `void`/`out_of_world` on top.
-#  * `bypasses_magic` is true for `void` and `starve` only, the two causes that
-#    skip `PotionEffects.resistance`/`absorb` (player.gd:957, :960); `void` also
-#    gets no Protection enchantment at all (enchantments.gd:111).
-#  * the three class flags are the cause's class in Voxey's own consumers:
-#    `Enchantments.protection` splits off `fall`, `fire`, `explosion` and
-#    `projectile` (enchantments.gd:113-116) and `Shields.BLOCKABLE` blocks
-#    `explosion` (shields.gd:34). Voxey carries no flag through `hurt`, so the
-#    class is a property of the cause string.
-#
-# `fire` has no entry: the source table has no such reason, so there is nothing to
-# compare it against. `generic` records its default (`bypass_armor` false), which
-# is what the argument-less sites get; several sites pass true instead
-# (adventure.gd:60, boats.gd:194, magic_projectile.gd:101, potion_effects.gd:19,
-# potion_effects.gd:95), so a per-cause flag is only ever an approximation in a
-# pipeline that decides mitigation per call.
-const IMPLEMENTED = {
-	"void": {"bypasses_armor":true,"bypasses_magic":true,"bypasses_totem":true},
-	"starve": {"bypasses_armor":true,"bypasses_magic":true,"bypasses_totem":true},
-	"fall": {"bypasses_armor":true,"bypasses_totem":true},
-	"in_wall": {"bypasses_armor":true,"bypasses_totem":true},
-	"freeze": {"bypasses_armor":true,"bypasses_totem":true},
-	"hot_floor": {"bypasses_armor":true,"bypasses_totem":true},
-	"sweet_berry": {},
-	"explosion": {"is_explosion":true},
-	"thorns": {"bypasses_armor":true,"bypasses_totem":true},
-	"magic": {},
-	"mob": {},
-	"projectile": {"is_projectile":true},
-	"anvil": {},
-	"falling_node": {},
-	"generic": {},
-}
+# Runtime mitigation uses ArmorEffects.flags, which reads the full source table.
+# The audit projects that adapter onto the six flags exposed below.
 
 # The reason's source entry, following an alias when Voxey's name differs.
 static func _source_reason(cause: String) -> String:
@@ -312,7 +263,7 @@ static func _same(left: Dictionary, right: Dictionary) -> bool:
 # cause whose implemented flags differ from the source's also lands in
 # `mismatched`, with both flag sets, so `known` stays the answer to "is this a
 # reason the source knows?" and `mismatched` the answer to "does Voxey agree?".
-# A cause with no IMPLEMENTED entry is recognised but not compared.
+# Every known cause is compared with the active damage adapter.
 static func audit(voxey_causes: Array) -> Dictionary:
 	var result: Dictionary = {"known":[],"unknown":[],"mismatched":[]}
 	for entry in voxey_causes:
@@ -322,9 +273,7 @@ static func audit(voxey_causes: Array) -> Dictionary:
 			result.unknown.append(cause)
 			continue
 		result.known.append(cause)
-		if not IMPLEMENTED.has(cause):
-			continue
-		var voxey: Dictionary = _project(IMPLEMENTED[cause])
+		var voxey: Dictionary = _project(ArmorEffects.flags(cause))
 		var source: Dictionary = flags(reason)
 		if not _same(voxey,source):
 			result.mismatched.append({"cause":cause,"reason":reason,"voxey":voxey,"source":source})

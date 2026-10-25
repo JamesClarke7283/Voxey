@@ -1,46 +1,83 @@
-# Grindstone repair
+# Grindstone
 
-Voxey follows `ITEMS/mcl_grindstone/init.lua` in the supplied Mineclonia checkout.
-The implementation is original GDScript using the source as a behavioural
-reference.
+Reference: `/home/impulse/.minetest/games/mineclonia/mods/ITEMS/mcl_grindstone/init.lua`,
+inspected 2026-10-24. Source-derived behavior retains GPL-3.0-or-later attribution;
+artwork and the interface are native.
 
-## The missing half
+The workstation has two real input slots and one virtual output. It no longer
+selects a partner from elsewhere in the player's inventory or modifies a carried
+item in place. Inputs may contain any item; incompatible inputs produce no result.
+The completed source registry determines which items count as tools, including
+armor, elytra and the non-damageable spyglass.
 
-Voxey's grindstone disenchanted a single item for a flat three experience. The
-source's grindstone is also a **repair bench**:
+## Repair and disenchantment
 
-- `calculate_repair` (`:133-137`) combines two identical damaged pieces. The 5%
-  bonus multiplies the **second** term only, so input order is observable:
-  `251 - ((251-200) + (251-150)*1.05)` is **93**, while the reverse order gives 96.
-- Curses transfer from **both** inputs; ordinary enchantments are dropped.
-- `calculate_xp` (`:66-77`) pays `random(7,13) * level` per non-curse enchantment
-  on the sacrificed item, and `:282-283` **throws** it at the grindstone as orbs.
+Two tools with the same source item name combine, including undamaged pairs.
+The calculation uses exact normalized wear, from 0 to 65,535:
 
-`scripts/grindstone_repair.gd` reproduces all three, expressed in Voxey's own wear
-units — the source works on the normalised 0..65535 scale, Voxey on
-`Nodes.durability(id)`, so every fraction is taken of the item's own span.
-`village_survival.gd`'s grindstone branch now runs the repair combine **before**
-the enchantment test, because a damaged pair with no enchantments must still
-repair, and pays the per-level experience instead of the flat three.
+`new_wear = clamp(65535 - ((65535 - first_wear) + (65535 - second_wear) * 1.05))`
 
-## Recorded differences
+The engine truncates the result. The five percent bonus applies only to the
+second input's remaining durability, so input order can change the result. The
+result retains the first input's custom name and curses from both inputs. Other
+enchantments, prior-work penalties, armor trims and unrelated metadata are removed.
+The existing exact-wear metadata preserves rounding across saves and transfers.
 
-- Requiring both pieces to be damaged is stricter than the source, which tests only
-  the item type and the stripped name. It follows this project's existing station
-  rule ("This item needs no repair") and is asserted in the check.
-- `combine` accepts an `rng` to match the requested signature but draws nothing:
-  the source's wear arithmetic has no random component.
-- The screen shows one item at a time, so the partner is whichever other carried
-  slot is compatible, and the branch still works in place on one slot — which is
-  how the whole grindstone branch already behaved for a stack of enchanted books.
-- `Inventory.clean_slot` needed **no** new key: the result writes only
-  `custom_name` and `enchantments`, both already allow-listed.
+A single enchanted tool or enchanted book can be disenchanted in either slot.
+Its wear and custom name survive; curses remain. A book with no remaining curse
+becomes a normal book. Curse-only items still produce a result and award no XP.
+The source creates one output item even when the input is a stack of books.
+
+Previewing consumes nothing. Taking a combined result consumes one item from
+each input. Taking a single-item result consumes the number of output items taken
+from its input. Every positive non-curse enchantment contributes an independent
+uniform `random(7,13) * level` XP award. XP appears as physical orbs beside the
+workstation. Taking output leaves it empty until an input changes or the player
+reopens the workstation, matching the source callback order.
+
+## Placement, persistence and networking
+
+The recipe uses two sticks, one **stone slab**, and two planks of any species.
+The previous full-stone shortcut is removed. The source's floor, ceiling and wall
+placement branches and all 24 screwdriver orientations are represented by the
+canonical item 527 and hidden states 15400–15422. Five oriented source boxes
+supply rendering, selection and collision. Every state remains a weaponsmith
+jobsite and drops the canonical item.
+
+Inputs and preview survive saves; reopening recalculates the preview. Breaking
+the workstation drops only its real inputs, preventing virtual-output duplication.
+The source does not register it as a hopper/comparator container.
+
+Guest transactions are validated and applied by the host. The host also simulates
+XP orbs, broadcasts their appearance and movement, and awards XP only when a
+living player collects one. Guests run Mending on the authoritative pickup award.
+An orb may be collected by another nearby player; withdrawing output itself
+credits no XP.
 
 ## Verification
 
-`tests/grindstone_repair_checks.gd` (46 checks) hand-computes the wear for both
-input orders, asserts the result never reaches full durability, checks curse
-transfer from the second piece and the dropping of ordinary enchantments, proves
-`xp_for` against a mirrored generator with the same seed (including that a curse
-draws no roll), and runs the whole operation on a real inventory pair asserting the
-thrown orbs carry 21..39.
+`tools/export_grindstone_reference.py` runs the real installed game. Its fixture
+records 591 repair, disenchantment and inventory callback cases, 1,358 bound
+item profiles, all 24 orientations, 24 placement cases and protected-inventory
+permissions. The source comparisons also cover empty and incompatible inputs,
+normalized-wear boundaries, stacked books, custom names and metadata removal.
+
+`tests/grindstone_reference_checks.gd` compares those outcomes and all twelve
+wood materials in both possible recipe rows. `tests/grindstone_repair_checks.gd`
+uses the real workstation UI, checks physical XP and unchosen inventory items,
+and exercises saving, reloading, rotation and destruction. The network suite
+checks guest preview/withdrawal and the resulting physical XP pickup.
+
+The UI, textures, engine input gestures and protected-area integration use
+Voxey's native systems. Broader sound, mob navigation and multiplayer parity
+remain separate work.
+
+Validation on 2026-10-24: 3,744 source comparisons, 190 combined
+workstation/XP/furnace/piston checks and 535 survival checks pass. All 633 Lua
+source hashes match the exported reference. The host/guest protocol and
+inventory suites pass, including physical XP pickup and reconnect regressions.
+The workshop, normal and compact interfaces and unavailable-input screen have
+been visually reviewed, and the Linux resource pack exports successfully.
+
+The additional host/guest/observer world-sync run also passes, covering streamed
+chunks, remote edits, entity movement, removal and stale-packet handling.

@@ -318,12 +318,14 @@ static func use_axe(game: Node3D, target: Dictionary) -> bool:
 		game.puff(Vector3(p)+Vector3.ONE*0.5,Color("888888"),8)
 		game.toast("Wax scraped off.")
 		if game.gamemode != "creative": game.achievements.award("wax_off")
-		game.inventory.damage_tool(); game.sound("place"); game.player.swing = 1
+		if game.gamemode != "creative": ToolCapabilities.action_wear(game.inventory)
+		game.sound("place"); game.player.swing = 1
 		return true
 	var index: int = stage(id)
 	if index <= 0: return false
 	if not set_stage(game.world,p,id,index-1): return false
 	game.puff(Vector3(p)+Vector3.ONE*0.5,Color("888888"),8)
+	if game.gamemode != "creative": ToolCapabilities.action_wear(game.inventory)
 	game.sound("place"); game.player.swing = 1
 	return true
 

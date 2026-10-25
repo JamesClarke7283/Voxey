@@ -12,7 +12,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	var world: VoxelWorld = game.world
 
 	# --- the registry --------------------------------------------------------
-	t.check(Signs.HANGING_BASES.size() == 11 and Signs.HANGING_ITEMS.size() == 11,"a hanging sign exists for every species")
+	t.check(Signs.HANGING_BASES.size() == 12 and Signs.HANGING_ITEMS.size() == 12,"a hanging sign exists for every species")
 	for index in Signs.HANGING_BASES.size():
 		var base: int = Signs.HANGING_BASES[index]
 		var item: int = Signs.HANGING_ITEMS[index]
@@ -69,4 +69,4 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	t.check(index >= 0,("the hanging sign has a recipe" if index >= 0 else "MISSING recipe for %d"%base))
 	if index >= 0:
 		var recipe: Dictionary = inv.recipes[index]
-		t.check(recipe.count == 6 and recipe.ingredients.get(WoodTypes.log_id(0),0) == 3 and recipe.ingredients.get(CopperDecor.CHAIN,0) == 2,"the source's stripped-log-over-two-chains recipe yields six")
+		t.check(recipe.count == 6 and recipe.ingredients.get(WoodTypes.base(0)+4,0) == 6 and recipe.ingredients.get(CopperDecor.CHAIN,0) == 2,"the source's two-chains-over-six-stripped-logs recipe yields six")

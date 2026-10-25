@@ -208,7 +208,7 @@ func _dragon(delta: float) -> void:
 		var origin: Vector3 = head.global_position-model.global_basis.z*2
 		game.adventure.projectile("breath",origin,(game.player.position+Vector3.UP-origin).normalized()*13,self)
 		attack_cooldown = 1.8 if perched else 4.5
-	if center().distance_to(game.player.position+Vector3.UP) < 4: game.player.hurt(7,false,position)
+	if center().distance_to(game.player.position+Vector3.UP) < 4: game.player.hurt(7,false,position,"mob",self)
 	beam_target = null
 	var best: float = 48
 	for mob in game.creatures.get_children():
@@ -230,15 +230,16 @@ func _dragon(delta: float) -> void:
 	game.world.adventure_state["dragon_health"] = health
 	game.world.adventure_state["dragon_phase"] = life
 
-func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> void:
+func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "", armor_breach: int = 0, attacker: Node3D = null) -> void:
 	if is_queued_for_deletion(): return
 	if kind == "enderman" and leap_cooldown <= 0:
 		teleport_near(position)
 		leap_cooldown = 3
-	super.hit(damage,from,reason)
+	super.hit(damage,from,reason,armor_breach,attacker)
 	if kind == "ender_dragon": game.world.adventure_state["dragon_health"] = maxf(0,health)
 
 func die() -> void:
+	Trials.died(self)
 	Farming.forget(self)
 	PotionEffects.died(self)
 	if kind == "slime":

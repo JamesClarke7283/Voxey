@@ -6,15 +6,15 @@ extends RefCounted
 # `[kind, weight, pack_min, pack_max]`.
 #
 # Monster spawners:
-# * Nether wastes: zombified piglin 100 (piglin.lua:1998-2006), ghast 50
+# * NetherWastes: zombified piglin 100 (piglin.lua:1998-2006), ghast 50
 #   (ghast.lua:249-260), piglin 15 (piglin.lua:1955-1964), magma cube 2
 #   (slime+magma_cube.lua:590-600), enderman 1 (enderman.lua:774-786).
-# * Crimson forest: hoglin 9 (hoglin+zoglin.lua:522-532), piglin 5, zombified
+# * CrimsonForest: hoglin 9 (hoglin+zoglin.lua:522-532), piglin 5, zombified
 #   piglin 1.
-# * Warped forest: enderman 1.
-# * Soul sand valley: ghast 50, skeleton 20 (skeleton+stray.lua:436-446),
+# * WarpedForest: enderman 1.
+# * SoulSandValley: ghast 50, skeleton 20 (skeleton+stray.lua:436-446),
 #   enderman 1.
-# * Basalt deltas: magma cube 100 (slime+magma_cube.lua:633-641), ghast 40 in
+# * BasaltDeltas: magma cube 100 (slime+magma_cube.lua:633-641), ghast 40 in
 #   packs of one.
 # * Nether fortress (a structure spawner, whatever the biome): blaze 10
 #   (blaze.lua:303-313), wither skeleton 8 (skeleton_wither.lua:170-180),
@@ -30,11 +30,11 @@ extends RefCounted
 # structure-only spawners have it.
 
 const MONSTERS = {
-	"Nether wastes":[["zombified_piglin",100,4,4],["ghast",50,4,4],["piglin",15,4,4],["magma_cube",2,4,4],["enderman",1,1,4]],
-	"Crimson forest":[["hoglin",9,3,4],["piglin",5,3,4],["zombified_piglin",1,2,4]],
-	"Warped forest":[["enderman",1,1,4]],
-	"Soul sand valley":[["ghast",50,4,4],["skeleton",20,5,5],["enderman",1,1,4]],
-	"Basalt deltas":[["magma_cube",100,2,5],["ghast",40,1,1]],
+	"NetherWastes":[["zombified_piglin",100,4,4],["ghast",50,4,4],["piglin",15,4,4],["magma_cube",2,4,4],["enderman",1,1,4]],
+	"CrimsonForest":[["hoglin",9,3,4],["piglin",5,3,4],["zombified_piglin",1,2,4]],
+	"WarpedForest":[["enderman",1,1,4]],
+	"SoulSandValley":[["ghast",50,4,4],["skeleton",20,5,5],["enderman",1,1,4]],
+	"BasaltDeltas":[["magma_cube",100,2,5],["ghast",40,1,1]],
 }
 const FORTRESS = [["blaze",10,2,3],["wither_skeleton",8,5,5],["zombified_piglin",5,4,4],["magma_cube",3,4,4],["skeleton",2,5,5]]
 const STRIDER = ["strider",60,1,2]
@@ -42,7 +42,7 @@ const GHAST_ODDS = 20
 const NO_WART = ["hoglin","piglin"]
 
 static func table_for(biome: String, in_fortress: bool) -> Array:
-	return FORTRESS if in_fortress else MONSTERS.get(biome,MONSTERS["Nether wastes"])
+	return FORTRESS if in_fortress else MONSTERS.get(biome,MONSTERS["NetherWastes"])
 
 # A weighted draw from a table; `roll` is uniform in [0, 1).
 static func pick(table: Array, roll: float) -> Array:

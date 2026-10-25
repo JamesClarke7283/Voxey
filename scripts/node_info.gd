@@ -60,6 +60,7 @@ static func invalidate() -> void:
 	traits.fill(0)
 	tiles.fill(NO_TILE)
 	VoxelWorld.hook_memo.clear()
+	BarrierCatalog.group_cache.clear()
 	RedstoneSensors.filter_memo.clear()
 	Pasture.emission_memo.clear()
 	Nodes.title_memo.clear()
@@ -117,21 +118,21 @@ static func compute(id: int) -> int:
 	if Nodes.uncached_transparent(id): bits |= TRANSPARENT
 	if Nodes.uncached_plant(id): bits |= PLANT
 	var cube: bool = id != 0 and not FoodFeatures.is_cake(id) and not Doors.is_door(id) and not SnowCover.is_snow(id) and not Trapdoors.is_trapdoor(id) and not Barriers.is_barrier(id) and not Fluids.flowing(id) and (not BuildingShapes.is_shape(id) or BuildingShapes.variant(id) == 2) and not VillageContent.special(id) and id not in Nodes.CIRCUIT_NODES and not Nodes.uncached_plant(id) and id not in [Nodes.TORCH,Nodes.LADDER,Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.NETHER_PORTAL,Nodes.END_PORTAL,Nodes.ENCHANTING_TABLE]
-	cube = cube and not Farmland.is_soil(id) and not Signs.is_sign(id) and not RedstoneInputs.is_device(id) and not Copper.is_rod(id) and not Sponges.is_sponge(id) and not Archaeology.DATA.has(id) and not Decor.is_pot(id) and not Decor.is_stand(id) and not Rails.is_rail(id) and not Heads.is_any(id) and not Scaffolding.is_scaffolding(id) and not Conduits.is_conduit(id) and not Corals.is_coral(id) and not SeaPickles.is_pickle(id) and not Seagrass.is_seagrass(id) and not Beacons.is_beacon(id) and not Beacons.is_beam(id)
+	cube = cube and not Farmland.is_soil(id) and not Signs.is_any(id) and not RedstoneInputs.is_device(id) and not Copper.is_rod(id) and not Sponges.is_sponge(id) and not Archaeology.DATA.has(id) and not Decor.is_pot(id) and not Decor.is_stand(id) and not Rails.is_rail(id) and not Heads.is_any(id) and not Scaffolding.is_scaffolding(id) and not Conduits.is_conduit(id) and not Corals.is_coral(id) and not SeaPickles.is_pickle(id) and not Seagrass.is_seagrass(id) and not Beacons.is_beacon(id) and not Beacons.is_beam(id)
 	if cube: bits |= CUBE
 	if not Nodes.uncached_transparent(id) and id not in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.ENCHANTING_TABLE]: bits |= OCCLUDES
 	if Fluids.source(id): bits |= SOURCE
 	if Fluids.flowing(id): bits |= FLOWING
 	if Fluids.water(id): bits |= WATERY
 	if id in [Nodes.WATER,Amethyst.TINTED_GLASS,Beehives.HONEY_BLOCK]: bits |= SURFACE
-	if RedstoneCircuit.circuit_node(id) or Archaeology.is_suspicious(id) or id in [Nodes.CHEST,VillageContent.CAULDRON,Dungeons.SPAWNER] or Campfires.is_campfire(id) or SnowCover.is_snow(id) or Fire.is_fire(id) or WoodTypes.is_leaves(id) or WoodTypes.is_sapling(id) or FoodFeatures.is_cake(id) or FoodFeatures.flower(id) or FoodFeatures.is_tall_grass(id) or Signs.is_sign(id) or CropFarming.is_crop(id) or Farmland.is_soil(id) or FruitCrops.is_stem(id) or FruitCrops.is_pumpkin_head(id) or Amethyst.tracked(id) or Beehives.is_hive(id): bits |= SPECIAL
+	if VillageContent.is_bed(id) or RedstoneCircuit.circuit_node(id) or Archaeology.is_suspicious(id) or Trials.is_block(id) or id in [Nodes.CHEST,VillageContent.CAULDRON,Dungeons.SPAWNER,Bookshelves.ID,VillageContent.PATH] or Campfires.is_campfire(id) or SnowCover.is_snow(id) or Fire.is_fire(id) or WoodTypes.is_leaves(id) or WoodTypes.is_sapling(id) or FoodFeatures.is_cake(id) or FoodFeatures.flower(id) or FoodFeatures.is_tall_grass(id) or Signs.is_any(id) or Banners.is_banner(id) or CropFarming.is_crop(id) or CocoaCrops.is_cocoa(id) or NetherWartCrops.is_wart(id) or SweetBerryCrops.is_bush(id) or Farmland.is_soil(id) or FruitCrops.is_stem(id) or FruitCrops.is_pumpkin_head(id) or Amethyst.tracked(id) or Beehives.is_hive(id) or LushCaves.is_vine(id) or LushCaveExtra.is_dripleaf_tipped(id) or LushCaveExtra.is_ceiling_plant(id): bits |= SPECIAL
 	if Pasture.TRACKED.has(id) or Fluids.lava(id) or FruitCrops.lit(id) or Amethyst.is_crystal(id): bits |= PASTURE
 	if Fluids.liquid(id) or Pasture.opaque(id): bits |= COVER
 	if Fire.flammable(id): bits |= FUEL
 	if Fluids.replaceable(id): bits |= REPLACEABLE
 	if Fluids.base(id) == Nodes.WATER: bits |= BASE_WATER
 	elif Fluids.base(id) == Nodes.LAVA: bits |= BASE_LAVA
-	if Nodes.uncached_solid(id) and not (Farmland.is_soil(id) or Amethyst.is_crystal(id) or FoodFeatures.is_cake(id) or Doors.is_door(id) or SnowCover.is_snow(id) or Trapdoors.is_trapdoor(id) or Barriers.is_barrier(id) or BuildingShapes.is_shape(id) or Campfires.is_campfire(id) or id == VillageContent.CAULDRON or RedstoneSensors.is_detector(id) or id in SteamMachines.BLOCKS): bits |= BOX
+	if Nodes.uncached_solid(id) and not LushCaveExtra.is_big_leaf(id) and not CocoaCrops.is_cocoa(id) and not (Signs.is_any(id) or Farmland.is_soil(id) or Amethyst.is_crystal(id) or FoodFeatures.is_cake(id) or Doors.is_door(id) or SnowCover.is_snow(id) or Trapdoors.is_trapdoor(id) or Barriers.is_barrier(id) or BuildingShapes.is_shape(id) or Stonecutting.is_cutter(id) or GrindstoneRepair.is_grindstone(id) or Campfires.is_campfire(id) or id in [VillageContent.CAULDRON,VillageContent.COMPOSTER] or RedstoneSensors.is_detector(id) or id in SteamMachines.BLOCKS): bits |= BOX
 	bits |= mesh_kind(id,false) << MESH_SHIFT
 	bits |= mesh_kind(id,true) << EXTERNAL_SHIFT
 	return bits
@@ -143,11 +144,13 @@ static func mesh_kind(id: int, external_circuits: bool) -> int:
 	if Farmland.is_soil(id): return 1
 	if CropFarming.is_crop(id): return 2
 	if FruitCrops.is_stem(id): return 3
+	if CocoaCrops.is_cocoa(id): return 35
+	if NetherWartCrops.is_wart(id): return 34
 	if RedstoneInputs.is_device(id) and not external_circuits: return 4
 	if RedstoneSensors.is_device(id) and not external_circuits: return 5
 	if id in Nodes.CIRCUIT_NODES and not external_circuits: return 6
 	if SnowCover.is_snow(id): return 7
-	if Signs.is_sign(id): return 8
+	if Signs.is_any(id): return 8
 	if FoodFeatures.is_cake(id): return 9
 	if Doors.is_door(id): return 10
 	if Trapdoors.is_trapdoor(id): return 11

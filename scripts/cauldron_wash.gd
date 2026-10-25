@@ -39,11 +39,8 @@ extends RefCounted
 # averaged arithmetic is fed from that block colour through `Nodes.color`, which
 # keeps one dye colour table in the project rather than a second one here.
 #
-# One deliberate divergence: the source spends the portion **before** it looks at
-# what it is washing (`mcl_cauldrons.add_level(pointed_thing.under, -1)` at
-# leather.lua:83 and mcl_banners/init.lua:482 both run first), so undyed leather
-# and a plain banner waste a portion. Washing here is gated on `can_wash` so a
-# cauldron is only spent when something is actually removed.
+# Banner washing spends a water portion even for a plain banner, as the source
+# does. The existing leather path still requires a tint before spending water.
 
 # The source's metadata key is `mcl_armor:color` (leather.lua:42), a
 # "#RRGGBBAA" string. Voxey stores the three colour channels as one integer.
@@ -171,7 +168,7 @@ static func can_wash(id: int, slot: Dictionary) -> bool:
 # `Cauldrons.use` guards it (cauldrons.gd:132), so a stale station dictionary
 # cannot spend water for a cauldron that is no longer there.
 static func wash(game: Node3D, p: Vector3i, station: Dictionary, slot: Dictionary) -> bool:
-	if not can_wash(int(slot.get("id",0)),slot): return false
+	if not Banners.is_banner(int(slot.get("id",0))) and not can_wash(int(slot.get("id",0)),slot): return false
 	if Cauldrons.level(station) == 0 or Cauldrons.liquid(station) != "water": return false
 	if game.world.node_at(p) != VillageContent.CAULDRON: return false
 	Cauldrons.set_contents(station,Cauldrons.level(station)-1,"water")
@@ -181,7 +178,7 @@ static func wash(game: Node3D, p: Vector3i, station: Dictionary, slot: Dictionar
 		# `table.remove` (mcl_banners/init.lua:486) drops the last layer, which is
 		# the newest one. `set_layers` erases the key once the list is empty.
 		var list: Array = Banners.layers(slot).duplicate(true)
-		list.remove_at(list.size()-1)
+		if not list.is_empty(): list.remove_at(list.size()-1)
 		Banners.set_layers(slot,list)
 	# The source plays a bottle pour here (leather.lua:86). Voxey's catalogue has
 	# no pour, and the cauldron module already sounds a liquid change as "place".

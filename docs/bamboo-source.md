@@ -83,7 +83,51 @@ plainly wrong.
 
 ## Recorded source gaps
 
-- **No bamboo wood family.** The source's `mcl_bamboo` is registered as a wood family, giving bamboo planks, a mosaic plank and rafts. Voxey has the stalk, the item, the stick recipe and the scaffolding recipe; the planks, mosaic and raft are open.
 - **No leaf variants.** The source has small and big leaves at a stalk's top, with three shape states each. Voxey's stalk has one top segment.
 - **No podzol or moss ground.** The source's `soil_bamboo` group covers dirt, grass, podzol and moss. Voxey has neither podzol nor moss, so bamboo grows on dirt, grass and sand.
 - **No `param2` orientation.** The source gives a stalk a four-direction facing. A column of revolution has nothing to orient, so Voxey stores none.
+
+## Bamboo wood, mosaic and rafts (2026-10-24)
+
+The source's `mcl_bamboo/init.lua` registers bamboo through `mcl_trees/api.lua` with
+`wood_amount = 2`, no leaves, sapling or bark blocks, and a raft boat variant.
+`scripts/bamboo_wood.gd` now supplies this material family:
+
+- Nine harvested stalks make one block of bamboo. An axe strips it while retaining
+  its axis; either raw or stripped block produces two planks. Raw blocks explicitly
+  disable charcoal cooking in the source; stripped blocks inherit charcoal output.
+- Two vertically stacked bamboo slabs produce one mosaic block. Planks and mosaic
+  have stairs and slabs; neither acquires a stonecutter recipe. Their full blocks
+  and stairs burn for 15 seconds, half slabs for 7.5 seconds.
+- Matching planks make doors, trapdoors, fences, gates, buttons, pressure plates and
+  ordinary signs. Bamboo planks also join mixed-wood crafting. Bamboo blocks do not
+  join the source's generic tree group (for example, the smoker's log ingredient).
+- Six stripped blocks and two chains produce six hanging signs, following the
+  source recipe now used for every wood species. Both sign types carry the correct
+  species name, texture and saved text. Hanging boards now have their own mesh,
+  ray targeting, text display, glow-ink interaction and support-removal path.
+- Five matching planks make a raft. A chest above it makes a chest raft with 27
+  slots. Its source collision box is 0.5 wide, 0.3 high and 1.25 long, offset toward
+  the rear; selection is 1.4 × 0.3 × 1.4. The rider sits 0.25 blocks above the hull.
+  Existing boat steering, passengers, damage, dispensers and persistence apply.
+
+IDs 13200–13211 contain the bamboo blocks and axis states; the other products use
+separate ranges from 13400 through 13523. Bamboo shape families are appended after
+all existing shapes, preserving old shape IDs. Trial vault loot now resolves the
+source's bamboo planks and hanging sign entries to actual items.
+
+Reference files: `mods/ITEMS/mcl_bamboo/{init,nodes,recipes}.lua`,
+`mods/ITEMS/mcl_trees/api.lua`, `mods/ITEMS/mcl_signs/init.lua`, and
+`mods/ENTITIES/mcl_boats/init.lua`. Original procedural art is used throughout.
+
+`tests/bamboo_wood_checks.gd` covers real crafting, stripping, catalog/ID safety,
+source fuels, sign rendering and interactions, legacy sign migration, raft hull
+clearance, rider attachment, and an actual disk save/reload with raft cargo. The
+remaining general boat and sign adaptations are documented in their source notes.
+
+Validation: the final bamboo acceptance run passed 346 checks. Combined
+sign/boat/copper regressions passed 732 checks; controls, barriers, pistons and
+rotation passed 664; the building suite passed 169, including its comparison of
+5,000 stair arrangements. Editor import completed without script errors.
+`tests/bamboo_tour.gd` renders a material/raft scene and a close-up of the signs;
+both previews were inspected.

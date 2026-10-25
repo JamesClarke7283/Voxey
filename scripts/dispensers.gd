@@ -28,7 +28,7 @@ extends RefCounted
 
 static func handles(id: int) -> bool:
 	return id in [Nodes.BONE_MEAL,Nodes.BUCKET,Nodes.WATER_BUCKET,Nodes.LAVA_BUCKET,
-		Nodes.FLINT_AND_STEEL,PiglinBarter.FIRE_CHARGE,VillageContent.XP_BOTTLE] or is_potion(id) or Nodes.is_armor(id)
+		Nodes.FLINT_AND_STEEL,PiglinBarter.FIRE_CHARGE,VillageContent.XP_BOTTLE,VillageContent.WATER_BOTTLE] or is_potion(id) or MobArmor.piece(id) >= 0
 
 # The source's armor/head action (`mcl_dispensers/init.lua`:88-124): armor is
 # equipped onto a player within one node of the dispensed cell (or the cell below),
@@ -36,13 +36,19 @@ static func handles(id: int) -> bool:
 # outcome when the action applies.
 static func equip_action(game: Node3D, p: Vector3i, d: Vector3i, slot: Dictionary) -> Dictionary:
 	var id: int = slot.id
-	if not Nodes.is_armor(id): return {}
+	if not Nodes.is_armor(id) and MobArmor.piece(id) < 0: return {}
 	var target: Vector3i = p+d
+	# Entity-specific actions run before the generic player armor action.
+	for mob in game.creatures.get_children():
+		if mob is Creature and not mob.is_queued_for_deletion() and mob.position.distance_to(Vector3(target)+Vector3.ONE*0.5) <= 1.0 and MobArmor.equip(mob,slot,true):
+			return {"applied":true,"replacement":0,"consume":true}
 	for cell in [target,target+Vector3i.DOWN]:
 		if game.player.position.distance_to(Vector3(cell)+Vector3.ONE*0.5) <= 1.0:
-			if game.player.equip_armor(slot): return {"applied":true,"replacement":0,"consume":true}
+			var index: int = 0 if id == FruitCrops.CARVED else Nodes.armor_piece(id)
+			if index in range(4) and game.player.armor_slots[index].id == 0 and game.player.equip_armor(slot):
+				return {"applied":true,"replacement":0,"consume":true}
 	# Equipping failed: a head or a pumpkin is placed as a node when the cell is free.
-	if game.world.node_at(target) == Nodes.AIR and id in [Nodes.PUMPKIN]:
+	if game.world.node_at(target) == Nodes.AIR and (id == FruitCrops.CARVED or Heads.is_head(id)):
 		if game.world.set_node(target,id): return {"applied":true,"replacement":0,"consume":true}
 	return {}
 
@@ -66,15 +72,25 @@ static func dispense(game: Node3D, p: Vector3i, d: Vector3i, slot: Dictionary) -
 	var origin: Vector3 = Vector3(p)+Vector3.ONE*0.5+Vector3(d)*0.51
 	# Bone meal grows whatever it is aimed at. The pointed block's own growth rules
 	# are the ones the player path already owns.
+	if id == VillageContent.WATER_BOTTLE:
+		if MudBottles.convert(game,at,true): return {"applied":true,"replacement":VillageContent.GLASS_BOTTLE,"consume":true}
+		return {"applied":false,"replacement":0,"consume":false}
 	if id == Nodes.BONE_MEAL:
 		var target: Vector3i = pointed(world,at)
 		var here: int = world.node_at(target)
 		var grew: bool = false
-		if here == Nodes.GRASS and world.node_at(target+Vector3i.UP) == Nodes.AIR:
+		if LargePlants.bone_meal_target(here):
+			var result: Dictionary = LargePlants.bone_meal(world,target)
+			if result.has("duplicate"): game.spawn_drop(Vector3(target)+Vector3.ONE*0.5,int(result.duplicate),1)
+			if result.get("consume",false): game.puff(Vector3(target)+Vector3i.UP*0.5+Vector3.ONE*0.5,Color("b8e07a"),8)
+			return {"applied":result.get("consume",false),"replacement":0,"consume":result.get("consume",false)}
+		if LushCaves.is_vine(here):
+			grew = LushCaves.ripen(world,target)
+		elif here == Nodes.GRASS and world.node_at(target+Vector3i.UP) == Nodes.AIR:
 			grew = FoodFeatures.bone_meal_grass(game,target)
 		elif CropFarming.is_crop(here):
 			grew = bool(CropFarming.bone_meal(world,target).get("grew",false))
-		elif FoodFeatures.flower(here):
+		elif FoodFeatures.bone_meal_target(here):
 			grew = FoodFeatures.bone_meal(game,target)
 		elif here in [Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM]:
 			grew = HugeMushrooms.grow(world,target,here,RandomNumberGenerator.new())

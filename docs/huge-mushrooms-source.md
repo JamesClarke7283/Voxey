@@ -1,47 +1,58 @@
-# Huge mushrooms
+# Huge mushroom cap and stem source notes
 
-Voxey follows the supplied Mineclonia `mods/ITEMS/mcl_mushrooms/{init,small,huge}.lua`. The implementation is original GDScript using the source as a behaviour reference; art is original procedural code.
+Reference: Mineclonia `mods/ITEMS/mcl_mushrooms/huge.lua` (GPL-3.0-or-later), especially `to_binary` at lines 29–42 and `register_mushroom` at lines 44–163. The existing schematic layout and growth rules remain in `scripts/huge_mushrooms.gd`; the cap layers still come from the shipped `.mts` schematics.
 
-## Why it is not just "a bigger mushroom"
+## State and source names
 
-Bone meal on a small mushroom grows a huge one, and the source's rule has **four** gates, all of which matter:
+The source cap suffix is six binary digits in tile order:
 
-| Gate | Source |
-|---|---|
-| Roll | `math.random(1, 100) > 40 then return` — a **40%** chance, so most attempts do nothing |
-| Soil | mycelium, dirt, grass, coarse dirt or podzol |
-| Room | a box scan: no opaque block below the needed height, and every cell air or leaves |
-| Height | `base_height = math.random(0, 2)`, doubled one time in twelve |
+| String position | Face | Bit | Value 0 | Value 1 |
+| --- | --- | --- | --- | --- |
+| 1 | +Y | 32 | pores | skin |
+| 2 | -Y | 16 | pores | skin |
+| 3 | +X | 8 | pores | skin |
+| 4 | -X | 4 | pores | skin |
+| 5 | +Z | 2 | pores | skin |
+| 6 | -Z | 1 | pores | skin |
 
-The roll is why the checks assert a huge mushroom grows *sometimes and not every time*. A guaranteed growth would be easier to write and simply wrong.
+Thus mask zero is `cap_000000`, mask 32 is `cap_100000`, and mask 63 is the player-facing `cap_111111`. There are 64 cap IDs per species, not 63: the all-pore registration is real content too. `HugeMushrooms.cap_for(small, mask)`, `mask_of(id)`, `mask_string(mask)`, and `source_name(id)` expose the exact mapping.
 
-## The shapes come from the source's own schematics
+Legacy IDs 1207–1212 are unchanged. The additional IDs occupy the previously unused contiguous range 16000–16125, below `NodeInfo.LIMIT` and outside `ShapeCatalog`'s 14000–15999 allocation:
 
-The two species differ in shape, which the source ships as `.mts` files. Rather than approximate them, the shapes are decoded from those files:
+- 16000/16001: brown/red `mcl_mushrooms:*_mushroom_block_stem_full`.
+- 16002–16063: brown cap masks 1–62.
+- 16064–16125: red cap masks 1–62.
+- Existing 1211/1212 and 1209/1210 remain brown/red masks 0 and 63.
 
-- **Brown** — a **7×7** cap: a full 7-wide layer on top, then a ring one wide, with the corners trimmed at the edge.
-- **Red** — a **5×5** cap over a one-block stem, with a 3×3 top and a 2-wide ring below.
+`HugeMushrooms.DATA` is the complete constant 132-entry registration table (128 caps plus four stems), mirrored by reference in `VillageContent.DATA`. Every cap below mask 63 has `hidden: true`, corresponding to the source's hidden internal registrations. The all-pore state is hidden too.
 
-Decoding them mattered. My first attempt at the brown cap was a hand-drawn `#`/`|` diagram guessed from the Lua, and it did not match the binary schematic. Reading the actual voxel data settled both the widths and where the stem continues **through** the cap's centre — the source marks that column `S` in the cap layers too, so a height-three stem with a two-layer cap has **five** stem cells, not three.
+## Placement callback and permanence
 
-## Cap blocks are a family, not one block
+Only `cap_111111` has `on_construct` in the source. It scans the six directions in the table above. A neighbor participates only when its species matches and its `huge_mushroom_cap` group is nonzero. Both touching skin bits are cleared. Different-species caps, ordinary stems, full stems, and non-mushroom blocks do not participate.
 
-This is the part worth understanding. A huge mushroom cap block's *skin* depends on which of its six faces are exposed. The source registers:
+The all-pore edge case is intentional: `cap_000000` is registered with `huge_mushroom_cap = 0`, but the callback tests `~= 0`. Consequently an all-pore cap does **not** trigger a touching-face update in a newly placed all-skin cap.
 
-- **63 interior variants**, `cap_000000` through `cap_111111`, one bit per face, skin where the bit is set and pores where it is not;
-- the **all-skin** block a player can place;
-- rules that turn two touching cap blocks' faces to pores **permanently**.
+The callbacks only clear bits. Removing a neighbor never sets a bit again, and placing/changing an internal mask does not rerun the all-skin construct callback. The mask is the voxel ID itself, so the ordinary voxel edit/save/network paths preserve it without `block_states` metadata.
 
-Voxey models the visible consequence rather than the full 63-variant table: any cap cell with another cap directly above it becomes **pores**, and the rest is skin. So a huge mushroom is skin outside and pores inside, which is what a player sees. The bit-level variants are recorded as an open gap below.
+API:
 
-## Drops
+- `placed(world, p) -> bool`: source `on_construct`; reads the current ID at `p`, returns false unless it is mask 63, and applies touching updates through `VoxelWorld.set_node`.
+- `changed(world, p, old_id, id) -> bool`: `VoxelWorld` integration wrapper; invokes `placed` only for a transition to mask 63.
+- `face_states(id) -> Array`: six skin booleans in source tile order; ordinary stems are `[false,false,true,true,true,true]`, full stems are all true.
+- `face_texture(id, source_face) -> int`: registered ID supplying that face's atlas art in source tile order.
+- `render_texture(id, render_face) -> int`: the same lookup in Voxey's `+X,-X,+Y,-Y,+Z,-Z` renderer order.
+- `state_snapshot(id) -> Dictionary`: `{id, source_node, species, kind, mask, skin, textures}`; `skin` is source ordered and `textures` contains the six source-ordered texture IDs.
+- `silk_touch_drop(id) -> int`: every cap mask returns its species' mask-63 cap; ordinary and full stems return themselves.
 
-A mushroom block drops the **small** mushroom — one or two — and only **Silk Touch** preserves the block itself. So breaking a huge mushroom yields food and planting stock rather than building material, which is the source's own behaviour.
+## Integrated parent hooks
 
-## Recorded source gaps
+1. **Registration/art:** every `HugeMushrooms.DATA` entry is mirrored in `VillageContent.DATA` and the new IDs are in its block/art registration, preserving each entry's `source_node` and `hidden` values. The constant table keeps registration acyclic and avoids regenerating source names at runtime.
+2. **Placement:** in `VoxelWorld.set_node`, after the new voxel ID has been written, call `HugeMushrooms.changed(self, p, old_id, id)` in the ordinary change-hook section. No removal hook is needed or wanted. The wrapper prevents recursion when `placed` replaces the caps with internal masks.
+3. **Silk Touch:** in `game.gd`'s existing `HugeMushrooms.is_huge(id)` harvest branch, replace the Silk Touch drop expression `id` with `HugeMushrooms.silk_touch_drop(id)`. Keep the existing ordinary small-mushroom drop path unchanged.
+4. **Rendering:** in `Nodes.uncached_tile`, before the generic `VillageContent.DATA` fallback, route huge mushroom faces through `HugeMushrooms.render_texture(id, face)` and resolve that returned ID to its atlas tile. This is required for regular stem ±Y pores and for cap faces; merely registering all mask IDs with one uniform tile would render the wrong textures.
+5. **Tests:** add `mushroom_cap` to `tests/lifecycle_runner.gd`'s default check list. The focused checks use real `VoxelWorld.set_node` edits and explicitly invoke the exposed change hook until hook 2 is integrated; repeated invocation after integration is harmless.
+6. **Existing mushroom assertions:** update `tests/food_feature_checks.gd`'s “all six” registration expectation to the 132-entry family. Count `is_pores` before `is_cap` (all-pore is a cap mask), and replace the one-unique-atlas-tile-per-ID assertion: correct per-face rendering intentionally resolves internal masks to the canonical skin or pore texture. The focused mushroom-cap suite covers the replacement contract.
 
-- **No 63-variant cap table.** The interior/skin distinction is modelled by cap adjacency rather than by 63 registered blocks, so a cap block does not carry per-face skin state that survives being broken and replaced.
-- **No permanent pore conversion between placed caps.** The source turns a face to pores when two cap blocks touch; Voxey computes pores from adjacency at growth time only.
-- **No huge mushrooms in world generation.** The source grows them naturally in dark forests and mushroom islands; Voxey's are grown by bone meal only, because Voxey has no mushroom island biome.
-- **No mycelium, coarse dirt or podzol.** The source's soil list includes them; Voxey has dirt and grass, so those two are the accepted soils and the rest are recorded.
-- **No mushroom-block placement merging.** Placing a cap next to another does not permanently convert their touching faces.
+## Drops and schematics
+
+The source's non-Silk drop remains the corresponding small mushroom, so `species_of` covers every new cap and both full stems. Silk Touch canonicalizes only caps; full stems retain their own IDs. `shape` keeps the existing brown/red schematic layers and stem column, then assigns each cap its full six-face adjacency mask instead of collapsing covered cells into a single generic pore block.

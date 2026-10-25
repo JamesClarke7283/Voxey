@@ -63,9 +63,9 @@ static func run(t: SceneTree, game: Node3D) -> void:
 		world.set_node(p,oriented); held(game,Nodes.TOOLS+1)
 		game.player.target = {"pos":p,"id":oriented,"normal":Vector3i.UP,"distance":3}
 		game.player.use()
-		t.check(world.node_at(p) == base+10 and game.inventory.held().wear == 1,label+" actual axe use strips the log, preserves its axis and wears the axe once")
+		t.check(world.node_at(p) == base+10 and Durability.normalized(game.inventory.held()) == 1093,label+" actual axe use strips the log, preserves its axis and adds the source's fixed wood-axe wear")
 		world.set_node(p,base+5); game.player.target.id = base+5; game.player.use()
-		t.check(world.node_at(p) == base+6 and game.inventory.held().wear == 2,label+" bark wood strips into stripped bark wood")
+		t.check(world.node_at(p) == base+6 and Durability.normalized(game.inventory.held()) == 2186,label+" bark wood strips into stripped bark wood with a second fixed wear increment")
 		world.set_node(p,Nodes.AIR)
 		var giant: bool = kind == 5
 		var seeds: Array = planted(world,p,kind,giant)

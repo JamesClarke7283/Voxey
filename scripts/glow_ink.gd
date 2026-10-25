@@ -49,7 +49,7 @@ static func apply(game: Node3D, target: Dictionary) -> bool:
 	if target.is_empty() or not is_glow_ink(game.inventory.held().id) or game.target_mob() != null: return false
 	var p: Vector3i = target.get("pos",Vector3i.ZERO)
 	var id: int = int(target.get("id",0))
-	if Signs.is_sign(id):
+	if Signs.is_any(id):
 		if not Signs.apply_glow(game.world,p): return false
 		consume(game); return true
 	# The node is the authority, not the reported target id, so a stale target

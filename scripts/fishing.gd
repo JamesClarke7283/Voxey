@@ -53,42 +53,11 @@ static func wait_time(lure: int, raining: bool, rng: RandomNumberGenerator) -> f
 	var reduced: int = clampi(lure,0,3)*5
 	return rng.randi_range(maxi(0,5-reduced),30-reduced)*(0.75 if raining else 1.0)
 
-static func enchant_candidates(id: int, current: Dictionary) -> Array:
-	var candidates: Array = []
-	var book: bool = id == VillageContent.ENCHANTED_BOOK
-	for name in Enchantments.DATA:
-		# These two treasure enchants are not tradable in the source, and the
-		# final two are only disabled definitions in this reference checkout.
-		if name in ["Soul Speed","Wind Burst","Aqua Affinity","Sweeping Edge"] or current.has(name): continue
-		var definition: Dictionary = Enchantments.DATA[name]
-		if not Enchantments.accepts(id,name) or (not book and not Enchantments.compatible(current,name)): continue
-		var primary: bool = book and not definition.treasure
-		for tag in Enchantments.tags(id):
-			if definition.primary.has(tag): primary = true
-		if primary or definition.treasure: candidates.append({"name":name,"weight":definition.weight})
-	return candidates
-
-# mcl_enchanting/engine.lua's level-30 treasure rolls. Books keep selecting
-# at successively halved powers; rods and bows also use the bonus cutoff.
+# All loot uses the same source engine; books omit the continuation cutoff.
 static func treasure_enchantments(id: int, rng: RandomNumberGenerator) -> Dictionary:
-	for attempt in 256:
-		var power: int = maxi(1,floori(31.0+31.0*(rng.randf()+rng.randf()-1.0)*0.15+0.5))
-		var result: Dictionary = {}
-		while power > 0:
-			var candidates: Array = enchant_candidates(id,result)
-			if candidates.is_empty(): break
-			var chosen: Dictionary = select_entry(candidates,rng.randi_range(1,total_weight(candidates)))
-			var definition: Dictionary = Enchantments.DATA[chosen.name]
-			var potency: int = 0
-			for i in range(int(definition.max)-1,-1,-1):
-				if power >= definition.power[i][0] and power <= definition.power[i][1]: potency = i+1; break
-			if potency == 0 and result.is_empty(): break
-			if potency > 0: result[chosen.name] = potency
-			if id != VillageContent.ENCHANTED_BOOK and rng.randf() >= (power+1)/50.0: break
-			power /= 2
-		if not result.is_empty(): return result
-	# Defensive fallback for a modded enchantment catalog with no valid powers.
-	return {}
+	var slot: Dictionary = {"id":Nodes.BOOK if id == VillageContent.ENCHANTED_BOOK else id,"count":1}
+	var result: Dictionary = Enchanting.generate_reliable(slot,30,EnchantRolls.new(1,rng),true,id == VillageContent.ENCHANTED_BOOK)
+	return result.get("enchantments",{})
 
 static func stack_from_entry(entry: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	var id: int = entry.id

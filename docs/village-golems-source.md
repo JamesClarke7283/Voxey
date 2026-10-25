@@ -11,7 +11,7 @@ relevant pieces, all in that one file:
 | `slept_recently_enough_for_golem` | 3419 | `_last_slept_gmt` within 1200s |
 | `seen_golem_lately` | 3423 | `_last_golem_gmt` within 30s |
 | `sense_villagers_requesting_golem` | 3215 | the area sweep of willing villagers |
-| `gossip_with` | 2559 | the trade-time gossip and its own request |
+| `gossip_with` | 2559 | social conversation and its own request |
 | `copy_gossips` | 2544 | how a reputation travels to a listener |
 | `gossip_types` | 2463 | the per-type caps, decays and multipliers |
 
@@ -27,12 +27,12 @@ has a golem from building another.
 
 ## The two thresholds
 
-`maybe_summon_golem(self_pos, n_villagers)` is called from exactly two places:
+`maybe_summon_golem(self_pos, n_villagers)` has two request paths:
 
-* `start_panic` (line 3490) passes **3**, and only while the villager is actually
+* `start_panic` and `calm_down` (lines 3490 and 5901) pass **3**, and only while the villager is actually
   panicking — `seen_hostile_lately`.
-* `gossip_with` (line 2574) passes **5**, on the ordinary path, at the moment a
-  trade happens.
+* `gossip_with` (line 2574) passes **5**, on the ordinary path during a
+  social conversation.
 
 The count comes from `sense_villagers_requesting_golem`, which sweeps
 `self_pos ± (10,10,10)` and collects every villager that `desires_golem`. **The
@@ -72,24 +72,14 @@ listener keeps whichever magnitude is larger. `evaluate_player_reputation` then 
 minus its negatives: hearing good news raises a hostile villager's net without
 cancelling the grudge.
 
-## What Voxey already had, and what this adds
+## Native integration and remaining adaptation
 
-`scripts/village_life.gd` already gave every village one golem at generation, and had
-professions, trades, restocking, levels, breeding, panic and a reputation store. What
-was missing was everything above: the desire rule, both request paths, the placement
-search and the gossip transfer. `scripts/village_golems.gd` adds them, and the
-records in `VillageLife.make_record` gained `slept_at`, `saw_golem_at` and
-`golem_timer` to hold the source's three timers.
+`VillageGolems` implements the desire rule, request thresholds and placement
+search. `VillagerSocial` invokes the ordinary conversation request through
+`VillagerGossip`, even during a listener's gossip cooldown. Trade transactions
+record trading memory without invoking a conversation. Typed gossip and its
+source validation are described in [villager gossip](villager-gossip-source.md).
 
-Two adaptations are deliberate and recorded in the module:
-
-* **Bed use is not tracked.** The source sets `_last_slept_gmt` from an actual bed
-  interaction. Voxey has no per-villager sleep event, so `VillageGolems.mark_slept`
-  stamps every resident when the village passes a night, driven from the day cycle
-  `VillageLife.update` already reads. Same information, coarser source.
-* **Reputation is one signed number, not typed buckets.** `copy_gossips` operates per
-  type, and Voxey's model has a single net. The transfer reconstructs the two types
-  this model covers (`trading` and `minor_negative`) as "what is not positive is
-  negative", which reproduces the source's arithmetic for them. It does not model
-  `major_negative`, whose `rep_multiplier` of −5 cannot be expressed in a store that
-  already treats an angry villager's −25 as a single number.
+Individual sleep events remain an adaptation: `VillageGolems.mark_slept` stamps
+residents when the village passes a night, driven by `VillageLife.update`.
+The source stamps each villager when it actually uses its bed.

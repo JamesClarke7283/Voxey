@@ -149,17 +149,11 @@ const DIORITE = 534 # VillageContent.DIORITE
 const GRANITE = 533 # VillageContent.GRANITE
 const SOUL_SOIL = 1223 # Campfires.SOUL_SOIL
 #
-# **Left out of the list, with the reason:**
-#   - `mcl_core:mycelium` — Voxey has no mycelium (`scripts/huge_mushrooms.gd:140`
-#     records the same gap).
-#   - `mcl_core:coarse_dirt` — Voxey has no coarse dirt (same note).
-#   - `mcl_mud:mud` — the source's `mcl_mud:mud` does carry `grass_block=1`
-#     (`ITEMS/mcl_mud/init.lua:13`) so `group:grass_block` selects it, but
-#     `docs/mineclonia-parity.md:223` lists `mcl_mud` as **Unreviewed**, so Voxey's
-#     `VillageContent.MUD` (683) is not confirmed to be that node. Adding it would
-#     be a guess; the parent can append it once that is settled.
+# Literal IDs avoid closing VillageContent's constant initializer cycle. This
+# includes coarse dirt, podzol, mycelium and mud, all present in the source's
+# `spread_to` group expansion.
 const SPREAD_TO = [
-	Nodes.STONE,Nodes.DIRT,Nodes.SAND,Nodes.GRASS,
+	Nodes.STONE,Nodes.DIRT,13600,Nodes.SAND,Nodes.GRASS,683,13602,13604,
 	ANDESITE,DIORITE,GRANITE,
 	Nodes.END_STONE,Nodes.NETHERRACK,Nodes.BASALT,Nodes.SOUL_SAND,
 	SOUL_SOIL,Nodes.WARPED_NYLIUM,Nodes.CRIMSON_NYLIUM,

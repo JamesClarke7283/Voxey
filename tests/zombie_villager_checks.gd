@@ -48,7 +48,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	t.check(ZombieVillagers.begin(game,mob,rng),"the cure begins")
 	t.check(bool(mob.get_meta("curing",false)),"the creature records that it is curing")
 	t.check(PotionEffects.level(mob,"weakness") == 0,"the cure clears weakness")
-	t.check(PotionEffects.level(mob,"strength") == 0 or PotionEffects.level(mob,"strength") == 1,"the cure clears the old strength, leaving only the cure's own")
+	t.check(PotionEffects.level(mob,"strength") == RegionalDifficulty.source_level(game.difficulty)-1,"the cure replaces old Strength with the source difficulty's level")
 	var timer: float = float(mob.get_meta("cure_timer",0.0))
 	t.check(timer >= ZombieVillagers.CURE_MIN and timer <= ZombieVillagers.CURE_MAX,"the cure takes the source's three to five minutes")
 	t.check(bool(mob.get_meta("persistent",false)),"a curing zombie villager will not despawn, as the source sets it")
@@ -103,13 +103,13 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	t.check(ZombieVillagers.INFECTING_KINDS.has("zombie") and ZombieVillagers.INFECTING_KINDS.has("zombie_villager"),"zombies and zombie villagers can both infect")
 	# The gate is closed at the easier difficulties.
 	var was_difficulty: int = game.difficulty
-	game.difficulty = 1
+	game.difficulty = 0
 	var gate_zombie: Creature = game.spawn_creature("zombie",game.player.position+Vector3(4,2,4))
 	var spot: Vector3 = gate_zombie.position
 	t.check(not ZombieVillagers.can_infect(game,spot),"the easier difficulties never infect")
 	# At the hardest it always does; between them it is a coin flip, so the check
 	# is that it fires at least once rather than on every roll.
-	game.difficulty = 3
+	game.difficulty = 2
 	t.check(ZombieVillagers.can_infect(game,spot),"the hardest difficulty always infects")
 	# A player kill never infects, and a blow from nowhere (a fall, a drown) never
 	# does either.

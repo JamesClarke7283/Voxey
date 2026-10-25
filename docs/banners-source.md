@@ -1,43 +1,21 @@
 # Banners
 
-Voxey follows the supplied Mineclonia `mods/ITEMS/mcl_banners/{init,items,patterncraft}.lua`. The implementation is original GDScript using the source as a behaviour reference; no source code or texture is copied.
+Reference: `/home/impulse/.minetest/games/mineclonia/mods/ITEMS/mcl_banners/{init,items,patterncraft}.lua` and `mods/ITEMS/mcl_loom/init.lua`. This is original GDScript and original procedural artwork. `assets/data/banner_reference.json` records hashes of the exact source files exercised by `tools/export_banner_reference.py`.
 
-## Layers are the whole point
+The installed reference permits **12 craftable layers**, with six listed in tooltips and an additional-layer count. Stored designs may have more layers; those cannot be copied or extended. New banner stacks are limited to sixteen; older overfull saved stacks are retained to avoid item loss. This differs from the previous native six-layer approximation.
 
-A banner is a coloured flag carrying an ordered list of **layers**, each a pattern plus the dye colour it was applied in. The source stores that list in the banner's metadata and rebuilds both the description and the texture from it. Voxey already had the sixteen coloured banner blocks and their recipes; this adds the layer system.
+The crafting table supports all 32 exact, absolute dye layouts. All dyes must share a colour; the banner may occupy any unused cell. The ten special designs use one dye, one banner and their source signature ingredient. Thing and Skull use their pattern items. Creeper, Flower, Bricks and Bordure Indented use their raw ingredients. Globe, Piglin, Flow and Guster use their pattern items.
 
-## The pattern table — 42 entries
+Only six pattern items are craftable from paper: Thing requires an **enchanted** golden apple, followed by Skull, Creeper, Flower, Bricks and Bordure Indented. Flow and Guster already come from the native trial loot tables. Globe comes from the master cartographer and Piglin from the native legacy-bulwark loot table. Earlier reward IDs migrate to the working loom items. Paper cannot duplicate an existing pattern item.
 
-The source's `patterncraft.lua` table is transcribed in full:
+Copying requires two banners with the same base colour, exactly one decorated and one plain. The output inherits the source's ordered design and name. The decorated source remains in the grid; one plain banner is consumed. Two decorated banners cannot be combined.
 
-- **32 dye-grid patterns.** Each is a three-by-three grid of dye (`d`) or empty (`e`) cells, crafted in a table. Every one of the 32 grids was verified cell-by-cell against the source rather than typed from memory — that check caught three transcription errors (`square_bottom_right`, `stripe_bottom` and `gradient_up`) before they shipped.
-- **10 special patterns.** Each is crafted shapelessly from paper plus a specific item:
+The visual loom selects a carried banner and dye, shows previews of all 42 designs and consumes one banner and one dye. Special designs additionally consume **one pattern item**, matching this installation's `mcl_loom` callback. A full inventory leaves every input untouched. The remaining banner stack retains its original design.
 
-| Pattern | Item |
-|---|---|
-| Thing | enchanted golden apple |
-| Skull Charge | wither skeleton skull |
-| Creeper Charge | creeper head |
-| Flower Charge | oxeye daisy |
-| Bricks | brick block |
-| Bordure Indented | vine |
-| Globe, Piglin, Guster, Flow | their own pattern items |
+Placement tries a floor banner first, then a wall attachment for horizontal clicks. Floor rotation has sixteen steps; walls record the supporting face. Designs and names appear on the placed cloth, item icons, the held item, dropped items and framed banners. Digging, explosions and support removal return the exact stored item once. Creative digging avoids duplicate items. Banner stations migrate older direct-layer records, persist in world saves and synchronize to multiplayer guests. Host-authoritative placement and screwdriver rotation preserve the guest's inventory and metadata. Banners are immovable by pistons.
 
-## Emblazoning
+Using a banner on a water cauldron removes its latest layer. The source also spends a water portion when the banner is already plain; native washing now does the same.
 
-- Applying a pattern **appends** a layer; it never replaces one.
-- A banner carries at most **`max_craftable_layers` = 6**.
-- A banner used on an emblazoned banner **combines** the two, appending the other's layers in order. Combining a banner with identical emblazoning is refused, which the source also declines to do.
-- The description lists the layers with their colour and pattern names, as the source's `update_description` does.
+Validation: 1,708 real Luanti craft results compare the pattern definitions, layout placement, metadata, copying, retained inputs and layer boundaries. Live lifecycle tests cover placement on each wall face, standing orientation, support loss, harvested items, save snapshots, selection boxes and loom transactions. The two-peer network test covers guest placement, rotation, harvesting and reconnect persistence. `tests/banner_tour.gd` renders the visual loom at desktop and compact window sizes.
 
-## Art
-
-An emblazoned banner's icon is drawn by painting each layer's own grid over the base colour, so two different patterns render visibly differently. This mirrors what the source's texture builder composes from its pattern textures.
-
-## Recorded source gaps
-
-- **No loom.** The reference provides a loom block where a banner, a dye and an optional pattern item are combined through a formspec. Voxey applies a pattern by using a dye or pattern item on a placed banner, which reaches the same layer list without the loom UI.
-- **No cauldron washing.** The source lets a water cauldron strip a banner's topmost layer. Voxey's cauldrons do not yet accept banners.
-- **Texture layering is procedural.** The source composites real pattern textures with masks; Voxey paints each layer's grid, so the icon shows the right *shape* per pattern but not the source's exact texture art.
-- **The `thing` pattern's item is the ordinary golden apple.** Voxey registers the enchanted golden apple under the same id, so the distinction the source draws between them does not exist here.
-- The source's `mcl_offhand` banner-shield interaction and its banner-on-wall/ceiling placement variants are not implemented.
+Remaining differences: artwork and geometry are native procedural representations rather than Mineclonia's textures and animated B3D models. [Shield decoration](shields-source.md), Globe trades and the legacy Piglin loot route are implemented. Raid-specific ominous-banner semantics and the newer `mcl_levelgen` bastion remain open.

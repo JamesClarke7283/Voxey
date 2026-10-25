@@ -5,7 +5,7 @@ Reference: `/home/impulse/.minetest/games/mineclonia/mods/ENTITIES/mcl_boats/ini
 ## Playable loop
 
 - Existing boats 837–841 remain oak, acacia, spruce, dark oak and birch. Chest boats 1250–1254 match those variants; jungle uses ordinary1260 and chest1261. All boats stack to one and burn for 60 seconds.
-- Make each of the six classic boats from five matching planks in a U at a table. Oak, spruce, birch, jungle, acacia and dark oak are renewable through their trees and saplings; the former dye conversions are replaced with their source material recipes. Put a chest directly above a matching boat in the hand crafting grid to make its chest boat, matching the source recipe.
+- Make each of the nine wood boats, or the bamboo raft, from five matching planks in a U at a table. Oak, spruce, birch, jungle, acacia and dark oak are renewable through their trees and saplings; the former dye conversions are replaced with their source material recipes. Put a chest directly above a matching boat in the hand crafting grid to make its chest boat, matching the source recipe.
 - Use a boat item on water or a clear block face to place it. Placement consumes one item only after a hull has successfully spawned, except in creative. It does not immediately board the player.
 - Right click the hull to board; W/S row forward/backward, A/D turn, and Ctrl leaves the boat in the world. Touch movement and sneak controls use the same path. Boats can be left, revisited and boarded again. The source's boat-relative steering means looking around does not change the hull heading.
 - Ctrl + right click a chest boat opens its 27 cargo slots, including the usual drag, split and shift transfer controls. Named boats keep their item name; cargo retains supported item metadata, including books, maps, enchantments, pouches and shulker contents.
@@ -30,6 +30,15 @@ The service sanitizes loaded hull records and all 27 cargo slots. Destruction re
 
 ## Remaining source dependencies
 
-Bamboo rafts and additional wood species require their missing material sets. Separate river-water physics requires river-water nodes; current Voxey water and flowing-water levels are supported. Source multiplayer attachment negotiation and client-side Luanti steering have no counterpart in this single-player Godot game. Fishing-hook retrieval of boats, timed piglin anger on chest access, and full entity burning integration are separate dependencies rather than silently approximated here.
+Separate river-water physics requires river-water nodes; current Voxey water and flowing-water levels are supported. Source multiplayer attachment negotiation and client-side Luanti steering have no counterpart in this single-player Godot game. Fishing-hook retrieval of boats, timed piglin anger on chest access, and full entity burning integration are separate dependencies rather than silently approximated here.
 
 Focused regressions: `godot --headless --path . --script res://tests/lifecycle_runner.gd -- boats`. They exercise real crafting/guide inputs, player use/steering, cargo UI, damage, water and collision, passenger identity, streaming, actual JSON saves, dimension travel and death.
+
+## Remaining material variants (2026-10-24)
+
+Cherry, mangrove and pale oak now have ordinary and chest boats (13530–13535).
+Crimson and warped remain excluded because their source registrations explicitly
+set `boat = false` and `chest_boat = false`. Bamboo supplies a raft and chest raft
+(13522–13523), with its own pole mesh, source hull and selection dimensions, and
+raised rider seat; see [bamboo wood](bamboo-source.md). Existing ordinary boat IDs
+and saves remain stable. All ten eligible materials have their source recipes.

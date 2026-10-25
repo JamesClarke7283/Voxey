@@ -22,17 +22,8 @@ extends RefCounted
 # - Each completed node costs the brush exactly 1/64 of its life, and the brush
 #   is craftable from a feather over a copper ingot over a stick.
 #
-# Source gaps carried over rather than invented:
-# - 23 sherds are registered in the checkout. Voxey registers four of them,
-#   chosen so every source pattern family is represented and the atlas stays
-#   bounded; the remaining nineteen names are recorded in the notes as omitted.
-# - Source's craft guard `old_craft_grid[1][2] == "mcl_core:brick"` indexes an
-#   ItemStack userdata with a number, which is always nil, so a four-brick pot
-#   still stores an empty pattern list. Voxey stores four blanks, which is the
-#   intended behaviour and is equivalent.
-# - No structure in the checkout places decorated pots outside trial chambers,
-#   and Voxey has no trial chambers, so decorated pots and suspicious nodes are
-#   creative-only for now. That is recorded, not papered over.
+# All 23 source sherds are registered. Structures supply explicit loot types;
+# untyped suspicious blocks have no loot in the current source.
 
 const BRUSH = 9900
 const SUSPICIOUS_SAND = 9901
@@ -40,17 +31,9 @@ const SUSPICIOUS_GRAVEL = 9902
 const POT = 9903
 const SHERD_FIRST = 9910
 const SHERDS = [SHERD_FIRST+0,SHERD_FIRST+1,SHERD_FIRST+2,SHERD_FIRST+3,SHERD_FIRST+4,SHERD_FIRST+5,SHERD_FIRST+6,SHERD_FIRST+7,SHERD_FIRST+8,SHERD_FIRST+9,SHERD_FIRST+10,SHERD_FIRST+11,SHERD_FIRST+12,SHERD_FIRST+13,SHERD_FIRST+14,SHERD_FIRST+15,SHERD_FIRST+16,SHERD_FIRST+17,SHERD_FIRST+18,SHERD_FIRST+19,SHERD_FIRST+20,SHERD_FIRST+21,SHERD_FIRST+22]
-# The four source patterns Voxey keeps. Source names them angler, archer,
-# arms_up, blade, brewer, burn, danger, explorer, friend, heartbreak, heart,
-# howl, miner, mourner, plenty, prize, sheaf, shelter, skull, snort, flow,
-# guster, scrape; see the notes for why only these four are registered.
 const SHERD_NAMES = ["Angler pottery sherd","Blade pottery sherd","Explorer pottery sherd","Skull pottery sherd","Archer pottery sherd","Arms up pottery sherd","Brewer pottery sherd","Burn pottery sherd","Danger pottery sherd","Friend pottery sherd","Heartbreak pottery sherd","Heart pottery sherd","Howl pottery sherd","Miner pottery sherd","Mourner pottery sherd","Plenty pottery sherd","Prize pottery sherd","Sheaf pottery sherd","Shelter pottery sherd","Snort pottery sherd","Flow pottery sherd","Guster pottery sherd","Scrape pottery sherd"]
-# Sherds whose only source route is a structure or container the checkout's Voxey
-# does not have: the source sends these to trail ruins, trial chambers and vaults,
-# none of which is implemented here. They are registered for completeness and
-# recorded rather than given an invented placement, exactly as the echo shard is.
-# `STRUCTURE_TABLES` below routes every other sherd from the structures Voxey has.
-const UNROUTED_SHERDS = ["burn","danger","friend","heartbreak","heart","howl","sheaf","flow","guster","scrape","arms_up","brewer"]
+# Every source sherd now has its natural structure or vault route.
+const UNROUTED_SHERDS = []
 
 const SHERD_PATTERNS = ["angler","blade","explorer","skull","archer","arms_up","brewer","burn","danger","friend","heartbreak","heart","howl","miner","mourner","plenty","prize","sheaf","shelter","snort","flow","guster","scrape"]
 const BRUSH_USES = 64
@@ -96,26 +79,6 @@ const DATA = {
 	9931:{"name":SHERD_NAMES[21],"color":"8fa8b8","pattern":SHERD_PATTERNS[21]},
 	9932:{"name":SHERD_NAMES[22],"color":"b0a08f","pattern":SHERD_PATTERNS[22]},
 }
-# Source `sus_drops_default` fallbacks and the trial-chamber pot loot table.
-# Weights are transcribed; entries whose item Voxey lacks are omitted and the
-# omission is recorded in the notes rather than silently reweighted.
-const SAND_LOOT = [
-	{"id":Nodes.DIAMOND,"weight":8,"min":1,"max":2},
-	{"id":Nodes.IRON,"weight":10,"min":1,"max":2},
-	{"id":Nodes.GOLD,"weight":8,"min":1,"max":2},
-	{"id":Nodes.COAL,"weight":20,"min":2,"max":8},
-	{"id":Nodes.BONE_MEAL,"weight":12,"min":2,"max":6},
-	{"id":Nodes.STRING,"weight":8,"min":1,"max":3},
-]
-const GRAVEL_LOOT = [
-	{"id":Nodes.FLINT,"weight":25,"min":1,"max":3},
-	{"id":Nodes.IRON,"weight":12,"min":1,"max":2},
-	{"id":Nodes.COAL,"weight":18,"min":2,"max":8},
-	{"id":Nodes.BONE,"weight":12,"min":1,"max":4},
-	{"id":Nodes.CLAY_BALL,"weight":12,"min":2,"max":6},
-	{"id":Nodes.DIAMOND,"weight":4,"min":1,"max":1},
-]
-
 # --- registry ---------------------------------------------------------------
 
 static func is_sherd(id: int) -> bool: return SHERDS.has(id)
@@ -165,68 +128,13 @@ static func set_patterns(world: VoxelWorld, p: Vector3i, list: Array) -> void:
 # --- loot -------------------------------------------------------------------
 
 static func table(id: int) -> Array:
-	return SAND_LOOT if id == SUSPICIOUS_SAND else (GRAVEL_LOOT if id == SUSPICIOUS_GRAVEL else [])
+	return [] # Source requires a loot type or a recognized placing structure.
 
-# The source does not draw a suspicious node's loot from one table. It reads the
-# `structure` tag the placing structure wrote into the node, looks that
-# structure's own `loot["SUS"]` table up, and falls back to a default list
-# otherwise. Those per-structure tables are where **the pottery sherds live** —
-# several of them carry four sherds each — so a world without one is a world
-# where sherds cannot be found at all.
-#
-# Voxey writes the structure name into the node's saved state at placement
-# (`set_structure`) and draws from these tables. The four sherds Voxey registers
-# appear in the tables that carried them in the source: angler and explorer in
-# the ocean ruins, blade in the cold ruins, and skull in the desert temple's
-# archaeology table. Source weights are preserved, and an entry Voxey has no item
-# for keeps its weight with a zero id rather than being redistributed.
-const STRUCTURE_TABLES = {
-	# `mcl_sus_nodes:sus_node_loot.desert_pyramid_archeology`, which the desert
-	# temple's own `loot["SUS"]` mirrors.
-	"desert_temple": [
-		# Source `desert_temple.lua`: archer, miner, prize and skull, each at weight 1.
-		{"id":9914,"weight":1,"min":1,"max":1},                           # archer
-		{"id":9923,"weight":1,"min":1,"max":1},                           # miner
-		{"id":9926,"weight":1,"min":1,"max":1},                           # prize
-		{"id":9913,"weight":1,"min":1,"max":1},                           # skull
-		{"id":VillageContent.EMERALD,"weight":1,"min":1,"max":1},
-		{"id":Nodes.GUNPOWDER,"weight":1,"min":1,"max":1},
-		{"id":Nodes.TNT,"weight":1,"min":1,"max":1},
-		{"id":Nodes.DIAMOND,"weight":1,"min":1,"max":1},
-	],
-	# `ocean_ruins_warm`.
-	"ocean_ruins_warm": [
-		{"id":Nodes.COAL,"weight":2,"min":1,"max":1},
-		{"id":VillageContent.EMERALD,"weight":2,"min":1,"max":1},
-		{"id":Nodes.GRAIN,"weight":2,"min":1,"max":1},
-		{"id":Nodes.TOOLS+4,"weight":2,"min":1,"max":1},             # wooden hoe
-		{"id":Nodes.GOLD_NUGGET,"weight":2,"min":1,"max":1},
-		{"id":9910,"weight":1,"min":1,"max":1},
-		{"id":9928,"weight":1,"min":1,"max":1},
-		{"id":9929,"weight":1,"min":1,"max":1},
+# Exported from the current mcl_sus_nodes table, including its actual omissions.
+static var STRUCTURE_TABLES: Dictionary = {}
 
-		{"id":9928,"weight":1,"min":1,"max":1},                           # shelter
-		{"id":9929,"weight":1,"min":1,"max":1},                           # snort
-		{"id":Nodes.TOOLS+11,"weight":1,"min":1,"max":1},            # iron axe
-	],
-	# `ocean_ruins_cold`.
-	"ocean_ruins_cold": [
-		{"id":Nodes.COAL,"weight":2,"min":1,"max":1},
-		{"id":VillageContent.EMERALD,"weight":2,"min":1,"max":1},
-		{"id":Nodes.GRAIN,"weight":2,"min":1,"max":1},
-		{"id":Nodes.TOOLS+4,"weight":2,"min":1,"max":1},             # wooden hoe
-		{"id":Nodes.GOLD_NUGGET,"weight":2,"min":1,"max":1},
-		{"id":9911,"weight":1,"min":1,"max":1},
-		{"id":9912,"weight":1,"min":1,"max":1},
-		{"id":9924,"weight":1,"min":1,"max":1},
-		{"id":9925,"weight":1,"min":1,"max":1},
-
-		{"id":SHERD_FIRST+2,"weight":1,"min":1,"max":1},               # explorer
-		{"id":9924,"weight":1,"min":1,"max":1},                           # mourner
-		{"id":9925,"weight":1,"min":1,"max":1},                           # plenty
-		{"id":Nodes.TOOLS+11,"weight":1,"min":1,"max":1},            # iron axe
-	],
-}
+static func configure_loot() -> void:
+	STRUCTURE_TABLES = ArchaeologyLoot.tables()
 
 # The structure a suspicious node belongs to, written at placement.
 static func set_structure(world: VoxelWorld, p: Vector3i, name: String) -> void:
@@ -239,8 +147,9 @@ static func structure(world: VoxelWorld, p: Vector3i) -> String:
 	return String(world.block_states.get(VoxelWorld.station_key(p),{}).get("structure",""))
 
 # The table for a node: its structure's own table when it has one, else the
-# generic sand or gravel list.
+# empty fallback for untyped nodes.
 static func table_for(id: int, structure_name: String) -> Array:
+	if STRUCTURE_TABLES.is_empty(): configure_loot()
 	if STRUCTURE_TABLES.has(structure_name): return STRUCTURE_TABLES[structure_name]
 	return table(id)
 
@@ -257,7 +166,9 @@ static func loot(id: int, rng: RandomNumberGenerator, structure_name: String = "
 	for entry in entries:
 		roll -= int(entry.weight)
 		if roll <= 0:
-			return [[int(entry.id),rng.randi_range(int(entry.min),int(entry.max))]]
+			var item: int = int(entry.id)
+			if entry.has("variants"): item = entry.variants[rng.randi_range(0,entry.variants.size()-1)]
+			return [[item,rng.randi_range(int(entry.min),int(entry.max))]]
 	return [[int(entries[0].id),int(entries[0].min)]]
 
 # --- brushing ---------------------------------------------------------------
@@ -284,7 +195,9 @@ static func brush(game: Node3D, target: Dictionary) -> bool:
 		# First stroke: roll the loot once and fix it for this node. The draw uses
 		# the structure the node belongs to, which is how the source reaches the
 		# per-structure tables that carry the sherds.
-		var rolled: Array = loot(id,rng,structure(game.world,p))
+		var loot_rng := RandomNumberGenerator.new()
+		loot_rng.seed = int(game.world.block_states.get(VoxelWorld.station_key(p),{}).get("archaeology_seed",game.world.generator.hash_at(p.x,p.y,p.z)))
+		var rolled: Array = loot(id,loot_rng,structure(game.world,p))
 		if rolled.is_empty(): return false
 		state["stage"] = FIRST_STAGE
 		state["loot_id"] = int(rolled[0][0])
@@ -332,6 +245,7 @@ static func update(world: VoxelWorld, delta: float) -> void:
 		if not world.loaded_at(Vector3(at)) or not is_suspicious(world.node_at(at)):
 			world.stations.erase(key); continue
 		station.timer = maxf(0,float(station.get("timer",HIDE_DELAY))-SUB_TIMER)
+		if station.timer <= 0: station.stage = 0
 
 static func runtime(world: VoxelWorld) -> Dictionary:
 	if not world.has_meta("archaeology"):
@@ -351,7 +265,9 @@ static func break_node(game: Node3D, p: Vector3i, id: int, tool: int, exploded: 
 		var silk: bool = Inventory.enchantment(game.inventory.held(),"Silk Touch") > 0
 		var stored: Array = patterns(game.world,p)
 		var facing_value: int = facing(game.world,p)
+		var trial_loot: Array = game.world.block_states.get(VoxelWorld.station_key(p),{}).get("trial_pot_loot",[]).duplicate(true)
 		if not game.world.set_node(p,Nodes.AIR): return true
+		for stack in trial_loot: game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,stack.id,stack.count,stack.get("wear",0),stack.get("data",{}))
 		if silk:
 			var pot: Dictionary = {"id":POT,"count":1,"wear":0,"data":{"pot_patterns":stored,"pot_facing":facing_value}}
 			if game.inventory.add_item(POT,1,0,pot.data) > 0: game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,POT,1,0,pot.data)

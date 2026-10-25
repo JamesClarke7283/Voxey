@@ -183,13 +183,16 @@ static func contact(game: Node3D, p: Vector3i, station: Dictionary) -> bool:
 	return changed
 
 static func rainy_biome(biome: String) -> bool:
-	return biome not in ["Sunwash desert","Frostpine highlands"]
+	if BiomeMap.is_underground(biome): return false
+	var temperature: Variant = BiomeMap.temperature(biome)
+	return temperature != null and float(temperature) < 2.0
 
-# A cauldron collects from *any* precipitation, so the biome test is the source's
-# broader one: not arid. The snowy biome is excluded from `rainy_biome` because it
-# receives snow rather than rain, but it still fills the cauldron — with powder snow.
+# A cauldron collects from *any* precipitation, so the source's `has_rain` test
+# accepts cold biomes; `precipitation_material` then chooses powder snow.
 static func collecting_biome(biome: String) -> bool:
-	return biome != "Sunwash desert"
+	if BiomeMap.is_underground(biome): return false
+	var temperature: Variant = BiomeMap.temperature(biome)
+	return temperature != null and float(temperature) < 2.0
 
 static func rain_eligible(world: VoxelWorld, p: Vector3i) -> bool:
 	if world.dimension != "overworld" or not world.loaded_at(Vector3(p)): return false
@@ -198,6 +201,8 @@ static func rain_eligible(world: VoxelWorld, p: Vector3i) -> bool:
 	# Reuse the current weather, biome and sky definitions. The biome names
 	# identify Voxey's existing dry/snow climates; no new weather is generated.
 	if not collecting_biome(world.generator.biome(p.x,p.z)): return false
+	var climate: Dictionary = world.generator.biome_climate(p.x,p.y,p.z)
+	if float(climate.temperature) > 1.0: return false
 	return not Nodes.solid(world.node_at(p+Vector3i.UP)) and world.open_sky(p)
 
 static func _rain_clock(station: Dictionary) -> float:

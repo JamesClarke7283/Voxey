@@ -17,14 +17,12 @@ static func run(t: SceneTree, game: Node3D) -> void:
 		var f: Dictionary = inv.recipes[inv.recipe_index(fence)]; var g: Dictionary = inv.recipes[inv.recipe_index(gate)]
 		# Brick fences (nether brick and red nether brick) yield 6/2; wood ones 3/1.
 		var brick: bool = Barriers.FENCE_MATERIALS[i] in [Nodes.NETHER_BRICKS,NetherBlocks.RED_NETHER_BRICKS]
-		t.check(f.count == (6 if brick else 3) and g.count == (2 if brick else 1) and f.ingredients[Barriers.FENCE_MATERIALS[i]] == 4 and g.ingredients[Barriers.FENCE_MATERIALS[i]] == 2,"source fence/gate recipe material counts and yields: "+Nodes.title(fence))
+		t.check(f.count == (6 if Barriers.FENCE_MATERIALS[i] == Nodes.NETHER_BRICKS else 3) and g.count == (2 if brick else 1) and f.ingredients[Barriers.FENCE_MATERIALS[i]] == 4 and g.ingredients[Barriers.FENCE_MATERIALS[i]] == 2,"source fence/gate recipe material counts and yields: "+Nodes.title(fence))
 	for i in Barriers.WALL_MATERIALS.size():
 		var wall: int = Barriers.WALL_FIRST+i; var recipe: Dictionary = inv.recipes[inv.recipe_index(wall)]
 		t.check(recipe.count == 6 and recipe.ingredients == {Barriers.WALL_MATERIALS[i]:6} and Nodes.exists(wall) and Nodes.placeable(wall),"source survival wall recipe and registry: "+Nodes.title(wall))
-	# Nine more wall materials were appended for the nether, prismarine and mud
-	# families, so the catalog grew from 35 to 44 items. The structural claims are
-	# unchanged.
-	t.check(Barriers.items().size() == 56 and not Nodes.all_ids().has(5005) and Nodes.drop(5008) == 5001 and not Nodes.placeable(5008),"catalog exposes every barrier item and hides gate placement states; all states drop their canonical gate")
+	# Twelve woods and two brick fences each have a gate, plus thirty walls.
+	t.check(Barriers.items().size() == 60 and not Nodes.all_ids().has(5005) and Nodes.drop(5008) == 5001 and not Nodes.placeable(5008),"catalog exposes every barrier item and hides gate placement states; all states drop their canonical gate")
 	# `mclx_fences`: the red nether brick fence and gate.
 	t.check(Barriers.is_fence(5032) and Barriers.is_gate(5033) and Barriers.material(5032) == NetherBlocks.RED_NETHER_BRICKS,"the red nether brick fence and gate exist")
 	t.check(Barriers.connects(5032,5033) and Barriers.connects(5032,5016),"red nether brick fences connect to their gate and to nether brick fences")
@@ -40,11 +38,12 @@ static func run(t: SceneTree, game: Node3D) -> void:
 		var around: Array = []
 		for side in 4: around.append(Nodes.STONE if bits&(1<<side) else Nodes.AIR)
 		around.append(Nodes.AIR)
-		var wall_boxes: Array = Barriers.boxes(5100,bits)
+		var resolved: int = BarrierCatalog.next_wall(5100,bits,Nodes.AIR,0)
+		var wall_boxes: Array = Barriers.boxes(resolved,bits)
 		var max_y: float = 0
 		for box in wall_boxes: max_y = maxf(max_y,box.end.y)
-		t.check(Barriers.mask(5000,around) == bits and Barriers.mask(5100,around) == bits and Barriers.boxes(5000,bits).size() == 1+2*_bits(bits) and is_equal_approx(max_y,0.8125 if bits in [5,10] else 1.0),"source connected fence/wall geometry for neighbor mask %d"%bits)
-	t.check(Barriers.mask(5100,[Nodes.STONE,0,Nodes.STONE,0,Nodes.TORCH]) == 16 and Barriers.boxes(5100,16).size() == 2,"a torch restores the center pillar on a straight wall")
+		t.check(Barriers.mask(5000,around) == bits and Barriers.mask(5100,around) == bits and Barriers.boxes(5000,bits).size() == 1+2*_bits(bits) and is_equal_approx(max_y,0.875 if bits in [5,10] else 1.0),"source connected fence/wall geometry for neighbor mask %d"%bits)
+	t.check(BarrierCatalog.next_wall(5100,5,Nodes.TORCH,0) == 5100 and Barriers.boxes(5100,5).size() == 3,"a torch restores the center pillar on a straight wall")
 	game.pause(); game.world.active = false; game.world.set_process(false); game.player.set_physics_process(false)
 	game.leads.clear()
 	for mob in game.creatures.get_children(): mob.queue_free()
@@ -74,7 +73,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	ray = game.world.raycast(Vector3(p)+Vector3(0.85,0.8,-1),Vector3.BACK,2)
 	t.check(ray.get("pos") == p and is_equal_approx(ray.point.z,p.z+0.4375),"ray targeting hits the actual upper fence rail")
 	game.world.set_node(p,5100)
-	t.check(game.world.intersects(Vector3(p)+Vector3(0.5,1.3,0.5)) and not game.world.intersects(Vector3(p)+Vector3(0.5,1.51,0.5)),"wall collision preserves the source's 1.5-high central post")
+	t.check(game.world.intersects(Vector3(p)+Vector3(0.5,1.20,0.5)) and not game.world.intersects(Vector3(p)+Vector3(0.5,1.26,0.5)),"wall collision preserves the source's 1.25-high central post")
 	game.world.set_node(p,Nodes.AIR); equip(game,5001,4)
 	game.player.target = {"pos":p+Vector3i.DOWN,"normal":Vector3i.UP,"id":Nodes.STONE,"distance":2.0}
 	game.player.use()

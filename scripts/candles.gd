@@ -20,9 +20,7 @@ extends RefCounted
 # - Light follows the count exactly: the lit forms use `light_source = 3 * n`, so
 #   one lit candle is 3, two 6, three 9 and four 12.
 # - Flint and steel ignites an unlit candle; right-clicking a lit one extinguishes
-#   it. The source also ignites on a burning arrow and extinguishes on a wind
-#   charge; neither exists in this checkout, so those two paths are recorded here
-#   rather than invented.
+#   it. Arrow flight also dispatches the source's burning-arrow ignition.
 # - Placing a candle on a cake candled the cake, and breaking the candles on it
 #   returns them.
 # - Recipe: one string over one honeycomb. The dyeing recipe is shapeless

@@ -28,7 +28,7 @@ static func classify(data: PackedInt32Array, info: NodeInfo.View) -> PackedInt32
 static func default_info() -> NodeInfo.View:
 	return NodeInfo.live_view() if NodeInfo.on_main_thread() else NodeInfo.View.new(PackedInt32Array(),PackedInt32Array())
 
-static func build(source: Variant, external_circuits: bool = false, info: NodeInfo.View = null, flags: PackedInt32Array = PackedInt32Array()) -> Array:
+static func build(source: Variant, external_circuits: bool = false, info: NodeInfo.View = null, flags: PackedInt32Array = PackedInt32Array(), cocoa_facings: Dictionary = {}, pot_plants: Dictionary = {}) -> Array:
 	var data: PackedInt32Array = source if source is PackedInt32Array else PackedInt32Array(Array(source))
 	if info == null: info = default_info()
 	if flags.size() != data.size(): flags = classify(data,info)
@@ -87,7 +87,7 @@ static func build(source: Variant, external_circuits: bool = false, info: NodeIn
 							Fluids.mesh(outputs[1 if id == Nodes.WATER else 0],Vector3(x,y,z),id,data,Vector3i(x+1,y+1,z+1))
 							break
 				var kind: int = (bits >> shift) & NodeInfo.MESH_MASK
-				if kind != 0: _custom(kind,outputs[0],Vector3(x,y,z),id,data,info)
+				if kind != 0: _custom(kind,outputs[0],Vector3(x,y,z),id,data,info,cocoa_facings,pot_plants)
 	if not has_nodes: return [[], []]
 	var mask := PackedInt32Array()
 	mask.resize(256)
@@ -192,7 +192,7 @@ static func build(source: Variant, external_circuits: bool = false, info: NodeIn
 	return result
 
 # Custom geometry, dispatched on the kind NodeInfo recorded for the node.
-static func _custom(kind: int, out: Array, p: Vector3, id: int, data: PackedInt32Array, info: NodeInfo.View) -> void:
+static func _custom(kind: int, out: Array, p: Vector3, id: int, data: PackedInt32Array, info: NodeInfo.View, cocoa_facings: Dictionary = {}, pot_plants: Dictionary = {}) -> void:
 	var cell := Vector3i(p)+Vector3i.ONE
 	match kind:
 		1: Farmland.mesh(out,p,id)
@@ -216,7 +216,9 @@ static func _custom(kind: int, out: Array, p: Vector3, id: int, data: PackedInt3
 		19: Corals.mesh(out,p,id)
 		20: Conduits.mesh(out,p,id)
 		21: Scaffolding.mesh(out,p,id)
-		22: VillageArt.mesh(out,p,id)
+		22:
+			if id == Decor.POT: Decor.pot_mesh(out,p,int(pot_plants.get(int(p.x)+int(p.z)*16+int(p.y)*256,0)))
+			else: VillageArt.mesh(out,p,id)
 		23: Sponges.mesh(out,p,id)
 		24: Archaeology.mesh(out,p,id)
 		25: Copper.mesh(out,p,id)
@@ -228,6 +230,8 @@ static func _custom(kind: int, out: Array, p: Vector3, id: int, data: PackedInt3
 		31: _ladder(out,p,data,Vector3i(p))
 		32: _bed_half(out,p,id,data,Vector3i(p))
 		33: PointedDripstone.mesh(out,p,id)
+		35: CocoaCrops.mesh(out,p,id,int(cocoa_facings.get(int(p.x)+int(p.z)*16+int(p.y)*256,0)))
+		34: NetherWartCrops.mesh(out,p,id)
 
 static func _empty() -> Array:
 	return [PackedVector3Array(),PackedVector3Array(),PackedVector2Array(),PackedVector2Array(),PackedColorArray(),PackedInt32Array()]

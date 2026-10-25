@@ -81,10 +81,10 @@ const VARIANTS = {
 	"rusty":[Color("b8703d"),Color("7d4523")],"spotted":[Color("c9a56c"),Color("7d6440")],
 	"striped":[Color("aa8d66"),Color("6a5438")],
 }
-const BIOME_VARIANT = {"Oakwood meadow":"woods","Frostpine highlands":"ashen"}
+const BIOME_VARIANT = {"#is_forest":"woods","#is_taiga":"ashen","Swamp":"pale"}
 # The source's weights beside the farm animals of the same biome (sheep 12,
 # pig 10, chicken 10, cow 8): forest wolves at 5 and taiga wolves at 8.
-const BIOME_WEIGHT = {"Oakwood meadow":5,"Frostpine highlands":8}
+const BIOME_WEIGHT = {"#is_forest":5,"#is_taiga":8,"Swamp":5}
 const FARM_WEIGHT = 40
 
 static func is_wolf(kind: String) -> bool: return kind == KIND
@@ -96,7 +96,11 @@ static func variant(mob: Node3D) -> String: return str(mob.get_meta("wolf_varian
 static func max_health(mob: Node3D) -> float: return TAME_HEALTH if tamed(mob) else WILD_HEALTH
 static func is_food(id: int) -> bool: return FOOD.has(id)
 static func heal_for(id: int) -> int: return int(FOOD.get(id,0))
-static func variant_for_biome(biome: String) -> String: return str(BIOME_VARIANT.get(biome,"pale"))
+static func variant_for_biome(biome: String) -> String:
+	if BiomeMap.allows("#is_taiga",biome): return "ashen"
+	if biome == "Swamp": return "pale"
+	if BiomeMap.allows("#is_forest",biome): return "woods"
+	return "pale"
 
 static func collar_for(dye: String) -> String: return str(COLLARS.get(dye,""))
 
@@ -414,7 +418,7 @@ static func refresh(mob: Node3D) -> void:
 # --- spawning --------------------------------------------------------------------
 
 static func spawn_share(biome: String) -> float:
-	var weight: int = int(BIOME_WEIGHT.get(biome,0))
+	var weight: int = 8 if BiomeMap.allows("#is_taiga",biome) else (5 if BiomeMap.allows("#is_forest",biome) or biome == "Swamp" else 0)
 	return float(weight)/float(weight+FARM_WEIGHT) if weight > 0 else 0.0
 
 static func spawn_allowed(world: VoxelWorld, cell: Vector3i) -> bool:

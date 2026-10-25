@@ -4,19 +4,27 @@ extends RefCounted
 # Canonical oak IDs remain compatible with old saves. Other species occupy
 # permanent 32-ID groups; axis variants drop their canonical vertical item.
 const FIRST = 6000
-const BASES = [13001,13033,13065,13097,13129]
-const NAMES = ["Oak","Spruce","Birch","Jungle","Acacia","Dark oak","Cherry","Mangrove","Pale oak","Crimson","Warped"]
-const KEYS = ["oak","spruce","birch","jungle","acacia","dark_oak","cherry","mangrove","pale_oak","crimson","warped"]
-const PLANKS = [Nodes.PLANKS,6035,6067,6099,6131,6163,13004,13036,13068,13100,13132]
-const LOGS = [Nodes.LOG,6032,6064,6096,6128,6160,13001,13033,13065,13097,13129]
-const LEAVES = [Nodes.LEAVES,6033,6065,6097,6129,6161,13002,13034,13066,13098,13130]
-const SAPLINGS = [Nodes.SAPLING,6034,6066,6098,6130,6162,13003,13035,13067,13099,13131]
+const BASES = [13001,13033,13065,13097,13129,13200]
+const NAMES = ["Oak","Spruce","Birch","Jungle","Acacia","Dark oak","Cherry","Mangrove","Pale oak","Crimson","Warped","Bamboo"]
+const KEYS = ["oak","spruce","birch","jungle","acacia","dark_oak","cherry","mangrove","pale_oak","crimson","warped","bamboo"]
+const PLANKS = [Nodes.PLANKS,6035,6067,6099,6131,6163,13004,13036,13068,13100,13132,13203]
+const LOGS = [Nodes.LOG,6032,6064,6096,6128,6160,13001,13033,13065,13097,13129,13200]
+const LEAVES = [Nodes.LEAVES,6033,6065,6097,6129,6161,13002,13034,13066,13098,13130,0]
+const SAPLINGS = [Nodes.SAPLING,6034,6066,6098,6130,6162,13003,13035,13067,13099,13131,0]
 const SIDES = [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.UP,Vector3i.DOWN,Vector3i.FORWARD,Vector3i.BACK]
-const BARK_COLORS = ["745335","62503b","d7d4bc","785840","82796c","46372b","8f5f6a","59433a","6f6a5c","6b2a2a","2f5f5c"]
-const WOOD_COLORS = ["b7955e","896744","dbcf9c","b88661","ba6f4c","594336","e6b7bd","87553c","ded4c2","7a3f3f","3b8f86"]
-const LEAF_COLORS = ["639144","426d4b","79a44d","3d9650","748444","42633b","efa9b8","4f7a3f","b9c48a","7a3030","3f7f7a"]
-const TEXTURES = [6000,6001,6002,6003,6004,6016,6017,6032,6033,6034,6035,6036,6048,6049,6064,6065,6066,6067,6068,6080,6081,6096,6097,6098,6099,6100,6112,6113,6128,6129,6130,6131,6132,6144,6145,6160,6161,6162,6163,6164,6176,6177,13001,13002,13003,13004,13005,13017,13018,13033,13034,13035,13036,13037,13049,13050,13065,13066,13067,13068,13069,13081,13082,13097,13098,13099,13100,13101,13113,13114,13129,13130,13131,13132,13133,13145,13146]
+const BARK_COLORS = ["745335","62503b","d7d4bc","785840","82796c","46372b","8f5f6a","59433a","6f6a5c","6b2a2a","2f5f5c","84954b"]
+const WOOD_COLORS = ["b7955e","896744","dbcf9c","b88661","ba6f4c","594336","e6b7bd","87553c","ded4c2","7a3f3f","3b8f86","d2bd74"]
+const LEAF_COLORS = ["639144","426d4b","79a44d","3d9650","748444","42633b","efa9b8","4f7a3f","b9c48a","7a3030","3f7f7a","84954b"]
+const TEXTURES = [6000,6001,6002,6003,6004,6016,6017,6032,6033,6034,6035,6036,6048,6049,6064,6065,6066,6067,6068,6080,6081,6096,6097,6098,6099,6100,6112,6113,6128,6129,6130,6131,6132,6144,6145,6160,6161,6162,6163,6164,6176,6177,13001,13002,13003,13004,13005,13017,13018,13033,13034,13035,13036,13037,13049,13050,13065,13066,13067,13068,13069,13081,13082,13097,13098,13099,13100,13101,13113,13114,13129,13130,13131,13132,13133,13145,13146,13200,13203,13204,13216,13217]
 const DATA = {
+	13200:BambooWood.WOOD_DATA[13200],
+	13203:BambooWood.WOOD_DATA[13203],
+	13204:BambooWood.WOOD_DATA[13204],
+	13208:BambooWood.WOOD_DATA[13208],
+	13209:BambooWood.WOOD_DATA[13209],
+	13210:BambooWood.WOOD_DATA[13210],
+	13211:BambooWood.WOOD_DATA[13211],
+
 	6004:{"name":"Oak stripped log","block":true,"family":"wood_stripped_log","hardness":2,"tool":1,"blast_resistance":3,"drop":6004},
 	6005:{"name":"Oak bark wood","block":true,"family":"wood_bark_wood","hardness":2,"tool":1,"blast_resistance":3,"drop":6005},
 	6006:{"name":"Oak stripped bark wood","block":true,"family":"wood_stripped_bark_wood","hardness":2,"tool":1,"blast_resistance":3,"drop":6006},
@@ -137,7 +145,7 @@ const DATA = {
 }
 static var SCHEMATICS: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/trees/mineclonia_trees.json"))
 
-static func base(kind: int) -> int: return FIRST+clampi(kind,0,5)*32 if kind < 6 else BASES[clampi(kind,6,10)-6]
+static func base(kind: int) -> int: return FIRST+clampi(kind,0,5)*32 if kind < 6 else BASES[clampi(kind,6,NAMES.size()-1)-6]
 static func species(id: int) -> int:
 	if id in [Nodes.LOG,Nodes.LEAVES,Nodes.SAPLING,Nodes.PLANKS]: return 0
 	if id >= FIRST and id < FIRST+192: return (id-FIRST)/32
@@ -187,6 +195,7 @@ static func color(id: int) -> Color:
 	return Color(WOOD_COLORS[kind]) if offset in [3,4,6,10,11,16,17] else Color(BARK_COLORS[kind])
 
 static func pixel(key: int, x: int, y: int, noise: Color) -> Color:
+	if species(key) == BambooWood.SPECIES: return BambooWood.pixel(key,x,y,noise)
 	var kind: int = maxi(0,species(key)); var offset: int = part(key); var tint: Color = color(key)
 	if offset in [16,17]:
 		var ring: int = maxi(absi(x-7),absi(y-7))
@@ -241,7 +250,7 @@ static func harvest(id: int, slot: Dictionary, rng: RandomNumberGenerator = null
 	return []
 
 static func soil(id: int) -> bool:
-	return Farmland.is_soil(id) or id in [Nodes.DIRT,Nodes.GRASS,Nodes.SNOW,VillageContent.SWAMP_GRASS]
+	return Farmland.is_soil(id) or id in [Nodes.DIRT,Nodes.GRASS,Nodes.SNOW,VillageContent.SWAMP_GRASS,DryTerrain.COARSE_DIRT,13602,13604]
 
 static func use(game: Node3D, target: Dictionary) -> bool:
 	if target.is_empty(): return false
@@ -250,7 +259,7 @@ static func use(game: Node3D, target: Dictionary) -> bool:
 		var next: int = base(species(id))+(6 if part(id) == 5 else 4)
 		if part(id) in [8,9]: next = base(species(id))+part(id)+2
 		if game.world.set_node(target.pos,next):
-			if game.gamemode != "creative": game.inventory.damage_tool()
+			if game.gamemode != "creative": ToolCapabilities.action_wear(game.inventory)
 			game.sound("dig")
 		return true
 	if held == Nodes.BONE_MEAL and is_sapling(id):
@@ -363,6 +372,7 @@ static func grow(world: VoxelWorld, p: Vector3i, seed_value: int = -1) -> bool:
 		if not replaceable(world,pos,seedlings): return false
 	for point in seedlings: world.set_node(point,Nodes.AIR)
 	for offset in plan.blocks: world.set_node(origin+offset,int(plan.blocks[offset]))
+	if kind == 1 and seedlings.size() == 4: SoilVariants.after_giant_spruce(world,origin)
 	Beehives.after_tree_grow(world,origin,kind,seed_value)
 	return true
 
@@ -550,22 +560,17 @@ static func unload(world: VoxelWorld, column: Vector2i) -> void:
 static func natural_species(generator: TerrainGenerator, x: int, z: int) -> int:
 	if generator.dimension != "overworld": return -1
 	var region: String = generator.biome(x,z)
-	if region == "Sunwash desert" or generator.terrain_height(x,z) <= TerrainGenerator.SEA+2: return -1
-	if region == "Frostpine highlands": return 1
-	var climate_value: float = generator.climate.get_noise_2d(x,z)
-	if region in ["Swamp","Willow shores"]: return 3 if climate_value > 0.05 else 0
-	if climate_value > 0.12: return 4
-	# The source's cherry, mangrove and pale oak each own a biome Voxey does not
-	# generate. They are placed instead in the nearest existing region, at a smaller
-	# share than the classic species, so every species is reachable in survival through
-	# its own saplings. Crimson and warped come from the Nether's fungus trees.
-	if region in ["Swamp","Willow shores"] and generator.hash_at(x,271,z)%7 == 0: return 7
-	if generator.hash_at(x,283,z)%11 == 0: return 6
-	if generator.hash_at(x,293,z)%13 == 0: return 8
-	var patch: int = generator.hash_at(floori(x/64.0),237,floori(z/64.0))%100
-	if patch < 18: return 5
-	if patch < 43: return 2
-	return 0
+	if region in ["Desert","Savannah","SavannahPlateau","WindsweptSavannah","Mesa","ErodedMesa","WoodedMesa","Beach","StonyShore","Ocean","River","FrozenOcean","DeepFrozenOcean"] or generator.terrain_height(x,z) <= TerrainGenerator.SEA+2: return -1
+	var temperature: Variant = BiomeMap.temperature(region)
+	if BiomeMap.allows("#is_mountain",region) or temperature != null and float(temperature) < 0.15: return 1
+	if region == "Swamp": return 3 if generator.climate.get_noise_2d(x,z) > 0.05 else 0
+	if region == "MangroveSwamp": return 7
+	if BiomeMap.allows("#is_jungle",region): return 4
+	if region == "CherryGrove" and generator.hash_at(x,283,z)%3 == 0: return 6
+	if region == "DarkForest" and generator.hash_at(x,293,z)%4 == 0: return 8
+	if BiomeMap.allows("#is_forest",region): return 2 if generator.hash_at(x,283,z)%3 else 0
+	if BiomeMap.allows("#is_taiga",region): return 1
+	return 0 if generator.hash_at(x,307,z)%9 else -1
 
 static func natural_tree(generator: TerrainGenerator, x: int, z: int) -> Dictionary:
 	if generator.hash_at(x,77,z)%105 != 0: return {}
@@ -598,10 +603,13 @@ const DOOR_ITEMS = [9001,9002,9003,9004,9005]
 const DOOR_BASES = [9112,9144,9176,9208,9240]
 const TRAPDOOR_ITEMS = [9301,9302,9303,9304,9305]
 const TRAPDOOR_BASES = [9346,9378,9410,9426,9442]
-const SIGN_BASES = [9558,9578,9601,9633,9665]
+const SIGN_BASES = [13332,13352,13372,13540,13560]
+const CLASSIC_SIGN_BASES = [13232,13252,13272,13292,13312]
 const HANGING_BASES = [11603,11635,11667,11699,11731,11763,11800,11832,11870,11902,11934]
 const HANGING_ITEMS = [11603,11635,11667,11699,11731,11763,11800,11832,11870,11902,11934]
-const FENCE_BASES = [9701,9717,9733,9809,9825]
+# Three original windows overlapped copper doors/trapdoors. Preserve the two
+# unambiguous families and keep the copper meaning of ambiguous saved IDs.
+const FENCE_BASES = [15200,15216,9733,15232,9825]
 const BUTTON_ITEMS = [6964,6980,6988,7004,7012]
 const PLATE_ITEMS = [11242,11243,11244,11245,11246]
 
@@ -610,9 +618,11 @@ static func register_families() -> void:
 		var kind: int = 6+i
 		Doors.register_family(DOOR_ITEMS[i],PLANKS[kind],NAMES[kind]+" door",DOOR_BASES[i])
 		Trapdoors.register_family(TRAPDOOR_ITEMS[i],PLANKS[kind],NAMES[kind]+" trapdoor",TRAPDOOR_BASES[i])
-		Signs.register_base(SIGN_BASES[i])
+		Signs.register_base(SIGN_BASES[i],kind)
 		Barriers.register_family(FENCE_BASES[i],PLANKS[kind])
 		RedstoneInputs.register_material(NAMES[kind],PLANKS[kind],PLATE_ITEMS[i])
+	for i in CLASSIC_SIGN_BASES.size(): Signs.register_base(CLASSIC_SIGN_BASES[i],i+1)
 	# Hanging signs cover every species, the classic one included.
 	for k in 11:
 		Signs.register_hanging(HANGING_BASES[k],HANGING_ITEMS[k])
+	BambooWood.register_families()

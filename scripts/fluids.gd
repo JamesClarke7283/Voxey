@@ -40,7 +40,7 @@ static func replaceable(id: int) -> bool:
 	# uproot whole oceans as soon as their source water activates.
 	if id == VillageContent.KELP_PLANT: return false
 	if RedstoneInputs.is_plate(id): return false
-	return RedstoneInputs.is_button(id) or SnowCover.is_snow(id) or id == Nodes.AIR or Fire.is_fire(id) or Nodes.plant(id) or Torches.is_torch(id) or id in Nodes.SMALL_CIRCUITS and id != Nodes.IRON_DOOR_OPEN
+	return RedstoneInputs.is_button(id) or CocoaCrops.is_cocoa(id) or SnowCover.is_snow(id) or id == Nodes.AIR or Fire.is_fire(id) or Nodes.plant(id) or Torches.is_torch(id) or id in Nodes.SMALL_CIRCUITS and id != Nodes.IRON_DOOR_OPEN
 
 func schedule(p: Vector3i, kind: int) -> void:
 	if kind == 0 or not WorldBounds.horizontal(p) or p.y <= world.generator.min_y() or p.y >= world.generator.max_y(): return
@@ -154,6 +154,16 @@ func settle(p: Vector3i, kind: int) -> void:
 	elif CropFarming.is_crop(before):
 		if kind == Nodes.WATER:
 			for entry in CropFarming.harvest(before): world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
+	elif CocoaCrops.is_cocoa(before): CocoaCrops.spawn_drops(world,p,before,kind == Nodes.LAVA)
+	elif NetherWartCrops.is_wart(before):
+		if kind == Nodes.WATER:
+			for entry in NetherWartCrops.harvest(before): world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
+	elif SweetBerryCrops.is_bush(before):
+		if kind == Nodes.WATER:
+			for entry in SweetBerryCrops.harvest(before,SweetBerryCrops.runtime(world).rng): world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
+	elif LargePlants.is_large(before):
+		if kind == Nodes.WATER:
+			for entry in LargePlants.harvest(before,{"id":0}): world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])
 	elif FruitCrops.is_stem(before):
 		if kind == Nodes.WATER:
 			for entry in FruitCrops.harvest(before): world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,entry[0],entry[1])

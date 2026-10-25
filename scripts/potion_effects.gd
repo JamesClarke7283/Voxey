@@ -1,7 +1,7 @@
 class_name PotionEffects
 extends RefCounted
 
-const NAMES = ["poison","regeneration","strength","weakness","water_breathing","fire_resistance","invisibility","night_vision","swiftness","slowness","leaping","withering","slow_falling","resistance","luck","bad_luck","bad_omen","infested","oozing","weaving","wind_charged","burning","hero_of_village","hunger","saturation","absorption","nausea","conduit_power","dolphins_grace","turtle_master","fatigue"]
+const NAMES = ["poison","regeneration","strength","weakness","water_breathing","fire_resistance","invisibility","night_vision","swiftness","slowness","leaping","withering","slow_falling","resistance","luck","bad_luck","bad_omen","trial_omen","infested","oozing","weaving","wind_charged","burning","hero_of_village","hunger","saturation","absorption","nausea","blindness","conduit_power","dolphins_grace","turtle_master","fatigue","haste"]
 const UNDEAD = ["zombie","skeleton","phantom","husk","drowned","stray","zoglin","skeleton_horse","zombie_horse"]
 
 static func level(target: Node3D, effect: String) -> int:
@@ -20,12 +20,13 @@ static func apply(target: Node3D, effect: String, duration: float, potency: int 
 		var healing: bool = ((effect == "healing") != undead) != inverted
 		var amount: float = (4 if effect == "healing" else 6)*potency*scale
 		if healing: target.health = minf(20 if player else target.info().health,target.health+amount)
-		elif player: target.hurt(amount,true)
+		elif player: target.hurt(amount,true,Vector3.INF,"magic")
 		# Harming damage is magic, which the source writes to health directly rather
 		# than routing through a damage group, so it is not armor-scaled.
 		else: target.hit(amount,Vector3.INF,"magic")
 		return
 	if not NAMES.has(effect) or duration <= 0: return
+	if not player and effect == "withering" and target.kind == "wither_skeleton": return
 	# A fire-resistant mob never catches light, which is the source's
 	# `_fire_resistant`: a blaze cannot be set alight by a blaze's own fireball.
 	if not player and effect == "burning" and Fire.resistant(target.kind): return
@@ -42,13 +43,16 @@ static func apply(target: Node3D, effect: String, duration: float, potency: int 
 	if player: target.game.survival.effects[effect] = duration
 	else: target.set_meta("effect_"+effect,duration)
 	if effect == "invisibility" and not player: target.model.visible = false
+	if player and effect in ["haste","fatigue","conduit_power"]: ToolCapabilities.refresh(target)
 
-static func apply_item(target: Node3D, id: int, scale: float = 1.0) -> void:
+static func apply_item(target: Node3D, id: int, scale: float = 1.0, metadata: Dictionary = {}) -> void:
 	if PotionCatalog.ITEMS.get(id,{}).get("potion","") == "water":
 		if target is SnowGolem: target.environmental_damage(1)
 		if target is VoxeyPlayer: target.game.survival.effects.erase("burning")
 		elif target.has_meta("effect_burning"): target.remove_meta("effect_burning")
-	for effect in PotionCatalog.effects(id): apply(target,effect.effect,effect.duration*scale,effect.level,scale)
+	for effect in PotionCatalog.effects(id):
+		var potency: int = int(metadata.get("omen_level",effect.level)) if effect.effect == "bad_omen" else int(metadata.get("potion_level",effect.level))
+		apply(target,effect.effect,effect.duration*scale,potency,scale)
 
 static func clear(target: Node3D) -> void:
 	if target is VoxeyPlayer: target.game.survival.effects.clear()
@@ -57,6 +61,7 @@ static func clear(target: Node3D) -> void:
 		for prefix in ["effect_","potency_","effectclock_"]:
 			if target.has_meta(prefix+effect): target.remove_meta(prefix+effect)
 	if target is Creature: target.model.visible = true
+	if target is VoxeyPlayer: ToolCapabilities.reset(target)
 
 # Remove one effect, which the source's zombie-villager cure needs: it clears
 # weakness and strength and nothing else, so a cure must not strip a creature's
@@ -65,6 +70,7 @@ static func clear_one(target: Node3D, effect: String) -> void:
 	if target is VoxeyPlayer: target.game.survival.effects.erase(effect)
 	for prefix in ["effect_","potency_","effectclock_"]:
 		if target.has_meta(prefix+effect): target.remove_meta(prefix+effect)
+	if target is VoxeyPlayer and effect in ["haste","fatigue","conduit_power"]: ToolCapabilities.reset(target)
 
 static func update(target: Node3D, delta: float) -> void:
 	if target.is_queued_for_deletion() or target.health <= 0: return
@@ -88,6 +94,7 @@ static func update(target: Node3D, delta: float) -> void:
 				if target.has_meta(prefix+effect): target.remove_meta(prefix+effect)
 			if effect == "invisibility" and not player: target.model.visible = true
 			if effect == "absorption" and target.has_meta("absorption_health"): target.remove_meta("absorption_health")
+			if player and effect in ["haste","fatigue","conduit_power"]: ToolCapabilities.reset(target)
 			continue
 		if player: target.game.survival.effects[effect] = remaining
 		else: target.set_meta("effect_"+effect,remaining)
@@ -102,8 +109,8 @@ static func update(target: Node3D, delta: float) -> void:
 				var poison_damage: float = absorb(target,minf(1,maxf(0,target.health-1)))
 				target.health -= poison_damage
 				if player and poison_damage > 0: Hunger.exhaust(target,Hunger.DAMAGE)
-			elif player: target.hurt(1,true,Vector3.INF,"fire" if effect == "burning" else "generic")
-			else: target.hit(1)
+			elif player: target.hurt(1,true,Vector3.INF,"on_fire" if effect == "burning" else "wither")
+			else: target.hit(1,Vector3.INF,"on_fire" if effect == "burning" else "magic")
 		target.set_meta("effectclock_"+effect,timer)
 	if level(target,"slow_falling") > 0: target.velocity.y = maxf(target.velocity.y,-1.6)
 
@@ -133,12 +140,10 @@ static func died(target: Node3D) -> void:
 			if entity != target and away.length() < 6: entity.velocity += (away.normalized()+Vector3.UP)*12
 		target.game.puff(target.position+Vector3.UP,Color("ccdce7"),35,3)
 
-# The elder guardian's mining fatigue, as a multiplier on block-breaking time. The
-# source's level 3 makes mining substantially slower, which is the whole point of
-# the elder's aura: it turns a monument into a grind rather than a fight.
+# Compatibility query for effects on a one-second dig. Actual mining transforms
+# the selected capability's time, including the reference's 300-second boundary.
 static func mining_speed(target: Node3D) -> float:
-	var fatigue: int = level(target,"fatigue")
-	return 1.0 if fatigue <= 0 else 1.0+fatigue*1.0
+	return ToolCapabilities.dig_time(1,ToolCapabilities.active(target)) if target is VoxeyPlayer else 1.0
 
 static func speed(target: Node3D) -> float:
 	var result: float = (1.0+level(target,"swiftness")*0.2)*maxf(0.1,1.0-level(target,"slowness")*0.15)

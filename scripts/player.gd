@@ -36,8 +36,14 @@ var crack_textures: Array = []
 var crack_stage: int = -1
 var dig_timer: float = 0.0
 var use_cooldown: float = 0.0
+var melee_elapsed: float = 100.0
+var combat_time: float = 0.0
+var mace_stamp: int = -1
 var use_latched: bool = false
 var eating: Dictionary = {}
+var bow_draw: Dictionary = {}
+var crossbow_draw: Dictionary = {}
+var crossbow_attack_held: bool = false
 var damage_cooldown: float = 0.0
 # The void's own timer. The source damages in discrete ticks rather than per frame,
 # so falling in costs a fixed amount per interval until the player climbs out.
@@ -59,6 +65,9 @@ var walked: float = 0.0
 var bob: float = 0.0
 var hand: Node3D
 var hand_id: int = -1
+var hand_banner_data: Dictionary = {}
+var offhand_shield: MeshInstance3D
+var offhand_shield_data: Dictionary = {}
 var swing: float = 0.0
 var underwater: bool = false
 var flying: bool = false
@@ -136,6 +145,7 @@ func armor_toughness() -> float:
 
 func _physics_process(delta: float) -> void:
 	if game == null or not game.playing(): return
+	melee_elapsed += delta; combat_time += delta
 	# The void is *below* the loaded world, so this has to come before the guard
 	# that bails out over unloaded terrain - otherwise the branch below never runs.
 	#
@@ -169,6 +179,8 @@ func _physics_process(delta: float) -> void:
 	# `mcl_core`'s `_on_object_over`: stepping on a redstone ore lights it too, and
 	# the source runs this every step rather than on the slow tick.
 	RedstoneOre.activate(game.world,Vector3i((position-Vector3.UP*0.1).floor()))
+	FlowersExtra.apply_contact(self,game.world.node_at(Vector3i(position.floor())))
+	FlowersExtra.apply_contact(self,game.world.node_at(Vector3i((position+Vector3.UP*1.6).floor())))
 	# And powder snow freezes whoever is inside it, which the source runs on the
 	# same slow step.
 	var freeze: float = PowderSnow.step(game.world,self)
@@ -198,16 +210,17 @@ func _physics_process(delta: float) -> void:
 	var sprint: bool = Input.is_physical_key_pressed(KEY_SHIFT) and not wet and hunger > 5 and not crouch
 	var speed: float = 7.0 if sprint else (2.1 if crouch else 4.5)
 	if not eating.is_empty(): speed = minf(speed,2.1)
+	if BowUse.valid(self) or CrossbowUse.valid(self): speed *= BowUse.SPEED_FACTOR
 	var moving: bool = direction.length() > 0.1
 	# `mcl_sprint` in the source is a standing property, and `mcl_criticals` reads it
 	# at attack time: sprinting is a held Shift with real movement intent.
 	sprinting = sprint and moving
-	camera.fov = Spyglass.FOV if scoping else lerpf(camera.fov,86.0 if sprint and moving and not flying else 78.0,delta*7)
+	camera.fov = Spyglass.FOV if scoping else lerpf(camera.fov,(86.0 if sprint and moving and not flying else 78.0)*(BowUse.FOV_FACTOR if BowUse.valid(self) else 1.0),delta*7)
 	if game.gamemode=="creative" and flying:
 		direction=basis*direction.normalized()
 		if Input.is_physical_key_pressed(KEY_SPACE) or (pad != null and pad.jump_held): direction.y+=1
 		if Input.is_physical_key_pressed(KEY_SHIFT) or (pad != null and pad.sneak_held): direction.y-=1
-		velocity=direction*12.0
+		velocity=direction*12.0*(BowUse.SPEED_FACTOR if BowUse.valid(self) or CrossbowUse.valid(self) else 1.0)
 		_move(velocity*delta,false)
 		camera.position.y=1.62
 		underwater=Fluids.contains(game.world,camera.global_position,Nodes.WATER)
@@ -274,14 +287,14 @@ func _physics_process(delta: float) -> void:
 		survival_timer = 0.0
 		if underwater and not game.survival.effects.has("water_breathing"):
 			breath = maxf(0,breath-1.0/(1+Enchantments.worn(self,"Respiration")))
-			if breath <= 0: hurt(2,true)
+			if breath <= 0: hurt(2,true,Vector3.INF,"drown")
 		else: breath = minf(10,breath+3)
 		var feet: Vector3i = Vector3i(position.floor())
-		if not game.survival.effects.has("fire_resistance") and not Striders.rider_protected(game) and (Fluids.contains(game.world,position+Vector3.UP*0.1,Nodes.LAVA) or Fluids.contains(game.world,position+Vector3.UP,Nodes.LAVA)): hurt(4,true,Vector3.INF,"fire")
+		if not game.survival.effects.has("fire_resistance") and not Striders.rider_protected(game) and (Fluids.contains(game.world,position+Vector3.UP*0.1,Nodes.LAVA) or Fluids.contains(game.world,position+Vector3.UP,Nodes.LAVA)): hurt(4,true,Vector3.INF,"lava")
 		for d in [Vector3i.LEFT,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.BACK]:
-			if game.world.node_at(feet+d) == Nodes.CACTUS: hurt(1)
+			if game.world.node_at(feet+d) == Nodes.CACTUS: hurt(1,false,Vector3.INF,"cactus")
 		if Fire.is_fire(game.world.node_at(feet)) or Fire.is_fire(game.world.node_at(feet+Vector3i.UP)):
-			if not game.survival.effects.has("fire_resistance"): PotionEffects.apply(self,"burning",8); hurt(1,true,Vector3.INF,"fire")
+			if not game.survival.effects.has("fire_resistance"): PotionEffects.apply(self,"burning",8); hurt(1,true,Vector3.INF,"in_fire")
 
 func _swim(delta: float, rise: bool, dive: bool, direction: Vector3) -> void:
 	velocity.y = maxf(-2.2,velocity.y-3.2*delta)
@@ -362,25 +375,30 @@ func _move(motion: Vector3, crouch: bool, on_ladder: bool = false) -> void:
 
 func _process(delta: float) -> void:
 	if game == null: return
+	if is_instance_valid(offhand_shield): offhand_shield.visible = game.playing()
 	if is_instance_valid(selection): selection.visible = false
 	if is_instance_valid(cracks): cracks.visible = false
-	if not game.playing(): Spyglass.reset(self); mining = 0; eating.clear(); return
+	if not game.playing(): Spyglass.reset(self); BowUse.cancel(self); CrossbowUse.cancel(self); crossbow_attack_held = false; mining = 0; eating.clear(); return
 	var nausea: float = 0.035*sin(Time.get_ticks_msec()*0.002) if PotionEffects.level(self,"nausea") > 0 else 0.0
 	camera.rotation.z = lerpf(camera.rotation.z,nausea,minf(1,delta*4))
 	target = game.world.raycast(camera.global_position,-camera.global_basis.z,5.0,Boats.is_boat(game.inventory.held().id) or game.inventory.held().id in [Nodes.BUCKET,VillageContent.GLASS_BOTTLE,VillageContent.FISHING_ROD,VillageContent.BOAT_OAK,VillageContent.BOAT_ACACIA,VillageContent.BOAT_SPRUCE,VillageContent.BOAT_DARK_OAK,VillageContent.BOAT_BIRCH,VillageContent.KELP,VillageContent.LILY_PAD])
 	if not target.is_empty():
 		selection.visible = true
 		selection.position = Vector3(target.pos)
-		if RedstoneInputs.is_device(target.id) or BuildingShapes.is_shape(target.id) or Barriers.is_barrier(target.id) or RedstoneSensors.is_detector(target.id) or Trapdoors.is_trapdoor(target.id) or SnowCover.is_snow(target.id) or Doors.is_door(target.id) or FoodFeatures.is_cake(target.id) or Signs.is_sign(target.id) or CropFarming.is_crop(target.id) or Farmland.is_soil(target.id) or FruitCrops.is_stem(target.id) or Amethyst.is_crystal(target.id):
+		if RedstoneInputs.is_device(target.id) or BuildingShapes.is_shape(target.id) or Barriers.is_barrier(target.id) or RedstoneSensors.is_detector(target.id) or Trapdoors.is_trapdoor(target.id) or SnowCover.is_snow(target.id) or Doors.is_door(target.id) or FoodFeatures.is_cake(target.id) or Signs.is_any(target.id) or CropFarming.is_crop(target.id) or CocoaCrops.is_cocoa(target.id) or NetherWartCrops.is_wart(target.id) or SweetBerryCrops.is_bush(target.id) or Farmland.is_soil(target.id) or FruitCrops.is_stem(target.id) or Amethyst.is_crystal(target.id) or target.id == DryTerrain.DEAD_BUSH:
 			var geometry: Dictionary
 			if Amethyst.is_crystal(target.id): geometry = Barriers.box_visuals(Amethyst.boxes(target.id),"amethyst:"+str(target.id))
 			elif CropFarming.is_crop(target.id): geometry = Barriers.box_visuals(CropFarming.boxes(target.id),"crop:"+str(target.id))
+			elif CocoaCrops.is_cocoa(target.id): geometry = Barriers.box_visuals(CocoaCrops.world_boxes(game.world,target.pos),"cocoa:"+str(target.id)+":"+str(CocoaCrops.facedir(game.world,target.pos)))
+			elif NetherWartCrops.is_wart(target.id): geometry = Barriers.box_visuals(NetherWartCrops.boxes(target.id),"nether_wart:"+str(target.id))
+			elif SweetBerryCrops.is_bush(target.id): geometry = Barriers.box_visuals(SweetBerryCrops.boxes(target.id),"sweet_berry:"+str(target.id))
 			elif Farmland.is_soil(target.id): geometry = Barriers.box_visuals(Farmland.boxes(target.id),"farmland:"+str(target.id))
 			elif FruitCrops.is_stem(target.id): geometry = Barriers.box_visuals(FruitCrops.boxes(target.id),"stem:"+str(target.id))
 			elif RedstoneInputs.is_device(target.id): geometry = Barriers.box_visuals(RedstoneInputs.boxes(target.id,game.world.circuits.state(target.pos)),"redstone_input:"+str(target.id)+":"+str(game.world.circuits.state(target.pos).get("input_pressed",false)))
 			elif FoodFeatures.is_cake(target.id): geometry = Barriers.box_visuals(FoodFeatures.boxes(target.id),"cake:"+str(target.id))
 			elif Doors.is_door(target.id): geometry = Barriers.box_visuals(Doors.boxes(target.id),"door:"+str(target.id))
-			elif Signs.is_sign(target.id): geometry = Barriers.box_visuals(Signs.boxes(target.id),"sign:"+str(target.id))
+			elif target.id == DryTerrain.DEAD_BUSH: geometry = Barriers.box_visuals(DryTerrain.boxes(),"dead_bush")
+			elif Signs.is_any(target.id): geometry = Barriers.box_visuals(Signs.boxes(target.id),"sign:"+str(target.id))
 			elif SnowCover.is_snow(target.id): geometry = Barriers.box_visuals(SnowCover.boxes(target.id,false),"snow:"+str(target.id))
 			elif Trapdoors.is_trapdoor(target.id): geometry = Barriers.box_visuals(Trapdoors.boxes(target.id),"trapdoor:"+str(target.id))
 			elif RedstoneSensors.is_detector(target.id): geometry = Barriers.box_visuals(RedstoneSensors.boxes(target.id),"daylight_detector")
@@ -389,10 +407,11 @@ func _process(delta: float) -> void:
 			selection.mesh = geometry.outline; cracks.mesh = geometry.cracks
 		else: selection.mesh = selection_cube; cracks.mesh = cracks_cube
 	var held: int = game.inventory.held().id
-	if held != hand_id: _make_hand(held)
+	if held != hand_id or (Banners.is_banner(held) or Shields.is_shield(held) or held == VillageContent.CROSSBOW) and hand_banner_data != game.inventory.held().get("data",{}): _make_hand(held)
 	swing = maxf(0,swing-delta*5)
 	hand.rotation = Vector3(-0.15-sin(swing*PI)*0.6,0.25,-0.12-sin(swing*PI)*0.4)
 	hand.position.y = -0.36+sin(bob)*0.012
+	_update_shield_view()
 	var pad: TouchControls = game.controls if game.touch else null
 	var mine_pressed: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or (pad != null and pad.mine_held)
 	var use_pressed: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or (pad != null and pad.use_pressed)
@@ -400,10 +419,17 @@ func _process(delta: float) -> void:
 	if pad != null: pad.use_pressed = false
 	var spyglass_use: bool = Spyglass.update(self,use_held,Input.is_physical_key_pressed(KEY_Z))
 	if not game.playing(): return
+	if CrossbowUse.update(self,use_held,Input.is_physical_key_pressed(KEY_Z),mine_pressed):
+		mining = 0
+		return
+	if BowUse.update(self,use_held,Input.is_physical_key_pressed(KEY_Z)):
+		mining = 0
+		return
 	if not eating.is_empty():
 		Eating.update(self,delta,use_held and not mine_pressed)
 		mining = 0
 		return
+	if held in [Nodes.BOW,VillageContent.CROSSBOW]: mine_pressed = false # Source bow on_use disables digging/punching.
 	if mine_pressed and use_cooldown <= 0 and game.boats.punch_target():
 		use_cooldown = 0.45; swing = 1; return
 	if mine_pressed and use_cooldown <= 0 and Paintings.punch_target(game):
@@ -419,29 +445,8 @@ func _process(delta: float) -> void:
 				if held == Nodes.SHEARS and mob.kind == "sheep":
 					_shear_sheep(mob)
 				else:
-					Golems.attacked(mob,self)
-					# `mcl_criticals`: a hit delivered while falling is a critical, worth
-					# `damage + random(0, floor(damage * 1.5 + 2))`, with its own particles
-					# and sound. A hit delivered while sprinting is not a critical: it adds
-					# the hitter's velocity to the target instead.
-					var damage: float = Enchantments.melee(self,mob)
-					if sprinting and velocity.length() > 0.1:
-						# `Creature` rebuilds its velocity from `knock` every physics step,
-						# so a direct `velocity` write is overwritten before it is used.
-						# The source's `obj:add_velocity(hitter:get_velocity())` maps onto
-						# `knock`, which is decayed and folded in each step.
-						mob.knock += velocity
-					elif velocity.y < 0 and damage > 0:
-						damage += randi_range(0,floori(damage*1.5+2))
-						game.puff(mob.center(),Color("bc7a57"),15,0.6)
-						game.sound_at("crit",mob.center())
-					mob.hit(damage,position)
-					mob.set_meta("player_struck",true)
-					Wolves.record_player_struck(game,mob)
-					Hunger.exhaust(self,Hunger.ATTACK)
-					mob.knock *= 1+Inventory.enchantment(game.inventory.held(),"Knockback")*0.6
-					if game.gamemode!="creative" and held != Nodes.SHEARS: game.inventory.damage_tool()
-				use_cooldown = 0.45
+					MeleeCombat.attack(self,mob)
+				use_cooldown = 0.2
 				swing = 1
 		elif not target.is_empty():
 			mine(delta)
@@ -463,20 +468,18 @@ func mine(delta: float) -> void:
 		mining_pos = target.pos
 		mining_tool = held
 		dig_timer = 0
+		ToolCapabilities.refresh(self)
 		NoteBlocks.punch(game,target)
 		# `mcl_core`'s `on_punch`: a redstone ore lights up when it is punched.
 		RedstoneOre.activate(game.world,target.pos)
-	var duration: float = 0.12 if game.gamemode=="creative" else Nodes.break_time(target.id,held)
-	if game.gamemode != "creative" and Nodes.tool_kind(held) == Nodes.preferred_tool(target.id): duration /= 1.0+Inventory.enchantment(game.inventory.held(),"Efficiency")*0.4
-	if underwater and Enchantments.worn(self,"Aqua Affinity") == 0: duration *= 5.0
-	# An elder guardian's mining fatigue slows every block, which is the source's
-	# own reason for the aura.
-	duration *= PotionEffects.mining_speed(self)
+	var params: Dictionary = ToolCapabilities.mining(target.id,game.inventory.held(),self)
+	var duration: float = 0.12 if game.gamemode=="creative" else float(params.time)
+	if game.gamemode != "creative" and not params.diggable: return
 	if is_inf(duration): return
-	mining += delta/duration
+	mining += delta/duration if duration > 0 else 1.0
 	swing = 0.5+0.5*sin(Time.get_ticks_msec()*0.02)
 	cracks.visible = true
-	cracks.position = Vector3(target.pos)+(Vector3.ZERO if RedstoneInputs.is_device(target.id) or BuildingShapes.is_shape(target.id) or Barriers.is_barrier(target.id) or RedstoneSensors.is_detector(target.id) or Trapdoors.is_trapdoor(target.id) or SnowCover.is_snow(target.id) or Doors.is_door(target.id) or FoodFeatures.is_cake(target.id) or Signs.is_sign(target.id) or CropFarming.is_crop(target.id) or Farmland.is_soil(target.id) or FruitCrops.is_stem(target.id) or Amethyst.is_crystal(target.id) else Vector3.ONE*0.5)
+	cracks.position = Vector3(target.pos)+(Vector3.ZERO if RedstoneInputs.is_device(target.id) or BuildingShapes.is_shape(target.id) or Barriers.is_barrier(target.id) or RedstoneSensors.is_detector(target.id) or Trapdoors.is_trapdoor(target.id) or SnowCover.is_snow(target.id) or Doors.is_door(target.id) or FoodFeatures.is_cake(target.id) or Signs.is_any(target.id) or CropFarming.is_crop(target.id) or CocoaCrops.is_cocoa(target.id) or NetherWartCrops.is_wart(target.id) or SweetBerryCrops.is_bush(target.id) or Farmland.is_soil(target.id) or FruitCrops.is_stem(target.id) or Amethyst.is_crystal(target.id) or target.id == DryTerrain.DEAD_BUSH else Vector3.ONE*0.5)
 	var stage: int = clampi(int(mining*9),0,8)
 	if stage != crack_stage:
 		crack_stage = stage
@@ -488,11 +491,13 @@ func mine(delta: float) -> void:
 		dig_timer = 0.11
 		game.dig_particles(target.pos,target.id,target.normal)
 	if mining >= 1.0:
-		game.break_node(target.pos,target.id,held)
-		if game.world.node_at(target.pos) != target.id: Hunger.exhaust(self,Hunger.DIG)
+		var broken_id: int = target.id
+		game.break_node(target.pos,broken_id,held)
+		if game.world.node_at(target.pos) != broken_id:
+			Hunger.exhaust(self,Hunger.DIG)
+			if game.gamemode!="creative" and not game.network.client(): ToolCapabilities.wear(game.inventory,broken_id)
 		mining = 0.0
 		crack_stage = -1
-		if game.gamemode!="creative" and not game.network.client(): game.inventory.damage_tool()
 
 # Mineclonia `mcl_offhand.get_offhand`: the second hand's contents. Shields,
 # totems and placeable items consult it when the main hand cannot serve, which is
@@ -528,8 +533,8 @@ func carried_slot(id: int) -> Dictionary:
 	return {}
 
 func equip_armor(slot: Dictionary) -> bool:
-	if not Nodes.is_armor(slot.id) and not Heads.is_head(slot.id): return false
-	var piece: int = Nodes.armor_piece(slot.id)
+	if not Nodes.is_armor(slot.id) and not Heads.is_head(slot.id) and slot.id != FruitCrops.CARVED: return false
+	var piece: int = 0 if slot.id == FruitCrops.CARVED else Nodes.armor_piece(slot.id)
 	if game.gamemode != "creative" and Inventory.enchantment(armor_slots[piece],"Curse of Binding") > 0: game.toast("Curse of Binding prevents replacing this armor."); return false
 	var previous: Dictionary = armor_slots[piece].duplicate()
 	armor_slots[piece] = slot.duplicate(true)
@@ -553,7 +558,34 @@ func _shear_sheep(sheep: Creature) -> void:
 	use_cooldown = 0.6
 	if game.gamemode != "creative": game.inventory.damage_tool()
 
+func _interact_target() -> bool:
+	if target.is_empty() or Input.is_physical_key_pressed(KEY_CTRL): return false
+	var p: Vector3i = target.pos
+	var id: int = target.id
+	var held: int = game.inventory.held().id
+	if game.world.circuits.interact(p): return true
+	if id == Nodes.ENCHANTING_TABLE: game.open_enchanting(p); return true
+	if held == Nodes.FLINT_AND_STEEL and id == Nodes.OBSIDIAN:
+		if game.world.ignite_portal(p+target.normal): game.sound("place")
+		else: game.toast("Build a 4 × 5 obsidian frame with a 2 × 3 opening.")
+		return true
+	if id in [Nodes.WORKBENCH,Nodes.FURNACE,Nodes.CHEST]:
+		# `mobs_mc.enrage_piglins(player, true)`: opening a container in the
+		# Nether provokes every piglin in sight, which is the source's own rule.
+		if id == Nodes.CHEST: PiglinAnger.on_container_opened(game)
+		game.open_inventory({Nodes.WORKBENCH:"table",Nodes.FURNACE:"furnace",Nodes.CHEST:"chest"}[id],p)
+		return true
+	if id in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.BED]:
+		game.sleep_at(p)
+		return true
+	if id == Nodes.TNT:
+		game.ignite_tnt(p)
+		swing = 1
+		return true
+	return false
+
 func use() -> void:
+	if not bow_draw.is_empty() or not crossbow_draw.is_empty(): return
 	if game.network.client() and not game.network.pending_breaks.is_empty(): return
 	var recipient: int = game.network.target_player() if game.network != null else 0
 	if recipient != 0 and game.network.pass_held(recipient,Input.is_physical_key_pressed(KEY_CTRL)):
@@ -577,6 +609,7 @@ func use() -> void:
 			return
 	if Screwdriver.is_screwdriver(held) and not target.is_empty():
 		if Screwdriver.turn(game,target.pos,Screwdriver.ROTATE_FACE): return
+	if Trials.use(game,target): return
 	if AntiqueArms.fire(game): return
 	if SteamMachines.use(game,target): return
 	if Candles.use(game,target): return
@@ -598,6 +631,7 @@ func use() -> void:
 	if Signs.use(game,target): return
 	if FoodFeatures.use(game,target): return
 	if Barriers.use(game,target): return
+	if LushCaveExtra.use(game,target): return
 	if WoodTypes.use(game,target): return
 	if Campfires.use(game,target): return
 	if Fire.use(game,target): return
@@ -615,6 +649,7 @@ func use() -> void:
 			if game.gamemode != "creative": game.inventory.consume_selected()
 			swing = 1
 		return
+	if LushCaves.use(game,target): return
 	if held in [Nodes.WRITABLE_BOOK,Nodes.WRITTEN_BOOK]: game.open_book(); return
 	if Hunger.can_eat(self,held):
 		Eating.start(self)
@@ -651,27 +686,11 @@ func use() -> void:
 		game.toast("Day %d  ·  %s  ·  %d%% through the day." % [game.day_number(),game.time_name(),int(fposmod(game.day_time,1.0)*100)])
 		swing = 0.5
 		return
-	# The bow fires an arrow where you look if you have ammunition.
-	if held == Nodes.BOW:
-		var ammunition: int = game.survival.ammunition()
-		if ammunition != 0 or game.gamemode=="creative":
-			var infinite: bool = ammunition == Nodes.ARROW_ITEM and Inventory.enchantment(game.inventory.held(),"Infinity") > 0
-			if game.gamemode!="creative" and not infinite: game.inventory.remove_item(ammunition,1)
-			var origin: Vector3 = camera.global_position-camera.global_basis.z*0.4
-			var velocity_value: Vector3 = -camera.global_basis.z*26.0+Vector3.UP*2.2
-			var shot: Arrow = game.spawn_arrow(origin,velocity_value)
-			if shot != null:
-				shot.from_player = true
-				shot.item_id = ammunition if ammunition != 0 else Nodes.ARROW_ITEM
-				shot.damage += Inventory.enchantment(game.inventory.held(),"Power")*2.0
-				shot.recoverable = not infinite and game.gamemode != "creative"
-				shot.flame = Inventory.enchantment(game.inventory.held(),"Flame") > 0
-				shot.punch = Inventory.enchantment(game.inventory.held(),"Punch")
-			if game.gamemode!="creative": game.inventory.damage_tool()
-			game.sound("arrow")
-			swing = 1
-		else:
-			game.toast("You need arrows. Craft them from flint, sticks, and feathers.")
+	# Node right-click handlers above take priority over beginning a pull.
+	if held in [Nodes.BOW,VillageContent.CROSSBOW]:
+		if _interact_target(): return
+		var ready: bool = BowUse.begin(self) if held == Nodes.BOW else CrossbowUse.begin(self)
+		if not ready: game.toast("You need arrows. Craft them from flint, sticks, and feathers.")
 		return
 	if target.is_empty():
 		if Spyglass.request(self): return
@@ -752,14 +771,6 @@ func use() -> void:
 			game.sound("place"); swing = 1
 			game.settle(p+Vector3i.UP)
 		return
-	# Bone meal ripens a cocoa pod one stage, which is the source's `mcl_cocoas.grow`.
-	# Only the two unripe stages respond; a ripe pod is left alone.
-	if held == Nodes.BONE_MEAL and VillageContent.is_cocoa(id) and id != VillageContent.RIPE_COCOA_POD:
-		if game.world.set_node(p,VillageContent.cocoa_next(id)):
-			if game.gamemode != "creative": game.inventory.consume_selected()
-			game.puff(Vector3(p)+Vector3.ONE*0.5,Color("b8e07a"),8)
-			game.sound("place"); swing = 1
-		return
 	# Bone meal on a grass block carpets the ground around it with tall grass and
 	# flowers, which is the source's `bone_meal_grass`. It used to grow exactly one
 	# flower on the block itself, which is neither the source's area nor its mix.
@@ -770,26 +781,7 @@ func use() -> void:
 			game.sound("place")
 			swing = 1
 		return
-	if not Input.is_physical_key_pressed(KEY_CTRL):
-		if game.world.circuits.interact(p): return
-		if id == Nodes.ENCHANTING_TABLE: game.open_enchanting(p); return
-		if held == Nodes.FLINT_AND_STEEL and id == Nodes.OBSIDIAN:
-			if game.world.ignite_portal(p+target.normal): game.sound("place")
-			else: game.toast("Build a 4 × 5 obsidian frame with a 2 × 3 opening.")
-			return
-		if id in [Nodes.WORKBENCH,Nodes.FURNACE,Nodes.CHEST]:
-			# `mobs_mc.enrage_piglins(player, true)`: opening a container in the
-			# Nether provokes every piglin in sight, which is the source's own rule.
-			if id == Nodes.CHEST: PiglinAnger.on_container_opened(game)
-			game.open_inventory({Nodes.WORKBENCH:"table",Nodes.FURNACE:"furnace",Nodes.CHEST:"chest"}[id],p)
-			return
-		if id in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.BED]:
-			game.sleep_at(p)
-			return
-		if id == Nodes.TNT:
-			game.ignite_tnt(p)
-			swing = 1
-			return
+	if _interact_target(): return
 	if Spyglass.request(self): return
 	# Bone meal on a sea pickle grows it and spreads it, as the source does.
 	if held == Nodes.BONE_MEAL and SeaPickles.is_pickle(id):
@@ -801,19 +793,24 @@ func use() -> void:
 	if FruitCrops.use(game,target): return
 	if game.maps.use(): return
 	if Throwables.use(game): return
-	if held == Nodes.BONE_MEAL and FoodFeatures.flower(id):
+	if held == Nodes.BONE_MEAL and FoodFeatures.bone_meal_target(id):
 		if FoodFeatures.bone_meal(game,p) and game.gamemode != "creative": game.inventory.consume_selected()
 		return
-	# `mcl_flowers.add_large_plant`'s `_on_bone_meal`: bone meal on a large plant
-	# drops one more of the plant rather than growing anything.
-	if held == Nodes.BONE_MEAL and LargePlants.is_large(id):
-		if game.gamemode != "creative": game.inventory.consume_selected()
-		game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,LargePlants.bottom(id),1)
-		game.puff(Vector3(p)+Vector3.ONE*0.5,Color("b8e07a"),8)
+	# Large flowers duplicate; small grass/fern convert, and double herbs have no
+	# callback. Nil source callbacks consume even when conversion is blocked.
+	if held == Nodes.BONE_MEAL and LargePlants.bone_meal_target(id):
+		var result: Dictionary = LargePlants.bone_meal(game.world,p)
+		if result.get("consume",false):
+			if game.gamemode != "creative": game.inventory.consume_selected()
+			game.puff(Vector3(p)+Vector3.ONE*0.5,Color("b8e07a"),8)
+			game.sound("place"); swing = 1
+		if result.has("duplicate"): game.spawn_drop(Vector3(p)+Vector3.ONE*0.5,int(result.duplicate),1)
 		return
 	# A crop accepts bone meal and a seed is planted from the hand, which the crop
 	# system owns. Without this call neither interaction is reachable.
 	if CropFarming.use(game,target): return
+	if DryTerrain.use(game,target): return
+	if SoilVariants.use(game,target): return
 	if Farmland.use(game,target): return
 	# Pouring: a water bucket fills the targeted face with a water node.
 	if held in [Nodes.WATER_BUCKET,Nodes.LAVA_BUCKET] and not target.is_empty():
@@ -859,8 +856,12 @@ func use() -> void:
 	if Screwdriver.is_screwdriver(held) and not place_target.is_empty():
 		if Screwdriver.turn(game,place_target.pos,Screwdriver.ROTATE_AXIS): return
 	if Signs.try_place(game,place_target): return
+	if Banners.try_place(game,place_target): return
+	if Bookshelves.try_place(game,place_target): return
 	if RedstoneInputs.try_place(game,place_target): return
 	if Barriers.try_place(game,place_target): return
+	if GrindstoneRepair.try_place(game,place_target): return
+	if Stonecutting.try_place(game,place_target): return
 	if BuildingShapes.try_place(game,place_target): return
 	# The source's `mcl_offhand.place`: a torch in the second hand is placed when the
 	# main hand cannot, which is the only `offhand_placeable` group in the game. The
@@ -877,7 +878,9 @@ func use() -> void:
 		held = place_id
 	if not Nodes.placeable(place_id) and not (game.gamemode=="creative" and place_id in [Nodes.WATER,Nodes.LAVA,Nodes.BEDROCK]): return
 	if place_id == Nodes.WATER and game.dimension == "nether": game.toast("Water evaporates in the Nether."); return
+	if FlowersExtra.try_place_ground(game,place_target): return
 	var destination: Vector3i = place_target.get("replace",p+target.normal)
+	if LushCaveExtra.needs_placement_rule(place_id) and not LushCaveExtra.can_place(game.world,destination,place_id,target.normal): return
 	var soil_id: int = game.world.node_at(destination+Vector3i.DOWN) if SnowCover.is_snow(id) else id
 	if place_id == Nodes.TORCH or place_id == Torches.COPPER:
 		place_id = Torches.placed_for(place_id,target.normal)
@@ -896,11 +899,12 @@ func use() -> void:
 		game.api.emit_node_placed(destination,place_id)
 		game.api.emit_node_placed(destination+Vector3i.UP,LargePlants.top(place_id))
 		return
-	if FoodFeatures.flower(place_id) and not FoodFeatures.flower_supported(game.world,destination): return
+	if FoodFeatures.uses_placement_rule(place_id) and not FoodFeatures.placement_supported(game.world,destination,place_id): return
+	if place_id == DryTerrain.DEAD_BUSH and not Nodes.solid(game.world.node_at(destination+Vector3i.DOWN)): return
 	if place_id == Nodes.SUGAR_CANE and not game.world.can_plant_cane(destination):
 		game.toast("Plant sugar cane on dirt, grass or sand beside water.")
 		return
-	if place_id in [Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM] and (target.normal != Vector3i.UP or soil_id not in [Nodes.DIRT,Nodes.GRASS,Nodes.MOSSY_COBBLE]): return
+	if place_id in [Nodes.RED_MUSHROOM,Nodes.BROWN_MUSHROOM] and (target.normal != Vector3i.UP or soil_id not in HugeMushrooms.SOILS): return
 	# `mcl_crimson`'s `place_fungus`: a fungus needs its own nylium.
 	if CrimsonPlants.is_fungus(place_id) and not CrimsonPlants.placement_ok(game.world,destination,place_id):
 		game.toast("That fungus needs its own nylium underneath.")
@@ -950,6 +954,7 @@ func use() -> void:
 	place_id = Beehives.oriented(place_id,rotation.y)
 	place_id = CopperDecor.oriented(place_id,target.normal,rotation.y)
 	if game.world.set_node(destination,place_id):
+		LushCaveExtra.placed(game.world,destination,place_id)
 		if WoodTypes.is_leaves(place_id): WoodTypes.mark_placed(game.world,destination)
 		PortableStorage.placed(game,destination,game.inventory.held())
 		Copper.placed_wax(game,destination,game.inventory.held())
@@ -984,38 +989,41 @@ func use() -> void:
 # Damage passes through worn armor unless it bypasses it (drowning, starving,
 # falling). Every piece worn takes wear from a hit. A source position knocks
 # the player away from the attacker.
-func hurt(amount: float, bypass_armor: bool = false, source: Vector3 = Vector3.INF, cause: String = "generic") -> void:
-	if damage_cooldown > 0 or health <= 0: return
-	if not bypass_armor and game.survival.blocks_damage(source,cause): return
-	# A totem of undying turns lethal damage into one health, which the source
-	# does in a damage modifier ahead of the hit landing. It applies in creative
-	# too, where the source saves the player but does not consume the totem.
-	if not bypass_armor and Totems.intercept(self,amount,cause): return
-	if game.gamemode=="creative": return
-	var toughness: float = armor_toughness()
-	var reduction: float = 0.0 if bypass_armor else minf(20,maxf(armor_points()/5.0,armor_points()-amount/(2+toughness/4)))/25
-	var uses: int = maxi(1,floori(amount/4))
-	if cause not in ["void","starve"]: amount *= PotionEffects.resistance(self)*Enchantments.protection(self,cause)
+func hurt(amount: float, bypass_armor: bool = false, source: Vector3 = Vector3.INF, cause: String = "generic", attacker: Node3D = null) -> void:
+	var flags: Dictionary = ArmorEffects.flags(cause,bypass_armor)
+	if cause == "fall" and mace_stamp >= 0 and floori(combat_time)-mace_stamp < 2: return
+	if damage_cooldown > 0 and not flags.get("bypasses_invulnerability",false) or health <= 0: return
+	if not flags.get("bypasses_armor",false) and game.survival.blocks_damage(source,cause,amount): return
+	if game.gamemode == "creative":
+		Totems.intercept(self,amount,cause)
+		return
+	if not flags.get("bypasses_magic",false):
+		if flags.get("is_fire",false) and PotionEffects.level(self,"fire_resistance") > 0: return
+		amount *= PotionEffects.resistance(self)
+	if amount <= 0: return
+	var damager: Node3D = attacker
+	if damager == null and not is_inf(source.x):
+		for mob in game.creatures.get_children():
+			if not mob.is_queued_for_deletion() and mob.position.distance_to(source) < 1.5: damager = mob; break
+	var reflect: Callable = func(value: int) -> bool:
+		if not is_instance_valid(damager) or damager == self: return false
+		if damager is Creature: damager.hit(value,position,"thorns")
+		elif damager is VoxeyPlayer: damager.hurt(value,false,position,"thorns",self)
+		else: return false
+		return is_instance_valid(damager) and not damager.is_queued_for_deletion()
+	var has_source: bool = is_instance_valid(damager) and (damager is Creature or damager is VoxeyPlayer)
+	var resolved: Dictionary = ArmorEffects.resolve(armor_slots,amount,flags,cause,has_source,null,[0,1,2,3],reflect,0,damager == self)
+	for id in resolved.broken:
+		game.toast("Your "+Nodes.title(id).to_lower()+" broke."); game.sound("break")
+	game.inventory.changed.emit()
 	PotionEffects.damaged(self)
-	var damage: float = amount*(1.0-reduction)
-	if cause not in ["void","starve"]: damage = PotionEffects.absorb(self,damage)
+	var damage: float = resolved.damage
+	if not flags.get("bypasses_magic",false): damage = PotionEffects.absorb(self,damage)
+	# Totems are the final source damage modifier, after armor and absorption.
+	if Totems.intercept(self,damage,cause): return
 	health = maxf(0,health-damage)
 	if damage > 0: Hunger.exhaust(self,Hunger.DAMAGE)
-	if not bypass_armor:
-		for slot in armor_slots:
-			if Nodes.armor_points(slot.id) == 0: continue
-			if randf() < float(Inventory.enchantment(slot,"Unbreaking"))/(Inventory.enchantment(slot,"Unbreaking")+1.0): continue
-			slot.wear += uses
-			if slot.wear >= Nodes.durability(slot.id):
-				game.toast("Your "+Nodes.title(slot.id).to_lower()+" broke.")
-				slot.id = 0; slot.count = 0; slot.wear = 0; slot.erase("data")
-				game.sound("break")
-		game.inventory.changed.emit()
 	if not is_inf(source.x):
-		var thorns: int = Enchantments.worn(self,"Thorns")
-		if thorns > 0 and randf() < minf(1.0,thorns*0.15):
-			for mob in game.creatures.get_children():
-				if not mob.is_queued_for_deletion() and mob.position.distance_to(source) < 0.8: mob.hit(randi_range(1,4),position); break
 		var away: Vector3 = ((position-source)*Vector3(1,0,1)).normalized()
 		velocity.x += away.x*5.5
 		velocity.z += away.z*5.5
@@ -1028,8 +1036,18 @@ func hurt(amount: float, bypass_armor: bool = false, source: Vector3 = Vector3.I
 
 func _make_hand(id: int) -> void:
 	hand_id = id
+	hand_banner_data = game.inventory.held().get("data",{}).duplicate(true) if Banners.is_banner(id) or Shields.is_shield(id) or id == VillageContent.CROSSBOW else {}
 	for child in hand.get_children(): child.queue_free()
-	if RedstoneInputs.is_device(id) or id in Nodes.CIRCUIT_NODES:
+	if Shields.is_shield(id):
+		var model: MeshInstance3D = Shields.model(game.inventory.held())
+		model.scale = Vector3.ONE*0.65; model.rotation.y = -0.25; hand.add_child(model)
+	elif Banners.is_banner(id):
+		var instance := MeshInstance3D.new(); var mesh := QuadMesh.new(); mesh.size = Vector2(0.55,0.7)
+		instance.mesh = mesh
+		var mat := StandardMaterial3D.new(); mat.albedo_texture = Banners.texture(game.inventory.held())
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR; mat.cull_mode = BaseMaterial3D.CULL_DISABLED; mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		instance.material_override = mat; instance.rotation.y = -0.35; hand.add_child(instance)
+	elif RedstoneInputs.is_device(id) or id in Nodes.CIRCUIT_NODES:
 		var model: Node3D = RedstoneInputs.build(id) if RedstoneInputs.is_device(id) else RedstoneArt.build(id)
 		model.scale = Vector3.ONE*0.28
 		model.position = Vector3(0,-0.14,0)
@@ -1045,8 +1063,8 @@ func _make_hand(id: int) -> void:
 		hand.add_child(instance)
 	elif id != 0:
 		var instance := MeshInstance3D.new()
-		instance.mesh = ItemArt.mesh(id)
-		instance.material_override = ItemArt.material(id)
+		instance.mesh = ItemArt.mesh(id,BowUse.current_stage(self) if id == Nodes.BOW else CrossbowUse.current_stage(self) if id == VillageContent.CROSSBOW else -1)
+		instance.material_override = ItemArt.material(id,BowUse.current_stage(self) if id == Nodes.BOW else CrossbowUse.current_stage(self) if id == VillageContent.CROSSBOW else -1)
 		instance.scale = Vector3.ONE*(0.55 if Nodes.is_tool_id(id) else 0.38)
 		instance.rotation.y = -0.35
 		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -1054,6 +1072,22 @@ func _make_hand(id: int) -> void:
 	else:
 		_add_hand_box(Vector3(0,-0.17,0.15),Vector3(0.19,0.46,0.19),Color(game.network.appearance.skin) if game.network != null else Color("c29470"))
 		_add_hand_box(Vector3(0,-0.34,0.15),Vector3(0.2,0.2,0.2),Color(game.network.appearance.shirt) if game.network != null else Color("526d58"))
+
+func _update_shield_view() -> void:
+	var item: Dictionary = offhand_slot if Shields.is_shield(offhand_id()) else {}
+	if item.is_empty():
+		if is_instance_valid(offhand_shield): offhand_shield.queue_free(); offhand_shield = null
+		offhand_shield_data = {}
+	elif not is_instance_valid(offhand_shield) or offhand_shield_data != item.get("data",{}):
+		if is_instance_valid(offhand_shield): offhand_shield.queue_free()
+		offhand_shield = Shields.model(item); offhand_shield_data = item.get("data",{}).duplicate(true)
+		offhand_shield.scale = Vector3.ONE*0.65; camera.add_child(offhand_shield)
+	if is_instance_valid(offhand_shield):
+		offhand_shield.visible = game.playing()
+		offhand_shield.position = Vector3(-0.23,-0.13,-0.68) if Shields.raised(self) else Vector3(-0.43,-0.33,-0.7)
+		offhand_shield.rotation = Vector3(0,0.25,0.06)
+	if Shields.is_shield(hand_id) and Shields.raised(self): hand.position = Vector3(0.23,-0.13,-0.68); hand.rotation = Vector3(0,-0.25,-0.06)
+	else: hand.position.x = 0.42; hand.position.z = -0.65
 
 func _add_hand_box(pos: Vector3, size_value: Vector3, color: Color) -> void:
 	var instance := MeshInstance3D.new()

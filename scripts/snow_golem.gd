@@ -130,8 +130,8 @@ func _physics_process(delta: float) -> void:
 	if hurt_flash > 0: _tint(Color("d8402f"),0.45)
 	elif tinted: _tint(Color.WHITE,0)
 
-func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> void:
-	super.hit(damage,from,reason)
+func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "", armor_breach: int = 0, attacker: Node3D = null) -> void:
+	super.hit(damage,from,reason,armor_breach,attacker)
 	if health > 0: store_record()
 
 func die() -> void:

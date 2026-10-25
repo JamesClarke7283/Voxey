@@ -36,7 +36,9 @@ static func clean_data(raw: Variant) -> Dictionary:
 	for value in raw.min:
 		if not (value is int or value is float) or not is_finite(float(value)) or absf(float(value)) > 32000: return {}
 		point.append(floori(float(value)/SIZE)*SIZE)
-	return {"id":str(int(raw.id)),"dimension":str(raw.dimension),"min":point,"created":maxi(0,int(raw.get("created",0)))}
+	var result: Dictionary = {"id":str(int(raw.id)),"dimension":str(raw.dimension),"min":point,"created":maxi(0,int(raw.get("created",0)))}
+	if raw.get("positive_z",false): result.positive_z = true
+	return result
 
 static func craft_output_data(ingredients: Array) -> Dictionary:
 	for slot in ingredients:
@@ -89,6 +91,8 @@ func restore(value: Variant) -> void:
 		var metadata: Dictionary = clean_data(raw.get("meta",{}))
 		if metadata.is_empty() or metadata.id != str(key): continue
 		var record: Dictionary = {"meta":metadata,"seed":int(raw.get("seed",game.world.seed_value)),"edits":[],"png":""}
+		if raw.get("remote",false): record.remote = true
+		if raw.get("missing",false): record.missing = true
 		if raw.get("png") is String and str(raw.png).length() <= 200000:
 			var png: PackedByteArray = Marshalls.base64_to_raw(raw.png)
 			var image := Image.new()
@@ -108,7 +112,7 @@ static func in_cube(p: Vector3i, minimum: Vector3i) -> bool:
 func create(position: Vector3, dimension: String = "") -> Dictionary:
 	if dimension.is_empty(): dimension = game.dimension
 	var minimum: Vector3i = origin(position)
-	var metadata: Dictionary = {"id":str(next_id),"dimension":dimension,"min":[minimum.x,minimum.y,minimum.z],"created":int(Time.get_unix_time_from_system())}
+	var metadata: Dictionary = {"id":str(next_id),"dimension":dimension,"min":[minimum.x,minimum.y,minimum.z],"created":int(Time.get_unix_time_from_system()),"positive_z":true}
 	next_id += 1
 	_capture(metadata)
 	return {"id":VillageContent.FILLED_MAP,"count":1,"wear":0,"data":{"map":metadata.duplicate(true)}}
@@ -134,30 +138,63 @@ func _capture(metadata: Dictionary) -> void:
 	for entry in record.edits: source.edits[Vector3i(entry[0],entry[1],entry[2])] = int(entry[3])
 	records[metadata.id] = record; sources[metadata.id] = source
 
-func ensure(slot: Dictionary) -> Dictionary:
+func ensure(slot: Dictionary, at: Vector3 = Vector3.INF) -> Dictionary:
 	if int(slot.get("id",0)) != VillageContent.FILLED_MAP: return {}
 	var metadata: Dictionary = clean_data(slot.get("data",{}).get("map",{}))
 	if metadata.is_empty():
-		metadata = create(game.player.position).data.map
+		if replica():
+			if is_same(slot,game.inventory.held()): game.network.map_action_request("migrate",game.inventory.selected)
+			return {}
+		metadata = create(game.player.position if not at.is_finite() else at).data.map
 		if not slot.has("data"): slot.data = {}
 		slot.data.map = metadata.duplicate(true)
+	elif replica():
+		if not records.has(metadata.id): records[metadata.id] = {"meta":metadata.duplicate(true),"png":"","remote":true}
+		game.network.request_map(metadata.id)
 	elif not records.has(metadata.id):
 		next_id = maxi(next_id,int(metadata.id)+1)
 		_capture(metadata)
 	return metadata
 
+func replica() -> bool:
+	return game.network != null and game.network.client()
+
+func fill_inventory(inv: Inventory, at: Vector3, legacy: bool = false) -> Dictionary:
+	var held: Dictionary = inv.held()
+	if legacy:
+		if held.id != VillageContent.FILLED_MAP or not clean_data(held.get("data",{}).get("map",{})).is_empty(): return {}
+		ensure(held,at); inv.changed.emit()
+		return {"item":held.duplicate(true),"overflow":0}
+	if held.id != VillageContent.EMPTY_MAP: return {}
+	var item: Dictionary = create(at)
+	var overflow: int = 0
+	if int(held.count) == 1: inv.slots[inv.selected] = item.duplicate(true)
+	else:
+		inv.consume_selected()
+		overflow = inv.add_item(item.id,1,0,item.data)
+	inv.changed.emit()
+	return {"item":item,"overflow":overflow}
+
 func use() -> bool:
 	var slot: Dictionary = game.inventory.held()
 	if int(slot.get("id",0)) not in [VillageContent.EMPTY_MAP,VillageContent.FILLED_MAP]: return false
+	if replica() and (slot.id == VillageContent.EMPTY_MAP or clean_data(slot.get("data",{}).get("map",{})).is_empty()):
+		game.network.map_action_request("fill" if slot.id == VillageContent.EMPTY_MAP else "migrate",game.inventory.selected); return true
 	if slot.id == VillageContent.EMPTY_MAP:
-		var filled: Dictionary = create(game.player.position)
-		# Source consumes one empty map in creative too; an overflow is dropped.
-		game.inventory.consume_selected()
-		var leftover: int = game.inventory.add_item(filled.id,1,0,filled.data)
-		if leftover: game.spawn_drop(game.player.position+Vector3.UP,filled.id,leftover,0,filled.data)
-		show_map(filled)
+		var filled: Dictionary = fill_inventory(game.inventory,game.player.position)
+		if int(filled.get("overflow",0)) > 0: game.spawn_drop(game.player.position,filled.item.id,filled.overflow,0,filled.item.data)
+		show_map(filled.item)
 	else: show_map(slot)
 	return true
+
+static func copy_inventory(inv: Inventory, index: int) -> bool:
+	if index < 0 or index >= inv.slots.size() or inv.slots[index].id != VillageContent.FILLED_MAP: return false
+	var original: Dictionary = inv.slots[index]
+	if clean_data(original.get("data",{}).get("map",{})).is_empty(): return false
+	var trial := Inventory.new(); trial.slots = inv.slots.duplicate(true)
+	if not trial.remove_item(VillageContent.EMPTY_MAP,1): return false
+	if trial.add_item(VillageContent.FILLED_MAP,1,original.wear,original.get("data",{})) > 0: return false
+	inv.slots = trial.slots; inv.changed.emit(); return true
 
 func copy_map(index: int = -1) -> bool:
 	if index < 0:
@@ -167,14 +204,32 @@ func copy_map(index: int = -1) -> bool:
 				if game.inventory.slots[i].id == VillageContent.FILLED_MAP: index = i; break
 	if index < 0 or index >= game.inventory.slots.size() or game.inventory.slots[index].id != VillageContent.FILLED_MAP:
 		game.toast("Bring a filled map and an empty map."); return false
+	if replica(): return game.network.map_action_request("copy",index)
 	ensure(game.inventory.slots[index])
-	var original: Dictionary = game.inventory.slots[index]
-	var trial := Inventory.new(); trial.slots = game.inventory.slots.duplicate(true)
-	if not trial.remove_item(VillageContent.EMPTY_MAP,1): game.toast("Copying needs one empty map."); return false
-	if trial.add_item(VillageContent.FILLED_MAP,1,original.wear,original.data) > 0:
-		game.toast("Make room for the copied map."); return false
-	game.inventory.slots = trial.slots; game.inventory.changed.emit(); game.sound("place")
-	game.toast("Copied map #"+str(original.data.map.id)+"."); return true
+	if not copy_inventory(game.inventory,index): game.toast("Copying needs an empty map and room for the result."); return false
+	game.sound("place"); game.toast("Copied map."); return true
+
+# A guest only displays the host's image; missing data never triggers a new survey.
+func accept_remote(id: String, raw: Dictionary) -> bool:
+	if raw.is_empty():
+		if records.has(id): records[id].missing = true
+		return false
+	var metadata: Dictionary = clean_data(raw.get("meta",{}))
+	if metadata.is_empty() or str(metadata.id) != id: return false
+	var png: String = str(raw.get("png",""))
+	if png.length() > 200000: return false
+	if not png.is_empty():
+		var check := Image.new()
+		if check.load_png_from_buffer(Marshalls.base64_to_raw(png)) != OK or check.get_size() != Vector2i(SIZE,SIZE): return false
+	if records.has(id) and not str(records[id].get("png","")).is_empty() and png.is_empty(): return true
+	records[id] = {"meta":metadata,"png":png,"remote":true}
+	textures.erase(id)
+	if game.survival != null: game.survival.refresh_displays()
+	return true
+
+func public_record(id: String) -> Dictionary:
+	if not records.has(id): return {}
+	return {"meta":records[id].meta.duplicate(true),"png":str(records[id].png)}
 
 func _prepare(id: String) -> void:
 	var record: Dictionary = records[id]
@@ -197,18 +252,20 @@ func update() -> void:
 			if job.kind == "finish":
 				records[id].png = Marshalls.raw_to_base64(job.result)
 				records[id].edits.clear(); builds.erase(id); sources.erase(id)
+				if game.network != null: game.network.map_ready(id)
 				if game.survival != null: game.survival.refresh_displays()
 			else: _apply_samples(builds[id],job.result)
 		job = {}
-	if job.is_empty() and retired.is_empty():
+	if job.is_empty() and retired.is_empty() and not replica():
 		for id in records:
-			if not str(records[id].png).is_empty(): continue
+			if not str(records[id].png).is_empty() or records[id].get("remote",false): continue
 			if not builds.has(id): _prepare(id)
 			var work: Dictionary = {"id":str(id),"kind":"column","result":{}}
 			if int(builds[id].column) >= 64:
 				work.kind = "finish"
 				var snapshot_build: Dictionary = builds[id].duplicate()
-				work.task = WorkerThreadPool.add_task(func(): work.result = finish_image(snapshot_build),false,"Encode persistent map")
+				var positive_z: bool = records[id].meta.get("positive_z",false)
+				work.task = WorkerThreadPool.add_task(func(): work.result = finish_image(snapshot_build,positive_z),false,"Encode persistent map")
 			else:
 				var record: Dictionary = records[id].duplicate(true)
 				var source: Dictionary = sources[id]
@@ -236,7 +293,7 @@ static func map_color(id: int) -> Color:
 	else: color.a = 1.0
 	return color
 
-static func render_column(record: Dictionary, source: Dictionary, index: int) -> Dictionary:
+static func render_column(record: Dictionary, source: Dictionary, index: int, colors: Dictionary = {}) -> Dictionary:
 	var minimum := Vector3i(int(record.meta.min[0]),int(record.meta.min[1]),int(record.meta.min[2]))
 	var column := Vector2i(minimum.x/16+index%8,minimum.z/16+index/8)
 	var blocks: Dictionary = {}; var edits: Dictionary = {}
@@ -264,7 +321,7 @@ static func render_column(record: Dictionary, source: Dictionary, index: int) ->
 				var p := Vector3i(column.x*16+x,y,column.y*16+z)
 				var id: int = int(edits[p]) if edits.has(p) else (int(blocks[floori(y/16.0)][x+z*16+posmod(y,16)*256]) if blocks.has(floori(y/16.0)) else Nodes.AIR)
 				if id == Nodes.AIR: continue
-				if not palette.has(id): palette[id] = map_color(id)
+				if not palette.has(id): palette[id] = colors.get(id,map_color(id))
 				var color: Color = palette[id]; var factor: float = color.a*(1.0-alpha)
 				aggregate += Vector3(color.r,color.g,color.b)*255.0*factor; alpha += factor
 				if alpha > 0.70 and heights[pixel] == NO_HEIGHT: heights[pixel] = y
@@ -281,14 +338,15 @@ static func _apply_samples(build: Dictionary, sample: Dictionary) -> void:
 			build.heights[dst] = sample.heights[src]; build.opaque[dst] = sample.opaque[src]
 	build.column += 1
 
-static func finish_image(build: Dictionary) -> PackedByteArray:
+static func finish_image(build: Dictionary, positive_z: bool = false) -> PackedByteArray:
 	var pixels := PackedByteArray(); pixels.resize(SIZE*SIZE*3)
 	for x in SIZE:
 		var last_height: int = NO_HEIGHT
 		for z in SIZE:
 			var pixel: int = x+z*SIZE; var height: int = build.heights[pixel]; var shade: int = 0
 			if build.opaque[pixel] and height != NO_HEIGHT and last_height != NO_HEIGHT: shade = clampi((height-last_height)*8,-32,32)
-			for channel in 3: pixels[pixel*3+channel] = clampi(roundi(float(build.rgb[pixel*3+channel])+shade),0,255)
+			var target: int = x+((SIZE-1-z) if positive_z else z)*SIZE
+			for channel in 3: pixels[target*3+channel] = clampi(roundi(float(build.rgb[pixel*3+channel])+shade),0,255)
 			last_height = height
 	return Image.create_from_data(SIZE,SIZE,false,Image.FORMAT_RGB8,pixels).save_png_to_buffer()
 
@@ -315,10 +373,11 @@ func frame_model(slot: Dictionary) -> MeshInstance3D:
 	return mesh
 
 static func marker(metadata: Dictionary, position: Vector3, dimension: String, yaw: float) -> Dictionary:
-	if metadata.is_empty() or metadata.dimension != dimension: return {"visible":false}
+	if metadata.is_empty(): return {"visible":false}
 	var x: float = roundf(position.x)-float(metadata.min[0]); var z: float = roundf(position.z)-float(metadata.min[2])
 	var outside: bool = x < 0 or x > SIZE-1 or z < 0 or z > SIZE-1
-	return {"visible":true,"pixel":Vector2(clampf(x,0,SIZE-1),clampf(z,0,SIZE-1)),"outside":outside,"rotation":-roundf(yaw/(PI/2.0))*(PI/2.0)}
+	var y: float = SIZE-1-clampf(z,0,SIZE-1) if metadata.get("positive_z",false) else clampf(z,0,SIZE-1)
+	return {"visible":true,"pixel":Vector2(clampf(x,0,SIZE-1),y),"outside":outside,"rotation":-posmod(floori(yaw/(PI/2.0)+0.5),4)*(PI/2.0)}
 
 func show_map(slot: Dictionary = {}) -> bool:
 	if slot.is_empty():
@@ -329,14 +388,16 @@ func show_map(slot: Dictionary = {}) -> bool:
 				if candidate.id == VillageContent.FILLED_MAP: slot = candidate; break
 	if slot.is_empty() or slot.get("id",0) != VillageContent.FILLED_MAP:
 		game.toast("Use an empty map to survey this region first."); return false
-	var metadata: Dictionary = ensure(slot); view_id = metadata.id
+	var metadata: Dictionary = ensure(slot)
+	if metadata.is_empty(): return false
+	view_id = metadata.id
 	game.state = "map"; game.world.active = false; Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	game.hud._clear(); game.hud.screen = "map"; game.hud._dim()
 	var panel: Panel = game.hud._fitted_panel(Vector2(620,610))
 	game.hud._label(panel,"MAP #"+view_id+" · "+str(metadata.dimension).to_upper(),Vector2(24,16),23,game.hud.ACCENT)
 	view_image = _image(panel,Vector2(80,58),460)
 	view_marker = _marker(view_image)
-	view_status = game.hud._label(panel,"",Vector2(24,527),14,game.hud.MUTED)
+	view_status = game.hud._label(panel,"",Vector2(24,523),13,game.hud.MUTED)
 	game.hud._button(panel,"Done",Rect2(24,565,572,32),game.resume)
 	_update_views(); return true
 
@@ -355,7 +416,7 @@ func _paint(id: String, image: TextureRect, label: Label, pointer: Label) -> voi
 	var record: Dictionary = records[id]; var metadata: Dictionary = record.meta
 	image.texture = texture(id)
 	var ready: bool = not str(record.png).is_empty()
-	if not ready: label.text = "Surveying region… %d / 64 columns"%int(builds.get(id,{}).get("column",0))
+	if not ready: label.text = "Map image unavailable." if record.get("missing",false) else ("Receiving host map…" if record.get("remote",false) else "Surveying region… %d / 64 columns"%int(builds.get(id,{}).get("column",0)))
 	elif image.size.x < 300: label.text = "Map #"+id+" · North ↑\n1 block / pixel"
 	else: label.text = "North ↑ · 1 block / pixel · snapshot #"+id+"\nX %d–%d · Z %d–%d · Y %d–%d"%[metadata.min[0],int(metadata.min[0])+127,metadata.min[2],int(metadata.min[2])+127,metadata.min[1],int(metadata.min[1])+127]
 	var mark: Dictionary = marker(metadata,game.player.position,game.dimension,game.player.rotation.y)
@@ -371,6 +432,7 @@ func _update_views() -> void:
 		if is_instance_valid(held_panel): held_panel.queue_free(); held_panel = null
 		return
 	var metadata: Dictionary = ensure(held)
+	if metadata.is_empty(): return
 	if not is_instance_valid(held_panel):
 		held_panel = Panel.new(); held_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE; held_panel.size = Vector2(224,248)
 		game.hud.layer.add_child(held_panel); held_image = _image(held_panel,Vector2(12,12),200); held_marker = _marker(held_image)

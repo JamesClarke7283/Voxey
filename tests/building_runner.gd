@@ -28,10 +28,11 @@ func run() -> void:
 	var inv := Inventory.new()
 	for base in BuildingShapes.MATERIALS:
 		var slab: int = BuildingShapes.slab_for(base); var stair: int = BuildingShapes.stair_for(base)
+		base = BuildingShapes.material(slab)
 		var recipe: Dictionary = inv.recipes[inv.recipe_index(slab)]
 		var stair_recipe: Dictionary = inv.recipes[inv.recipe_index(stair)]
 		check(recipe.count == 6 and recipe.ingredients[base] == 3 and stair_recipe.count == 4 and stair_recipe.ingredients[base] == 6,"source slab and stair crafting yields for "+Nodes.title(base))
-	check(BuildingShapes.items().size() == (BuildingShapes.MATERIALS.size()+BuildingShapes.extra_list().size())*2 and not Nodes.all_ids().has(4001) and not Nodes.all_ids().has(4002),"catalog exposes a slab and stair for every material and hides placement-only variants")
+	check(BuildingShapes.items().size() == (BuildingShapes.MATERIALS.size()+BuildingShapes.extra_list().size()+ShapeCatalog.data.new_families.size())*2 and not Nodes.all_ids().has(4001) and not Nodes.all_ids().has(4002),"catalog exposes a slab and stair for every material and hides placement-only variants")
 	# The materials added after the original 51 keep their own band, so the original
 	# families' ids are untouched and the appended ones do not collide with the
 	# barrier families at 5000.
@@ -45,10 +46,10 @@ func run() -> void:
 	# (`mcl_mud/init.lua:43-58`, `mcl_ocean/prismarine.lua:65-87`), and both are
 	# cut from their base blocks.
 	check(BuildingShapes.slab_for(EndMud.MUD_BRICKS) != 0 and BuildingShapes.stair_for(EndMud.MUD_BRICKS) != 0 and BuildingShapes.material(BuildingShapes.stair_for(EndMud.MUD_BRICKS)) == EndMud.MUD_BRICKS,"mud-brick stairs and slabs are reachable")
-	check(BuildingShapes.stair_for(VillageContent.PRISMARINE) != 0 and BuildingShapes.stonecutter_inputs(EndMud.MUD_BRICKS).has(EndMud.PACKED_MUD) and BuildingShapes.stonecutter_inputs(VillageContent.PRISMARINE_BRICK).has(VillageContent.PRISMARINE),"prismarine shapes exist and the source stonecutter routes are present")
+	check(BuildingShapes.stair_for(VillageContent.PRISMARINE) != 0 and BuildingShapes.stonecutter_inputs(EndMud.MUD_BRICKS) == [EndMud.MUD_BRICKS] and BuildingShapes.stonecutter_inputs(VillageContent.PRISMARINE_BRICK) == [VillageContent.PRISMARINE_BRICK],"prismarine shapes exist and the source stonecutter routes are present")
 	# `mcl_trees/api.lua`:555-596: every species' bark wood and stripped bark wood.
-	check(BuildingShapes.slab_for(6005) != 0 and BuildingShapes.stair_for(6166) != 0 and BuildingShapes.title(BuildingShapes.stair_for(6005)) == "Oak bark stairs","all twelve bark materials have a slab and a stair")
-	check(Nodes.fuel_time(4000) == 7.5 and Nodes.fuel_time(4003) == 15,"wood slabs retain the source fractional fuel duration")
+	check(BuildingShapes.slab_for(6005) != 0 and BuildingShapes.stair_for(6166) != 0 and BuildingShapes.title(BuildingShapes.stair_for(6005)).to_lower() == "oak bark stairs","all twelve bark materials have a slab and a stair")
+	check(Nodes.fuel_time(4000) == 7.5 and Nodes.fuel_time(4003) == 15,"wood slabs retain the registered source fuel duration")
 	for id in range(4000,4011):
 		var bits: int = BuildingShapes.mask(id)
 		check(volume(bits) == (4 if id < 4002 else (8 if id == 4002 else 6)),"shape has the expected solid volume for state "+str(id))
@@ -74,7 +75,7 @@ func run() -> void:
 	game.inventory.restore([]); game.inventory.slots[0] = {"id":4000,"count":3,"wear":0}; game.inventory.selected = 0
 	game.gamemode = "survival"; game.player.target = ray; game.player.use()
 	check(game.world.node_at(origin) == 4002 and game.inventory.held().count == 2,"placing on a matching lower slab combines it and consumes one slab")
-	check(Enchantments.harvest(4002,{} ) == [[4000,2]],"breaking a double slab returns two ordinary slabs")
+	check(Enchantments.harvest(4002,{"id":0,"count":0,"wear":0}) == [[4000,2]],"breaking a double slab returns two ordinary slabs")
 	game.world.set_node(origin,Nodes.AIR)
 	game.player.target = {"pos":origin+Vector3i.LEFT,"normal":Vector3i.RIGHT,"id":Nodes.STONE,"distance":2.0,"point":Vector3(origin)+Vector3(0,0.8,0.5)}
 	game.player.use()
@@ -98,7 +99,8 @@ func run() -> void:
 	for inverted in 2:
 		for facing in 4:
 			game.world.set_node(origin,Nodes.AIR)
-			game.player.camera.look_at(game.player.camera.global_position+Vector3(BuildingShapes.DIRECTIONS[facing]))
+			game.player.position = Vector3(origin)+Vector3.ONE*0.5-Vector3(BuildingShapes.DIRECTIONS[facing])*3
+			game.player.camera.look_at(Vector3(origin)+Vector3.ONE*0.5)
 			var normal: Vector3i = Vector3i.DOWN if inverted else Vector3i.UP
 			game.player.target = {"pos":origin-normal,"normal":normal,"id":Nodes.STONE,"distance":2.0,"point":Vector3(origin)+Vector3(0.5,inverted,0.5)}
 			game.player.use()

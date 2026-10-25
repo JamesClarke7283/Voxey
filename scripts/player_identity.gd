@@ -19,9 +19,10 @@ func migrate_save(value) -> void:
 	if value is Array:
 		for child in value: migrate_save(child)
 	elif value is Dictionary:
-		for field in ["homes","reputations"]:
+		for field in ["homes","reputations","gossips"]:
 			if value.get(field) is Dictionary and value[field].has(legacy_offline_id) and not value[field].has(OFFLINE):
-				value[field][OFFLINE] = value[field][legacy_offline_id]
+				var previous = value[field][legacy_offline_id]
+				value[field][OFFLINE] = previous.duplicate(true) if previous is Dictionary or previous is Array else previous
 		if value.get("owner","") == legacy_offline_id:
 			value.owner = OFFLINE
 			if str(value.get("label","")).begins_with("Recovery chest · "): value.label = "Recovery chest · player"

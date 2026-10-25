@@ -28,7 +28,7 @@ static func rename(game: Node, index: int, value: String) -> bool:
 	else: slot.data = data
 	# `mcl_anvils`: a rename costs exactly one level, and it does not add to the
 	# prior-work penalty (only a material repair does, at init.lua:229).
-	if game.gamemode != "creative": game.experience = maxf(0,game.experience-(7+2*(level-1)))
+	if game.gamemode != "creative": game.experience = ExperienceCurve.spend(game.experience,1)
 	game.inventory.changed.emit()
 	game.sound("equip")
 	game.toast("Item name removed." if text.is_empty() else "Named "+text+".")

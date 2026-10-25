@@ -10,10 +10,14 @@ static func torch(id: int) -> bool:
 	return Torches.is_torch(id) or id in [Nodes.SOUL_TORCH,Nodes.REDSTONE_TORCH]
 
 static func diggable(id: int) -> bool:
-	return CropFarming.is_crop(id) or torch(id) or id == VillageContent.ITEM_FRAME or RedstoneInputs.is_device(id) or SnowCover.is_snow(id) or Doors.is_door(id) or FoodFeatures.is_cake(id) or Amethyst.is_crystal(id) or id == Amethyst.BUDDING or id in [Nodes.PUMPKIN,Nodes.MELON] or FruitCrops.is_pumpkin_head(id)
+	if id == DryTerrain.DEAD_BUSH: return true
+	return CropFarming.is_crop(id) or CocoaCrops.is_cocoa(id) or NetherWartCrops.is_wart(id) or SweetBerryCrops.is_bush(id) or LargePlants.is_large(id) or torch(id) or id == VillageContent.ITEM_FRAME or RedstoneInputs.is_device(id) or SnowCover.is_snow(id) or Doors.is_door(id) or FoodFeatures.is_cake(id) or Amethyst.is_crystal(id) or id == Amethyst.BUDDING or id in [Nodes.PUMPKIN,Nodes.MELON] or FruitCrops.is_pumpkin_head(id)
 
 static func unsticky(id: int) -> bool:
 	if CropFarming.is_crop(id): return CropFarming.unsticky(id)
+	if CocoaCrops.is_cocoa(id): return CocoaCrops.unsticky(id)
+	if NetherWartCrops.is_wart(id): return NetherWartCrops.unsticky(id)
+	if SweetBerryCrops.is_bush(id): return false
 	return diggable(id)
 
 static func replaceable(id: int) -> bool:
@@ -54,21 +58,34 @@ static func finish(circuit: RedstoneCircuit) -> void:
 	var world: VoxelWorld = circuit.world
 	circuit.moving = false
 	Signs.finish_piston(world)
+	Banners.finish_piston(world)
 	Farmland.finish_piston(world)
 	Amethyst.finish_piston(world)
 	var pending: Dictionary = world.get_meta("piston_support",{})
 	if world.has_meta("piston_support"): world.remove_meta("piston_support")
 	for p in pending:
+		DryTerrain.changed(world,p)
 		SnowCover.changed(world,p); FoodFeatures.changed(world,p)
 		Torches.support_changed(world,p); circuit.support_changed(p)
 		CropFarming.refresh(world,p); CropFarming.refresh(world,p+Vector3i.UP)
+		NetherWartCrops.refresh(world,p); NetherWartCrops.refresh(world,p+Vector3i.UP)
+		CocoaCrops.refresh(world,p)
+		for side in CocoaCrops.SIDES: CocoaCrops.refresh(world,p+side)
+		SweetBerryCrops.refresh(world,p); SweetBerryCrops.refresh(world,p+Vector3i.UP)
 		FruitCrops.refresh(world,p); FruitCrops.refresh(world,p+Vector3i.UP)
 		for side in FruitCrops.CONNECT_ORDER: FruitCrops.refresh(world,p+side)
+		LargePlants.changed(world,p,world.node_at(p),world.node_at(p))
+		Decor.support_changed(world,p)
 
 static func destroy(world: VoxelWorld, entry: Dictionary) -> void:
 	var p: Vector3i = entry.from; var id: int = int(entry.id)
 	if world.node_at(p) != id: return # Paired doors may already remove a second queued half.
-	if CropFarming.piston_break(world,p) or FruitCrops.piston_break(world,p) or Amethyst.piston_break(world,p): return
+	if id == DryTerrain.DEAD_BUSH:
+		if world.set_node(p,Nodes.AIR):
+			for item in DryTerrain.harvest({"id":0}): world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,item[0],item[1])
+		return
+	if CropFarming.piston_break(world,p) or CocoaCrops.piston_break(world,p) or NetherWartCrops.piston_break(world,p) or SweetBerryCrops.piston_break(world,p) or FruitCrops.piston_break(world,p) or Amethyst.piston_break(world,p): return
+	if LargePlants.environmental_break(world,p): return
 	if torch(id):
 		if world.set_node(p,Nodes.AIR): world.get_parent().spawn_drop(Vector3(p)+Vector3.ONE*0.5,Nodes.TORCH if Torches.is_torch(id) else id,1)
 	elif id == VillageContent.ITEM_FRAME:
@@ -118,6 +135,9 @@ static func actors(world: VoxelWorld) -> Array:
 
 static func future_boxes(world: VoxelWorld, p: Vector3i, ids: Dictionary) -> Array:
 	var id: int = int(ids.get(p,world.node_at(p)))
+	if LushCaveExtra.is_big_leaf(id): return LushCaveExtra.collision_boxes(id)
+	if GrindstoneRepair.is_grindstone(id): return GrindstoneRepair.boxes(id)
+	if Stonecutting.is_cutter(id): return Stonecutting.boxes(id)
 	if Barriers.is_barrier(id):
 		var neighbors: Array = []
 		for side in Barriers.SIDES+[Vector3i.UP]: neighbors.append(int(ids.get(p+side,world.node_at(p+side))))
@@ -126,6 +146,7 @@ static func future_boxes(world: VoxelWorld, p: Vector3i, ids: Dictionary) -> Arr
 		var neighbors: Array = []
 		for side in BuildingShapes.DIRECTIONS: neighbors.append(int(ids.get(p+side,world.node_at(p+side))))
 		return BuildingShapes.boxes(BuildingShapes.mask(id,neighbors))
+	if CocoaCrops.is_cocoa(id): return CocoaCrops.world_boxes(world,p)
 	if Farmland.is_soil(id): return Farmland.boxes(id)
 	if Amethyst.is_crystal(id): return Amethyst.boxes(id)
 	if SnowCover.is_snow(id): return SnowCover.boxes(id)
@@ -247,7 +268,7 @@ static func apply_plan(circuit: RedstoneCircuit, planned: Dictionary, movement: 
 	var world: VoxelWorld = circuit.world
 	for entry in planned.nodes:
 		entry.state = world.block_states.get(VoxelWorld.station_key(entry.from),{}).duplicate(true)
-		if Signs.is_sign(entry.id): Signs.station(world,entry.from)
+		if Signs.is_any(entry.id): Signs.station(world,entry.from)
 		entry.station = world.stations.get(VoxelWorld.station_key(entry.from),{})
 		entry.hive = Beehives.move_state(world,entry.from)
 	var old_drops: Dictionary = {}
@@ -279,5 +300,11 @@ static func apply_plan(circuit: RedstoneCircuit, planned: Dictionary, movement: 
 			var strength := Vector3(10,13,10) if actor is VoxeyPlayer else (Vector3(20,20,20) if actor is Creature else (Vector3(9,11,9) if actor is ItemDrop else (Vector3(43,72,43) if actor is FallingNode else Vector3(6,9,6))))
 			actor.velocity += Vector3(movement)*strength
 	finish(circuit)
+	# Chiseled shelves render their saved contents outside the chunk mesh.
+	# Move that display in the same transaction as the block and its inventory.
+	for entry in planned.nodes:
+		if entry.id == Bookshelves.ID:
+			game.survival.refresh_displays()
+			break
 	recover_drops(world,old_drops,movement)
 	return true

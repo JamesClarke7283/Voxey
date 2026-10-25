@@ -12,7 +12,7 @@ static func run(t: SceneTree, game: Node) -> void:
 	Composters.step(state,0.6)
 	var restored: Dictionary = JSON.parse_string(JSON.stringify(state))
 	Composters.step(restored,0.39)
-	t.check(Composters.level(restored) == 7,"saved composter retains its remaining maturation time")
+	t.check(Composters.level(restored) == 7,"an active composter retains its remaining maturation time until a reload")
 	Composters.step(restored,0.02)
 	t.check(Composters.level(restored) == 8 and Composters.harvest(restored) and not Composters.harvest(restored),"maturation produces exactly one harvest then resets")
 	var inv := Inventory.new()

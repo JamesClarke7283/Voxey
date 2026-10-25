@@ -1,12 +1,12 @@
 # Mineclonia trading reference
 
-Voxey's `scripts/village_trades.gd` adapts the 297 trade definitions in the user's local Mineclonia checkout, `mods/ENTITIES/mobs_mc/villager.lua`, read on 2026-09-07. Attribution: the Mineclonia / mobs_mc contributors. This adapted data is licensed under GPL version 3; see [the complete license](licenses/Mineclonia-GPL-3.0.txt). The adaptation converts the Lua item names into stable Voxey IDs and materializes candle colors. The GDScript simulation and procedural visuals were implemented for Voxey.
+Voxey's `scripts/village_trades.gd` adapts all 297 trade definitions in the user's local Mineclonia checkout, `mods/ENTITIES/mobs_mc/villager.lua`, rechecked on 2026-10-24. Attribution: the Mineclonia / mobs_mc contributors. The adapted data is licensed under GPL version 3; see [the complete license](licenses/Mineclonia-GPL-3.0.txt). The adaptation converts Lua item names into stable Voxey IDs and materializes the two candle colors.
 
-Source SHA-256: `692674eb05094e20a02f7e53f3cc6f99f03d6f1781ad2010cb5abea29d65e7f6`.
+Source SHA-256: `51d8e9701bea0c8cf5eedbb0f8e01f6f281439f8e91c7a2b344937ea697079aa`.
 
-The reference includes all 13 professions and all five tiers. It unlocks **every** offer in a tier, rather than choosing two. We retain the source input and output quantities, randomized price ranges, stock limits, villager XP, default 0.05 and equipment 0.2 price multipliers, and level thresholds 0/10/70/150/250. Two-input offers are preserved. In this checkout, the cleric's rotten-flesh offer gives 12 villager XP.
+The reference includes thirteen professions and five tiers. It enables every offer in an unlocked tier. Quantities, price ranges, stock, XP and multipliers are compared against the real Lua table, including two-input trades. In this checkout, the cleric's rotten-flesh trade grants twelve villager XP.
 
-Voxey gives 4–6 player XP per trade and five additional XP on level-up. Work restores stock twice per day, with over 120 active seconds before a second restock and a 600-second fallback to a new working day. Demand is adjusted by `2 * uses - stock`. Reputation is stored per session player identity (`player` offline), with trading discounts and penalties for hitting villagers. Voxey also has a three-wave pillager raid and Hero of the Village discounts; multiplayer gossip and zombie curing are not implemented. Enchanted offers draw from the full enchantment catalog, respecting equipment compatibility and source maximum levels.
+[The trade lifecycle notes](villager-trading-source.md) describe delayed promotion, source enchanting, price refresh callbacks, restock boundaries, migration and persistence. [Typed gossip](villager-gossip-source.md) supplies trading memories, hurt and murder penalties, cure rewards and price arithmetic. Complete village schedules and navigation remain open.
 
 Village layouts are original deterministic structures sized for Voxey's terrain. The reference for workplace assignments, houses, beds and paths was `mods/MAPGEN/mcl_villages/` and the profession definitions in `villager.lua`. No upstream textures, meshes or village schematics were imported.
 

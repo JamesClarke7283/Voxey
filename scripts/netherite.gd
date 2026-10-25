@@ -24,7 +24,7 @@ static func upgrade(inv: Inventory, index: int) -> bool:
 	var replacement: Dictionary = original.duplicate(true)
 	replacement.id = result
 	# Luanti retains normalized wear when changing an item name.
-	replacement.wear = mini(Nodes.durability(result)-1,ceili(float(original.wear)*Nodes.durability(result)/Nodes.durability(original.id)))
+	Durability.set_normalized(replacement,Durability.normalized(original))
 	var trial := Inventory.new(); trial.slots = inv.slots.duplicate(true)
 	trial.remove_item(INGOT); trial.remove_item(TEMPLATE)
 	trial.slots[index] = replacement

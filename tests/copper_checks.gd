@@ -22,7 +22,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	for id in stages: all_registered = all_registered and Nodes.exists(id)
 	t.check(all_registered,"every copper stage node is registered")
 	t.check(Nodes.max_stack(Copper.BLOCK_STAGES[0]) == 64,"copper building blocks stack to 64")
-	t.check(Nodes.preferred_tool(Copper.CUT_STAGES[0]) == 0 and Nodes.harvestable(Copper.CUT_STAGES[0],Nodes.TOOLS),"copper blocks need a pickaxe and drop with one")
+	t.check(Nodes.preferred_tool(Copper.CUT_STAGES[0]) == 0 and not Nodes.harvestable(Copper.CUT_STAGES[0],Nodes.TOOLS) and Nodes.harvestable(Copper.CUT_STAGES[0],Nodes.TOOLS+5),"copper blocks require the source's stone-or-better pickaxe harvest level")
 	t.check(not Nodes.harvestable(Copper.CUT_STAGES[0],0),"bare hands cannot harvest a copper block")
 	t.check(is_equal_approx(Nodes.hardness(Copper.BLOCK_STAGES[2]),3.0),"copper hardness matches the source 3.0")
 	for index in 4:
@@ -34,7 +34,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 		var material: int = Copper.CUT_STAGES[index]
 		t.check(BuildingShapes.MATERIALS.has(material) and Copper.shape_id(BuildingShapes.slab_for(material)) != 0,"cut copper stage "+str(index)+" exposes a slab family")
 	var stair: int = BuildingShapes.stair_for(Copper.CUT_STAGES[0])
-	t.check(Nodes.placeable(BuildingShapes.item(stair)) and Nodes.harvestable(stair,Nodes.TOOLS),"cut copper stairs are placeable and pickaxe-harvestable")
+	t.check(Nodes.placeable(BuildingShapes.item(stair)) and Nodes.harvestable(stair,Nodes.TOOLS+5) and not Nodes.harvestable(stair,Nodes.TOOLS),"cut copper stairs retain the source's stone-or-better pickaxe harvest level")
 	var changed: int = Copper.shape_stage(stair,1)
 	t.check(BuildingShapes.material(changed) == Copper.CUT_STAGES[1] and BuildingShapes.variant(changed) == BuildingShapes.variant(stair),"shape stage change keeps the stair variant and moves to exposed copper")
 

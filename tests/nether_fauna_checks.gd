@@ -41,20 +41,20 @@ static func run(suite: Object, game: Node3D) -> void:
 	suite.check(Farming.supports("strider") and Farming.supports("hoglin") and not Farming.supports("zoglin"),"striders and hoglins breed; zoglins never do")
 
 	# --- Nether spawn tables ---------------------------------------------------------------
-	suite.check(NetherSpawns.pick(NetherSpawns.MONSTERS["Nether wastes"],0.0)[0] == "zombified_piglin" and NetherSpawns.pick(NetherSpawns.MONSTERS["Nether wastes"],0.999)[0] == "enderman","the wastes table runs from zombified piglins to endermen")
+	suite.check(NetherSpawns.pick(NetherSpawns.MONSTERS["NetherWastes"],0.0)[0] == "zombified_piglin" and NetherSpawns.pick(NetherSpawns.MONSTERS["NetherWastes"],0.999)[0] == "enderman","the wastes table runs from zombified piglins to endermen")
 	var counts: Dictionary = {}
 	var rng := RandomNumberGenerator.new(); rng.seed = 13
 	for i in 16800:
-		var kind: String = NetherSpawns.pick(NetherSpawns.MONSTERS["Nether wastes"],rng.randf())[0]
+		var kind: String = NetherSpawns.pick(NetherSpawns.MONSTERS["NetherWastes"],rng.randf())[0]
 		counts[kind] = int(counts.get(kind,0))+1
 	suite.check(absf(float(counts.get("zombified_piglin",0))/16800.0-100.0/168.0) < 0.02 and absf(float(counts.get("ghast",0))/16800.0-50.0/168.0) < 0.02,"the wastes draw follows the source's weights (%s)" % str(counts))
 	for biome in NetherSpawns.MONSTERS:
 		for entry in NetherSpawns.MONSTERS[biome]:
 			if entry[0] in ["blaze","wither_skeleton"]: suite.check(false,"%s never spawns outside a fortress" % entry[0])
-	suite.check(NetherSpawns.table_for("Crimson forest",false)[0][0] == "hoglin","hoglins lead the crimson forest")
-	suite.check(NetherSpawns.table_for("Crimson forest",true) == NetherSpawns.FORTRESS,"inside a fortress the fortress table applies whatever the biome")
+	suite.check(NetherSpawns.table_for("CrimsonForest",false)[0][0] == "hoglin","hoglins lead the crimson forest")
+	suite.check(NetherSpawns.table_for("CrimsonForest",true) == NetherSpawns.FORTRESS,"inside a fortress the fortress table applies whatever the biome")
 	suite.check(NetherSpawns.FORTRESS.any(func(e): return e[0] == "blaze") and NetherSpawns.FORTRESS.any(func(e): return e[0] == "wither_skeleton"),"blazes and wither skeletons spawn in fortresses")
-	suite.check(NetherSpawns.table_for("Nowhere",false) == NetherSpawns.MONSTERS["Nether wastes"],"an unknown biome falls back to the wastes")
+	suite.check(NetherSpawns.table_for("Nowhere",false) == NetherSpawns.MONSTERS["NetherWastes"],"an unknown biome falls back to the wastes")
 	var inside: int = 0; var agree: bool = true
 	for x in range(-40,41,3):
 		for z in range(-40,41,3):

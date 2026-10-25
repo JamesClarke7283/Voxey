@@ -120,8 +120,11 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var skeleton: Creature = mob(game,"skeleton",Vector3(4.5,600.01,5.5))
 	game.player.position = Vector3(4.5,600.01,13.5)
 	skeleton.model.look_at(game.player.position); skeleton.attack_cooldown = 0
-	skeleton._physics_process(0.016)
-	var fired: Array = game.entities.get_children().filter(func(entity): return entity is Arrow and entity.shooter_id == skeleton.get_instance_id())
+	var fired: Array = []
+	for i in 180:
+		skeleton._physics_process(1.0/60.0)
+		fired = game.entities.get_children().filter(func(entity): return entity is Arrow and entity.shooter_id == skeleton.get_instance_id())
+		if not fired.is_empty(): break
 	suite.check(fired.size() == 1 and fired[0].shooter_kind == "skeleton","actual skeleton AI assigns its own identity to a fired arrow")
 	for shot in fired: shot.queue_free()
 	skeleton.queue_free(); await suite.process_frame
@@ -130,7 +133,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 		before = drops(game)
 		var shot: Arrow = arrow(game,shooter if shooter != "player" else "",Vector3(6.5,601.0,12.5),Vector3.FORWARD,shooter in ["player",""])
 		fly(shot)
-		suite.check(creeper.health <= 0 and drops(game) == before+(1 if shooter in ["skeleton","stray"] else 0),"real "+("dispenser" if shooter == "" else shooter)+" arrow collision gives the source creeper record eligibility")
+		suite.check(creeper.health <= 0 and drops(game) == before+(1 if shooter in ["skeleton","stray"] else 0),"real "+("dispenser" if shooter == "" else shooter)+" arrow collision gives the source creeper record eligibility; health="+str(creeper.health)+" drops="+str(drops(game))+" before="+str(before)+" stuck="+str(shot.stuck)+" pos="+str(shot.position))
 		Jukeboxes.arrow_killed(creeper,shooter,true)
 		suite.check(drops(game) == before+(1 if shooter in ["skeleton","stray"] else 0),"repeated death callback never duplicates a "+shooter+" record")
 		await suite.process_frame

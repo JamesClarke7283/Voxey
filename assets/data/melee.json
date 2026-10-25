@@ -1,0 +1,780 @@
+{
+  "profiles": {
+    "0": {
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "",
+      "uses": 0
+    },
+    "100": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:helmet_leather",
+      "uses": 0
+    },
+    "101": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:chestplate_leather",
+      "uses": 0
+    },
+    "102": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:leggings_leather",
+      "uses": 0
+    },
+    "103": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:boots_leather",
+      "uses": 0
+    },
+    "104": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:helmet_iron",
+      "uses": 0
+    },
+    "105": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:chestplate_iron",
+      "uses": 0
+    },
+    "106": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:leggings_iron",
+      "uses": 0
+    },
+    "107": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:boots_iron",
+      "uses": 0
+    },
+    "108": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:helmet_gold",
+      "uses": 0
+    },
+    "109": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:chestplate_gold",
+      "uses": 0
+    },
+    "1090": {
+      "custom": true,
+      "groups": {
+        "fleshy": 6
+      },
+      "interval": 0.8333333134651184,
+      "name": "mcl_tools:pick_netherite",
+      "uses": 1015
+    },
+    "1091": {
+      "custom": true,
+      "groups": {
+        "fleshy": 10
+      },
+      "interval": 1,
+      "name": "mcl_tools:axe_netherite",
+      "uses": 1015
+    },
+    "1092": {
+      "custom": true,
+      "groups": {
+        "fleshy": 6
+      },
+      "interval": 1,
+      "name": "mcl_tools:shovel_netherite",
+      "uses": 1015
+    },
+    "1093": {
+      "custom": true,
+      "groups": {
+        "fleshy": 9
+      },
+      "interval": 0.625,
+      "name": "mcl_tools:sword_netherite",
+      "uses": 2031
+    },
+    "1094": {
+      "custom": true,
+      "groups": {
+        "fleshy": 4
+      },
+      "interval": 0.25,
+      "name": "mcl_farming:hoe_netherite",
+      "uses": 1015
+    },
+    "1095": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:helmet_netherite",
+      "uses": 0
+    },
+    "1096": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:chestplate_netherite",
+      "uses": 0
+    },
+    "1097": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:leggings_netherite",
+      "uses": 0
+    },
+    "1098": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:boots_netherite",
+      "uses": 0
+    },
+    "110": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:leggings_gold",
+      "uses": 0
+    },
+    "111": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:boots_gold",
+      "uses": 0
+    },
+    "1110": {
+      "custom": true,
+      "groups": {
+        "fleshy": 2
+      },
+      "interval": 0.8333333134651184,
+      "name": "mcl_tools:pick_gold",
+      "uses": 16
+    },
+    "1111": {
+      "custom": true,
+      "groups": {
+        "fleshy": 7
+      },
+      "interval": 1,
+      "name": "mcl_tools:axe_gold",
+      "uses": 16
+    },
+    "1112": {
+      "custom": true,
+      "groups": {
+        "fleshy": 2
+      },
+      "interval": 1,
+      "name": "mcl_tools:shovel_gold",
+      "uses": 16
+    },
+    "1113": {
+      "custom": true,
+      "groups": {
+        "fleshy": 4
+      },
+      "interval": 0.625,
+      "name": "mcl_tools:sword_gold",
+      "uses": 33
+    },
+    "1114": {
+      "custom": true,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 1,
+      "name": "mcl_farming:hoe_gold",
+      "uses": 16
+    },
+    "112": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:helmet_diamond",
+      "uses": 0
+    },
+    "113": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:chestplate_diamond",
+      "uses": 0
+    },
+    "114": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:leggings_diamond",
+      "uses": 0
+    },
+    "115": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:boots_diamond",
+      "uses": 0
+    },
+    "11568": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:helmet_copper",
+      "uses": 0
+    },
+    "11569": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:chestplate_copper",
+      "uses": 0
+    },
+    "11570": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:leggings_copper",
+      "uses": 0
+    },
+    "11571": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:boots_copper",
+      "uses": 0
+    },
+    "11580": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_mobitems:carrot_on_a_stick",
+      "uses": 0
+    },
+    "11581": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_mobitems:warped_fungus_on_a_stick",
+      "uses": 0
+    },
+    "11592": {
+      "custom": true,
+      "groups": {
+        "fleshy": 3
+      },
+      "interval": 0.8333333134651184,
+      "name": "mcl_tools:pick_copper",
+      "uses": 95
+    },
+    "11593": {
+      "custom": true,
+      "groups": {
+        "fleshy": 9
+      },
+      "interval": 1.25,
+      "name": "mcl_tools:axe_copper",
+      "uses": 95
+    },
+    "11594": {
+      "custom": true,
+      "groups": {
+        "fleshy": 3
+      },
+      "interval": 1,
+      "name": "mcl_tools:shovel_copper",
+      "uses": 95
+    },
+    "11595": {
+      "custom": true,
+      "groups": {
+        "fleshy": 5
+      },
+      "interval": 0.625,
+      "name": "mcl_tools:sword_copper",
+      "uses": 191
+    },
+    "11596": {
+      "custom": true,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.5,
+      "name": "mcl_farming:hoe_copper",
+      "uses": 95
+    },
+    "123": {
+      "custom": true,
+      "groups": null,
+      "interval": 0.5,
+      "name": "mcl_tools:shears",
+      "uses": 0
+    },
+    "134": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_bows:bow",
+      "uses": 0
+    },
+    "138": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_fire:flint_and_steel",
+      "uses": 0
+    },
+    "277": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:elytra",
+      "uses": 0
+    },
+    "279": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "screwdriver:screwdriver",
+      "uses": 0
+    },
+    "789": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_fishing:fishing_rod",
+      "uses": 0
+    },
+    "790": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_bows:crossbow",
+      "uses": 0
+    },
+    "80": {
+      "custom": true,
+      "groups": {
+        "fleshy": 2
+      },
+      "interval": 0.8333333134651184,
+      "name": "mcl_tools:pick_wood",
+      "uses": 30
+    },
+    "81": {
+      "custom": true,
+      "groups": {
+        "fleshy": 2
+      },
+      "interval": 1.25,
+      "name": "mcl_tools:axe_wood",
+      "uses": 30
+    },
+    "813": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_shields:shield",
+      "uses": 0
+    },
+    "817": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:helmet_chain",
+      "uses": 0
+    },
+    "818": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:chestplate_chain",
+      "uses": 0
+    },
+    "819": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:leggings_chain",
+      "uses": 0
+    },
+    "82": {
+      "custom": true,
+      "groups": {
+        "fleshy": 2
+      },
+      "interval": 1,
+      "name": "mcl_tools:shovel_wood",
+      "uses": 30
+    },
+    "820": {
+      "custom": false,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_armor:boots_chain",
+      "uses": 0
+    },
+    "83": {
+      "custom": true,
+      "groups": {
+        "fleshy": 4
+      },
+      "interval": 0.625,
+      "name": "mcl_tools:sword_wood",
+      "uses": 60
+    },
+    "84": {
+      "custom": true,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 1,
+      "name": "mcl_farming:hoe_wood",
+      "uses": 30
+    },
+    "85": {
+      "custom": true,
+      "groups": {
+        "fleshy": 3
+      },
+      "interval": 0.8333333134651184,
+      "name": "mcl_tools:pick_stone",
+      "uses": 66
+    },
+    "86": {
+      "custom": true,
+      "groups": {
+        "fleshy": 9
+      },
+      "interval": 1.25,
+      "name": "mcl_tools:axe_stone",
+      "uses": 66
+    },
+    "87": {
+      "custom": true,
+      "groups": {
+        "fleshy": 3
+      },
+      "interval": 1,
+      "name": "mcl_tools:shovel_stone",
+      "uses": 66
+    },
+    "88": {
+      "custom": true,
+      "groups": {
+        "fleshy": 5
+      },
+      "interval": 0.625,
+      "name": "mcl_tools:sword_stone",
+      "uses": 132
+    },
+    "89": {
+      "custom": true,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.5,
+      "name": "mcl_farming:hoe_stone",
+      "uses": 66
+    },
+    "90": {
+      "custom": true,
+      "groups": {
+        "fleshy": 4
+      },
+      "interval": 0.8333333134651184,
+      "name": "mcl_tools:pick_iron",
+      "uses": 125
+    },
+    "91": {
+      "custom": true,
+      "groups": {
+        "fleshy": 9
+      },
+      "interval": 1.1111111640930176,
+      "name": "mcl_tools:axe_iron",
+      "uses": 125
+    },
+    "92": {
+      "custom": true,
+      "groups": {
+        "fleshy": 4
+      },
+      "interval": 1,
+      "name": "mcl_tools:shovel_iron",
+      "uses": 125
+    },
+    "93": {
+      "custom": true,
+      "groups": {
+        "fleshy": 6
+      },
+      "interval": 0.625,
+      "name": "mcl_tools:sword_iron",
+      "uses": 251
+    },
+    "94": {
+      "custom": true,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.3333333432674408,
+      "name": "mcl_farming:hoe_iron",
+      "uses": 125
+    },
+    "946": {
+      "custom": true,
+      "groups": {
+        "fleshy": 9
+      },
+      "interval": 1.100000023841858,
+      "name": "mcl_tridents:trident",
+      "uses": 0
+    },
+    "947": {
+      "custom": true,
+      "groups": {
+        "fleshy": 5
+      },
+      "interval": 1.600000023841858,
+      "name": "mcl_tools:mace",
+      "uses": 450
+    },
+    "95": {
+      "custom": true,
+      "groups": {
+        "fleshy": 5
+      },
+      "interval": 0.8333333134651184,
+      "name": "mcl_tools:pick_diamond",
+      "uses": 781
+    },
+    "96": {
+      "custom": true,
+      "groups": {
+        "fleshy": 9
+      },
+      "interval": 1,
+      "name": "mcl_tools:axe_diamond",
+      "uses": 781
+    },
+    "97": {
+      "custom": true,
+      "groups": {
+        "fleshy": 5
+      },
+      "interval": 1,
+      "name": "mcl_tools:shovel_diamond",
+      "uses": 781
+    },
+    "98": {
+      "custom": true,
+      "groups": {
+        "fleshy": 7
+      },
+      "interval": 0.625,
+      "name": "mcl_tools:sword_diamond",
+      "uses": 1562
+    },
+    "99": {
+      "custom": true,
+      "groups": {
+        "fleshy": 1
+      },
+      "interval": 0.25,
+      "name": "mcl_farming:hoe_diamond",
+      "uses": 781
+    }
+  },
+  "resistances": {
+    "axolotl": 0,
+    "baby_drowned": 0,
+    "baby_hoglin": 0.6,
+    "baby_husk": 0,
+    "baby_pigman": 0,
+    "baby_strider": 0,
+    "baby_zoglin": 0.6,
+    "baby_zombie": 0,
+    "bat": 0,
+    "blaze": 0,
+    "cat": 0,
+    "cave_spider": 0,
+    "chicken": 0,
+    "cod": 0,
+    "cow": 0,
+    "creeper": 0,
+    "creeper_charged": 0,
+    "dog": 0,
+    "dolphin": 0,
+    "donkey": 0,
+    "drowned": 0,
+    "enderdragon": 0,
+    "enderman": 0,
+    "endermite": 0,
+    "evoker": 0,
+    "ghast": 0,
+    "glow_squid": 0,
+    "guardian": 0,
+    "guardian_elder": 0,
+    "hoglin": 0.6,
+    "horse": 0,
+    "husk": 0,
+    "illusioner": 0,
+    "iron_golem": 1,
+    "killer_bunny": 0,
+    "llama": 0,
+    "magma_cube_big": 0,
+    "magma_cube_small": 0,
+    "magma_cube_tiny": 0,
+    "mooshroom": 0,
+    "mule": 0,
+    "ocelot": 0,
+    "parrot": 0,
+    "pig": 0,
+    "piglin": 0,
+    "piglin_brute": 0,
+    "pigman": 0,
+    "pillager": 0,
+    "polar_bear": 0,
+    "pufferfish": 0,
+    "rabbit": 0,
+    "ravager": 0.75,
+    "salmon": 0,
+    "sheep": 0,
+    "shulker": 1,
+    "silverfish": 0,
+    "skeleton": 0,
+    "skeleton_horse": 0,
+    "slime_big": 0,
+    "slime_small": 0,
+    "slime_tiny": 0,
+    "snowman": 0,
+    "spider": 0,
+    "squid": 0,
+    "stray": 0,
+    "strider": 0,
+    "trader_llama": 0,
+    "tropical_fish": 0,
+    "vex": 0,
+    "villager": 0,
+    "villager_zombie": 0,
+    "vindicator": 0,
+    "wandering_trader": 0,
+    "witch": 0,
+    "wither": 0,
+    "witherskeleton": 0,
+    "wolf": 0,
+    "zoglin": 0.6,
+    "zombie": 0,
+    "zombie_horse": 0,
+    "zombified_piglin": 0
+  },
+  "source_hashes": {
+    "mods/ENTITIES/mcl_mobs/combat.lua": "109e1f5b76151d6fdc392ba1b452025ed0b4103d6d25fb630db99a9cb3bcf692",
+    "mods/ITEMS/mcl_tools/register.lua": "784efd08225db86ef1a78b4aec3d3b524128666b83235dc56189ecca06ca3309",
+    "mods/ITEMS/mcl_tools/init.lua": "20cd4f2ba4adbfe12305f4cfdf073baa11017ccb86a046943cf0bf12a40c8a64",
+    "mods/ITEMS/mcl_tools/mace.lua": "6d973ba5d82fb60d4c9d412bfd10c8e629452e3ad133595d063c1408535342e5",
+    "mods/ITEMS/mcl_enchanting/enchantments.lua": "ff7e36d44e8a407c1f1f17f1ff2964c9d249394392cd8e993c6d9072aae02507",
+    "mods/PLAYER/mcl_criticals/init.lua": "c5767d808a2f0ba981903ca0617f47f715f78c93a1f8bbe87ae2c3135ea68d0c",
+    "mods/CORE/mcl_util/misc.lua": "337cc84ca81094a7bb09e2bfb020eb13d6271bc9d208b976182ab27c657ff010",
+    "mods/ITEMS/mcl_potions/functions.lua": "877141b7b3177c46e9c596c51c77fb0ee72e9055d501e4807aaf0e1441940c19",
+    "mods/ENTITIES/mcl_mobs/physics.lua": "9bde46ad26807db92fbea0b319e659d6239d8465ec6e10913d6aa933b975c510"
+  },
+  "license": "GPL-3.0-or-later"
+}

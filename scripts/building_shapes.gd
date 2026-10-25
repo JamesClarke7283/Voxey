@@ -20,19 +20,26 @@ const DIRECTIONS = [Vector3i.BACK,Vector3i.RIGHT,Vector3i.FORWARD,Vector3i.LEFT]
 const SIDES = [Vector3i.RIGHT,Vector3i.LEFT,Vector3i.UP,Vector3i.DOWN,Vector3i.BACK,Vector3i.FORWARD]
 static var icon_cache: Dictionary = {}
 
-static func extra_list() -> Array: return EXTRA_MATERIALS+BARK_MATERIALS
+static func extra_list() -> Array: return EXTRA_MATERIALS+BARK_MATERIALS+[BambooWood.PLANKS,BambooWood.MOSAIC]
 static func is_shape(id: int) -> bool:
+	if ShapeCatalog.is_new(id): return true
 	if id >= EXTRA_FIRST and id < EXTRA_FIRST+extra_list().size()*16: return (id-EXTRA_FIRST)%16 <= 10
 	return id >= FIRST and id < FIRST+MATERIALS.size()*16 and (id-FIRST)%16 <= 10
 static func variant(id: int) -> int:
+	if ShapeCatalog.is_new(id): return (id-ShapeCatalog.NEW_FIRST)%16
 	return (id-EXTRA_FIRST)%16 if id >= EXTRA_FIRST and id < EXTRA_FIRST+extra_list().size()*16 else (id-FIRST)%16
 static func material(id: int) -> int:
+	var source: Dictionary = ShapeCatalog.profile(family(id))
+	if not source.is_empty(): return int(source.base)
 	if id >= EXTRA_FIRST and id < EXTRA_FIRST+extra_list().size()*16: return extra_list()[(id-EXTRA_FIRST)/16]
 	return MATERIALS[(id-FIRST)/16]
 static func family(id: int) -> int:
+	if ShapeCatalog.is_new(id): return ShapeCatalog.new_family(id)
 	if id >= EXTRA_FIRST and id < EXTRA_FIRST+extra_list().size()*16: return EXTRA_FIRST+(id-EXTRA_FIRST)/16*16
 	return FIRST+(id-FIRST)/16*16
 static func slab_for(base: int) -> int:
+	var registered: int = ShapeCatalog.family_for(base)
+	if registered != 0: return registered
 	var all: Array = extra_list()
 	if base in all: return EXTRA_FIRST+all.find(base)*16
 	return FIRST+MATERIALS.find(base)*16 if base in MATERIALS else 0
@@ -46,6 +53,8 @@ static func facing(id: int) -> int: return (variant(id)-3)%4
 static func item(id: int) -> int: return family(id)+(3 if stair(id) else 0)
 static func count(id: int) -> int: return 2 if variant(id) == 2 else 1
 static func title(id: int) -> String:
+	var registered: Dictionary = ShapeCatalog.info(id)
+	if not registered.is_empty(): return str(registered.title)
 	var m: int = material(id)
 	var name: String
 	if WoodTypes.is_planks(m): name = WoodTypes.NAMES[WoodTypes.species(m)]
@@ -58,7 +67,19 @@ static func items() -> Array:
 	var ids: Array = []
 	for base in MATERIALS: ids.append(slab_for(base)); ids.append(stair_for(base))
 	for base in extra_list(): ids.append(slab_for(base)); ids.append(stair_for(base))
+	for first in ShapeCatalog.data.new_families: ids.append(int(first)); ids.append(int(first)+3)
 	return ids
+
+static func family_materials() -> Array:
+	var materials: Array = []
+	for id in items():
+		var base: int = material(id)
+		if base not in materials: materials.append(base)
+	return materials
+
+static func tile(id: int, face: int) -> int:
+	if material(id) == Masonry.SMOOTH_STONE and not stair(id) and face not in [2,3]: return Nodes.tile(ShapeMaterials.SMOOTH_SLAB_SIDE,face)
+	return Nodes.tile(material(id),face)
 
 # Matches mcl_stairs/cornerstair.lua's lead/trail rules. Stored facings are the
 # original placement orientation; corners are derived, never recursively saved.
@@ -150,15 +171,20 @@ static func mesh(out: Array, p: Vector3, id: int, data: Variant, padded_cell: Ve
 						points.append(p+local)
 						uv.append(Vector2(local.dot(right)+(1.0 if right.dot(Vector3.ONE) < 0 else 0.0),-local.dot(up)+(1.0 if up.dot(Vector3.ONE) > 0 else 0.0)))
 					var shade: float = [0.82,0.73,1.0,0.53,0.87,0.77][face]
-					BlockMesher._quad(out,points,uv,normal,Nodes.tile(material(id),face),Color(shade,shade,shade),true)
+					BlockMesher._quad(out,points,uv,normal,tile(id,face),Color(shade,shade,shade),true)
 
 static func recipes(inv: Inventory) -> void:
 	for base in MATERIALS+extra_list():
+		if not ShapeCatalog.profile(slab_for(base)).is_empty(): continue
 		inv._recipe(title(slab_for(base)),slab_for(base),6,[base,base,base],3,"table")
 		inv._recipe(title(stair_for(base)),stair_for(base),4,[base,0,0,base,base,0,base,base,base],3,"table")
+	ShapeCatalog.recipes(inv)
+	ShapeMaterials.recipes(inv)
 
-static func stonecutter_inputs(base: int) -> Array:
-	if WoodTypes.is_planks(base): return []
+static func stonecutter_inputs(base: int, stairs: bool = false) -> Array:
+	var profile: Dictionary = ShapeCatalog.profile(slab_for(base))
+	if not profile.is_empty(): return (profile.stair.cuts if stairs else profile.slab.cuts).map(func(value): return int(value))
+	if WoodTypes.is_wood(base) or base == BambooWood.MOSAIC: return []
 	# Source _mcl_stonecutter_recipes includes earlier stages of these materials.
 	# Decorative metal stairs have crafting recipes but no stonecutter recipes.
 	match base:
@@ -200,8 +226,8 @@ static func try_place(game: Node, target: Dictionary) -> bool:
 		elif half_slab(game.world.node_at(at)) and family(game.world.node_at(at)) == family(held): id = family(held)+2
 		else: id += 1 if inverted else 0
 	else:
-		var look: Vector3 = -game.player.camera.global_basis.z
-		var facing_value: int = (1 if look.x > 0 else 3) if absf(look.x) > absf(look.z) else (0 if look.z > 0 else 2)
+		var away: Vector3 = Vector3(target.pos+normal)+Vector3.ONE*0.5-game.player.global_position
+		var facing_value: int = (3 if away.x < 0 else 1) if absf(away.x) > absf(away.z) else (2 if away.z < 0 else 0)
 		id += facing_value+(4 if inverted else 0)
 	var previous: int = game.world.node_at(at)
 	if Barriers.is_barrier(previous): return true
@@ -209,8 +235,9 @@ static func try_place(game: Node, target: Dictionary) -> bool:
 	var neighbors: Array = []
 	for side in DIRECTIONS: neighbors.append(game.world.node_at(at+side))
 	var body := AABB(game.player.position-Vector3(0.29,0,0.29),Vector3(0.58,1.8,0.58))
-	for box in boxes(mask(id,neighbors)):
-		if AABB(Vector3(at)+box.position,box.size).intersects(body): return true
+	if variant(id) != 2:
+		for box in boxes(mask(id,neighbors)):
+			if AABB(Vector3(at)+box.position,box.size).intersects(body): return true
 	if game.world.set_node(at,id):
 		Copper.placed_wax(game,at,game.inventory.held())
 		if game.gamemode != "creative": game.inventory.consume_selected()

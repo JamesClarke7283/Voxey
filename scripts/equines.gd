@@ -116,7 +116,7 @@ const HERD_MIN = 2
 const HERD_MAX = 6
 const HORSE_WEIGHT = 5
 const DONKEY_WEIGHT = 1
-const MEADOW = "Oakwood meadow"
+const MEADOW = "Meadow"
 const MEADOW_ANIMALS = 40
 
 static func is_equine(kind: String) -> bool: return KINDS.has(kind)

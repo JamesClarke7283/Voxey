@@ -60,6 +60,10 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.state = "playing"; game.gamemode = "survival"; game.daylight = 1
 	game.player.set_process(false); game.player.set_physics_process(false)
 	game.world.active = false; game.world.set_process(false); game.player.eating.clear()
+	# Earlier high-altitude fixtures can leave a roof over this lighting plot.
+	# Clear edited blocks above it so the sunlight assertion tests open sky.
+	for at in game.world.edits.keys():
+		if at.x >= 2 and at.x < 15 and at.z >= 2 and at.z < 15 and at.y >= 506 and game.world.node_at(at) != Nodes.AIR: game.world.set_node(at,Nodes.AIR)
 	for x in range(2,15):
 		for z in range(2,15):
 			for y in range(499,506): game.world.set_node(Vector3i(x,y,z),Nodes.STONE if y == 499 else Nodes.AIR)
@@ -108,17 +112,19 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	game.world.set_node(low,SnowCover.BASE+2)
 	var before: int = drop_count(game,Nodes.SNOWBALL)
 	game.world.set_node(low+Vector3i.DOWN,Nodes.AIR)
-	suite.check(game.world.node_at(low) == Nodes.AIR and drop_count(game,Nodes.SNOWBALL)-before == 4,"losing support removes snow and drops the source layer-count snowballs")
+	suite.check(game.world.node_at(low) == Nodes.AIR and drop_count(game,Nodes.SNOWBALL) == before,"losing support removes snow without bypassing its shovel-only drop table")
 	game.world.set_node(low+Vector3i.DOWN,Nodes.STONE)
 	# Actual mining callbacks, including tools and Silk Touch, close acquisition.
 	for layer in range(1,9):
 		var id: int = SnowCover.BASE+layer-1
 		game.world.set_node(p,id); held(game,Nodes.TOOLS+2,1)
 		before = drop_count(game,Nodes.SNOWBALL); game.break_node(p,id,Nodes.TOOLS+2)
-		suite.check(game.world.node_at(p) == Nodes.AIR and drop_count(game,Nodes.SNOWBALL)-before == layer+1,"shoveling snow layer "+str(layer)+" yields "+str(layer+1)+" snowballs")
+		suite.check(game.world.node_at(p) == Nodes.AIR and drop_count(game,Nodes.SNOWBALL)-before == layer,"shoveling snow layer "+str(layer)+" yields "+str(layer)+" snowballs")
 		game.world.set_node(p,id); held(game,Nodes.TOOLS+2,1,{"Silk Touch":1})
-		before = drop_count(game,SnowCover.BASE); game.break_node(p,id,Nodes.TOOLS+2)
-		suite.check(game.world.node_at(p) == Nodes.AIR and drop_count(game,SnowCover.BASE)-before == layer,"Silk Touch recovers "+str(layer)+" single-layer snow items")
+		var silk_item: int = Nodes.SNOW_BLOCK if layer == 8 else SnowCover.BASE
+		var silk_count: int = 1 if layer == 8 else layer
+		before = drop_count(game,silk_item); game.break_node(p,id,Nodes.TOOLS+2)
+		suite.check(game.world.node_at(p) == Nodes.AIR and drop_count(game,silk_item)-before == silk_count,"Silk Touch recovers the source item and count for snow layer "+str(layer))
 	game.world.set_node(p,SnowCover.BASE); held(game,0,0)
 	before = drop_count(game,Nodes.SNOWBALL); game.break_node(p,SnowCover.BASE,0)
 	suite.check(game.world.node_at(p) == Nodes.AIR and drop_count(game,Nodes.SNOWBALL) == before,"breaking top snow without a shovel yields no useful drop")
@@ -154,17 +160,17 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	SnowCover.update(game.world,100)
 	suite.check(game.world.node_at(p) == SnowCover.BASE and data.clock == 0,"snow ABMs do not catch up missed intervals or bypass a failed chance roll")
 	game.world.set_node(p+Vector3i.RIGHT*2,Nodes.AIR)
-	# Water can wash snow away, leaving usable drops via the normal fluid loop.
+	# Water washes snow away, but supplies no shovel for its restricted drop table.
 	before = drop_count(game,Nodes.SNOWBALL)
 	game.world.set_node(p+Vector3i.RIGHT,Nodes.WATER); game.world.fluids.settle(p,Nodes.WATER)
-	suite.check(Fluids.water(game.world.node_at(p)) and drop_count(game,Nodes.SNOWBALL)-before == 2,"flowing water washes away a snow layer and releases two snowballs")
+	suite.check(Fluids.water(game.world.node_at(p)) and drop_count(game,Nodes.SNOWBALL) == before,"flowing water washes away snow without bypassing its shovel-only drop table")
 	game.world.set_node(p+Vector3i.RIGHT,Nodes.AIR); game.world.set_node(p,Nodes.AIR)
 	var piston := Vector3i(3,500,4)
 	game.world.set_node(piston,Nodes.PISTON); game.world.circuits.configure(piston,Vector3i.RIGHT)
 	game.world.set_node(piston+Vector3i.RIGHT,SnowCover.BASE+2)
 	before = drop_count(game,Nodes.SNOWBALL)
 	var extended: bool = game.world.circuits.piston(piston,true)
-	suite.check(extended and game.world.node_at(piston+Vector3i.RIGHT) == Nodes.PISTON_HEAD and game.world.node_at(piston+Vector3i.RIGHT*2) == Nodes.AIR and drop_count(game,Nodes.SNOWBALL)-before == 4,"a piston destroys top snow for its source drops instead of pushing it")
+	suite.check(extended and game.world.node_at(piston+Vector3i.RIGHT) == Nodes.PISTON_HEAD and game.world.node_at(piston+Vector3i.RIGHT*2) == Nodes.AIR and drop_count(game,Nodes.SNOWBALL) == before,"a piston destroys top snow without a shovel-only drop")
 	game.world.circuits.piston(piston,false); game.world.set_node(piston,Nodes.AIR)
 	# Scheduling a whole snowy landscape must continue over bounded updates.
 	var pending: Dictionary = {"cells":[],"cursor":0}
@@ -179,7 +185,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var cold := Vector2i(999999,999999)
 	for z in range(-32,33):
 		for x in range(-32,33):
-			if game.world.generator.biome(x*32,z*32) == "Frostpine highlands" and game.world.generator.terrain_height(x*32,z*32) > TerrainGenerator.SEA+1:
+			if Weather.snowy_biome(game.world.generator.biome(x*32,z*32)) and game.world.generator.terrain_height(x*32,z*32) > TerrainGenerator.SEA+1:
 				cold = Vector2i(x*2,z*2); break
 		if cold.x != 999999: break
 	suite.check(cold.x != 999999,"the survival seed contains cold terrain suitable for natural top snow")
@@ -195,7 +201,8 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 			var ground: int = game.world.node_at(natural+Vector3i.DOWN)
 			held(game,Nodes.TOOLS+2,1); before = drop_count(game,Nodes.SNOWBALL)
 			game.break_node(natural,SnowCover.BASE,Nodes.TOOLS+2)
-			suite.check(drop_count(game,Nodes.SNOWBALL)-before == 2 and game.world.node_at(natural+Vector3i.DOWN) == ground,"shoveling naturally generated top snow supplies two snowballs while preserving its ground")
+			var expected_ground: int = SoilVariants.snowless(ground) if SoilVariants.snowless(ground) != 0 else ground
+			suite.check(drop_count(game,Nodes.SNOWBALL)-before == 1 and game.world.node_at(natural+Vector3i.DOWN) == expected_ground,"shoveling naturally generated top snow supplies one snowball and restores clear ground")
 			# Old saves can have mined ground before top snow was introduced.
 			# Regeneration must reconcile that edit before validating new support.
 			var legacy_edits: Dictionary = {natural+Vector3i.DOWN:Nodes.AIR}

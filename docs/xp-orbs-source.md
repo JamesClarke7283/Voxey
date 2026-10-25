@@ -55,7 +55,7 @@ Every site the source routes through `throw_xp` now throws:
 | Sculk | `mcl_sculk/init.lua`:95-105 | `game.gd` `break_node` |
 | Ore `group:xp` | `mcl_item_entity/init.lua`:216-220 | `game.gd` `break_node`, `Nodes.ore_xp` |
 | Bottle o' enchanting | `bottle.lua`:17 | `village_survival.gd`, `thrown_item.gd` |
-| Grindstone | `mcl_grindstone/init.lua`:282-283 | `grindstone_repair.gd`, `village_survival.gd` |
+| Grindstone | `mcl_grindstone/init.lua`:282-283 | `grindstone_repair.gd`, `hud.gd`, `voxey_network.gd` |
 | Dragon | `mobs_mc/ender_dragon.lua`:224-229 | `adventure.gd` |
 | Villager trade | `mobs_mc/villager.lua`:402 | `village_life.gd` |
 | Achievement | `mcl_achievements/init.lua`:23 | `achievements.gd` |
@@ -88,6 +88,20 @@ diamond and emerald.
 point and zeroes it, unless `mcl_keepInventory` is set. `game.die()` now does the
 same when `keepInventory` is off, so a death finally costs experience as well as
 items.
+
+## Hosted worlds
+
+XP orbs now join the host's entity snapshots and motion updates. The server
+simulates their physical flight and collector state; a guest's replica cannot
+award itself experience. The server chooses a living player in the source's
+magnet radius, releases the claim if that player dies, disconnects or moves
+away, and sends a pickup award only after the orb reaches the collector. That
+award also runs the guest's Mending path. The hosting world keeps simulating
+while the host's menu is open; offline pause still freezes the world.
+
+The grindstone network regression withdraws a cursed repair result, confirms
+that no XP is immediately credited, observes the host's orbs on the guest, then
+moves into range and checks that the guest collects the complete reward once.
 
 ## Verification
 

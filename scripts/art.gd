@@ -210,7 +210,8 @@ static func make_atlas() -> ImageTexture:
 						if (x/2*7+y/2*5)%9 < 3: c = base.lightened(0.35)*rng.randf_range(0.95,1.1)
 						else: c = base.darkened(0.12)
 					64,65:
-						if y % 8 == 7 or (tile == 65 and (x+(y/8)*8)%16 == 0): c = base.darkened(0.24)
+						if tile == 65 and (maxi(absi(x-7),absi(y-7)) in [4,7] or y in [6,7] and x in range(5,10)): c = base.darkened(0.28)
+						elif y % 8 == 7: c = base.darkened(0.24)
 						elif y % 8 == 0: c = base.lightened(0.15)
 					66:
 						c = Color("91bbcf").lerp(Color("d5edf0"),float((x+y)%13 < 2)*0.65)

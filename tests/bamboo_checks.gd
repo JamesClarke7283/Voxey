@@ -168,26 +168,26 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	# height is `5 + rng:next_within(12)`, i.e. five to sixteen, and a stalk taller
 	# than three carries the small and large leaf forms at its tip.
 	t.check(Bamboo.TRUNK_MIN == 5 and Bamboo.TRUNK_RANGE == 12,"the source's trunk height range is recorded")
+	var grove: Dictionary = gen.generate_column(Vector2i(4,-17),{},true)
+	var bamboo_cells: Dictionary = {}
 	var bases: Dictionary = {}
 	var with_tip: int = 0
 	var total: int = 0
-	for cx in range(-3,4):
-		for cz in range(-3,4):
-			game.world._apply_column(game.world.generator.generate_column(Vector2i(cx,cz),{}))
-	for x in range(-48,48):
-		for z in range(-48,48):
-			for wy in range(18,42):
-				var base := Vector3i(x,wy,z)
-				if game.world.node_at(base) != Bamboo.STALK: continue
-				if game.world.node_at(base-Vector3i.UP) in [Bamboo.STALK,Bamboo.SMALL,Bamboo.BIG]: continue
-				var height: int = 0
-				var cur: Vector3i = base
-				while game.world.node_at(cur) in [Bamboo.STALK,Bamboo.SMALL,Bamboo.BIG]:
-					height += 1; cur += Vector3i.UP
-				bases[height] = true
-				total += 1
-				if game.world.node_at(cur-Vector3i.UP) in [Bamboo.SMALL,Bamboo.BIG]: with_tip += 1
-	t.check(total > 0,"terrain grows bamboo groves in the warm regions")
+	for block in grove.blocks:
+		for cell_index in block.data.size():
+			if block.data[cell_index] not in [Bamboo.STALK,Bamboo.SMALL,Bamboo.BIG]: continue
+			var bamboo_at := Vector3i(4*16+cell_index%16,int(block.y)*16+cell_index/256,-17*16+(cell_index/16)%16)
+			bamboo_cells[bamboo_at] = block.data[cell_index]
+	t.check(not bamboo_cells.is_empty(),"terrain grows bamboo groves in source jungle regions")
+	for cell in bamboo_cells:
+		if bamboo_cells.has(cell-Vector3i.UP): continue
+		var height: int = 0
+		var cur: Vector3i = cell
+		while bamboo_cells.has(cur):
+			height += 1; cur += Vector3i.UP
+		bases[height] = true
+		total += 1
+		if bamboo_cells.get(cur-Vector3i.UP) in [Bamboo.SMALL,Bamboo.BIG]: with_tip += 1
 	if total > 0:
 		t.check(bases.keys().all(func(k: int): return k >= Bamboo.TRUNK_MIN and k <= Bamboo.TRUNK_MIN+Bamboo.TRUNK_RANGE-1),"every wild stalk is within the source's five-to-sixteen height")
 		t.check(bases.size() > 1,"wild stalks have varied heights rather than one fixed height")

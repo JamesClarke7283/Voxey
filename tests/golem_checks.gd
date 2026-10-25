@@ -105,7 +105,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	t.check(iron.revenge_target == game.player and iron.anger_remaining == 15 and iron.knock == Vector3.ZERO and iron.velocity == original_velocity,"installed source playerbuilt golem retaliates to direct hits with full knockback resistance")
 	iron.revenge_target = null; iron.anger_remaining = 0
 	var villager: VillageMob = game.spawn_creature("villager",Vector3(p)+Vector3(2,0,0)); villager.set_physics_process(false)
-	game.villages.record(villager.person_key).reputations[game.player_id] = -125
+	VillagerGossip.record(game.villages.record(villager.person_key),game.player_id,"major_negative",25)
 	t.check(iron.iron_target() == null,"creator flag suppresses reputation-based aggression for constructed iron golems")
 	iron.creator = ""
 	t.check(iron.iron_target() == game.player,"village iron golem pursues a player below the source negative100 reputation threshold")

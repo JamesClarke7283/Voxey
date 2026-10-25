@@ -29,7 +29,7 @@ Source's stand is a node plus a non-persisted display entity whose armor lives i
 
 ## Pottery and suspicious nodes
 
-Four sherds are registered, each carrying its source pattern name. Source registers 23; the four keep one representative of each motif family and bound the atlas, and the omission is recorded below.
+All 23 source sherds are registered with their own pattern names and procedural motifs. Ocean ruins, desert temples, trial chambers and [trail ruins](trail-ruins-source.md) supply the implemented acquisition routes. [Desert wells](desert-wells-source.md) now supply Arms Up and Brewer, completing all 23 source sherd routes.
 
 A decorated pot carries one pattern per face, four faces, and **rotates with the block's facing** so a pattern stays on the side it was built against. Crafting is the source's plus shape of four sherds or bricks; a plain brick contributes a blank face.
 
@@ -57,9 +57,7 @@ The fixture exercises the flowerpot whitelist including refusals, plant insertio
 
 ## Remaining differences
 
-- **Four of twenty-three sherds.** Source registers angler, archer, arms_up, blade, brewer, burn, danger, explorer, friend, heartbreak, heart, howl, miner, mourner, plenty, prize, sheaf, shelter, skull, snort, flow, guster and scrape. Voxey registers angler, blade, explorer and skull — one per motif family — to keep the atlas bounded. The omitted names are these nineteen, and no source loot entry was silently reweighted to hide that.
-- **Sherds are now obtainable in survival.** The source draws a suspicious node's loot from the table of the structure that placed it, and those tables are where the sherds live. Voxey previously drew from generic tables with no sherds and could only produce a sherd by breaking a decorated pot, which is itself crafted from sherds — a closed loop. [Ocean ruins](ocean-ruins-source.md) and [desert temples](desert-temples-source.md) now tag their nodes and draw from their own tables, so all four registered sherds are reachable. Decorated pots still have no structure placement, since that needs trial chambers.
-- **Loot tables are a documented subset.** Source's suspicious-node pools include several items Voxey lacks (sniffer egg, leads, `raiser`/`shaper`/`host` armor trims, the Relic disc). Those entries are omitted rather than reweighted, so the surviving weights keep their source ratios among themselves.
+- **Current archaeology pools are exported from source.** [Trail-ruin notes](trail-ruins-source.md) describe the six active tables, fixed seeds and corrected ocean weights. The reference comments out the sniffer egg, three future trim rewards, Relic and lead entries; those are not invented. Untagged suspicious blocks have no loot. Desert wells supply the last two sherd routes.
 - **The armor stand has no hands.** Source's stand maps armor to four slots and everything else to the entity's hands; Voxey has no separate hand slots, so a held item is worn on the torso.
 - **Flowerpot plant list is shorter.** Source names 36 plants including azalea, mangrove propagule, crimson and warped fungi and roots, and bamboo. Voxey has not ported those species, so they are not accepted yet.
 - **Source's four-brick pot guard is a no-op.** `old_craft_grid[1][2]` indexes an ItemStack userdata with a number, which is always nil, so a four-brick craft writes an empty pattern list in source too. Voxey stores four blanks, which is the intended and equivalent behaviour.

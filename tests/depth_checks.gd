@@ -97,7 +97,7 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var furnace: Dictionary = game.world.get_station(p+Vector3i(0,0,-2),"furnace")
 	furnace.slots[0] = {"id":Nodes.DEEP_IRON_ORE,"count":1,"wear":0}
 	furnace.slots[1] = {"id":Nodes.LAVA_BUCKET,"count":1,"wear":0}
-	for tick in 8: game.world._simulate()
+	for tick in 10: game.world._simulate()
 	suite.check(furnace.slots[2].id == Nodes.IRON and furnace.slots[1].id == Nodes.BUCKET and furnace.burn > 900,"lava buckets smelt deep ores and return an empty bucket")
 	suite.check(not Nodes.harvestable(Nodes.DEEP_DIAMOND_ORE,85) and Nodes.harvestable(Nodes.DEEP_DIAMOND_ORE,90),"deepslate ores preserve pickaxe progression")
 	for result_id in [Nodes.POLISHED_DEEPSLATE,Nodes.DEEPSLATE_BRICKS]:

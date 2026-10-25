@@ -1,24 +1,62 @@
 # Fences, gates and walls
 
-Implemented against the local Mineclonia checkout at `/home/impulse/.minetest/games/mineclonia` on 2026-09-16. Rules and node-box coordinates in `scripts/barriers.gd` are translated from GPL-3.0-or-later Mineclonia sources; see the existing `docs/licenses/` attribution. Voxey uses its own procedural materials, mesher and controls.
+Reference: `/home/impulse/.minetest/games/mineclonia`, inspected 2026-10-24.
+Rules and geometry retain GPL-3.0-or-later attribution. Artwork is procedural.
 
-## Source evidence and behavior
+The loaded registry contains 26 wall materials and 14 fence/gate pairs. All are
+available, alongside six existing native wall extensions: 60 inventory items.
+The two newly added walls are red sandstone and resin brick. The latter uses
+six loose resin bricks in its source recipe, rather than six resin-brick blocks;
+its appearance uses the resin-brick-block texture. Red Nether brick fences use
+two Nether brick items and four blocks and yield three fences. Their gates use
+four Nether brick items and two blocks and yield two gates.
 
-- `mods/ITEMS/mcl_fences/init.lua`: connected two-rail fences, gates, open/closed selection and collision boxes, manual/redstone interaction, recipes and canonical drops.
-- `mods/ITEMS/mcl_trees/api.lua`: oak wood-group connection rules, hardness 2, burn time 15 seconds and plank/stick recipes.
-- `mods/ITEMS/mcl_nether/init.lua` and `mclx_fences/init.lua`: Nether brick fence/gate groups and nether-brick-item recipes. Four blocks plus two brick items produce six fences; two blocks plus four brick items produce two gates. Oak yields three fences or one gate.
-- `mods/ITEMS/mcl_walls/init.lua`: sixteen neighbor masks, special straight-wall pillars when covered by a solid/wall/fence/torch, six-block-to-six-wall crafting and source collision geometry.
-- Wall material registrations in `mcl_core/nodes_stairs.lua`, `mcl_nether/init.lua`, `mcl_end/building.lua`, `mcl_blackstone/init.lua`, and `mcl_deepslate/{deepslate,tuff}.lua`.
+`tools/export_barriers_reference.py` loads the real game, captures its final
+registrations, invokes wall and gate callbacks, and queries Luanti's actual
+node/collision/selection boxes. `tools/build_barrier_catalog.py` binds the result
+to native IDs in `assets/data/barriers.json`. Source groups, recipes, hardness and canonical drops are used directly. Declared
+stonecutter lists now pass through the [actual workstation filter](stonecutter-source.md);
+resin brick has no valid source stonecutting recipe despite its declaration.
 
-There are 35 obtainable items: six classic wood species and Nether brick fences/gates, plus 21 wall materials already obtainable in Voxey. The walls are cobblestone, mossy cobblestone, brick, sandstone, stone brick, mossy stone brick, granite, diorite, andesite, Nether brick, End stone brick, blackstone and its two polished variants, four deepslate variants and three tuff variants. Each supports crafting, source stonecutter inputs, normal tool harvesting and saved block edits. Internal gate facings/open states are hidden from the catalog and drop the base gate.
+## Wall states and connections
 
-Fence connections use their source material groups: wood connects to wood fences/gates; Nether brick connects to Nether brick fences/gates. Both connect to full solid blocks. Source walls connect to walls/full blocks; this checkout does not connect them to fence gates. Voxey's full-block test substitutes for Luanti's `solid` group and preserves non-full slabs/stairs as nonconnecting neighbors.
+Each source wall has short/tall and pillar/flat states. A straight wall loses its
+center post. A solid block above makes its side panels tall without necessarily
+restoring the post. A ground torch, pressure plate, standing sign or banner
+above restores the post. A wall above supplies additional post and shared-side
+rules. Walls connect to walls, full solid blocks and panes. Fences connect by
+their registered material groups; Nether brick fences connect to each other.
 
-Fence collision is 1.51 blocks high; closed gate collision is 1.5 high, beginning 0.3125 above the floor. Open gates have no collision but retain a narrow selection box. Source walls have a 1.5-high central collision post regardless of the visible connections; Voxey preserves this unusual source behavior instead of silently substituting a modern wall collision model. Collision queries examine the cell below the actor's feet, preventing jumping into the invisible top portion. Targeting uses the actual visual fence/wall boxes, and gates keep the source selection box.
+Collision follows the current checkout's actual boxes: a wall post is 0.75 wide
+and 1.25 high; a short flat wall collides along its entire length to height 1.25;
+a tall flat wall has height 1.0. These are distinct from older source versions
+and from the description claiming every wall prevents ordinary jumping. Fence
+collision remains 1.51 high. Closed gates have 1.5-high collision beginning
+0.3125 above the floor; open gates have selection geometry and no collision.
 
-Right-click opens/closes gates before eating or placing items. Ctrl/touch sneak bypasses the gate interaction for placement. Gates face the placement direction and retain it when opening, breaking and reloading. A changed redstone powered state opens or closes them; manual opening remains usable between circuit ticks. The polling circuit solver is a Voxey adaptation of source notification-based redstone.
+Native wall states are stored as IDs, so collision, targeting, meshing, drops,
+saves and multiplayer share the same state. Existing unambiguous base IDs are
+preserved; extra wall states use 14800–15055. The source only changes a flat
+wall's facing when its height or post state changes, and this behavior is kept.
+Loaded older canonical wall IDs are reconciled against their neighbors.
 
-Fence connections are derived from neighbors during meshing and collision rather than stored as dozens of separate node IDs. Neighbor changes, including a block over a wall across a mapblock boundary, refresh the affected mesh. Drops and held models reuse the terrain geometry; inventory icons show connected fence/wall shapes.
+Gate placement uses the player's position relative to the target, as Luanti's
+placement routine does. Manual use and wind charges toggle the gate and its
+saved state. Redstone changes use the existing native solver. Ctrl/touch sneak
+bypasses interaction. Source sound assets and the engine's notification-based
+redstone scheduling remain adapted.
+
+## Corrected ID collisions
+
+Three later wood fence windows overlapped copper door/trapdoor states. Cherry,
+mangrove and crimson fences now start at 15200, 15216 and 15232. Pale oak and
+warped retain their original unambiguous IDs. All nine used fence/gate states
+are checked against door, trapdoor and stair families.
+
+An old overlapped ID cannot reveal whether a save intended a wood fence or a
+copper state. Those IDs retain their copper meaning; no heuristic rewrites
+existing copper doors. New wood-fence crafting and placement use the corrected
+IDs. Existing unaffected fences and wall materials keep their IDs.
 
 ## Leads and persistence
 
@@ -26,6 +64,21 @@ Tying Voxey's existing leads to a fence is a Voxey addition; no lead implementat
 
 ## Verification and remaining scope
 
-`tests/barrier_checks.gd` exercises every connection mask, crafting yields, source group boundaries, tall collision above a voxel boundary, ray passage between rails, real placement/use, redstone edges, drops, anchoring, hibernation and actual disk reload of open/facing gates, walls and dyed named animals. `tests/habitat_tour.gd` renders the features together for visual inspection.
+`barrier_reference_checks.gd` compares 5,248 wall transitions, 336 gate callbacks,
+448 real engine geometry configurations and 432 real crafting queries. It also
+checks identities, drops, fuel, item visibility and ID ownership. Live checks
+cover placement, panes, height transitions, wind charges, stonecutting and real
+save/reload. Network tests verify initial wall/fence state and the host's derived
+wall update after a guest changes an adjacent block. `barrier_registry_tour.gd`
+renders the resulting material families and recipe guide.
 
-This does not complete all source building families. Other wood ecosystems, red Nether brick, red sandstone, mud, prismarine and resin resources need their acquisition loops before their matching barriers can be added. Seven wood/iron trapdoor materials are documented separately; pane connection rules remain open. Wind-charge gate activation awaits that projectile (the wind-charged potion effect is a different system). Source sounds, engine light propagation and detailed navigation remain adapted.
+Final validation on 2026-10-24: 14,031 source comparisons, 673 combined
+barrier/piston/control checks, 32 focused live checks and 535 core checks pass.
+Protocol, host and guest network tests pass, including the new wall-state
+exchange. All 17 recorded source hashes match. Rendered world/recipe views were
+reviewed, and the Linux pack exports without script errors.
+
+This closes the registered barrier-material inventory and the wall-state model.
+Source sounds, detailed mob navigation and the broader redstone scheduling
+model remain work for their respective systems. The six native wall extensions
+remain explicit additions rather than source registrations.

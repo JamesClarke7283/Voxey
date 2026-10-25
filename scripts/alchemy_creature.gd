@@ -60,9 +60,7 @@ func _build_model() -> void:
 		for side in [-1,1]:
 			_box(Vector3(side*0.13,0.015,-0.24),Vector3(0.11,0.065,0.02),Color("34413b"),"",head)
 			var leg := _joint(Vector3(side*0.14,0.67,0),"Leg"); _box(Vector3(0,-0.3,0),Vector3(0.22,0.6,0.27),Color("454b45"),"",leg); legs.append(leg)
-		_box(Vector3(0,1.06,-0.35),Vector3(0.6,0.14,0.15),Color("949c8e"))
-		_box(Vector3(0,1.09,-0.57),Vector3(0.15,0.16,0.55),Color("956c48"))
-		_box(Vector3(0,1.09,-0.7),Vector3(0.7,0.1,0.12),Color("ac8557"))
+		MobCrossbows.build_weapon(self)
 
 func _physics_process(delta: float) -> void:
 	if game.playing() and game.leads.sleep_if_unloaded(self): return
@@ -87,9 +85,8 @@ func _physics_process(delta: float) -> void:
 	else: velocity.y = 5
 	model.rotation.y = atan2(-velocity.x,-velocity.z)
 	for i in arms.size(): arms[i].rotation.z = sin(life*9)*(1 if i == 0 else -1)*0.4
-	if position.distance_to(game.player.position) < 1.7 and attack_cooldown <= 0 and aggressive(): game.player.hurt(4,false,position); attack_cooldown = 1.5
+	if position.distance_to(game.player.position) < 1.7 and attack_cooldown <= 0 and aggressive(): game.player.hurt(4,false,position,"mob",self); attack_cooldown = 1.5
 	if custom_name.is_empty() and position.distance_to(game.player.position) > 100: queue_free()
 
 func die() -> void:
-	if kind == "pillager" and not get_meta("raid",false): game.spawn_drop(center(),PotionCatalog.find("ominous"))
 	super.die()

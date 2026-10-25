@@ -1,10 +1,8 @@
 extends RefCounted
 
-# Focused regression for shields. The reference blocks an attack when the dot
-# product of the attack direction against the player's look is at or below
-# `-cos(180/2)`, which is the frontal hemisphere, and only for a listed set of
-# attack types. Wear costs the ceiling of the damage, but only for hits of three
-# or more. The shield is held up rather than raised for a fixed window.
+# Focused regression for the installed radians-based angle expression, listed
+# attack types and exact normalized wear. The real-engine fixture also covers
+# Unbreaking, piercing and projectile reflection.
 
 static func face(game: Node3D, direction: Vector3) -> void:
 	# Point the player, and therefore the look direction, along `direction`.
@@ -20,7 +18,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 
 	# --- constants ---------------------------------------------------------
 	t.check(is_equal_approx(Shields.BLOCK_ARC,180.0),"the source's 180 degree arc is used")
-	t.check(is_equal_approx(Shields.BLOCK_COSINE,0.0),"the source's -cos(180/2) threshold evaluates to zero")
+	t.check(is_equal_approx(Shields.BLOCK_COSINE,-cos(90.0)),"the installed source's -cos(180/2) is evaluated in radians")
 	t.check(is_equal_approx(Shields.WEAR_THRESHOLD,3.0),"wear is only added for hits of three or more")
 	t.check(Shields.USES == 336,"the source's 336 uses are used")
 	t.check(Shields.is_shield(VillageContent.SHIELD) and not Shields.is_shield(Nodes.IRON),"the shield item is recognised and other items are not")
@@ -46,7 +44,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	# Exactly at the frontal 90 degree edge the source's comparison allows it.
 	var side: Vector3 = player.position+Vector3(4,0,0)
 	var side_angle: float = Shields.angle(player,side)
-	t.check(side_angle <= Shields.BLOCK_COSINE,"an attack exactly at the arc's edge is still blocked, since the source tests <= 0")
+	t.check(side_angle <= Shields.BLOCK_COSINE,"a perpendicular attack falls inside the source's actual threshold")
 	t.check(Shields.can_block(player,side,"mob"),"a side attack at the boundary is blocked")
 
 	# --- blockable types ---------------------------------------------------
@@ -78,9 +76,9 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	Shields.add_wear(player,2.0)
 	t.check(int(game.inventory.held().wear) == 0,"a hit below the three-damage threshold costs no durability")
 	Shields.add_wear(player,4.5)
-	t.check(int(game.inventory.held().wear) == 5,"a hit costs durability equal to the damage's ceiling")
+	t.check(Durability.normalized(game.inventory.held()) == 978,"the damage ceiling is passed to the source's normalized wear routine")
 	Shields.add_wear(player,3.0)
-	t.check(int(game.inventory.held().wear) == 8,"further hits accumulate wear")
+	t.check(Durability.normalized(game.inventory.held()) == 1563,"further hits accumulate exact normalized wear")
 	# A shield worn out breaks and is removed.
 	game.inventory.held().wear = Shields.USES-1
 	Shields.add_wear(player,3.0)

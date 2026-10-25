@@ -27,16 +27,18 @@ static func is_screwdriver(id: int) -> bool: return id == ID
 
 # A node this tool can turn: the families with a stored orientation.
 static func rotatable(id: int) -> bool:
-	return BuildingShapes.is_shape(id) or Doors.is_door(id) or Trapdoors.is_trapdoor(id) \
-		or Barriers.is_barrier(id) or Signs.is_sign(id) or Rails.is_rail(id) \
+	return GrindstoneRepair.is_grindstone(id) or Stonecutting.is_cutter(id) or BuildingShapes.is_shape(id) or Doors.is_door(id) or Trapdoors.is_trapdoor(id) \
+		or Barriers.is_barrier(id) or Signs.is_sign(id) or Banners.is_banner(id) or Rails.is_rail(id) \
 		or WoodTypes.is_log(id) or id == Nodes.PISTON or id == Nodes.STICKY_PISTON \
 		or id == Nodes.DISPENSER or id == Nodes.DROPPER or id == Nodes.OBSERVER \
 		or id == Nodes.HOPPER or id == Nodes.REPEATER or id == Nodes.COMPARATOR \
-		or id == Nodes.CHEST or id == Nodes.FURNACE
+		or id == Nodes.CHEST or id == Nodes.FURNACE or id == Bookshelves.ID
 
 # The rotated id for `id`, or 0 when the family has no rotation for this mode. The
 # caller replaces the node in place.
 static func rotate(id: int, mode: int, toward: int = 1) -> int:
+	if GrindstoneRepair.is_grindstone(id): return GrindstoneRepair.rotate(id,mode)
+	if Stonecutting.is_cutter(id): return Stonecutting.rotate(id,mode)
 	if BuildingShapes.is_shape(id) and BuildingShapes.stair(id):
 		var facing: int = BuildingShapes.facing(id)
 		var inverted: bool = BuildingShapes.variant(id) >= 7
@@ -66,6 +68,21 @@ static func rotate(id: int, mode: int, toward: int = 1) -> int:
 # The source's `screwdriver.handler`: turn the node `p`, wear the tool one use.
 static func turn(game: Node3D, p: Vector3i, mode: int) -> bool:
 	var id: int = game.world.node_at(p)
+	if id == Bookshelves.ID:
+		if mode != ROTATE_FACE: return false
+		if game.network != null and game.network.client():
+			game.network.turn_bookshelf.rpc_id(1,p,game.player.position,game.network.inventory_snapshot()); return true
+		Bookshelves.rotate(game.world,p)
+		if game.gamemode != "creative": game.inventory.damage_tool()
+		game.sound("dig"); return true
+	if Banners.is_banner(id):
+		if mode != ROTATE_FACE: return false
+		if game.network != null and game.network.client():
+			game.network.rotate_banner.rpc_id(1,p,game.player.position,game.network.inventory_snapshot())
+			return true
+		if not Banners.rotate(game.world,p,mode): return false
+		if game.gamemode != "creative": game.inventory.damage_tool()
+		game.sound("dig"); return true
 	if not rotatable(id): return false
 	var next: int = rotate(id,mode)
 	if next == 0 or next == id: return false

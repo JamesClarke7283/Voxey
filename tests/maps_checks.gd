@@ -87,20 +87,20 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	var old_image: Image = image_for(maps,old_id)
 	var newer_image: Image = image_for(maps,newer_map.data.map.id)
 	suite.check(old_image.get_size() == Vector2i(128,128),"persistent map images contain exactly 128 by 128 pixels")
-	suite.check(close_color(old_image.get_pixel(8,8),Nodes.color(Nodes.STONE)),"map pixels retain captured edited blocks after later construction and pending reload")
-	suite.check(close_color(newer_image.get_pixel(8,8),Nodes.color(Nodes.GOLD_BLOCK)),"a later map captures its own independent terrain snapshot")
-	suite.check(close_color(old_image.get_pixel(10,8),Nodes.color(Nodes.GOLD_BLOCK).lerp(Nodes.color(Nodes.GLASS),64.0/255.0)),"transparent glass composites over captured blocks with the source texture alpha")
-	suite.check(close_color(old_image.get_pixel(7,8),Color.BLACK),"empty sky inside the regional cube remains black instead of sampling terrain below it")
-	suite.check(old_image.get_pixel(8,8) != Nodes.color(Nodes.GOLD_BLOCK),"blocks above the aligned cube cannot obscure its snapshot")
+	suite.check(close_color(old_image.get_pixel(8,119),Nodes.color(Nodes.STONE)),"map pixels retain captured edited blocks after later construction and pending reload")
+	suite.check(close_color(newer_image.get_pixel(8,119),Nodes.color(Nodes.GOLD_BLOCK)),"a later map captures its own independent terrain snapshot")
+	suite.check(close_color(old_image.get_pixel(10,119),Nodes.color(Nodes.GOLD_BLOCK).lerp(Nodes.color(Nodes.GLASS),64.0/255.0)),"transparent glass composites over captured blocks with the source texture alpha")
+	suite.check(close_color(old_image.get_pixel(7,119),Color.BLACK),"empty sky inside the regional cube remains black instead of sampling terrain below it")
+	suite.check(old_image.get_pixel(8,119) != Nodes.color(Nodes.GOLD_BLOCK),"blocks above the aligned cube cannot obscure its snapshot")
 	var frozen_png: String = maps.records[old_id].png
 	game.world.set_node(p,Nodes.REDSTONE_BLOCK); maps.update()
 	suite.check(maps.records[old_id].png == frozen_png,"completed map images never refresh when world blocks change")
 	var metadata: Dictionary = old_map.data.map
 	var inside: Dictionary = ExplorationMaps.marker(metadata,Vector3(8,900,8),"overworld",PI/2)
 	var outside: Dictionary = ExplorationMaps.marker(metadata,Vector3(-25,650,180),"overworld",0)
-	suite.check(inside.visible and not inside.outside and inside.pixel == Vector2(8,8) and is_equal_approx(inside.rotation,-PI/2),"map marker ignores vertical travel and rounds facing to source quarter turns")
-	suite.check(outside.visible and outside.outside and outside.pixel == Vector2(0,127),"travel beyond the map clamps the marker to an edge dot")
-	suite.check(not ExplorationMaps.marker(metadata,Vector3(p),"nether",0).visible,"a map retains its dimension and hides a marker from another dimension")
+	suite.check(inside.visible and not inside.outside and inside.pixel == Vector2(8,119) and is_equal_approx(inside.rotation,-PI/2),"map marker ignores vertical travel and rounds facing to source quarter turns")
+	suite.check(outside.visible and outside.outside and outside.pixel == Vector2(0,0),"travel beyond the map clamps the marker to an edge dot")
+	suite.check(ExplorationMaps.marker(metadata,Vector3(p),"nether",0).visible,"the source marker remains visible across dimensions")
 	var clean: Dictionary = Inventory.clean_slot(JSON.parse_string(JSON.stringify(old_map)))
 	suite.check(clean.get("data",{}).get("map",{}) == metadata,"inventory cleaning preserves stable map identity and bounds")
 	var copied: Dictionary = ExplorationMaps.craft_output_data([old_map,{"id":VillageContent.EMPTY_MAP,"count":1}])
@@ -119,19 +119,21 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 	suite.check(recipe_index >= 0 and inventory.craft(recipe_index,"hand"),"survival recipe guide crafts two metadata-preserving map copies")
 	var identities: Array = []
 	for slot in inventory.slots:
-		if slot.id == VillageContent.FILLED_MAP: identities.append(slot.get("data",{}).get("map",{}).get("id",""))
-	suite.check(identities == [old_id,old_id],"copying splits unstackable maps into two inventory slots without losing identity")
+		if slot.id == VillageContent.FILLED_MAP:
+			for i in int(slot.count): identities.append(slot.get("data",{}).get("map",{}).get("id",""))
+	suite.check(identities == [old_id,old_id],"copies of the same map stack without losing identity")
 	for i in game.inventory.slots.size(): game.inventory.slots[i] = {"id":0,"count":0,"wear":0}
 	for i in 9: game.inventory.grid[i] = {"id":0,"count":0,"wear":0}
 	game.inventory.grid[0] = old_map.duplicate(true); game.inventory.grid[1] = {"id":VillageContent.EMPTY_MAP,"count":1,"wear":0}
 	game.hud.cursor = {"id":0,"count":0,"wear":0}; game.hud.station = "hand"
 	game.hud._take_output()
-	suite.check(game.hud.cursor.id == 0 and game.inventory.count_item(VillageContent.FILLED_MAP) == 2 and game.inventory.grid[0].id == 0 and game.inventory.grid[1].id == 0,"manual copy output enters two inventory slots instead of an oversized lossy cursor stack")
+	suite.check(game.hud.cursor.id == VillageContent.FILLED_MAP and game.hud.cursor.count == 2 and game.inventory.count_item(VillageContent.FILLED_MAP) == 0 and game.inventory.grid[0].id == 0 and game.inventory.grid[1].id == 0,"manual copying returns the source two-item result to the cursor")
+	game.hud.return_cursor()
 	game.inventory.slots = inventory.slots.duplicate(true); game.inventory.selected = 0
 	game.inventory.add_item(VillageContent.EMPTY_MAP,1)
 	suite.check(maps.copy_map(0) and game.inventory.count_item(VillageContent.FILLED_MAP) == 3 and game.inventory.count_item(VillageContent.EMPTY_MAP) == 0,"cartography copies the chosen map using one empty map")
 	for i in game.inventory.slots.size(): game.inventory.slots[i] = {"id":Nodes.STONE,"count":64,"wear":0}
-	game.inventory.slots[0] = old_map.duplicate(true); game.inventory.slots[1] = {"id":VillageContent.EMPTY_MAP,"count":2,"wear":0}
+	game.inventory.slots[0] = old_map.duplicate(true); game.inventory.slots[0].count = 64; game.inventory.slots[1] = {"id":VillageContent.EMPTY_MAP,"count":2,"wear":0}
 	var before: Array = game.inventory.slots.duplicate(true)
 	suite.check(not maps.copy_map(0) and game.inventory.slots == before,"a full inventory rejects cartography copying without consuming either ingredient")
 	var drops_before: int = game.drops.get_child_count()
@@ -185,11 +187,11 @@ static func run(suite: SceneTree, game: Node3D) -> void:
 		if "copy" in child.text.to_lower() and ("#"+str(newer_map.data.map.id)) in child.text: copy_button = child; break
 	var copies_before: int = 0
 	for slot in game.inventory.slots:
-		if slot.get("data",{}).get("map",{}).get("id","") == newer_map.data.map.id: copies_before += 1
+		if slot.get("data",{}).get("map",{}).get("id","") == newer_map.data.map.id: copies_before += int(slot.count)
 	if copy_button != null: copy_button.pressed.emit()
 	var copies_after: int = 0
 	for slot in game.inventory.slots:
-		if slot.get("data",{}).get("map",{}).get("id","") == newer_map.data.map.id: copies_after += 1
+		if slot.get("data",{}).get("map",{}).get("id","") == newer_map.data.map.id: copies_after += int(slot.count)
 	suite.check(copy_button != null and copies_after == copies_before+1,"cartography offers a working copy action for a chosen map beyond the first inventory entry")
 	game.pause(); game.set_process(false)
 	var chest: Vector3i = p+Vector3i.RIGHT*4

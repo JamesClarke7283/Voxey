@@ -1,0 +1,318 @@
+{
+  "profiles": {
+    "114": {
+      "ability": 10,
+      "primary": [
+        "Blast Protection",
+        "Fire Protection",
+        "Projectile Protection",
+        "Protection",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Curse of Binding",
+        "Curse of Vanishing",
+        "Mending",
+        "Thorns"
+      ]
+    },
+    "115": {
+      "ability": 10,
+      "primary": [
+        "Blast Protection",
+        "Feather Falling",
+        "Fire Protection",
+        "Projectile Protection",
+        "Protection",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Curse of Binding",
+        "Curse of Vanishing",
+        "Depth Strider",
+        "Frost Walker",
+        "Mending",
+        "Soul Speed",
+        "Thorns"
+      ]
+    },
+    "112": {
+      "ability": 10,
+      "primary": [
+        "Blast Protection",
+        "Fire Protection",
+        "Projectile Protection",
+        "Protection",
+        "Respiration",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Curse of Binding",
+        "Curse of Vanishing",
+        "Mending",
+        "Thorns"
+      ]
+    },
+    "113": {
+      "ability": 10,
+      "primary": [
+        "Blast Protection",
+        "Fire Protection",
+        "Projectile Protection",
+        "Protection",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Curse of Binding",
+        "Curse of Vanishing",
+        "Mending",
+        "Thorns"
+      ]
+    },
+    "789": {
+      "ability": 1,
+      "primary": [
+        "Luck of the Sea",
+        "Lure",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Curse of Vanishing",
+        "Mending"
+      ]
+    },
+    "134": {
+      "ability": 1,
+      "primary": [
+        "Flame",
+        "Infinity",
+        "Power",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Curse of Vanishing",
+        "Mending",
+        "Punch"
+      ]
+    },
+    "790": {
+      "ability": 1,
+      "primary": [
+        "Multishot",
+        "Piercing",
+        "Quick Charge",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Curse of Vanishing",
+        "Mending"
+      ]
+    },
+    "791": {
+      "ability": 1,
+      "primary": [
+        "Bane of Arthropods",
+        "Blast Protection",
+        "Channeling",
+        "Depth Strider",
+        "Efficiency",
+        "Feather Falling",
+        "Fire Aspect",
+        "Fire Protection",
+        "Flame",
+        "Fortune",
+        "Impaling",
+        "Infinity",
+        "Knockback",
+        "Looting",
+        "Loyalty",
+        "Luck of the Sea",
+        "Lure",
+        "Multishot",
+        "Piercing",
+        "Power",
+        "Projectile Protection",
+        "Protection",
+        "Punch",
+        "Quick Charge",
+        "Respiration",
+        "Riptide",
+        "Sharpness",
+        "Silk Touch",
+        "Smite",
+        "Thorns",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Breach",
+        "Curse of Binding",
+        "Curse of Vanishing",
+        "Density",
+        "Frost Walker",
+        "Mending",
+        "Soul Speed",
+        "Wind Burst"
+      ]
+    },
+    "91": {
+      "ability": 14,
+      "primary": [
+        "Efficiency",
+        "Fortune",
+        "Silk Touch",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Bane of Arthropods",
+        "Curse of Vanishing",
+        "Mending",
+        "Sharpness",
+        "Smite"
+      ]
+    },
+    "92": {
+      "ability": 14,
+      "primary": [
+        "Efficiency",
+        "Fortune",
+        "Silk Touch",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Curse of Vanishing",
+        "Mending"
+      ]
+    },
+    "90": {
+      "ability": 14,
+      "primary": [
+        "Efficiency",
+        "Fortune",
+        "Silk Touch",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Curse of Vanishing",
+        "Mending"
+      ]
+    },
+    "96": {
+      "ability": 10,
+      "primary": [
+        "Efficiency",
+        "Fortune",
+        "Silk Touch",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Bane of Arthropods",
+        "Curse of Vanishing",
+        "Mending",
+        "Sharpness",
+        "Smite"
+      ]
+    },
+    "97": {
+      "ability": 10,
+      "primary": [
+        "Efficiency",
+        "Fortune",
+        "Silk Touch",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Curse of Vanishing",
+        "Mending"
+      ]
+    },
+    "95": {
+      "ability": 10,
+      "primary": [
+        "Efficiency",
+        "Fortune",
+        "Silk Touch",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Curse of Vanishing",
+        "Mending"
+      ]
+    },
+    "93": {
+      "ability": 14,
+      "primary": [
+        "Bane of Arthropods",
+        "Fire Aspect",
+        "Knockback",
+        "Looting",
+        "Sharpness",
+        "Smite",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Curse of Vanishing",
+        "Mending"
+      ]
+    },
+    "98": {
+      "ability": 10,
+      "primary": [
+        "Bane of Arthropods",
+        "Fire Aspect",
+        "Knockback",
+        "Looting",
+        "Sharpness",
+        "Smite",
+        "Unbreaking"
+      ],
+      "secondary": [
+        "Curse of Vanishing",
+        "Mending"
+      ]
+    }
+  },
+  "book_candidates": [
+    "Bane of Arthropods",
+    "Blast Protection",
+    "Breach",
+    "Channeling",
+    "Curse of Vanishing",
+    "Density",
+    "Depth Strider",
+    "Efficiency",
+    "Feather Falling",
+    "Fire Aspect",
+    "Fire Protection",
+    "Flame",
+    "Fortune",
+    "Frost Walker",
+    "Impaling",
+    "Infinity",
+    "Knockback",
+    "Looting",
+    "Loyalty",
+    "Luck of the Sea",
+    "Lure",
+    "Mending",
+    "Multishot",
+    "Piercing",
+    "Power",
+    "Projectile Protection",
+    "Protection",
+    "Punch",
+    "Quick Charge",
+    "Respiration",
+    "Riptide",
+    "Sharpness",
+    "Silk Touch",
+    "Smite",
+    "Thorns",
+    "Unbreaking"
+  ],
+  "source_hashes": {
+    "mods/ENTITIES/mobs_mc/villager.lua": "51d8e9701bea0c8cf5eedbb0f8e01f6f281439f8e91c7a2b344937ea697079aa",
+    "mods/ITEMS/mcl_enchanting/engine.lua": "055b3d2b6cf17e169cc3459ca9ec346d3fb8c591b1c5e152f8a3c333f9d6440d",
+    "mods/ITEMS/mcl_enchanting/enchantments.lua": "ff7e36d44e8a407c1f1f17f1ff2964c9d249394392cd8e993c6d9072aae02507",
+    "mods/ITEMS/mcl_armor/register.lua": "4265fa1c640184fa4fbd8c05ee9cf611533238bf64e358e62e2fe3258a2a4cb2"
+  }
+}

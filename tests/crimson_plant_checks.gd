@@ -18,7 +18,7 @@ static func run(suite: Object, game: Node3D) -> void:
 	suite.check(Pasture.emission(game.world,lit_at) == 1,"a placed fungus emits the source's light level of one")
 	suite.check(Nodes.plant(CrimsonPlants.CRIMSON_FUNGUS),"a fungus is drawn as a plant, not a cube")
 	game.world.set_node(lit_at,Nodes.AIR)
-	# A fungus only survives on its own nylium.
+	# Both nyliums share soil_fungus placement; huge growth needs matching nylium.
 	suite.check(CrimsonPlants.soil(CrimsonPlants.CRIMSON_FUNGUS) == "crimson" and CrimsonPlants.soil(CrimsonPlants.WARPED_FUNGUS) == "warped","each fungus names its own soil")
 	var world: VoxelWorld = game.world
 	var at: Vector3i = Vector3i(4,game.world.generator.terrain_height(4,4)+3,4)
@@ -27,7 +27,7 @@ static func run(suite: Object, game: Node3D) -> void:
 			for z in range(-4,5): world.set_node(at+Vector3i(x,y,z),Nodes.AIR)
 	world.set_node(at+Vector3i.DOWN,Nodes.CRIMSON_NYLIUM)
 	suite.check(CrimsonPlants.placement_ok(world,at,CrimsonPlants.CRIMSON_FUNGUS),"a crimson fungus is allowed on crimson nylium")
-	suite.check(not CrimsonPlants.placement_ok(world,at,CrimsonPlants.WARPED_FUNGUS),"a warped fungus is refused on crimson nylium")
+	suite.check(CrimsonPlants.placement_ok(world,at,CrimsonPlants.WARPED_FUNGUS) and not CrimsonPlants.huge_soil_ok(world,at,CrimsonPlants.WARPED_FUNGUS),"a warped fungus places on crimson nylium but cannot grow huge there")
 	# Roots and vines drop only to shears; the fungi and the wart block drop themselves.
 	var hand: Dictionary = {"id":Nodes.TOOLS,"count":1,"wear":0}
 	var shears: Dictionary = {"id":Nodes.SHEARS,"count":1,"wear":0}

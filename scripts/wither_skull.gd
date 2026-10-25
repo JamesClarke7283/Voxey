@@ -59,7 +59,7 @@ func _physics_process(delta: float) -> void:
 func strike(victim: Node3D, at: Vector3) -> void:
 	if impacted: return
 	impacted = true
-	var lethal: bool = WitherSkulls.impact(game,victim,at,heading,game.difficulty)
+	var lethal: bool = WitherSkulls.impact(game,victim,at,heading,game.difficulty,shooter if is_instance_valid(shooter) else null)
 	# `shooter:heal_mob(5)` on a kill. The shooter may already be gone.
 	if lethal and shooter != null and is_instance_valid(shooter) and shooter is Creature:
 		shooter.health = minf(shooter.info().health,shooter.health+WitherSkulls.KILL_HEAL)

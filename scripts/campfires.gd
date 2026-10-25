@@ -232,7 +232,7 @@ static func contact(world: VoxelWorld, p: Vector3i, id: int) -> void:
 	var game: Node3D = world.get_parent()
 	var player: VoxeyPlayer = game.player
 	if game.gamemode != "creative" and touching(player.position,p) and PotionEffects.level(player,"fire_resistance") == 0:
-		player.hurt(damage(id),true,Vector3.INF,"fire")
+		player.hurt(damage(id),true,Vector3.INF,"in_fire")
 	for creature in game.creatures.get_children():
 		if not creature is Creature or creature.is_queued_for_deletion() or creature.kind in ["blaze","ghast","magma_cube"]: continue
 		if touching(creature.position,p,creature.width) and PotionEffects.level(creature,"fire_resistance") == 0: creature.hit(damage(id))

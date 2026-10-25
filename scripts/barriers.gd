@@ -28,17 +28,23 @@ static func family(id: int) -> int:
 	return -1
 static func is_fence(id: int) -> bool: return id in FENCE_BASES
 static func is_gate(id: int) -> bool: return family(id) >= 0 and id-family(id) in range(1,9)
-static func is_wall(id: int) -> bool: return id >= WALL_FIRST and id < WALL_FIRST+WALL_MATERIALS.size()
+static func is_wall(id: int) -> bool: return BarrierCatalog.is_wall(id)
 static func is_barrier(id: int) -> bool: return is_fence(id) or is_gate(id) or is_wall(id)
-static func item(id: int) -> int: return family(id)+1 if is_gate(id) else id
+static func item(id: int) -> int:
+	if is_wall(id): return int(BarrierCatalog.info(id).item)
+	return family(id)+1 if is_gate(id) else id
 static func facing(id: int) -> int: return (id-family(id)-1)%4
 static func open(id: int) -> bool: return is_gate(id) and id-family(id) >= 5
-static func material(id: int) -> int: return WALL_MATERIALS[id-WALL_FIRST] if is_wall(id) else FENCE_MATERIALS[FENCE_BASES.find(family(id))]
-static func title(id: int) -> String: return (WoodTypes.NAMES[WoodTypes.species(material(id))] if WoodTypes.is_planks(material(id)) else Nodes.title(material(id)))+(" wall" if is_wall(id) else (" fence gate" if is_gate(id) else " fence"))
+static func material(id: int) -> int: return int(BarrierCatalog.info(id).material) if is_wall(id) else FENCE_MATERIALS[FENCE_BASES.find(family(id))]
+static func title(id: int) -> String:
+	var source: String = str(BarrierCatalog.info(id).get("title",""))
+	if is_gate(id) and source.is_empty(): source = str(BarrierCatalog.info(item(id)).get("title",""))
+	if not source.is_empty(): return source
+	return (WoodTypes.NAMES[WoodTypes.species(material(id))] if WoodTypes.is_planks(material(id)) else Nodes.title(material(id)))+(" wall" if is_wall(id) else (" fence gate" if is_gate(id) else " fence"))
 static func items() -> Array:
 	var ids: Array = []
 	for base in FENCE_BASES: ids.append(base); ids.append(base+1)
-	for i in WALL_MATERIALS.size(): ids.append(WALL_FIRST+i)
+	ids.append_array(BarrierCatalog.wall_items())
 	return ids
 
 static func full_solid(id: int) -> bool:
@@ -46,15 +52,8 @@ static func full_solid(id: int) -> bool:
 	return not is_barrier(id) and Nodes.solid(id) and (not Nodes.transparent(id) or id in [Nodes.GLASS,Nodes.ICE]) and id not in [Nodes.BED_FOOT,Nodes.BED_HEAD,Nodes.ENCHANTING_TABLE]
 
 static func connects(id: int, other: int) -> bool:
-	if is_wall(id): return is_wall(other) or full_solid(other)
-	if is_fence(id):
-		# Nether brick and red nether brick fences share one `fence_nether_brick` group,
-		# so they connect to each other as well as to their own material; wood fences
-		# connect across species.
-		var nether: bool = material(id) in [Nodes.NETHER_BRICKS,NetherBlocks.RED_NETHER_BRICKS]
-		var other_nether: bool = is_fence(other) and material(other) in [Nodes.NETHER_BRICKS,NetherBlocks.RED_NETHER_BRICKS]
-		return full_solid(other) or (is_fence(other) or is_gate(other)) and (material(id) == material(other) or nether and other_nether or WoodTypes.is_planks(material(id)) and WoodTypes.is_planks(material(other)))
-	return false
+	if not BarrierCatalog.info(id).is_empty(): return BarrierCatalog.connects(id,other)
+	return full_solid(other)
 
 static func neighbors(world: VoxelWorld, p: Vector3i) -> Array:
 	var result: Array = []
@@ -63,13 +62,7 @@ static func neighbors(world: VoxelWorld, p: Vector3i) -> Array:
 	return result
 
 static func mask(id: int, around: Array) -> int:
-	var bits: int = 0
-	for side in mini(4,around.size()):
-		if connects(id,int(around[side])): bits |= 1 << side
-	if is_wall(id) and bits in [5,10] and around.size() > 4:
-		var above: int = around[4]
-		if is_wall(above) or full_solid(above) or is_fence(above) or Torches.is_torch(above): bits += 11
-	return bits
+	return BarrierCatalog.mask(id,around)
 
 static func rotate_box(box: AABB, turns: int) -> AABB:
 	for turn in turns:
@@ -77,6 +70,7 @@ static func rotate_box(box: AABB, turns: int) -> AABB:
 	return box
 
 static func boxes(id: int, bits: int = 0, collision: bool = false, selection: bool = false) -> Array:
+	if not BarrierCatalog.info(id).is_empty(): return BarrierCatalog.boxes(id,bits,collision,selection)
 	var result: Array = []
 	if is_gate(id):
 		if collision and open(id): return []
@@ -132,7 +126,11 @@ static func mesh(out: Array, p: Vector3, id: int, data: Variant, cell: Vector3i)
 static func set_open(world: VoxelWorld, p: Vector3i, value: bool) -> bool:
 	var id: int = world.node_at(p)
 	if not is_gate(id) or open(id) == value: return false
-	return world.set_node(p,item(id)+facing(id)+(4 if value else 0))
+	var state: Dictionary = world.circuits.state(p)
+	var result: Dictionary = BarrierCatalog.gate_event(id,int(state.get("gate_state",0)),0,"manual")
+	if not world.set_node(p,result.id): return false
+	world.circuits.state(p)["gate_state"] = result.state
+	return true
 
 static func use(game: Node, target: Dictionary) -> bool:
 	if target.is_empty() or game.target_mob() != null: return false
@@ -144,6 +142,10 @@ static func use(game: Node, target: Dictionary) -> bool:
 	if is_fence(target.id) and game.leads.anchor_at(target.pos): return true
 	return false
 
+static func placement_facing(at: Vector3i, player: Vector3) -> int:
+	var away: Vector3 = Vector3(at)+Vector3.ONE*0.5-player
+	return (1 if away.x < 0 else 3) if absf(away.x)>absf(away.z) else (2 if away.z < 0 else 0)
+
 static func try_place(game: Node, target: Dictionary) -> bool:
 	var id: int = game.inventory.held().id
 	if not is_barrier(id) or target.is_empty(): return false
@@ -152,8 +154,7 @@ static func try_place(game: Node, target: Dictionary) -> bool:
 	var previous: int = game.world.node_at(at)
 	if previous != Nodes.AIR and not SnowCover.is_snow(previous) and not Fluids.liquid(previous) and not Nodes.plant(previous) and not Fire.is_fire(previous): return true
 	if is_gate(id):
-		var look: Vector3 = -game.player.camera.global_basis.z
-		id += (1 if look.x < 0 else 3) if absf(look.x)>absf(look.z) else (0 if look.z>0 else 2)
+		id += placement_facing(target.pos+target.normal,game.player.global_position)
 	var body := AABB(game.player.position-Vector3(0.29,0,0.29),Vector3(0.58,1.8,0.58))
 	for box in boxes(id,mask(id,neighbors(game.world,at)),true):
 		if body.intersects(AABB(Vector3(at)+box.position,box.size)): return true
@@ -163,16 +164,11 @@ static func try_place(game: Node, target: Dictionary) -> bool:
 	return true
 
 static func recipes(inv: Inventory) -> void:
-	for i in FENCE_MATERIALS.size():
-		var base: int = FENCE_MATERIALS[i]
-		var stick: int = Nodes.NETHER_BRICK_ITEM if i == 1 else Nodes.STICK
-		inv._recipe(title(FENCE_BASES[i]),FENCE_BASES[i],6 if base in [Nodes.NETHER_BRICKS,NetherBlocks.RED_NETHER_BRICKS] else 3,[base,stick,base,base,stick,base],3,"table")
-		inv._recipe(title(FENCE_BASES[i]+1),FENCE_BASES[i]+1,2 if base in [Nodes.NETHER_BRICKS,NetherBlocks.RED_NETHER_BRICKS] else 1,[stick,base,stick,stick,base,stick],3,"table")
-	for i in WALL_MATERIALS.size():
-		var base: int = WALL_MATERIALS[i]
-		inv._recipe(title(WALL_FIRST+i),WALL_FIRST+i,6,[base,base,base,base,base,base],3,"table")
+	BarrierCatalog.recipes(inv)
 
 static func stonecutter_inputs(base: int) -> Array:
+	var id: int = BarrierCatalog.wall_for(base)
+	if id != 0 and not BarrierCatalog.source_name(id).is_empty(): return BarrierCatalog.info(id).cuts.map(func(v):return int(v))
 	if base == Bastions.BRICKS: return [MinecloniaOres.BLACKSTONE,Bastions.POLISHED,Bastions.BRICKS]
 	if base == Masonry.POLISHED_TUFF: return [MinecloniaOres.TUFF,Masonry.POLISHED_TUFF]
 	if base == Masonry.TUFF_BRICKS: return [MinecloniaOres.TUFF,Masonry.POLISHED_TUFF,Masonry.TUFF_BRICKS]

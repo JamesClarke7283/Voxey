@@ -72,13 +72,21 @@ static func run(t: SceneTree, game: Node3D) -> void:
 		t.check(world.node_at(p) == Farmland.DRY,"source plant group retains unhydrated farmland: "+str(plant))
 	# Solid group concerns regular full collision, not opacity or walkability.
 	for entry in [[Nodes.STONE,true],[Nodes.GLASS,true],[Nodes.PISTON_HEAD,false],[VillageContent.PATH,false],[Nodes.CHEST,false],[Nodes.HOPPER,false],[Beehives.HONEY_BLOCK,false],[VillageContent.BED_BLUE,false],[VillageContent.CAULDRON,false],[BuildingShapes.slab_for(Nodes.PLANKS),false]]:
-		fresh(world,p,Farmland.WET); world.set_node(p+Vector3i.UP,int(entry[0])); Farmland.advance(world,p)
+		fresh(world,p,Farmland.WET); world.set_node(p+Vector3i.UP,int(entry[0])); Farmland.decay_above(world,p)
 		t.check((world.node_at(p) == Nodes.DIRT) == entry[1],"source solid-above dirtification matches full shape: "+str(entry[0]))
+	fresh(world,p,Farmland.WET); world.set_node(p+Vector3i.UP,Nodes.STONE)
+	Farmland.advance(world,p)
+	t.check(world.node_at(p) == Farmland.DRY and Farmland.state(world,p).wet == 6,"hydration performs one moisture step under a solid cover independently of the separate dirtification ABM")
 	fresh(world,p,Farmland.WET); world.set_node(p+Vector3i.UP,Farmland.DRY); Farmland.placed(world,p+Vector3i.UP)
 	t.check(world.node_at(p) == Nodes.DIRT,"actual source dirtifier placement immediately converts lower farmland despite partial geometry")
 	fresh(world,p,Farmland.WET); world.set_node(p+Vector3i.UP,Nodes.STONE)
 	t.check(world.node_at(p) == Farmland.WET,"generic world set_node leaves solid-above conversion to the source ABM")
 	Farmland.placed(world,p+Vector3i.UP); t.check(world.node_at(p) == Nodes.DIRT,"player placement hook dirtifies farmland immediately under solid blocks")
+	for id in [Farmland.DRY,Farmland.WET,VillageContent.PATH]:
+		fresh(world,p,id); world.set_node(p+Vector3i.UP,VillageContent.COMPOSTER); Farmland.placed(world,p+Vector3i.UP)
+		t.check(world.node_at(p) == Nodes.DIRT,"source dirtifier group converts soil and paths below a placed composter: "+str(id))
+		fresh(world,p,id); world.set_node(p+Vector3i.UP,VillageContent.COMPOSTER); Farmland.placed(world,p)
+		t.check(world.node_at(p) == Nodes.DIRT,"placing soil or path below an existing dirtifier converts the newly placed node: "+str(id))
 	# Rain uses global weather plus source outdoor test, without hydration.
 	for id in [Farmland.DRY,Farmland.WET]:
 		fresh(world,p,id); world.adventure_state.weather = "rain"; game.day_time = 0.9
@@ -90,6 +98,19 @@ static func run(t: SceneTree, game: Node3D) -> void:
 		t.check(world.node_at(p) == (Farmland.DRY if id == Farmland.WET else Nodes.DIRT),"opaque roof prevents source rain protection: "+str(id))
 		world.set_node(p+Vector3i.UP*3,Nodes.AIR)
 	world.adventure_state.weather = "clear"; game.day_time = 0.5
+	# Covered-soil checks have their own eight-second, one-in-fifty clock.
+	Farmland.reset(world); fresh(world,p,Farmland.WET); world.set_node(p+Vector3i.UP,Nodes.STONE)
+	var cover_rng := RandomNumberGenerator.new(); var cover_seed: int = -1
+	for trial in 10000:
+		cover_rng.seed = trial
+		if cover_rng.randi_range(1,50) == 1: cover_seed = trial; break
+	Farmland.runtime(world).rng.seed = cover_seed; Farmland.update(world,7.99)
+	t.check(world.node_at(p) == Farmland.WET,"covered soil waits for the independent eight-second interval")
+	Farmland.update(world,0.02)
+	t.check(world.node_at(p) == Nodes.DIRT,"covered-soil ABM runs its source one-in-fifty branch before hydration is due")
+	Farmland.reset(world); fresh(world,p,VillageContent.PATH); world.set_node(p+Vector3i.UP,Nodes.STONE)
+	Farmland.runtime(world).rng.seed = cover_seed; Farmland.update(world,8.0)
+	t.check(world.node_at(p) == Nodes.DIRT,"the covered-soil ABM also handles dirt paths")
 	# Scheduler is reproducible, once per interval, and bounded across a field.
 	Farmland.reset(world); fresh(world,p,Farmland.WET)
 	var chosen: int = -1; var rng := RandomNumberGenerator.new()
@@ -152,6 +173,8 @@ static func lifecycle(t: SceneTree, game: Node3D, p: Vector3i) -> void:
 	t.check(world.circuits.piston(base,true) and world.node_at(dest) == Farmland.DRY and Farmland.state(world,dest).wet == 3 and is_equal_approx(Farmland.state(world,dest).remaining,4.25),"actual piston push carries moisture and remaining time instead of constructing new dry soil")
 	t.check(Farmland.runtime(world).cells.has(dest) and not Farmland.runtime(world).cells.has(source),"piston updates soil runtime identity to its destination")
 	fresh(world,p+Vector3i.RIGHT*3,Farmland.WET)
+	var path_pos: Vector3i = p+Vector3i.RIGHT*6
+	fresh(world,path_pos,VillageContent.PATH)
 	fresh(world,p); Farmland.state(world,p).wet = 5; Farmland.state(world,p).remaining = 8.75
 	game.player.position = Vector3(8.5,Y+0.01,12.5)
 	t.check(game.save_game("user://farmland-check.json"),"real save stores positive dry moisture and fractional timer")
@@ -161,6 +184,7 @@ static func lifecycle(t: SceneTree, game: Node3D, p: Vector3i) -> void:
 	t.check(world.node_at(p) == Farmland.DRY and Farmland.state(world,p).wet == 5 and Farmland.state(world,p).remaining > 8.5 and Farmland.state(world,p).remaining <= 8.75,"actual JSON reload retains dry node, moisture counter and fractional countdown")
 	t.check(Farmland.runtime(world).cells.has(p),"saved edited farmland registers as a loaded soil after reload")
 	t.check(world.node_at(p+Vector3i.RIGHT*3) == Farmland.WET and Farmland.state(world,p+Vector3i.RIGHT*3).wet == 7,"actual JSON reload also preserves wet node identity and full moisture")
+	t.check(world.node_at(path_pos) == VillageContent.PATH and Farmland.runtime(world).cells.has(path_pos),"reloaded dirt paths register for source covered-soil checks")
 	var before: Dictionary = Farmland.state(world,p).duplicate(true); world._unload(Vector2i.ZERO)
 	t.check(not Farmland.runtime(world).cells.has(p),"actual column unload removes soil from active simulation")
 	world._apply_column(world.generator.generate_column(Vector2i.ZERO,world.edits.duplicate()))

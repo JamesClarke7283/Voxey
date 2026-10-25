@@ -18,8 +18,8 @@ extends RefCounted
 # Both require **snow beneath them** (`snowblock`, `snow` or snowy grass), so a
 # spike never grows out of bare stone, and both rotate randomly.
 #
-# Voxey has a cold biome — `Frostpine highlands` — but nothing that decorates it,
-# so its snowy plains were featureless.
+# Voxey's levelgen selects the canonical `IceSpikes` biome; its surface generation
+# and the source's two decorations both stand in for the same biome.
 
 # Source `sidelen = 6` for the large spike; the small one places on an 80-block
 # decoration grid.
@@ -82,9 +82,9 @@ static func cells_at(ground: Vector3i, kind: String, rng: RandomNumberGenerator)
 # do over their own noise fields. Only the cold biome gets spikes, and only on
 # snowy ground.
 static func decorate(gen: TerrainGenerator, coord: Vector2i, data: PackedInt32Array, deep: PackedInt32Array, biome_name: String) -> void:
-	# A spike field belongs to the frozen plains, which is the biome the source names
-	# `IcePlainsSpikes`. Voxey's equivalent is the Frostpine highlands.
-	if biome_name != "Frostpine highlands": return
+	# A spike field belongs to the frozen plains, which the source's levelgen names
+	# `IceSpikes` (the legacy mapgen alias `IcePlainsSpikes` resolves here).
+	if biome_name != "IceSpikes": return
 	var rng := RandomNumberGenerator.new()
 	rng.seed = gen.hash_at(coord.x,20293,coord.y)
 	var base: Vector2i = coord*16

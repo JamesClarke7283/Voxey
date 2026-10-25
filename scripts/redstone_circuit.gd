@@ -284,7 +284,7 @@ func step(dt: float = 0.1) -> void:
 					if world.node_at(p+side) in [Nodes.REPEATER,Nodes.COMPARATOR] and output(p+side,-side) > 0: locked = true
 				if id == Nodes.REPEATER and locked: s["locked"] = true; continue
 				s["locked"] = false
-				if id == Nodes.COMPARATOR and (world.node_at(p-d) in CONTAINERS or PortableStorage.is_shulker(world.node_at(p-d)) or world.node_at(p-d) in [Jukeboxes.ID,VillageContent.COMPOSTER,VillageContent.CAULDRON] or FoodFeatures.is_cake(world.node_at(p-d)) or Beehives.is_hive(world.node_at(p-d)) or Copper.is_bulb(world.node_at(p-d)) or Frames.is_frame(world.node_at(p-d))): rear = container_signal(p-d)
+				if id == Nodes.COMPARATOR and (world.node_at(p-d) in CONTAINERS or PortableStorage.is_shulker(world.node_at(p-d)) or world.node_at(p-d) in [Jukeboxes.ID,VillageContent.COMPOSTER,VillageContent.CAULDRON,Bookshelves.ID,VillageContent.LECTERN] or FoodFeatures.is_cake(world.node_at(p-d)) or Beehives.is_hive(world.node_at(p-d)) or Copper.is_bulb(world.node_at(p-d)) or Frames.is_frame(world.node_at(p-d))): rear = container_signal(p-d)
 				var wanted: int = 15 if rear > 0 else 0
 				if id == Nodes.COMPARATOR: wanted = maxi(0,rear-side_level) if s.get("subtract",false) else (rear if rear >= side_level else 0)
 				if id == Nodes.REPEATER:
@@ -462,8 +462,10 @@ func hopper(p: Vector3i) -> bool:
 	var d := direction(p)
 	if d == Vector3i.UP: d = Vector3i.DOWN
 	var destination: Array = container(p+d)
-	if world.node_at(p+d) in FURNACES and d == Vector3i.DOWN and destination[2].count > 0: destination = []
-	elif world.node_at(p+d) in FURNACES: destination = [destination[0 if d == Vector3i.DOWN else 1]]
+	# The source plain shelf has container group 1: hopper push only accepts
+	# groups 2..6, and generic extraction has no source list for group 1.
+	if world.node_at(p+d) == Nodes.BOOKSHELF: destination = []
+	if world.node_at(p+d) in FURNACES: destination = [destination[0 if d == Vector3i.DOWN else 1]]
 	for slot in slots:
 		if world.node_at(p+d) in SteamMachines.CONTAINERS:
 			var target: Dictionary = SteamMachines.station(world,p+d)
@@ -473,9 +475,13 @@ func hopper(p: Vector3i) -> bool:
 		if world.node_at(p+d) == VillageContent.COMPOSTER:
 			if d == Vector3i.DOWN and Composters.add(world.get_station(p+d,"composter"),slot.id): consume_one(slot); return true
 			continue
+		if world.node_at(p+d) == Bookshelves.ID:
+			if Bookshelves.hopper_in(world,p+d,slot): consume_one(slot); return true
+			continue
 		if world.node_at(p+d) in FURNACES:
-			if d == Vector3i.DOWN and Nodes.smelt_result(slot.id) == 0: continue
-			if d != Vector3i.DOWN and Nodes.fuel_time(slot.id) <= 0: continue
+			# The generic top transfer accepts any source item. Side insertion
+			# uses the fuel predicate and never stacks replacement fuels.
+			if d != Vector3i.DOWN and (Nodes.fuel_time(slot.id) <= 0 or FurnaceRules.fuel(slot.id).replacement != 0 and destination[0].count > 0): continue
 		if world.node_at(p+d) == VillageContent.BREWING_STAND:
 			var eligible: Array = []
 			for i in destination.size():
@@ -492,15 +498,13 @@ func hopper(p: Vector3i) -> bool:
 					state(p+d)["transfer_delay"] = HOPPER_EMPTY_COOLDOWN
 				return true
 	if world.node_at(p+Vector3i.UP) == Bookshelves.ID:
-		# The source registers `_on_hopper_out` on the shelf, so a hopper above feeds
-		# one book per transfer into the first free slot.
-		for shelf_slot in slots:
-			if shelf_slot.id != 0 and Bookshelves.hopper_in(world,p+Vector3i.UP,shelf_slot): consume_one(shelf_slot); return true
+		if Bookshelves.hopper_out(world,p+Vector3i.UP,slots): return true
 	if world.node_at(p+Vector3i.UP) == VillageContent.COMPOSTER:
 		var compost: Dictionary = world.get_station(p+Vector3i.UP,"composter")
 		if Composters.level(compost) == 8 and insert_one(slots,{"id":Nodes.BONE_MEAL,"count":1,"wear":0}):
 			Composters.harvest(compost); return true
 	var above: Array = container(p+Vector3i.UP)
+	if world.node_at(p+Vector3i.UP) == Nodes.BOOKSHELF: above = []
 	if world.node_at(p+Vector3i.UP) in SteamMachines.CONTAINERS:
 		above = [] if world.node_at(p+Vector3i.UP) == SteamMachines.GENERATOR else [above[2]]
 	if world.node_at(p+Vector3i.UP) in FURNACES:
@@ -583,6 +587,7 @@ func dispense(p: Vector3i, projectile: bool) -> void:
 		if projectile and Golems.dispense(self,p,p+d,d,slot): return
 		if projectile and Beehives.dispense(self,p,p+d,d,slot): return
 		if not projectile and (world.node_at(p+d) in CONTAINERS or PortableStorage.is_shulker(world.node_at(p+d))):
+			if world.node_at(p+d) == Nodes.BOOKSHELF: return
 			if PortableStorage.is_shulker(world.node_at(p+d)) and not PortableStorage.accepts(PortableStorage.station(world,p+d),slot): return
 			var destination: Array = container(p+d)
 			if world.node_at(p+d) in SteamMachines.CONTAINERS:
@@ -601,8 +606,16 @@ func dispense(p: Vector3i, projectile: bool) -> void:
 			var outcome: Dictionary = Dispensers.equip_action(game,p,d,slot)
 			if outcome.is_empty(): outcome = Dispensers.dispense(game,p,d,slot)
 			if bool(outcome.get("applied",false)):
-				if int(outcome.get("replacement",0)) != 0 and int(outcome.replacement) != slot.id: slot.id = int(outcome.replacement)
-				if bool(outcome.get("consume",true)): consume_one(slot)
+				var replacement: int = int(outcome.get("replacement",0))
+				if replacement != 0 and replacement != slot.id:
+					# mcl_dispensers: take one input, replace an empty slot or merge the
+					# returned item. Its no-room path ejects the original dropitem.
+					var original: int = slot.id
+					consume_one(slot)
+					if slot.id == 0:
+						slot.id = replacement; slot.count = 1; slot.wear = 0
+					elif not insert_one(slots,{"id":replacement,"count":1,"wear":0}): game.spawn_drop(origin,original,1)
+				elif bool(outcome.get("consume",true)): consume_one(slot)
 				return
 		if projectile and Throwables.supports(slot.id):
 			if Nodes.solid(world.node_at(p+d)): return
@@ -623,7 +636,7 @@ func dispense(p: Vector3i, projectile: bool) -> void:
 
 func movable(p: Vector3i) -> bool:
 	var id: int = world.node_at(p)
-	if VillageContent.shape(id) == "banner" or Beehives.immovable(id) or id in [Jukeboxes.ID,Dungeons.SPAWNER] or Campfires.is_campfire(id) or RedstoneSensors.is_detector(id): return false
+	if Trials.is_block(id) or VillageContent.shape(id) == "banner" or Beehives.immovable(id) or id in [Jukeboxes.ID,Dungeons.SPAWNER] or Campfires.is_campfire(id) or RedstoneSensors.is_detector(id): return false
 	if not world.loaded_at(Vector3(p)) or p.y <= world.generator.min_y() or p.y >= world.generator.max_y()-1: return false
 	# `mcl_pistons/api.lua`: `inv_nodes_movable` defaults to **true**, so a chest, a
 	# furnace, a dispenser or a hopper is pushed like any other block. It is a
@@ -635,7 +648,7 @@ func movable(p: Vector3i) -> bool:
 
 func _move(from: Vector3i, to: Vector3i) -> void:
 	var id: int = world.node_at(from)
-	if Signs.is_sign(id): Signs.station(world,from)
+	if Signs.is_any(id): Signs.station(world,from)
 	var station: Dictionary = world.stations.get(VoxelWorld.station_key(from),{}).duplicate(true)
 	var hive: Dictionary = Beehives.move_state(world,from)
 	var metadata: Dictionary = world.block_states.get(VoxelWorld.station_key(from),{}).duplicate(true)

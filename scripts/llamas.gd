@@ -28,8 +28,8 @@ extends RefCounted
 #   released.
 # * Wolves (wolf.lua:72-75, 823-828) run from a llama when its strength beats
 #   `random(0, 4)`.
-# * Spawning (486-507). Packs of four to six in the hills at weight 5. Voxey's
-#   Frostpine highlands stand for the hills; there is no savannah.
+# * Spawning (486-507). Packs of four to six in the source's windswept hills at
+#   weight 5.
 
 const KIND = "llama"
 const TRADER = "trader_llama"
@@ -83,7 +83,7 @@ const CARAVAN_CHECK = 0.3
 const WOLF_AVOID_TIME = 2.0
 # `llama_spawner`: weight 5 beside the hills' farm animals, packs of four to six.
 const WEIGHT = 5
-const HIGHLAND = "Frostpine highlands"
+const HIGHLAND = "WindsweptHills"
 const HIGHLAND_ANIMALS = 40
 const PACK_MIN = 4
 const PACK_MAX = 6
@@ -326,7 +326,7 @@ class Spit extends Node3D:
 	func hit_something() -> bool:
 		var from: Vector3 = shooter.position if is_instance_valid(shooter) else position-velocity
 		if position.distance_to(game.player.position+Vector3.UP*0.9) < 0.7:
-			game.player.hurt(Llamas.SPIT_DAMAGE,false,from,"projectile")
+			game.player.hurt(Llamas.SPIT_DAMAGE,false,from,"spit",shooter if is_instance_valid(shooter) else null)
 			if is_instance_valid(shooter): Wolves.record_player_hurt(game,shooter)
 			game.puff(position,Color("e8f6ff"),6,0.5)
 			queue_free()

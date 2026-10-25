@@ -108,12 +108,14 @@ func _move_step(delta: float) -> void:
 			part[axis] = 0
 
 func blocked(pos: Vector3) -> bool:
-	if game.world.intersects(pos,0.5,0.55): return true
-	var box := AABB(pos+Vector3(-0.5,0,-0.5),Vector3(1,0.55,1))
+	if Boats.hull_blocked(game.world,item_id,pos): return true
+	var hull: AABB = Boats.hull(item_id)
+	var box := AABB(pos+hull.position,hull.size)
 	for other in service.active.values():
 		if other == self or not is_instance_valid(other) or other.removed or other.is_queued_for_deletion(): continue
 		if pos.distance_squared_to(other.position) > 3: continue
-		if box.intersects(AABB(other.position+Vector3(-0.5,0,-0.5),Vector3(1,0.55,1))): return true
+		var other_hull: AABB = Boats.hull(other.item_id)
+		if box.intersects(AABB(other.position+other_hull.position,other_hull.size)): return true
 	return false
 
 func clear_lily_pads(pos: Vector3) -> void:
@@ -139,15 +141,18 @@ func release_mob(move_mob: bool = true) -> void:
 		Farming.remember(passenger)
 		if passenger is VillageMob: passenger.game.villages.relocate(passenger); passenger.store_record()
 		if passenger is NetherResident or passenger is SnowGolem: passenger.store_record()
+		if MobJockeys.rider(passenger) != null: MobJockeys.sync(MobJockeys.rider(passenger))
 	passenger = null; saved.erase("passenger")
 
 func seat_occupants() -> void:
+	var seat_height: float = 0.25 if BambooWood.is_raft(item_id) else 0.15
 	if service.riding == self:
-		game.player.position = position+basis*Vector3(0,0.15,-0.1)
+		game.player.position = position+basis*Vector3(0,seat_height,-0.05 if BambooWood.is_raft(item_id) else -0.1)
 		game.player.velocity = Vector3.ZERO; game.player.grounded = false
 	if is_instance_valid(passenger) and not passenger.is_queued_for_deletion():
-		passenger.position = position+basis*Vector3(0,0.15,0.45 if service.riding == self else -0.1)
+		passenger.position = position+basis*Vector3(0,seat_height,0.45 if service.riding == self else -0.1)
 		if is_instance_valid(passenger.model): passenger.model.rotation.y = rotation.y
+		if MobJockeys.rider(passenger) != null: MobJockeys.sync(MobJockeys.rider(passenger))
 
 func store_record() -> void:
 	if removed: return

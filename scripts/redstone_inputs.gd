@@ -29,7 +29,7 @@ static func is_button(id: int) -> bool: return button_kind(id) >= 0
 static func is_plate(id: int) -> bool: return plate_kind(id) >= 0
 static func is_device(id: int) -> bool: return is_button(id) or is_plate(id)
 static func kind(id: int) -> int: return button_kind(id) if is_button(id) else plate_kind(id)
-static func wooden(id: int) -> bool: return kind(id) in range(1,7) or kind(id) in range(10,15)
+static func wooden(id: int) -> bool: return is_device(id) and WoodTypes.is_planks(material(id))
 static func item(id: int) -> int:
 	if is_button(id):
 		var k: int = button_kind(id)
@@ -63,7 +63,9 @@ static func oriented(id: int, normal: Vector3i) -> int:
 	var face: int = SUPPORTS.find(-normal)
 	return item(id) if face <= 0 else FIRST+button_kind(id)*8+face
 static func duration(id: int) -> float: return 1.5 if is_button(id) and wooden(id) else 1.0
-static func fuel_time(id: int) -> float: return (5.0 if is_button(id) else 15.0) if wooden(id) else 0.0
+static func fuel_time(id: int) -> float:
+	if material(id) in [WoodTypes.PLANKS[9],WoodTypes.PLANKS[10]]: return 0.0
+	return (5.0 if is_button(id) else 15.0) if wooden(id) else 0.0
 
 static func recipes(inv: Inventory) -> void:
 	for id in items():

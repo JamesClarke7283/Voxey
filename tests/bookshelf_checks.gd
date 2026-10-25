@@ -18,7 +18,7 @@ static func run(suite: Object, game: Node3D) -> void:
 	var book_inv := Inventory.new()
 	var orig: Dictionary = {"id":Nodes.WRITTEN_BOOK,"count":1,"wear":0,"data":{"title":"My Book","text":"hello","author":"player","generation":0}}
 	var out: Dictionary = book_inv.craft_output_data(Nodes.WRITTEN_BOOK,[orig,{"id":Nodes.WRITABLE_BOOK,"count":2,"wear":0}])
-	suite.check(out.get("data",{}).get("title","") == "My Book" and out.get("data",{}).get("generation",0) == 1,"copying a written book carries its text and increments its generation")
+	suite.check(out.get("title","") == "My Book" and out.get("generation",0) == 1,"copying a written book carries its text and increments its generation")
 	var copy2: Dictionary = {"id":Nodes.WRITTEN_BOOK,"count":1,"wear":0,"data":{"title":"x","text":"y","generation":2}}
 	suite.check(book_inv.craft_output_data(Nodes.WRITTEN_BOOK,[copy2,{"id":Nodes.WRITABLE_BOOK,"count":1,"wear":0}]).has("error"),"a copy of a copy cannot be copied")
 	suite.check(book_inv.recipe_index(Nodes.WRITTEN_BOOK) >= 0,"the written-book copy recipe is registered")
@@ -66,6 +66,9 @@ static func run(suite: Object, game: Node3D) -> void:
 	var saved_state: Dictionary = Bookshelves.state(world,at).duplicate(true)
 	suite.check(saved_state.slots.size() == Bookshelves.SLOTS and int(saved_state.get("last_slot",0)) >= 1,"the station records both the slots and the comparator reading")
 	# The recipe is the source's own.
-	var inv := Inventory.new(); inv.add_item(Nodes.PLANKS,9)
+	var inv := Inventory.new(); inv.add_item(Nodes.PLANKS,6); inv.add_item(BuildingShapes.slab_for(Nodes.PLANKS),3)
 	var index: int = inv.recipe_index(Bookshelves.ID)
-	suite.check(index >= 0 and inv.craft(index,"table") and inv.count_item(Bookshelves.ID) == 1,"nine planks make a chiseled bookshelf")
+	suite.check(index >= 0 and inv.craft(index,"table") and inv.count_item(Bookshelves.ID) == 1,"six planks and three wooden slabs make a chiseled bookshelf")
+
+	await load("res://tests/plain_bookshelf_checks.gd").run(suite,game)
+	await load("res://tests/bookshelf_lifecycle_checks.gd").run(suite,game)

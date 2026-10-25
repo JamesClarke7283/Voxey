@@ -4,11 +4,12 @@ extends RefCounted
 static func snapshot(game: Node3D) -> void:
 	var saved: Array = []
 	for mob in game.creatures.get_children():
+		if mob.has_meta("trial_key"): continue # Owned and restored by Trials.
 		if not mob is AlchemyCreature or mob.is_queued_for_deletion() or game.leads.attached(mob) or Boats.is_passenger(mob): continue
 		var effects: Dictionary = {}
 		for name in PotionEffects.NAMES:
 			if mob.has_meta("effect_"+name): effects[name] = {"duration":mob.get_meta("effect_"+name),"level":PotionEffects.level(mob,name)}
-		saved.append({"kind":mob.kind,"position":[mob.position.x,mob.position.y,mob.position.z],"health":mob.health,"effects":effects,"raid":mob.get_meta("raid",false),"custom_name":mob.custom_name,"persistent":mob.get_meta("persistent",false)})
+		saved.append({"kind":mob.kind,"position":[mob.position.x,mob.position.y,mob.position.z],"health":mob.health,"effects":effects,"raid":mob.get_meta("raid",false),"custom_name":mob.custom_name,"persistent":mob.get_meta("persistent",false),"patrol":PillagerPatrols.is_patrol_member(mob),"patrol_captain":PillagerPatrols.is_captain(mob),"crossbow":MobCrossbows.snapshot(mob) if mob.kind == "pillager" else {}})
 	game.world.adventure_state["alchemy_creatures"] = saved
 
 static func restore(game: Node3D) -> void:
@@ -20,10 +21,13 @@ static func restore(game: Node3D) -> void:
 		# did not mention, so a saved creature was written and never read back.
 		if not record is Dictionary or not Creature.ALCHEMY_KINDS.has(str(record.get("kind",""))): continue
 		var mob: Creature = game.spawn_creature(record.kind,VillageLife.vec(record.position))
+		if mob.kind == "pillager": MobCrossbows.restore(mob,record.get("crossbow",{}))
 		mob.health = clampf(record.get("health",mob.health),0,mob.info().health)
 		mob.custom_name = NameTags.bounded(str(record.get("custom_name","")),30); NameTags.refresh(mob)
 		if record.get("raid",false): mob.set_meta("raid",true)
 		if record.get("persistent",false): mob.set_meta("persistent",true)
+		if record.get("patrol",false): mob.set_meta(PillagerPatrols.PATROL_META,true)
+		if record.get("patrol_captain",false): mob.set_meta(PillagerPatrols.CAPTAIN_META,true)
 		for effect in record.get("effects",{}):
 			var data: Dictionary = record.effects[effect]
 			PotionEffects.apply(mob,effect,float(data.get("duration",0)),int(data.get("level",1)))
@@ -72,6 +76,7 @@ static func update(game: Node3D, delta: float) -> void:
 				var mob: Creature = game.spawn_creature(String(role),pos)
 				if mob == null: continue
 				mob.set_meta("raid",true)
+				if mob.kind == "pillager": MobCrossbows.raid_buff(mob,wave,int(raid.level),MobCrossbows.rng_for(game.world))
 				spawn_count += 1
 			raid["size"] = spawn_count
 			game.toast("Raid wave %d / 3"%int(raid.wave))

@@ -85,10 +85,9 @@ static func segments(world: VoxelWorld, p: Vector3i) -> int:
 	return top.y-base_of(world,top).y+1
 
 # The ground bamboo grows on, which is the source's `soil_bamboo` group. The
-# source lists dirt, grass, podzol and moss; Voxey has neither podzol nor moss, so
-# the ground it does have is used and the omission is recorded in the notes.
+# source lists dirt, grass, podzol and moss. Moss has its own source registration.
 static func soil(id: int) -> bool:
-	return id in [Nodes.DIRT,Nodes.GRASS,Nodes.SAND]
+	return id in [Nodes.DIRT,Nodes.GRASS,Nodes.SAND,ShapeMaterials.RED_SAND,DryTerrain.COARSE_DIRT,13602,13604,LushCaves.MOSS]
 
 # --- growth ------------------------------------------------------------------
 
@@ -157,6 +156,7 @@ static func drop(id: int) -> int:
 static func recipes(inv: Inventory) -> void:
 	# Two bamboo make a stick, stacked vertically rather than in the usual 2x2.
 	inv._recipe("Sticks from bamboo",Nodes.STICK,1,[BAMBOO_ITEM,0,BAMBOO_ITEM],2)
+	BambooWood.recipes(inv)
 
 # --- natural groves ----------------------------------------------------------
 
@@ -167,14 +167,14 @@ static func recipes(inv: Inventory) -> void:
 #
 # Voxey's jungle species grows in the swamp and willow-shore regions, so a bamboo
 # grove uses the same regions. The source additionally accepts podzol and moss
-# ground, which Voxey does not have.
+# ground, both represented here.
 const GROVE_CHANCE = 12
 const TRUNK_MIN = 5
 const TRUNK_RANGE = 12
 
 # Whether a grove may stand at `p`, which is the source's soil rule.
 static func grove_soil(id: int) -> bool:
-	return id in [Nodes.DIRT,Nodes.GRASS,Nodes.SAND]
+	return id in [Nodes.DIRT,Nodes.GRASS,Nodes.SAND,ShapeMaterials.RED_SAND,DryTerrain.COARSE_DIRT,13602,13604,LushCaves.MOSS]
 
 # Raise one stalk at `p`, which is the source's `bamboo_place`. Returns the number of
 # segments placed so a caller can tell a failed placement from a short stalk.

@@ -79,11 +79,11 @@ func equip_horse_armor() -> void:
 	horse_armor = true
 	_box(Vector3(0,1.1,0.02),Vector3(0.69,0.53,1.02),Color("76563e"),"cloth")
 
-func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "") -> void:
+func hit(damage: float, from: Vector3 = Vector3.INF, reason: String = "", armor_breach: int = 0, attacker: Node3D = null) -> void:
 	if Llamas.is_llama(kind): Llamas.struck(game,self,from)
 	# Horse armour sets the share of fleshy damage that lands.
-	if Equines.is_equine(kind): super.hit(damage*(Equines.armor_factor(self) if reason not in Creature.BYPASSES_ARMOR else 1.0),from,reason); return
-	super.hit(damage*0.7 if horse_armor else damage,from,reason)
+	if Equines.is_equine(kind): super.hit(damage*(Equines.armor_factor(self) if reason not in Creature.BYPASSES_ARMOR else 1.0),from,reason,armor_breach,attacker); return
+	super.hit(damage*0.7 if horse_armor else damage,from,reason,armor_breach,attacker)
 
 func die() -> void:
 	if saddled: game.spawn_drop(center(),Nodes.SADDLE)

@@ -13,7 +13,7 @@ static func run(suite: Object, game: Node3D) -> void:
 	# --- the item --------------------------------------------------------------
 	suite.check(Nodes.exists(RecoveryCompass.ID),"the recovery compass is registered")
 	suite.check(Nodes.title(RecoveryCompass.ID) == "Recovery compass","and carries the source's own name")
-	suite.check(Nodes.max_stack(RecoveryCompass.ID) == 1,"a compass is unstackable, as the source's `stack_max` says")
+	suite.check(Nodes.max_stack(RecoveryCompass.ID) == 64,"recovery compasses use the registered source stack limit of 64")
 	suite.check(RecoveryCompass.is_recovery_compass(RecoveryCompass.ID) and not RecoveryCompass.is_recovery_compass(Nodes.COMPASS) and not RecoveryCompass.is_recovery_compass(Nodes.CLOCK),"only the recovery compass answers, not the plain compass or the clock")
 	# The source's id must not collide with the modding API's reserved band.
 	suite.check(RecoveryCompass.ID != Nodes.MOD_ITEM_BASE and RecoveryCompass.ID > 255,"the id sits in the content band, clear of the mod item base")

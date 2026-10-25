@@ -46,21 +46,24 @@ func _init() -> void:
 			var id: int = Nodes.armor_id(material,piece)
 			_recipe(Nodes.title(id), id, 1, patterns[piece], 3, "table")
 	# Luanti/Mineclonia-style expansion items.
+	MobArmor.recipes(self)
+	CopperTools.recipes(self)
 	_recipe("Shears", Nodes.SHEARS, 1, [0,Nodes.IRON,Nodes.IRON,0], 2)
 	_recipe("Bucket", Nodes.BUCKET, 1, [Nodes.IRON,0,Nodes.IRON,0,Nodes.IRON,0], 2)
 	_recipe("Sandstone", Nodes.SANDSTONE, 1, [Nodes.SAND,Nodes.SAND,Nodes.SAND,Nodes.SAND], 2)
-	_recipe("Sandstone bricks", Nodes.SANDSTONE_BRICK, 4, [Nodes.SANDSTONE,Nodes.SANDSTONE,Nodes.SANDSTONE,Nodes.SANDSTONE], 2)
 	_recipe("Snow block", Nodes.SNOW_BLOCK, 1, [Nodes.SNOWBALL,Nodes.SNOWBALL,Nodes.SNOWBALL,Nodes.SNOWBALL], 2)
 	_recipe("Ladder", Nodes.LADDER, 3, [Nodes.STICK,0,Nodes.STICK,Nodes.STICK,Nodes.STICK,Nodes.STICK,Nodes.STICK,0,Nodes.STICK], 3)
 	_recipe("Bookshelf", Nodes.BOOKSHELF, 1, [Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS,Nodes.BOOK,Nodes.BOOK,Nodes.BOOK,Nodes.PLANKS,Nodes.PLANKS,Nodes.PLANKS], 3, "table")
 	_recipe("Paper", Nodes.PAPER, 3, [Nodes.SUGAR_CANE,Nodes.SUGAR_CANE,Nodes.SUGAR_CANE], 3, "table")
 	_shapeless("Book", Nodes.BOOK, 1, [Nodes.PAPER,Nodes.PAPER,Nodes.PAPER,Nodes.LEATHER])
-	_shapeless("Writable book", Nodes.WRITABLE_BOOK, 1, [Nodes.BOOK,Nodes.FEATHER,Nodes.CHARCOAL])
+	_shapeless("Writable book", Nodes.WRITABLE_BOOK, 1, [Nodes.BOOK,Nodes.FEATHER,VillageContent.INK_SAC])
 	# `mcl_books`: one written book plus 1..8 writable books copies it that many times.
 	for copies in range(1,9):
 		var copy_ingredients: Array = [Nodes.WRITTEN_BOOK]
 		for n in copies: copy_ingredients.append(Nodes.WRITABLE_BOOK)
 		_shapeless("Copy written book x%d"%copies,Nodes.WRITTEN_BOOK,copies,copy_ingredients)
+		recipes.back()["keep_item"] = Nodes.WRITTEN_BOOK
+		recipes.back()["book_copy"] = true
 	_recipe("Enchanting table",Nodes.ENCHANTING_TABLE,1,[0,Nodes.BOOK,0,Nodes.DIAMOND,Nodes.OBSIDIAN,Nodes.DIAMOND,Nodes.OBSIDIAN,Nodes.OBSIDIAN,Nodes.OBSIDIAN],3,"table")
 	_recipe("Nether bricks",Nodes.NETHER_BRICKS,4,[Nodes.NETHERRACK,Nodes.NETHERRACK,Nodes.NETHERRACK,Nodes.NETHERRACK],2)
 	_shapeless("Pumpkin pie", Nodes.PUMPKIN_PIE, 1, [Nodes.PUMPKIN,Nodes.SUGAR,Nodes.EGG])
@@ -139,6 +142,7 @@ func _init() -> void:
 	Conduits.recipes(self)
 	Corals.recipes(self)
 	Banners.recipes(self)
+	Shields.recipes(self)
 	Beacons.recipes(self)
 	Beehives.recipes(self)
 	WoodTypes.recipes(self)
@@ -167,7 +171,7 @@ const CARPET_GROUP_MARKER = 6011
 static var CARPET_GROUP_IDS: Array = []
 
 func _shapeless(label: String, id: int, count: int, ingredients: Array) -> void:
-	_recipe(label,id,count,ingredients,2)
+	_recipe(label,id,count,ingredients,2 if ingredients.size() <= 4 else 3,"hand" if ingredients.size() <= 4 else "table")
 	recipes.back()["shapeless"] = true
 
 func _recipe(label: String, id: int, count: int, pattern: Array, width: int, station: String = "hand") -> void:
@@ -178,8 +182,10 @@ func _recipe(label: String, id: int, count: int, pattern: Array, width: int, sta
 		if item: ingredients[item] = ingredients.get(item, 0) + 1
 	# Generic group:wood recipes accept mixed species; named wood products keep
 	# their exact material, including the original oak recipes.
-	var wood_product: bool = RedstoneInputs.is_device(id) or Doors.is_item(id) or Trapdoors.is_trapdoor(id) or Barriers.is_barrier(id) or BuildingShapes.is_shape(id) or Boats.is_boat(id) or Signs.is_sign(id)
+	var wood_product: bool = RedstoneInputs.is_device(id) or Doors.is_item(id) or Trapdoors.is_trapdoor(id) or Barriers.is_barrier(id) or BuildingShapes.is_shape(id) or Boats.is_boat(id) or Signs.is_any(id)
 	recipes.append({"name":label, "id":id, "count":count, "pattern":pattern, "width":width, "ingredients":ingredients, "station":station,"wood_group":ingredients.has(Nodes.PLANKS) and not wood_product,"log_group":ingredients.has(Nodes.LOG) and (id == VillageContent.SMOKER or Campfires.is_campfire(id)),"wood_slab_group":ingredients.has(BuildingShapes.slab_for(Nodes.PLANKS)) and id in [RedstoneSensors.DAYLIGHT,VillageContent.COMPOSTER],"carpet_group":ingredients.has(CARPET_GROUP_MARKER),"group_any":CARPET_GROUP_IDS})
+
+	if ingredients.has(Nodes.SAND) and (id == Nodes.TNT or Concrete.is_powder(id)): recipes.back()["sand_group"] = true
 
 func recipe_index(id: int) -> int:
 	for i in recipes.size():
@@ -324,6 +330,9 @@ func damage_tool() -> bool:
 
 func can_craft(recipe: Dictionary, station: String) -> bool:
 	if recipe.station == "table" and station != "table": return false
+	# Banner design/copy recipes carry exact grid positions and a retained
+	# source item. They can only be taken through the metadata-aware grid path.
+	if recipe.get("dynamic",false) and Banners.is_banner(int(recipe.id)): return false
 	for id in recipe.ingredients:
 		if count_ingredient(recipe,id) < recipe.ingredients[id]: return false
 	return not craft_output_data(recipe.id,recipe_inputs(recipe)).has("error")
@@ -332,6 +341,8 @@ func recipe_inputs(recipe: Dictionary) -> Array:
 	var needed: Dictionary = recipe.ingredients.duplicate()
 	var inputs: Array = []
 	for slot in slots:
+		if recipe.get("book_copy",false) and slot.id == Nodes.WRITTEN_BOOK and not WrittenBooks.can_copy(slot): continue
+		if recipe.get("shield_decoration",false) and Shields.is_shield(int(slot.id)) and not Shields.plain(slot): continue
 		var key: int = ingredient_key(recipe,slot.id)
 		var amount: int = mini(slot.count,needed.get(key,0))
 		if amount <= 0: continue
@@ -342,9 +353,13 @@ func recipe_inputs(recipe: Dictionary) -> Array:
 	return inputs
 
 static func ingredient_key(recipe: Dictionary, id: int) -> int:
+	if id == 0: return 0
+	for key in recipe.get("source_items",{}):
+		if ShapeCatalog.matches(str(recipe.source_items[key]),id): return int(key)
+	if recipe.get("sand_group",false) and id in [Nodes.SAND,ShapeMaterials.RED_SAND]: return Nodes.SAND
 	if recipe.get("carpet_group",false) and (id == CARPET_GROUP_MARKER or id in CARPET_GROUP_IDS): return CARPET_GROUP_MARKER
 	if recipe.get("wood_group",false) and WoodTypes.is_planks(id): return Nodes.PLANKS
-	if recipe.get("log_group",false) and (WoodTypes.is_log(id) or id in [Nodes.CRIMSON_STEM,Nodes.WARPED_STEM]): return Nodes.LOG
+	if recipe.get("log_group",false) and (WoodTypes.is_log(id) and not BambooWood.is_log(id) or id in [Nodes.CRIMSON_STEM,Nodes.WARPED_STEM]): return Nodes.LOG
 	if recipe.get("wood_slab_group",false) and BuildingShapes.half_slab(id) and WoodTypes.is_planks(BuildingShapes.material(id)): return BuildingShapes.slab_for(Nodes.PLANKS)
 	return id
 
@@ -366,8 +381,9 @@ func craft(index: int, station: String) -> bool:
 	var before: Array = slots.duplicate(true)
 	var inputs: Array = recipe_inputs(recipe)
 	var output_data: Dictionary = craft_output_data(recipe.id,inputs)
-	for ingredient in inputs: remove_item(ingredient.id,ingredient.count)
-	var leftovers: int = add_item(recipe.id, recipe.count,0,output_data)
+	for ingredient in inputs:
+		if ingredient.id != int(recipe.get("keep_item",0)): remove_item(ingredient.id,ingredient.count)
+	var leftovers: int = add_item(recipe.id, recipe.count,craft_output_wear(recipe.id,inputs),output_data)
 	for ingredient in inputs:
 		var container: int = craft_replacement(ingredient.id)
 		if container: leftovers += add_item(container,ingredient.count)
@@ -378,6 +394,9 @@ func craft(index: int, station: String) -> bool:
 	return true
 
 static func craft_output_data(id: int, ingredients: Array) -> Dictionary:
+	if Shields.is_shield(id) and ingredients.any(func(item): return Banners.is_banner(int(item.get("id",0)))):
+		var shield: Dictionary = Shields.decorate(ingredients)
+		return {"error":"this shield cannot be decorated"} if shield.is_empty() else shield.data
 	# `mcl_books`: copying a written book needs the original's text/author, and a copy
 	# of a copy of a copy is refused at generation 2. The output carries the original's
 	# metadata with `generation` incremented.
@@ -392,20 +411,15 @@ static func craft_output_data(id: int, ingredients: Array) -> Dictionary:
 	if CauldronWash.is_leather_armor(id): return CauldronWash.apply_craft(ingredients).get("data",{})
 	return PortableStorage.output_data(id,ingredients) if PortableStorage.is_shulker(id) else Pouches.output_data(id,ingredients)
 
+static func craft_output_wear(id: int, ingredients: Array) -> int:
+	if Shields.is_shield(id): return int(Shields.decorate(ingredients).get("wear",0))
+	return 0
+
 # The written-book copy output: the original's title/text/author plus an incremented
 # generation, or `{"error":...}` when the rule refuses (generation >= 2, or no
 # original in the grid). `mcl_books/init.lua`.
 static func _copy_book_data(ingredients: Array) -> Dictionary:
-	var original: Dictionary = {}
-	for ingredient in ingredients:
-		if int(ingredient.id) == Nodes.WRITTEN_BOOK: original = ingredient; break
-	if original.is_empty(): return {"error":"no original book"}
-	var raw: Dictionary = original.get("data",{})
-	var generation: int = int(raw.get("generation",0))
-	if generation >= 2: return {"error":"a copy of a copy cannot be copied"}
-	var metadata: Dictionary = {"title":str(raw.get("title","Untitled")).left(64),"text":str(raw.get("text","")).left(12000),"generation":generation+1}
-	if str(raw.get("author","")) != "": metadata["author"] = str(raw.author).left(64)
-	return {"data":metadata}
+	return WrittenBooks.copy_data(ingredients)
 
 static func craft_replacement(id: int) -> int:
 	return Nodes.BUCKET if id == Nodes.MILK_BUCKET else Beehives.replacement(id)
@@ -414,10 +428,26 @@ static func clean_slot(slot, allow_pouches: bool = true, allow_shulkers: bool = 
 	if not slot is Dictionary: return {"id":0,"count":0,"wear":0}
 	var id: int = Nodes.migrate(int(slot.get("id", 0)))
 	if not Nodes.exists(id) or id == Nodes.AIR or (not allow_pouches and Pouches.is_pouch(id)) or (not allow_shulkers and PortableStorage.is_shulker(id)): return {"id":0,"count":0,"wear":0}
-	var result: Dictionary = {"id":id, "count":clampi(int(slot.get("count",0)), 0, 64 if id == VillageContent.CAKE else Nodes.max_stack(id)), "wear":maxi(0,int(slot.get("wear",0)))}
+	# Preserve older overfull banner stacks on load; new stacks use the source's
+	# sixteen-item limit. Cleaning a save must not discard forty-eight banners.
+	var result: Dictionary = {"id":id, "count":clampi(int(slot.get("count",0)), 0, 64 if id == VillageContent.CAKE or Banners.is_banner(id) or id == Nodes.FLINT_AND_STEEL else Nodes.max_stack(id)), "wear":maxi(0,int(slot.get("wear",0)))}
 	if slot.get("data") is Dictionary and result.count > 0:
-		var raw: Dictionary = slot.data
+		var raw: Dictionary = WrittenBooks.normalize(slot.data) if id in [Nodes.WRITABLE_BOOK,Nodes.WRITTEN_BOOK] else slot.data
 		var metadata: Dictionary = {}
+		if Banners.is_banner(id):
+			var banner_layers: Array = Banners.clean_layers(raw.get("layers",[]))
+			if not banner_layers.is_empty(): metadata.layers = banner_layers
+		if Shields.is_shield(id) and Shields.color(slot) >= 0:
+			metadata.shield_color = Shields.color(slot)
+			var shield_layers: Array = Banners.clean_layers(raw.get("layers",[]))
+			if not shield_layers.is_empty(): metadata.layers = shield_layers
+		if raw.get("item_speed") is Dictionary:
+			var h: float = float(raw.item_speed.get("haste",0)); var f: float = float(raw.item_speed.get("fatigue",1))
+			if is_finite(h) and is_finite(f): metadata.item_speed = {"haste":clampf(h,0,100),"fatigue":clampf(f,0,1)}
+		if PotionCatalog.is_bottle(id) and PotionCatalog.ITEMS[id].potion == "ominous" and raw.has("omen_level"):
+			metadata.omen_level = clampi(int(raw.omen_level),1,5)
+		if PotionCatalog.ITEMS.has(id) and raw.has("potion_level"):
+			metadata.potion_level = clampi(int(raw.potion_level),1,5)
 		if id == VillageContent.SUSPICIOUS_STEW: metadata.merge(FoodFeatures.clean_stew_data(raw))
 		if raw.get("custom_name") is String and not raw.custom_name.is_empty(): metadata["custom_name"] = NameTags.bounded(str(raw.custom_name),50)
 		if id == VillageContent.FILLED_MAP:
@@ -430,6 +460,9 @@ static func clean_slot(slot, allow_pouches: bool = true, allow_shulkers: bool = 
 		# `mcl_enchanting:pwp`: the anvil's prior-work penalty. Without it the cost
 		# resets to zero the first time an item is reloaded.
 		if raw.has("pwp"): metadata["pwp"] = maxi(0,int(raw.pwp))
+		if raw.has("wear_normalized") and raw.has("wear_display") and int(raw.wear_display) == int(result.wear) and (Nodes.durability(id) > 0 or GrindstoneRepair.tool(id)):
+			metadata["wear_normalized"] = clampi(int(raw.wear_normalized),0,65535)
+			metadata["wear_display"] = int(raw.wear_display)
 		# `mcl_armor.mcl_armor:color`: a dyed leather piece's tint. It is a
 		# per-item colour rather than a per-material one, so it must travel with the
 		# stack or a chest transfer would bleach it.
@@ -440,7 +473,7 @@ static func clean_slot(slot, allow_pouches: bool = true, allow_shulkers: bool = 
 		# `mcl_books`' generation counter: a copy of a copy is refused at
 		# generation 2, which needs the number to survive a save.
 		if id == Nodes.WRITTEN_BOOK and raw.has("generation"):
-			metadata["generation"] = clampi(int(raw.generation),0,3)
+			metadata["generation"] = WrittenBooks.generation(raw)
 		# An armor trim is two metadata keys; without this they are dropped the
 		# first time the piece moves between slots.
 		if raw.get("trim_overlay") is String and not str(raw.trim_overlay).is_empty():
@@ -453,17 +486,25 @@ static func clean_slot(slot, allow_pouches: bool = true, allow_shulkers: bool = 
 			metadata["contents"] = clean
 		if PortableStorage.is_shulker(id): metadata["contents"] = PortableStorage.clean_contents(raw.get("contents",[]),allow_pouches)
 		if id in [Nodes.WRITABLE_BOOK,Nodes.WRITTEN_BOOK]:
-			metadata["title"] = str(raw.get("title","Untitled")).left(64)
-			metadata["text"] = str(raw.get("text","")).left(12000)
+			metadata["title"] = WrittenBooks.cap(str(raw.get("title","")),WrittenBooks.MAX_TITLE)
+			metadata["text"] = WrittenBooks.cap(str(raw.get("text","")),WrittenBooks.MAX_TEXT)
+			if raw.get("author") is String: metadata["author"] = str(raw.author).left(64)
+			if raw.get("date") is int or raw.get("date") is float:
+				if is_finite(float(raw.date)): metadata["date"] = int(raw.date)
 		if AntiqueArms.is_gun(id) and (raw.get("reload_remaining") is float or raw.get("reload_remaining") is int):
 			metadata["reload_remaining"] = clampf(float(raw.reload_remaining),0,AntiqueArms.STATS[id].reload)
 		if result.id == VillageContent.CROSSBOW:
+			if raw.get("mob_crossbow",false):
+				metadata["mob_crossbow"] = true
+				if raw.has("crossbow_loaded"): metadata["crossbow_loaded"] = bool(raw.crossbow_loaded)
 			var arrow: int = int(raw.get("loaded_arrow",Nodes.AIR))
 			if arrow == Nodes.ARROW_ITEM or VillageContent.DATA.get(arrow,{}).get("family","") == "arrow":
 				metadata["loaded_arrow"] = arrow
-				metadata["charge"] = clampf(float(raw.get("charge",0)),0,1.25)
+				if raw.has("crossbow_loaded"): metadata["crossbow_loaded"] = bool(raw.crossbow_loaded)
+				if raw.get("loaded_arrow_data") is Dictionary:
+					metadata["loaded_arrow_data"] = clean_slot({"id":arrow,"count":1,"data":raw.loaded_arrow_data}).get("data",{})
 		if raw.get("enchantments") is Dictionary:
-			var ench: Dictionary = Enchantments.clean(id,raw.enchantments)
+			var ench: Dictionary = Enchantments.clean(id,raw.enchantments,id == VillageContent.CROSSBOW and bool(raw.get("mob_crossbow",false)))
 			if not ench.is_empty(): metadata["enchantments"] = ench
 		if not metadata.is_empty(): result["data"] = metadata
 	if result.count == 0: result.id = 0; result.wear = 0
@@ -508,6 +549,9 @@ func matching_recipe(station: String) -> int:
 	if special.is_empty(): special = Campfires.special_recipe(grid)
 	if special.is_empty(): special = RedstoneSensors.special_recipe(grid)
 	if special.is_empty(): special = ExplorationMaps.special_recipe(grid)
+	if special.is_empty(): special = Shields.special_recipe(grid)
+	if special.is_empty() and station == "table": special = Banners.special_recipe(grid)
+	if special.is_empty() and grid.any(func(slot): return Banners.is_banner(int(slot.id))): return -1
 	if not special.is_empty():
 		if craft_output_data(special.id,grid).has("error"): return -1
 		if dynamic_recipe < 0: dynamic_recipe = recipes.size(); recipes.append(special)
@@ -519,16 +563,18 @@ func matching_recipe(station: String) -> int:
 		var recipe: Dictionary = recipes[i]
 		if recipe.get("dynamic",false): continue
 		if recipe.station == "table" and station != "table": continue
+		var pattern: Dictionary = {}
+		if not recipe.get("shapeless",false):
+			pattern = _normalized_pattern(recipe.pattern,recipe.width)
+			if pattern.width != normalized.width or pattern.height != normalized.height: continue
 		var matching_cells: Array = cells.map(func(id): return ingredient_key(recipe,id))
 		if recipe.get("shapeless",false):
 			var present: Dictionary = {}
 			for cell in matching_cells:
 				if cell: present[cell] = present.get(cell,0)+1
-			if present == recipe.ingredients: return i
+			if present == recipe.ingredients and (not recipe.get("book_copy",false) or not WrittenBooks.copy_data(grid).has("error")): return i
 			continue
-		var pattern: Dictionary = _normalized_pattern(recipe.pattern,recipe.width)
 		var matching: Dictionary = _normalized_pattern(matching_cells,3)
-		if pattern.width != normalized.width or pattern.height != normalized.height: continue
 		if pattern.cells == matching.cells: return i
 		var mirrored: Array = []
 		for y in pattern.height:
@@ -539,15 +585,17 @@ func matching_recipe(station: String) -> int:
 func take_grid_result(station: String) -> Dictionary:
 	var index: int = matching_recipe(station)
 	if index < 0: return {}
-	var result: Dictionary = {"id":recipes[index].id,"count":recipes[index].count,"wear":0}
-	var metadata: Dictionary = craft_output_data(result.id,grid)
+	var result: Dictionary = {"id":recipes[index].id,"count":recipes[index].count,"wear":recipes[index].get("output_wear",craft_output_wear(recipes[index].id,grid))}
+	var metadata: Dictionary = recipes[index].get("output_data",craft_output_data(result.id,grid))
 	if metadata.has("error"): return {}
 	if not metadata.is_empty(): result["data"] = metadata
 	var before_slots: Array = slots.duplicate(true)
 	var before_grid: Array = grid.duplicate(true)
 	var returns: Dictionary = {}
-	for slot in grid:
-		if slot.id == 0: continue
+	for i in grid.size():
+		if i in recipes[index].get("keep_grid",[]): continue
+		var slot: Dictionary = grid[i]
+		if slot.id == 0 or slot.id == int(recipes[index].get("keep_item",0)): continue
 		var container: int = craft_replacement(slot.id)
 		slot.count -= 1
 		if slot.count == 0:
@@ -604,6 +652,8 @@ func grid_plan(recipe: Dictionary, amount: int) -> Array:
 	var pools: Array = []
 	for slot in slots:
 		if slot.id == 0: continue
+		if recipe.get("book_copy",false) and slot.id == Nodes.WRITTEN_BOOK and not WrittenBooks.can_copy(slot): continue
+		if recipe.get("shield_decoration",false) and Shields.is_shield(int(slot.id)) and not Shields.plain(slot): continue
 		var found: bool = false
 		for pool in pools:
 			if pool.id == slot.id and pool.wear == slot.wear and pool.get("data",{}) == slot.get("data",{}): pool.count += slot.count; found = true; break

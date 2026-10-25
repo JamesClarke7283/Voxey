@@ -27,7 +27,10 @@ Six effects, each gated by a minimum power, taken from the source's `effect_leve
 | Strength | 3 |
 | Regeneration | 4 |
 
-A **power-4** beacon also grants a second effect, which the source fixes to regeneration.
+A **power-4** beacon can grant its primary effect at level I plus regeneration,
+or amplify the primary effect to level II without regeneration. Sneak-use
+(Ctrl + right-click) toggles these modes after selecting a primary effect.
+Haste is a live mining/tool-speed effect; see [tool capabilities](tool-capabilities-source.md).
 
 Range is the source's own formula, `(power_level + 1) * 10` — 20 blocks at power 1 and 50 at power 4. The effect is granted for 16 seconds and decays normally.
 

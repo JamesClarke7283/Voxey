@@ -15,7 +15,9 @@ const CHISELED_TUFF_BRICKS = 1157
 const CHISELED_BRICKS = 1159
 const CRACKED_BRICKS = 1160
 const MOSSY_BRICKS = 1161
-const BLOCKS = [1150,1151,1152,1153,1154,1155,1156,1157,1159,1160,1161]
+const SMOOTH_STONE = 11597
+const SMOOTH_SANDSTONE = 11598
+const BLOCKS = [1150,1151,1152,1153,1154,1155,1156,1157,1159,1160,1161,11597,11598]
 # The variants that are shaped like a brick course rather than a tile.
 const BRICK_COURSE = [CRACKED_BRICKS,MOSSY_BRICKS,CHISELED_BRICKS]
 
@@ -45,6 +47,8 @@ static func cuts() -> Dictionary:
 
 static func pixel(id: int, x: int, y: int, noise: Color) -> Color:
 	var base := Color(VillageContent.DATA[id].color)
+	if id == SMOOTH_STONE: return base.darkened(0.16) if x in [0,15] or y in [0,15] else noise
+	if id == SMOOTH_SANDSTONE: return noise.lightened(0.05)
 	if id in [DEEP_TILES,CRACKED_DEEP_TILES,CRACKED_DEEP_BRICKS,TUFF_BRICKS]:
 		var height: int = 4 if id in [DEEP_TILES,CRACKED_DEEP_TILES] else 8
 		if y%height == 0 or posmod(x+(4 if y/height%2 else 0),8) == 0: return base.darkened(0.4)

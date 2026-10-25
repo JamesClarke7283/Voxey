@@ -49,7 +49,7 @@ Stable new item IDs are **1200 (name tag)** and **1201 (nautilus shell)**. A nam
 
 ## Remaining parity boundaries
 
-Casting still uses Voxey's targeted water interaction. It does not simulate the source's flying bobber trajectory, fishing line mesh, hooking and pulling item entities or other hookable objects. Sounds and bobber art use Voxey's own assets. Rain eligibility uses Voxey's weather and sky-cover test rather than Mineclonia's full weather-biome system. Catch enchantments use Voxey's existing catalog; future source enchantments require additions to that catalog.
+Casting still uses Voxey's targeted water interaction. It does not simulate the source's flying bobber trajectory, fishing line mesh, hooking and pulling item entities or other hookable objects. Sounds and bobber art use Voxey's own assets. Rain eligibility uses Voxey's weather and sky-cover test rather than Mineclonia's full weather-biome system. Catch enchantments now share the [source-verified enchanting engine](enchanting-source.md), including its active definitions and retry behavior.
 
 Nautilus shells are preserved as real obtainable treasure. Their downstream conduit crafting and conduit effects remain a separate missing progression feature. There is no substitute reward or silent reweighting for that dependency.
 

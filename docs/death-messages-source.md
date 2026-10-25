@@ -26,27 +26,22 @@ rather than an object. That is recorded rather than faked.
 ## The flag table
 
 `mcl_damage.types` is transcribed in full — all six mitigation flags per reason,
-plus the five the audit reports but does not use (`is_magic`, `is_lightning`,
+plus the additional source flags (`is_magic`, `is_lightning`,
 `bypasses_guardian`, `bypasses_invulnerability`, `scales`,
 `always_affects_dragons`). `flags(reason)` is the module's whole point: it is now the
-one place that says what a reason does, and `Totems.bypasses` reads
+one place that says what a reason does. The player pipeline also uses
+`bypasses_invulnerability`, and `Totems.bypasses` reads
 `bypasses_totem` from it instead of keeping a second list that could drift.
 
-## What the audit found
+## Damage integration
 
-`audit(voxey_causes)` compares the flags each Voxey cause *actually* implements
-against the source's declaration. Four real divergences came out of it, and they are
-recorded rather than silently reconciled:
-
-| Divergence | Detail |
-|---|---|
-| Armor bypass implies totem bypass | `player.gd` skips `Totems.intercept` when `bypass_armor` is set, so `starve`, `fall`, `in_wall`, `freeze` and `hot_floor` all bypass a totem. The source sets `bypasses_totem` for `out_of_world` alone. |
-| The default cause | The source's `generic` bypasses armor; Voxey's default does not. |
-| Magic | The source's `magic` bypasses armor; Voxey's magic is armor-reduced. |
-| `hot_floor` | The source marks it `is_fire`; Voxey's magma-block damage is not classified as fire. |
-
-The causes that already agree are `void`, `sweet_berry`, `explosion`, `mob`,
-`projectile`, `anvil` and `falling_node`.
+The earlier audit found that armor bypass also bypassed totems, generic and
+magic damage took the wrong armor path, and hot-floor damage lost its fire flag.
+Those gaps are now closed by the [defensive enchantment pipeline](defensive-enchantments-source.md).
+The active player path reads the source flags, applies Resistance before armor,
+then absorption and totems. Fire contact, burning, lava, drowning and physical
+attacks now carry their distinct source reasons. The audit compares the active
+adapter against the declared source flags.
 
 ## One deliberate departure
 
@@ -68,7 +63,7 @@ asserts every one renders prose.
 
 ## Verification
 
-`tests/death_message_checks.gd` (317 checks) covers the table (every reason has a
+`tests/death_message_checks.gd` covers the table (every reason has a
 non-empty message with no unfilled placeholder, the plain forms open with the
 victim, the killer-only forms name the cause in prose), the flags for the reasons
 with the most distinctive behaviour (`in_wall`, `out_of_world` with

@@ -31,19 +31,19 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	clear_drops(game)
 
 	# --- registry ----------------------------------------------------------
-	t.check(Seagrass.SURFACES.size() == 6,"the six surfaces Voxey has are registered")
+	t.check(Seagrass.SURFACES.size() == 7,"all seven source surfaces are registered")
 	t.check(Seagrass.SURFACES.has(Nodes.DIRT) and Seagrass.SURFACES.has(Nodes.SAND) and Seagrass.SURFACES.has(Nodes.GRAVEL),"dirt, sand and gravel are supported surfaces")
 	t.check(Seagrass.SURFACES.has(VillageContent.PRISMARINE) and Seagrass.SURFACES.has(VillageContent.PRISMARINE_BRICK) and Seagrass.SURFACES.has(VillageContent.PRISMARINE_DARK),"all three prismarine variants are supported surfaces")
 	t.check(not Seagrass.SURFACES.has(Nodes.STONE) and not Seagrass.SURFACES.has(Nodes.GRASS),"stone and grass are not seagrass surfaces")
 	var registered: int = 0
-	for i in 6:
-		if Seagrass.is_seagrass(VillageContent.SEAGRASS_FIRST+i): registered += 1
-	t.check(registered == 6,"one seagrass node per surface is registered")
+	for surface in Seagrass.SURFACES:
+		if Seagrass.is_seagrass(Seagrass.for_surface(surface)): registered += 1
+	t.check(registered == 7,"one seagrass node per surface is registered")
 	t.check(not Seagrass.is_seagrass(VillageContent.SEAGRASS),"the seagrass item itself is not a node")
 	t.check(Seagrass.title(VillageContent.SEAGRASS_FIRST) == "Seagrass","the seagrass node is titled as the source titles it")
 	# Each node resolves back to its own surface.
-	for s in 6:
-		var node: int = VillageContent.SEAGRASS_FIRST+s
+	for s in 7:
+		var node: int = Seagrass.for_surface(Seagrass.SURFACES[s])
 		t.check(Seagrass.surface(node) == Seagrass.SURFACES[s],"seagrass node %d resolves its surface"%s)
 		t.check(Seagrass.for_surface(Seagrass.SURFACES[s]) == node,"the surface resolves back to its seagrass node")
 	t.check(Seagrass.for_surface(Nodes.STONE) == 0,"an unsupported surface has no seagrass node")
@@ -71,7 +71,7 @@ static func run(t: SceneTree, game: Node3D) -> void:
 	t.check(world.node_at(ground) == Seagrass.for_surface(Nodes.DIRT),"placing seagrass on dirt creates the dirt seagrass node")
 	t.check(game.inventory.count_item(VillageContent.SEAGRASS) == 3,"placing seagrass consumes one item")
 	# The right node is chosen per surface.
-	for surface_id in [Nodes.SAND,Nodes.GRAVEL,VillageContent.PRISMARINE]:
+	for surface_id in [Nodes.SAND,Nodes.GRAVEL,VillageContent.PRISMARINE,ShapeMaterials.RED_SAND]:
 		plot(world,ground,surface_id)
 		Seagrass.place(game,{"pos":ground-Vector3i.UP,"normal":Vector3i.UP,"id":surface_id,"distance":1.0,"point":Vector3(ground)},VillageContent.SEAGRASS)
 		t.check(world.node_at(ground) == Seagrass.for_surface(surface_id),"placing on surface %d creates that surface's seagrass node"%surface_id)
