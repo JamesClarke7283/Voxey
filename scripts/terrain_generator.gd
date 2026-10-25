@@ -209,6 +209,9 @@ func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false,
 						elif stone_variant > 981: id = Nodes.GRAVEL
 				data[x + z * 18 + y * 324] = id
 			if snowy and h > SEA+1: data[x+z*18+(h+1)*324] = SnowCover.BASE
+			if biome_name == "MushroomIslands" and h > SEA:
+				data[x+z*18+h*324] = SoilVariants.MYCELIUM
+				for y in range(h-3,h): data[x+z*18+y*324] = SoilVariants.MYCELIUM
 			if biome_name == "Swamp":
 				if h > SEA: data[x+z*18+h*324] = VillageContent.MUD if hash_at(wx/3,93,wz/3)%5 == 0 else VillageContent.SWAMP_GRASS
 				if h < SEA and hash_at(wx,94,wz)%21 == 0: data[x+z*18+(SEA+1)*324] = VillageContent.LILY_PAD

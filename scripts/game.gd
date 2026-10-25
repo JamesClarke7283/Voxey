@@ -1145,6 +1145,12 @@ func _spawn_creature() -> void:
 	elif normal_count>=7: return
 	var pool: Array = ["enderman"] if dimension == "end" else (["piglin","magma_cube","enderman","wither_skeleton","blaze"] if dimension == "nether" else (Creature.HOSTILE if hostile else Creature.PASSIVE))
 	var biome: String = world.generator.biome(int(pos.x),int(pos.z))
+	# `mooshroom_spawner`: packs of four to eight on mycelium in MushroomIslands.
+	if not hostile and dimension == "overworld" and randf() < BiomeFauna.mooshroom_share(biome):
+		if not BiomeFauna.spawn_mooshrooms(self,pos,BiomeFauna.rng_for(world)).is_empty(): return
+	# `ocelot_spawner`: infrequent ground spawns in the two jungle biomes.
+	if hostile and dimension == "overworld" and not underground and BiomeFauna.ocelot_biome(biome) and randf() < 0.25:
+		if not BiomeFauna.spawn_ocelots(self,pos,biome,BiomeFauna.rng_for(world)).is_empty(): return
 	if not hostile and "desert" in biome and randf() < 0.6: return
 	# `horse_spawner` and `donkey_spawner_meadow`: herds in the meadow.
 	if not hostile and dimension == "overworld" and randf() < Equines.spawn_share(biome) and not world.intersects(pos,0.5,2.2):

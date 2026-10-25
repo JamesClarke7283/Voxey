@@ -18,6 +18,19 @@ integration pass 15,445, and the combined biome-affected lifecycle set passes 70
 Terrain density, source height/surface rules, natural feature dispatch and cave
 biome identity remain open; this batch does not claim whole-world parity.
 
+## 2026-10-25 batch: source biome fauna
+
+[Natural `MushroomIslands` mycelium](biome-fauna-source.md) now supports the
+source's four-to-eight mooshroom pack with its existing stew and shearing
+lifecycle. [Jungle ocelots](biome-fauna-source.md) spawn on grass or leaves,
+follow a player holding fish at the source's six-node range, gain trust one
+attempt in three, heal and breed when trusted, and produce a tamed cat. Their
+trust persists. The new focused fauna suite passes 27 checks; the combined
+fauna, companion, biome-registry and mooshroom suites pass 148.
+
+Natural biome feature dispatch, source terrain shape and cave biome identity
+remain open.
+
 ## 2026-10-25 batch: soils, flowers and lush lifecycles
 
 [Podzol and mycelium](soil-variants-source.md) now include snowy states,
@@ -757,9 +770,9 @@ closes the three undead variants and the systems they depend on.
 
   Horses, donkeys and mules now also follow a player holding a golden carrot or
   golden apple. See [llamas](llamas-source.md).
-- **Still open from the survey.** The mooshroom needs a mushroom-fields biome and
-  the ocelot a jungle, and Voxey has neither. The illusioner has no natural
-  spawner in the source, so it is recorded rather than ported.
+- **Still open from the survey.** The illusioner has no natural spawner in the
+  source, so it is recorded rather than ported. The mooshroom and ocelot gaps are
+  closed by canonical biome selection; see [biome fauna](biome-fauna-source.md).
 
 ## 2026-09-21 batch: hazards, experience, item entities and block behaviour
 
@@ -1317,7 +1330,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_falling_nodes` | Implemented — falling sand/gravel with damage (`falling_node.gd`, `falling_damage.gd`) |
 | `mcl_item_entity` | Implemented for its item behaviours — stack merging, cactus destruction, water floating and flow carrying, ejection from a solid cell, offhand-first pickup and the `group:xp` ore payout. Fishing hooking and reeling remain open. See [experience orbs](xp-orbs-source.md) |
 | `mcl_minecarts` | Partial — seven rail nodes with engine shape resolution, redstone powered/detector/activator behaviour, five cart variants and source movement and persistence; mineshaft generation lives in `mcl_levelgen` |
-| `mcl_mobs` | Partial — five farm species breed and persist; see animal farming |
+| `mcl_mobs` | Partial — five farm species breed and persist, plus natural mushroom-island mooshrooms and jungle ocelots with source trust and cat offspring. See [biome fauna](biome-fauna-source.md) |
 | `mcl_paintings` | Implemented — the source’s twenty-six motives from 1x1 to 4x4, biggest-fit placement of the largest motive that fits with the source’s random tie-break, horizontal-wall requirement, per-cell occupancy so paintings never overlap, punch-to-drop with the motive preserved on the item, persistence in the world’s adventure state across saves/streaming/dimensions, and original procedural art per motive. See [the paintings batch](paintings-source.md) |
 | `mcl_wither_spawning` | Partial — the seven-cell soul-sand T ritual in both orientations, the 600-health boss with difficulty scaling, its invulnerable opening phase, armoured arrow-immune second phase, flight, guaranteed nether star, a **skull projectile** with its strong variant, blast, withering, knockback, kill heal, wither rose, boss bar, `harmed_by_heal` (inverted healing and regeneration), the **descent** that detonates and releases four wither skeletons, and **`wither_unstuck`** block destruction. Still open: the wither aura and the two aux-head idle shots |
 | `mobs_mc` | Partial — constructed iron/snow golems and earlier mobs; source AI remains adapted |
@@ -1437,7 +1450,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_mobspawners` | Partial — dungeon species, bounded spawning and saves; administrative editing and remaining species open |
 | `mcl_monster_eggs` | Implemented — six infested stone variants that look identical to the block they hide, releasing a silverfish unless Silk Touch returns the plain block. See [infested blocks](monster-eggs-source.md) |
 | `mcl_mud` | Implemented for registered mud content — mud, packed mud, mud bricks and their stairs/slabs/walls, plus water-bottle conversion on all three registered hosts: dirt, coarse dirt and rooted dirt. Natural mud-biome generation remains separate |
-| `mcl_mushrooms` | Partial — small-mushroom placement and forty-percent bone-meal growth, both source schematic shapes, all 64 cap masks per species, separate full stems, permanent touching-face updates and Silk Touch canonicalization. Natural `MushroomIslands` vegetation and mooshroom spawning remain worldgen work. See [huge mushrooms](huge-mushrooms-source.md) |
+| `mcl_mushrooms` | Partial — small-mushroom placement and forty-percent bone-meal growth, both source schematic shapes, all 64 cap masks per species, separate full stems, permanent touching-face updates and Silk Touch canonicalization. Natural `MushroomIslands` mycelium and mooshroom spawning are implemented; broader mushroom-field vegetation remains worldgen work. See [huge mushrooms](huge-mushrooms-source.md) and [biome fauna](biome-fauna-source.md) |
 | `mcl_nether` | Partial — source nether-wart placement, 35-second/chance-11 growth, drops, support, fluids and pistons (`nether_wart_crops.gd`); netherrack, magma blocks and nether brick families; quartz, soul sand/soil and remaining nether materials stay open. See [magma blocks](magma-source.md) and [nether wart](nether-wart-source.md) |
 | `mcl_ocean` | Partial — prismarine, its bricks and dark variant, the sea lantern, the crafting parts, [coral](corals-source.md) in all five species and six forms with the source's water-death rule, and [sea pickles](sea-pickles-source.md) in four sizes with lit/unlit forms, growth, bone-meal spread and size-counted drops, plus [seagrass](seagrass-source.md) with its rooted-node placement and shears-only drop and [kelp](kelp-source.md) with its height/age growth, drowning rule and per-height drops; ocean generation and ocean mobs remain open |
 | `mcl_pale_oak` | Implemented — resin chain, hanging moss, pale moss, eyeblossom and the pale oak wood family (`pale_oak.gd`, `wood_types.gd`) |

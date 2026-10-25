@@ -31,8 +31,8 @@ static func supports(kind: String) -> bool: return FOODS.has(kind)
 
 static func saved_kind(kind: String, custom_name: String) -> bool:
 	if MobArmor.handles(kind): return true
-	# A tamed or fed cat and a tamed parrot are kept; their records say so.
-	if kind in [Cats.KIND,Parrots.KIND]: return true
+	# A tamed or fed cat, trusted ocelot and tamed parrot are kept.
+	if kind in [Cats.KIND,BiomeFauna.OCELOT,Parrots.KIND]: return true
 	return supports(kind) or not custom_name.is_empty() and not Equines.is_equine(kind) and kind not in ["horse","ender_dragon","end_crystal","villager","iron_golem","snow_golem","piglin","piglin_brute","silverfish","turtle","phantom","breeze","pillager"] and Creature.KINDS.has(kind)
 
 static func managed(mob: Creature) -> bool:
@@ -40,7 +40,7 @@ static func managed(mob: Creature) -> bool:
 	if mob.has_meta("trial_key"): return false
 	if MobArmor.handles(mob.kind): return true
 	if supports(mob.kind): return true
-	if Cats.keeps(mob) or Parrots.keeps(mob): return true
+	if Cats.keeps(mob) or BiomeFauna.managed(mob) or Parrots.keeps(mob): return true
 	# The horse family is saved by `VillageSurvival.animal_snapshot` instead.
 	return not mob.custom_name.is_empty() and not Equines.is_equine(mob.kind) and mob.kind not in ["horse","ender_dragon","end_crystal","snow_golem"] and not (mob is VillageMob or mob is NetherResident or mob is AlchemyCreature)
 
@@ -66,6 +66,7 @@ static func state(mob: Creature, include_jockey: bool = true) -> Dictionary:
 		"slime_size":mob.slime_size if mob is ExpeditionCreature and mob.kind == "slime" else 0,"crystal_key":mob.crystal_key if mob is ExpeditionCreature else "",
 		"saddled":mob.saddled if mob is RuralAnimal else false,"persistent":mob.has_meta("persistent"),
 		"axolotl_colour":Axolotls.colour(mob) if Axolotls.is_axolotl(mob.kind) else "",
+		"ocelot":BiomeFauna.snapshot(mob) if BiomeFauna.is_ocelot(mob.kind) else {},
 		"cat":Cats.snapshot(mob) if Cats.is_cat(mob.kind) else {},"parrot":Parrots.snapshot(mob) if Parrots.is_parrot(mob.kind) else {},"wolf":Wolves.snapshot(mob) if Wolves.is_wolf(mob.kind) else {},"bow":MobBows.snapshot(mob) if MobBows.handles(mob.kind) else {},"mob_armor":MobArmor.snapshot(mob) if MobArmor.handles(mob.kind) else {},"weapon_state":MobWeapons.snapshot(mob) if MobWeapons.handles(mob.kind) else {}}
 	value.zombie_traits = ZombieTraits.snapshot(mob)
 	value.baby = MobBabies.baby(mob); value.chicken_jockey = mob.get_meta("chicken_jockey",false)
@@ -108,6 +109,7 @@ static func restore_state(mob: Creature, entry: Dictionary) -> void:
 	if Cats.is_cat(mob.kind): Cats.restore(mob,entry.get("cat",{}))
 	if Parrots.is_parrot(mob.kind): Parrots.restore(mob,entry.get("parrot",{}))
 	if Axolotls.is_axolotl(mob.kind) and Axolotls.COLOURS.has(str(entry.get("axolotl_colour",""))): Axolotls.set_colour(mob,str(entry.axolotl_colour))
+	if BiomeFauna.is_ocelot(mob.kind): BiomeFauna.restore(mob,entry.get("ocelot",{}))
 	# A tamed wolf's maximum is forty, so its record is read before its health.
 	if Wolves.is_wolf(mob.kind): Wolves.restore(mob,entry.get("wolf",{}))
 	var cap: float = Wolves.max_health(mob) if Wolves.is_wolf(mob.kind) else mob.info().health

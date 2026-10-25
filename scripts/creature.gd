@@ -65,6 +65,8 @@ const KINDS = {
 	"sheep": {"hostile":false,"health":8.0,"speed":0.8,"width":0.3,"height":1.1,"damage":0,"drops":[[VillageContent.RAW_MUTTON,1,2],[Nodes.WOOL,1,1]],"voice":"sheep","pitch":1.0,"xp":1},
 	"cow": {"hostile":false,"health":10.0,"speed":0.7,"width":0.36,"height":1.35,"damage":0,"drops":[[VillageContent.RAW_BEEF,1,3],[Nodes.LEATHER,1,2]],"voice":"cow","pitch":0.75,"xp":1},
 	"mooshroom": {"hostile":false,"health":10.0,"speed":0.7,"width":0.36,"height":1.35,"damage":0,"drops":[[VillageContent.RAW_BEEF,1,3],[Nodes.LEATHER,1,2]],"voice":"cow","pitch":0.75,"xp":1},
+	# `ocelot.lua`: ten health, no tame flag, no drops and one-to-three experience.
+	"ocelot": {"hostile":false,"health":10.0,"speed":2.4,"width":0.3,"height":0.7,"damage":3,"drops":[],"voice":"cat","pitch":1.25,"xp":1,"xp_max":3,"can_despawn":true},
 	"pig": {"hostile":false,"health":10.0,"speed":0.9,"width":0.3,"height":0.9,"damage":0,"drops":[[VillageContent.RAW_PORKCHOP,1,3]],"voice":"pig","pitch":1.0,"xp":1},
 	"chicken": {"hostile":false,"health":4.0,"speed":1.0,"width":0.18,"height":0.65,"damage":0,"drops":[[VillageContent.RAW_CHICKEN,1,1],[Nodes.FEATHER,1,2]],"voice":"chicken","pitch":1.5,"glides":true,"xp":1},
 	# The source's parrot: six health, a feather or two, and a glider like the
@@ -516,7 +518,7 @@ func _build_model() -> void:
 				core.material_override.emission_enabled = true
 				core.material_override.emission = Color("e4551b")
 			for side in [-1,1]: _box(Vector3(side*0.2,0.69,-0.431),Vector3(0.15,0.14,0.025),Color("ffca4b"))
-		"cow","mooshroom","pig","chicken","sheep","parrot","cat":
+		"cow","mooshroom","pig","chicken","sheep","parrot","cat","ocelot":
 			_build_animal()
 		"endermite":
 			# A short segmented purple-grey grub with small legs, drawn at the
@@ -652,6 +654,8 @@ func _build_animal() -> void:
 			Parrots.build(self)
 		"cat":
 			Cats.build(self)
+		"ocelot":
+			BiomeFauna.build_ocelot(self)
 		"chicken":
 			_box(Vector3(0,0.39,0.04),Vector3(0.34,0.32,0.46),Color("eeeadd"),"feather")
 			head = _joint(Vector3(0,0.58,-0.18),"Head")
@@ -1103,7 +1107,7 @@ func _physics_process(delta: float) -> void:
 	var chasing: bool = aggressive() and distance < (ZombieTraits.view_range(self) if ZombieTraits.handles(kind) else 24.0)*detection_factor() and life-last_seen < 4.0
 	# Other NPC hunters use their family-specific prey selection. Zombie families
 	# apply the ordered retaliation/player/villager/golem rules below.
-	if not ZombieTargets.handles(kind) and (data.get("hunts_villagers",false) or not data.get("hunts",[]).is_empty() or Wolves.is_wolf(kind) or Hoglins.is_family(kind) or Axolotls.is_axolotl(kind) or Cats.is_cat(kind)) and not (scared > 0 and not hostile):
+	if not ZombieTargets.handles(kind) and (data.get("hunts_villagers",false) or not data.get("hunts",[]).is_empty() or Wolves.is_wolf(kind) or Hoglins.is_family(kind) or Axolotls.is_axolotl(kind) or Cats.is_cat(kind) or BiomeFauna.is_ocelot(kind)) and not (scared > 0 and not hostile):
 		prey_timer -= delta
 		if prey_timer <= 0 or prey_choice != null and (not is_instance_valid(prey_choice) or prey_choice.is_queued_for_deletion()):
 			prey_timer = 0.25
@@ -1112,6 +1116,7 @@ func _physics_process(delta: float) -> void:
 			elif Hoglins.is_family(kind): prey_choice = Hoglins.target(game,self)
 			elif Axolotls.is_axolotl(kind): prey_choice = Axolotls.target(game,self)
 			elif Cats.is_cat(kind): prey_choice = Cats.target(game,self)
+			elif BiomeFauna.is_ocelot(kind): prey_choice = BiomeFauna.target(game,self)
 			else: prey_choice = nearest_villager()
 		var prey: Node3D = prey_choice
 		if prey != null:
@@ -1151,6 +1156,7 @@ func _physics_process(delta: float) -> void:
 	if scared > 0: direction = -toward
 	# The source's `runaway_from = {"players"}` with `runaway_view_range = 8`: a fish
 	# keeps away from a nearby player without being provoked first.
+	elif BiomeFauna.is_ocelot(kind) and not BiomeFauna.trusts(self) and distance < BiomeFauna.FLEE_RANGE and distance > 0.1: direction = -toward
 	elif data.get("flees",false) and distance < AquaticMobs.FLEE_RANGE and distance > 0.1: direction = -toward
 	elif not data.get("runaway_from",[]).is_empty():
 		var threat: Vector3 = runaway_threat(data.runaway_from,float(data.get("runaway_range",6.0)))
@@ -1163,6 +1169,9 @@ func _physics_process(delta: float) -> void:
 	if Hoglins.is_family(kind):
 		var away: Vector3 = Hoglins.direction(self)
 		if away != Vector3.INF: direction = away; chasing = false
+	elif BiomeFauna.is_ocelot(kind) and scared <= 0 and not chasing:
+		var ocelot_heading: Vector3 = BiomeFauna.direction(game,self)
+		if ocelot_heading != Vector3.INF: direction = ocelot_heading
 	elif Cats.is_cat(kind) and farm_direction == Vector3.INF and scared <= 0 and not chasing:
 		var cat_heading: Vector3 = Cats.direction(game,self)
 		if cat_heading != Vector3.INF: direction = cat_heading
@@ -1385,6 +1394,8 @@ func _physics_process(delta: float) -> void:
 	if Cats.is_cat(kind):
 		Cats.step(game,self,delta)
 		Cats.breed_step(game,self,delta)
+	if BiomeFauna.is_ocelot(kind):
+		BiomeFauna.breed_step(game,self,delta)
 	if Dolphins.is_dolphin(kind):
 		Dolphins.step(game,self,delta,Dolphins.rng_for(game.world))
 		if is_queued_for_deletion(): return
