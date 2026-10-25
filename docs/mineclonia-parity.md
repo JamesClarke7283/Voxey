@@ -22,11 +22,12 @@ biome identity remain open; this batch does not claim whole-world parity.
 
 [Natural `MushroomIslands` mycelium](biome-fauna-source.md) now supports the
 source's four-to-eight mooshroom pack with its existing stew and shearing
-lifecycle. [Jungle ocelots](biome-fauna-source.md) spawn on grass or leaves,
-follow a player holding fish at the source's six-node range, gain trust one
-attempt in three, heal and breed when trusted, and produce a tamed cat. Their
-trust persists. The new focused fauna suite passes 27 checks; the combined
-fauna, companion, biome-registry and mooshroom suites pass 148.
+lifecycle. The source's island vegetation selector grows both huge mushroom
+species from the existing source-derived shapes. [Jungle ocelots](biome-fauna-source.md)
+spawn on grass or leaves, follow a player holding fish at the source's six-node
+range, gain trust one attempt in three, heal and breed when trusted, and produce
+a tamed cat. Their trust persists. The focused fauna suite passes 30 checks;
+the combined huge-mushroom and fauna suites pass 65.
 
 Natural biome feature dispatch, source terrain shape and cave biome identity
 remain open.
@@ -1450,7 +1451,7 @@ Module reviews distinguish partial implementations from complete parity. The [wo
 | `mcl_mobspawners` | Partial — dungeon species, bounded spawning and saves; administrative editing and remaining species open |
 | `mcl_monster_eggs` | Implemented — six infested stone variants that look identical to the block they hide, releasing a silverfish unless Silk Touch returns the plain block. See [infested blocks](monster-eggs-source.md) |
 | `mcl_mud` | Implemented for registered mud content — mud, packed mud, mud bricks and their stairs/slabs/walls, plus water-bottle conversion on all three registered hosts: dirt, coarse dirt and rooted dirt. Natural mud-biome generation remains separate |
-| `mcl_mushrooms` | Partial — small-mushroom placement and forty-percent bone-meal growth, both source schematic shapes, all 64 cap masks per species, separate full stems, permanent touching-face updates and Silk Touch canonicalization. Natural `MushroomIslands` mycelium and mooshroom spawning are implemented; broader mushroom-field vegetation remains worldgen work. See [huge mushrooms](huge-mushrooms-source.md) and [biome fauna](biome-fauna-source.md) |
+| `mcl_mushrooms` | Partial — small-mushroom placement and forty-percent bone-meal growth, both source schematic shapes, all 64 cap masks per species, separate full stems, permanent touching-face updates, Silk Touch canonicalization, natural `MushroomIslands` mycelium/huge-mushroom vegetation and mooshroom spawning. Remaining small-mushroom patch variety is worldgen work. See [huge mushrooms](huge-mushrooms-source.md) and [biome fauna](biome-fauna-source.md) |
 | `mcl_nether` | Partial — source nether-wart placement, 35-second/chance-11 growth, drops, support, fluids and pistons (`nether_wart_crops.gd`); netherrack, magma blocks and nether brick families; quartz, soul sand/soil and remaining nether materials stay open. See [magma blocks](magma-source.md) and [nether wart](nether-wart-source.md) |
 | `mcl_ocean` | Partial — prismarine, its bricks and dark variant, the sea lantern, the crafting parts, [coral](corals-source.md) in all five species and six forms with the source's water-death rule, and [sea pickles](sea-pickles-source.md) in four sizes with lit/unlit forms, growth, bone-meal spread and size-counted drops, plus [seagrass](seagrass-source.md) with its rooted-node placement and shears-only drop and [kelp](kelp-source.md) with its height/age growth, drowning rule and per-height drops; ocean generation and ocean mobs remain open |
 | `mcl_pale_oak` | Implemented — resin chain, hanging moss, pale moss, eyeblossom and the pale oak wood family (`pale_oak.gd`, `wood_types.gd`) |

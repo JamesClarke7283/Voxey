@@ -476,3 +476,48 @@ static func grow(world: VoxelWorld, p: Vector3i, small: int, rng: RandomNumberGe
 	for offset in plan:
 		world.set_node(p+offset,plan[offset])
 	return true
+
+# `mcl_mushrooms:mushroom_island_vegetation`: one huge red or brown mushroom
+# on a square-heightmap candidate, selected evenly. The source's feature uses
+# the normal huge-mushroom shape roll, so the same limits apply. Deterministic
+# world-coordinate seeds keep neighboring column halos identical.
+static func decorate_island(gen: TerrainGenerator, coord: Vector2i, data: PackedInt32Array) -> bool:
+	var base: Vector2i = coord*16-Vector2i.ONE
+	var placed: bool = false
+	for z in range(1,17):
+		for x in range(1,17):
+			var wx: int = base.x+x
+			var wz: int = base.y+z
+			if gen.hash_at(wx,701,wz)%97 != 0: continue
+			if gen.biome(wx,wz) != "MushroomIslands": continue
+			var h: int = gen.terrain_height(wx,wz)
+			if h <= TerrainGenerator.SEA or h >= gen.terrain_ceiling()-1: continue
+			if data[x+z*18+h*324] != SoilVariants.MYCELIUM: continue
+			var small: int = Nodes.RED_MUSHROOM if gen.hash_at(wx,702,wz)%2 == 0 else Nodes.BROWN_MUSHROOM
+			var rng := RandomNumberGenerator.new(); rng.seed = gen.hash_at(wx,703,wz)
+			var height: int = rng.randi_range(0,BASE_HEIGHT_MAX)
+			if rng.randi_range(1,DOUBLE_CHANCE) == 1: height = height*2+SCHEM_STEM-1
+			var stem: int = height+SCHEM_STEM
+			var half: int = cap_width(small)/2
+			var top: int = stem+cap_layers(small).size()-1
+			if h+1+top >= gen.terrain_ceiling(): continue
+			if not island_room(data,x,h,z,half,top): continue
+			var plan: Dictionary = shape(small,stem)
+			for offset in plan:
+				var lx: int = x+offset.x
+				var lz: int = z+offset.z
+				if lx < 0 or lx >= 18 or lz < 0 or lz >= 18: continue
+				data[lx+lz*18+(h+1+offset.y)*324] = int(plan[offset])
+			placed = true
+	return placed
+
+static func island_room(data: PackedInt32Array, x: int, h: int, z: int, half: int, top: int) -> bool:
+	if data[x+z*18+h*324] != SoilVariants.MYCELIUM: return false
+	for ox in range(-half,half+1):
+		for oz in range(-half,half+1):
+			var lx: int = x+ox
+			var lz: int = z+oz
+			if lx < 0 or lx >= 18 or lz < 0 or lz >= 18: return false
+			for y in range(1,top+1):
+				if data[lx+lz*18+(h+y)*324] != Nodes.AIR: return false
+	return true

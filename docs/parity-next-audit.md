@@ -1,7 +1,7 @@
 # Mineclonia next-feature audit
 
 
-2026-10-25 biome-fauna follow-up: canonical biome selection unlocked [natural mooshrooms and jungle ocelots](biome-fauna-source.md). Mushroom islands generate mycelium and spawn the source's four-to-eight mooshroom pack; ocelots use the source's two jungle spawners, one-in-three position roll, shy fish-follow, one-in-three trust and cat offspring. The focused suite passes 27 checks and the adjacent lifecycle set 148. Natural mushroom vegetation, ocelot animation and broader feature dispatch remain open.
+2026-10-25 biome-fauna follow-up: canonical biome selection unlocked [natural mooshrooms, huge mushroom island vegetation and jungle ocelots](biome-fauna-source.md). Mushroom islands generate mycelium, the source's huge red/brown selector and four-to-eight mooshroom packs; ocelots use the source's two jungle spawners, one-in-three position roll, shy fish-follow, one-in-three trust and cat offspring. The focused suite passes 30 checks and the combined huge-mushroom/fauna set 65. Small-mushroom decoration coverage, ocelot animation and broader feature dispatch remain open.
 
 2026-10-25 biome-selection follow-up: the [64-entry biome registry](biome-map-source.md), [default Overworld climate/depth sampler](mineclonia-noise-source.md) and [nearest-extent selector](mineclonia-biome-selector-source.md) now match canonical IDs, aliases, filters, the exact 7,593-leaf packed R-tree, signed seeds and forward/reverse queries. The numerical suite passes 623 checks, selector/integration 15,445 and the combined biome-affected lifecycle set 701. Source terrain density, height/surface rules, cave biome identity and natural feature dispatch remain open.
 

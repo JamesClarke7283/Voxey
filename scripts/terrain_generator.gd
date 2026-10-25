@@ -288,6 +288,7 @@ func generate_column(coord: Vector2i, edits: Dictionary, map_only: bool = false,
 	if dimension == "overworld":
 		# The frozen plains grow spike fields, which is what makes them a landmark.
 		IceSpikes.decorate(self,coord,data,deep,biome(coord.x*16+8,coord.y*16+8))
+		HugeMushrooms.decorate_island(self,coord,data)
 		Dripstones.decorate(self,coord,data,deep)
 	if dimension == "nether": Bastions.overlay(self,coord,data)
 	var wells: Dictionary = DesertWells.overlay(self,coord,data,deep)

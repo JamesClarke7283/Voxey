@@ -44,12 +44,11 @@ godot --headless --path . --script tests/lifecycle_runner.gd -- biome_fauna
 godot --headless --path . --script tests/lifecycle_runner.gd -- biome_fauna companion biome_map mooshroom_stew
 ```
 
-The focused suite covers real `MushroomIslands` and `Jungle` generators, loaded
-column support, light and obstruction, pack bounds, the one-in-three roll,
-follow/stop ranges, trust attempts and fish consumption, healing, breeding,
-cat offspring, and saved trust. It passes 27 checks; the combined adjacent set
-passes 148.
+The focused suite covers real `MushroomIslands` and `Jungle` generators, natural
+huge-mushroom generation, loaded column support, light and obstruction, pack
+bounds, the one-in-three roll, follow/stop ranges, trust attempts and fish
+consumption, healing, breeding, cat offspring, and saved trust. It passes 30
+checks; the combined huge-mushroom and fauna set passes 65.
 
-This does not add natural mushroom-island vegetation, ocelot avoidance animation,
-or source pathfinding. Ocelots use Voxey movement and the existing cat renderer
-for their offspring.
+This does not add every small-mushroom decoration or reproduce source feature
+seeds. Ocelots use Voxey movement and the existing cat renderer for offspring.

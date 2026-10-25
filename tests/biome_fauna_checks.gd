@@ -27,6 +27,29 @@ static func run(suite: Object, game: Node3D) -> void:
 	world.target = game.player.position
 	suite.check(world.loaded_at(Vector3(arena)) and BiomeFauna.mooshroom_allowed(world,arena),"the mushroom arena is a loaded MushroomIslands mycelium cell")
 	world.columns[Vector2i(arena.x >> 4,arena.z >> 4)] = true
+	# --- mushroom island vegetation ----------------------------------------------------
+	var island_blocks: Dictionary = {}
+	var island_stems: int = 0
+	var island_caps: int = 0
+	for column in [Vector2i(50,-201),Vector2i(50,-200),Vector2i(49,-201),Vector2i(50,-202)]:
+		var generated: Dictionary = world.generator.generate_column(column,{},true)
+		for block in generated.blocks:
+			for index in block.data.size():
+				var value: int = block.data[index]
+				if not HugeMushrooms.is_huge(value): continue
+				island_blocks[value] = int(island_blocks.get(value,0))+1
+				if HugeMushrooms.is_stem(value): island_stems += 1
+				else: island_caps += 1
+	suite.check(not island_blocks.is_empty(),"MushroomIslands generates natural huge mushrooms")
+	suite.check(island_stems > 0 and island_caps > island_stems,"a natural huge mushroom has a real stem and capped body")
+	var species_seen: Dictionary = {}
+	for x in range(752,785):
+		for z in range(-3344,-3311):
+			if world.generator.biome(x,z) != "MushroomIslands": continue
+			if world.generator.hash_at(x,701,z)%97 != 0: continue
+			species_seen[Nodes.RED_MUSHROOM if world.generator.hash_at(x,702,z)%2 == 0 else Nodes.BROWN_MUSHROOM] = true
+	suite.check(species_seen.has(Nodes.RED_MUSHROOM) and species_seen.has(Nodes.BROWN_MUSHROOM),"the island feature candidates select both source species")
+
 	# --- mooshrooms -------------------------------------------------------------------
 	suite.check(BiomeFauna.mooshroom_share("MushroomIslands") == 1.0 and BiomeFauna.mooshroom_share("Jungle") == 0.0,"mooshrooms are the mushroom island's only creature spawner")
 	suite.check(BiomeFauna.MOOSHROOM_PACK_MIN == 4 and BiomeFauna.MOOSHROOM_PACK_MAX == 8,"mooshrooms spawn in the source's four-to-eight pack")
@@ -37,7 +60,14 @@ static func run(suite: Object, game: Node3D) -> void:
 	world.set_node(arena+Vector3i.UP,Nodes.STONE)
 	suite.check(not BiomeFauna.mooshroom_allowed(world,arena),"an obstructed cell rejects a mooshroom")
 	world.set_node(arena+Vector3i.UP,Nodes.AIR)
-	var moos: Array = BiomeFauna.spawn_mooshrooms(game,Vector3(arena)+Vector3(0.5,0.01,0.5),RandomNumberGenerator.new())
+	for x in range(-16,17):
+		for z in range(-16,17):
+			world.set_node(arena+Vector3i(x,-1,z),SoilVariants.MYCELIUM)
+			for y in range(0,5): world.set_node(arena+Vector3i(x,y,z),Nodes.AIR)
+	var pack_center := arena+Vector3i(0,0,8)
+	for mob in game.creatures.get_children(): mob.free()
+	game.inventory.restore([])
+	var moos: Array = BiomeFauna.spawn_mooshrooms(game,Vector3(pack_center)+Vector3(0.5,0.01,0.5),RandomNumberGenerator.new())
 	suite.check(moos.size() >= 4 and moos.size() <= 8 and moos.all(func(m): return m.kind == BiomeFauna.MOOSHROOM),"a real spawn attempt produces a mooshroom pack")
 	if not moos.is_empty():
 		suite.check(MooshroomStew.handles(moos[0].kind) and moos[0].head != null,"a natural mooshroom owns its stew state and body")
